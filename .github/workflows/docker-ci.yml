@@ -1,0 +1,19 @@
+name: Docker CI Workflow
+on:
+  release:
+    types: [created]
+  push:
+    branches:
+      - '**'
+
+jobs:
+  call-docker-ci-workflow:
+    strategy:
+        matrix:
+          component:
+            - name: qubership-apihub-backend
+              file: Dockerfile
+              context: ""
+    uses: netcracker/qubership-apihub-ci/.github/workflows/docker-ci.yaml@docker-workflow
+    with:
+      target: ${{ matrix.component }}
