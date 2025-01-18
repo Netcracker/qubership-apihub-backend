@@ -16,4 +16,4 @@ jobs:
               context: ""
     uses: netcracker/qubership-apihub-ci/.github/workflows/docker-ci.yml@docker-workflow
     with:
-      target: ${{ matrix.component }}
+      component: ${{ matrix.component }}
