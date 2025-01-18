@@ -1,4 +1,4 @@
-name: Docker CI Workflow
+name: Docker CI Workflow Push
 on:
   release:
     types: [created]
