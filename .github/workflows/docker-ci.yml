@@ -9,11 +9,11 @@ on:
 jobs:
   call-docker-ci-workflow:
     strategy:
-        matrix:
-          component:
-            - name: qubership-apihub-backend
-              file: Dockerfile
-              context: ""
+      matrix:
+        component:
+          - name: qubership-apihub-backend
+            file: Dockerfile
+            context: ""
     uses: netcracker/qubership-apihub-ci/.github/workflows/docker-ci.yml@docker-workflow
     with:
       component: ${{ matrix.component }}
