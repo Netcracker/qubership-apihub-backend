@@ -1,4 +1,4 @@
-name: Docker CI Workflow Push
+name: Docker CI Workflow
 on:
   release:
     types: [created]
@@ -8,7 +8,7 @@ on:
 
 jobs:
   call-docker-ci-workflow:
-    uses: netcracker/qubership-apihub-ci/.github/workflows/docker-ci.yml@docker-workflow
+    uses: netcracker/qubership-apihub-ci/.github/workflows/docker-ci.yml@v1
     with:
       name: qubership-apihub-backend
       file: Dockerfile
