@@ -1,17 +1,3 @@
-// Copyright 2024-2025 NetCracker Technology Corporation
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package main
 
 import (
@@ -28,27 +14,27 @@ import (
 
 	"gopkg.in/natefinch/lumberjack.v2"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/metrics"
-	midldleware "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/middleware"
+	"git.netcracker.com/prod.platform.apihub/apihub-backend/apihub-service/metrics"
+	midldleware "git.netcracker.com/prod.platform.apihub/apihub-backend/apihub-service/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
-	mController "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/migration/controller"
-	mRepository "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/migration/repository"
-	mService "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/migration/service"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
+	"git.netcracker.com/prod.platform.apihub/apihub-backend/apihub-service/exception"
+	mController "git.netcracker.com/prod.platform.apihub/apihub-backend/apihub-service/migration/controller"
+	mRepository "git.netcracker.com/prod.platform.apihub/apihub-backend/apihub-service/migration/repository"
+	mService "git.netcracker.com/prod.platform.apihub/apihub-backend/apihub-service/migration/service"
+	"git.netcracker.com/prod.platform.apihub/apihub-backend/apihub-service/utils"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/cache"
+	"git.netcracker.com/prod.platform.apihub/apihub-backend/apihub-service/cache"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/db"
+	"git.netcracker.com/prod.platform.apihub/apihub-backend/apihub-service/db"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
+	"git.netcracker.com/prod.platform.apihub/apihub-backend/apihub-service/view"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/client"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/controller"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/repository"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
+	"git.netcracker.com/prod.platform.apihub/apihub-backend/apihub-service/client"
+	"git.netcracker.com/prod.platform.apihub/apihub-backend/apihub-service/controller"
+	"git.netcracker.com/prod.platform.apihub/apihub-backend/apihub-service/repository"
+	"git.netcracker.com/prod.platform.apihub/apihub-backend/apihub-service/security"
+	"git.netcracker.com/prod.platform.apihub/apihub-backend/apihub-service/service"
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
@@ -163,7 +149,6 @@ func main() {
 			time.Sleep(time.Second * 10) // Give a chance to read the unrecoverable error
 			panic("Failed to perform db migrations: " + err.Error())
 		}
-
 		migrationPassedChan <- true
 	}()
 
