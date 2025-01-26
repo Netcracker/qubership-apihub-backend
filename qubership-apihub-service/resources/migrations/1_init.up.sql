@@ -170,7 +170,6 @@ begin
 end;$_$;
 
 
-ALTER FUNCTION public.get_latest_revision(package_id character varying, version character varying) OWNER TO apihub;
 
 --
 -- TOC entry 264 (class 1255 OID 17274)
@@ -194,7 +193,6 @@ end;
 $_$;
 
 
-ALTER FUNCTION public.merge_json_path(jsonb[]) OWNER TO apihub;
 
 --
 -- TOC entry 262 (class 1255 OID 17011)
@@ -235,7 +233,6 @@ end;
 $_$;
 
 
-ALTER FUNCTION public.parent_package_names(character varying) OWNER TO apihub;
 
 --
 -- TOC entry 263 (class 1255 OID 17273)
@@ -260,7 +257,6 @@ end;
 $_$;
 
 
-ALTER FUNCTION public.split_json_path(jsonb[]) OWNER TO apihub;
 
 SET default_tablespace = '';
 
@@ -287,7 +283,6 @@ CREATE TABLE IF NOT EXISTS public.package_group (
     CONSTRAINT "PK_project_group" PRIMARY KEY (id),
     CONSTRAINT "FK_parent_package_group" FOREIGN KEY (parent_id) REFERENCES public.package_group(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.package_group OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.activity_tracking (
     id character varying NOT NULL,
@@ -299,7 +294,6 @@ CREATE TABLE IF NOT EXISTS public.activity_tracking (
     CONSTRAINT activity_tracking_pkey PRIMARY KEY (id),
     CONSTRAINT activity_tracking_package_group_id_fk FOREIGN KEY (package_id) REFERENCES public.package_group(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.activity_tracking OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.activity_tracking_transition (
     id character varying NOT NULL,
@@ -316,7 +310,6 @@ CREATE TABLE IF NOT EXISTS public.activity_tracking_transition (
     completed_serial_number integer,
     CONSTRAINT activity_tracking_transition_pk PRIMARY KEY (id)
 );
-ALTER TABLE public.activity_tracking_transition OWNER TO apihub;
 
 -- create if not exists
 CREATE SEQUENCE IF NOT EXISTS public.activity_tracking_transition_completed_seq
@@ -331,7 +324,6 @@ CREATE SEQUENCE IF NOT EXISTS public.activity_tracking_transition_completed_seq
 SELECT pg_catalog.setval('public.activity_tracking_transition_completed_seq', 0, false);
 
 -- alter ownership
-ALTER SEQUENCE public.activity_tracking_transition_completed_seq OWNER TO apihub;
 ALTER SEQUENCE public.activity_tracking_transition_completed_seq OWNED BY public.activity_tracking_transition.completed_serial_number;
 
 CREATE TABLE IF NOT EXISTS public.agent (
@@ -345,7 +337,6 @@ CREATE TABLE IF NOT EXISTS public.agent (
     agent_version character varying,
     CONSTRAINT agent_pkey PRIMARY KEY (agent_id)
 );
-ALTER TABLE public.agent OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.agent_config (
     cloud character varying NOT NULL,
@@ -353,7 +344,6 @@ CREATE TABLE IF NOT EXISTS public.agent_config (
     config jsonb,
     CONSTRAINT "PK_agent_config" PRIMARY KEY (cloud, namespace)
 );
-ALTER TABLE public.agent_config OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.apihub_api_keys (
      id character varying NOT NULL,
@@ -368,7 +358,6 @@ CREATE TABLE IF NOT EXISTS public.apihub_api_keys (
      created_for character varying,
      CONSTRAINT apihub_api_keys_pkey PRIMARY KEY (id)
 );
-ALTER TABLE public.apihub_api_keys OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.project (
      id character varying NOT NULL,
@@ -389,7 +378,6 @@ CREATE TABLE IF NOT EXISTS public.project (
      secret_token_user_id character varying,
      CONSTRAINT "PK_project" PRIMARY KEY (id)
 );
-ALTER TABLE public.project OWNER TO apihub;
 COMMENT ON COLUMN public.project.group_id IS 'Only for the GROUP kind';
 COMMENT ON COLUMN public.project.integration_type IS 'GitLab / Local storage';
 
@@ -419,7 +407,6 @@ CREATE TABLE IF NOT EXISTS public.branch_draft_content (
     CONSTRAINT "PK_branch_draft_content" PRIMARY KEY (project_id, branch_name, file_id),
     CONSTRAINT "FK_project" FOREIGN KEY (project_id) REFERENCES public.project(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.branch_draft_content OWNER TO apihub;
 COMMENT ON COLUMN public.branch_draft_content.data_type IS 'OpenAPI / Swagger / MD';
 COMMENT ON COLUMN public.branch_draft_content.media_type IS 'HTTP media-type';
 
@@ -433,7 +420,6 @@ CREATE TABLE IF NOT EXISTS public.branch_draft_reference (
     CONSTRAINT "PK_branch_draft_reference" PRIMARY KEY (branch_name, project_id, reference_package_id, reference_version),
     CONSTRAINT "FK_project" FOREIGN KEY (project_id) REFERENCES public.project(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.branch_draft_reference OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.build (
     build_id character varying NOT NULL,
@@ -453,7 +439,6 @@ CREATE TABLE IF NOT EXISTS public.build (
     CONSTRAINT "PK_build" PRIMARY KEY (build_id),
     CONSTRAINT build_package_group_id_fk FOREIGN KEY (package_id) REFERENCES public.package_group(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.build OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.build_cleanup_run (
     run_id integer NOT NULL,
@@ -467,7 +452,6 @@ CREATE TABLE IF NOT EXISTS public.build_cleanup_run (
     ts_gql_operation_data integer DEFAULT 0,
     CONSTRAINT build_cleanup_run_pkey PRIMARY KEY (run_id)
 );
-ALTER TABLE public.build_cleanup_run OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.build_depends (
     build_id character varying NOT NULL,
@@ -475,14 +459,12 @@ CREATE TABLE IF NOT EXISTS public.build_depends (
     CONSTRAINT "FK_build_depends_depend" FOREIGN KEY (depend_id) REFERENCES public.build(build_id) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "FK_build_depends_id" FOREIGN KEY (build_id) REFERENCES public.build(build_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.build_depends OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.build_result (
     build_id character varying NOT NULL,
     data bytea NOT NULL,
     CONSTRAINT "FK_build_result_build_id" FOREIGN KEY (build_id) REFERENCES public.build(build_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.build_result OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.build_src (
     build_id character varying NOT NULL,
@@ -490,7 +472,6 @@ CREATE TABLE IF NOT EXISTS public.build_src (
     config jsonb NOT NULL,
     CONSTRAINT "FK_build_src" FOREIGN KEY (build_id) REFERENCES public.build(build_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.build_src OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.builder_notifications (
      build_id character varying NOT NULL,
@@ -499,7 +480,6 @@ CREATE TABLE IF NOT EXISTS public.builder_notifications (
      file_id character varying,
      CONSTRAINT builder_notifications_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.build(build_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.builder_notifications OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.business_metric (
      year integer NOT NULL,
@@ -510,7 +490,6 @@ CREATE TABLE IF NOT EXISTS public.business_metric (
      user_id character varying DEFAULT 'unknown'::character varying NOT NULL,
      CONSTRAINT business_metric_pkey PRIMARY KEY (year, month, day, metric, user_id)
 );
-ALTER TABLE public.business_metric OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.drafted_branches (
     project_id character varying NOT NULL,
@@ -522,7 +501,6 @@ CREATE TABLE IF NOT EXISTS public.drafted_branches (
     CONSTRAINT drafted_branches_pkey PRIMARY KEY (project_id, branch_name),
     CONSTRAINT "FK_project" FOREIGN KEY (project_id) REFERENCES public.project(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.drafted_branches OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.endpoint_calls (
      path character varying NOT NULL,
@@ -531,7 +509,6 @@ CREATE TABLE IF NOT EXISTS public.endpoint_calls (
      count integer,
      CONSTRAINT endpoint_calls_pkey PRIMARY KEY (path, hash)
 );
-ALTER TABLE public.endpoint_calls OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.user_data (
     user_id character varying NOT NULL,
@@ -544,7 +521,6 @@ CREATE TABLE IF NOT EXISTS public.user_data (
     CONSTRAINT email_unique UNIQUE (email),
     CONSTRAINT private_package_id_unique UNIQUE (private_package_id)
 );
-ALTER TABLE public.user_data OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.external_identity (
     provider character varying NOT NULL,
@@ -553,7 +529,6 @@ CREATE TABLE IF NOT EXISTS public.external_identity (
     CONSTRAINT external_identity_pkey PRIMARY KEY (provider, external_id),
     CONSTRAINT "FK_user_data" FOREIGN KEY (internal_id) REFERENCES public.user_data(user_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.external_identity OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.favorite_packages (
     user_id character varying NOT NULL,
@@ -562,7 +537,6 @@ CREATE TABLE IF NOT EXISTS public.favorite_packages (
     CONSTRAINT "FK_favorite_packages_package_group" FOREIGN KEY (package_id) REFERENCES public.package_group(id) ON DELETE CASCADE,
     CONSTRAINT "FK_favorite_packages_user_data" FOREIGN KEY (user_id) REFERENCES public.user_data(user_id) ON DELETE CASCADE
 );
-ALTER TABLE public.favorite_packages OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.favorite_projects (
     user_id character varying NOT NULL,
@@ -571,7 +545,6 @@ CREATE TABLE IF NOT EXISTS public.favorite_projects (
     CONSTRAINT "FK_favorite_projects_project" FOREIGN KEY (project_id) REFERENCES public.project(id) ON DELETE CASCADE,
     CONSTRAINT "FK_favorite_projects_user_data" FOREIGN KEY (user_id) REFERENCES public.user_data(user_id) ON DELETE CASCADE
 );
-ALTER TABLE public.favorite_projects OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.migrated_version (
     package_id character varying,
@@ -584,7 +557,6 @@ CREATE TABLE IF NOT EXISTS public.migrated_version (
     no_changelog boolean,
     CONSTRAINT migrated_version_package_group_id_fk FOREIGN KEY (package_id) REFERENCES public.package_group(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.migrated_version OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.migrated_version_changes (
     package_id character varying NOT NULL,
@@ -595,14 +567,12 @@ CREATE TABLE IF NOT EXISTS public.migrated_version_changes (
     changes jsonb,
     unique_changes character varying[]
 );
-ALTER TABLE public.migrated_version_changes OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.migration_changes (
     migration_id character varying NOT NULL,
     changes jsonb,
     CONSTRAINT migration_changes_pkey PRIMARY KEY (migration_id)
 );
-ALTER TABLE public.migration_changes OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.migration_run (
     id character varying,
@@ -619,7 +589,6 @@ CREATE TABLE IF NOT EXISTS public.migration_run (
     updated_at timestamp without time zone,
     skip_validation boolean
 );
-ALTER TABLE public.migration_run OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.operation_data (
      data_hash character varying NOT NULL,
@@ -627,7 +596,6 @@ CREATE TABLE IF NOT EXISTS public.operation_data (
      search_scope jsonb,
      CONSTRAINT pk_operation_data PRIMARY KEY (data_hash)
 );
-ALTER TABLE public.operation_data OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.published_version (
     package_id character varying NOT NULL,
@@ -645,7 +613,6 @@ CREATE TABLE IF NOT EXISTS public.published_version (
     CONSTRAINT "PK_published_version" PRIMARY KEY (package_id, version, revision),
     CONSTRAINT "FK_package_group" FOREIGN KEY (package_id) REFERENCES public.package_group(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.published_version OWNER TO apihub;
 COMMENT ON COLUMN public.published_version.status IS 'DRAFT / APPROVED / RELEASED / ARCHIVE';
 
 CREATE TABLE IF NOT EXISTS public.operation (
@@ -669,7 +636,6 @@ CREATE TABLE IF NOT EXISTS public.operation (
     CONSTRAINT "FK_operation_data" FOREIGN KEY (data_hash) REFERENCES public.operation_data(data_hash) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "FK_published_version" FOREIGN KEY (package_id,"version",revision) REFERENCES public.published_version(package_id,"version",revision) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.operation OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.version_comparison (
      package_id character varying NOT NULL,
@@ -688,7 +654,6 @@ CREATE TABLE IF NOT EXISTS public.version_comparison (
      CONSTRAINT version_comparison_comparison_id_key UNIQUE (comparison_id),
      CONSTRAINT version_comparison_pkey PRIMARY KEY (package_id, version, revision, previous_package_id, previous_version, previous_revision)
 );
-ALTER TABLE public.version_comparison OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.operation_comparison (
     package_id character varying NOT NULL,
@@ -705,7 +670,6 @@ CREATE TABLE IF NOT EXISTS public.operation_comparison (
     comparison_id character varying,
     CONSTRAINT "FK_version_comparison" FOREIGN KEY (comparison_id) REFERENCES public.version_comparison(comparison_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.operation_comparison OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.operation_group (
      package_id character varying NOT NULL,
@@ -722,7 +686,6 @@ CREATE TABLE IF NOT EXISTS public.operation_group (
      CONSTRAINT operation_group_pkey PRIMARY KEY (package_id, version, revision, api_type, group_name),
      CONSTRAINT "FK_published_version" FOREIGN KEY (package_id,"version",revision) REFERENCES public.published_version(package_id,"version",revision) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.operation_group OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.grouped_operation (
     group_id character varying NOT NULL,
@@ -733,7 +696,6 @@ CREATE TABLE IF NOT EXISTS public.grouped_operation (
     CONSTRAINT "FK_operation" FOREIGN KEY (package_id,"version",revision,operation_id) REFERENCES public.operation(package_id,"version",revision,operation_id) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "FK_operation_group" FOREIGN KEY (group_id) REFERENCES public.operation_group(group_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.grouped_operation OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.operation_group_history (
      group_id character varying,
@@ -743,7 +705,6 @@ CREATE TABLE IF NOT EXISTS public.operation_group_history (
      date timestamp without time zone,
      automatic boolean
 );
-ALTER TABLE public.operation_group_history OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.operation_group_publication (
     publish_id character varying NOT NULL,
@@ -751,14 +712,12 @@ CREATE TABLE IF NOT EXISTS public.operation_group_publication (
     details character varying,
     CONSTRAINT operation_group_publication_pkey PRIMARY KEY (publish_id)
 );
-ALTER TABLE public.operation_group_publication OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.operation_group_template (
     checksum character varying NOT NULL,
     template bytea,
     CONSTRAINT operation_group_template_pkey PRIMARY KEY (checksum)
 );
-ALTER TABLE public.operation_group_template OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.operation_open_count (
     package_id character varying NOT NULL,
@@ -767,7 +726,6 @@ CREATE TABLE IF NOT EXISTS public.operation_open_count (
     open_count bigint,
     CONSTRAINT operation_open_count_pkey PRIMARY KEY (package_id, version, operation_id)
 );
-ALTER TABLE public.operation_open_count OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.package_member_role (
     user_id character varying NOT NULL,
@@ -780,7 +738,6 @@ CREATE TABLE IF NOT EXISTS public.package_member_role (
     CONSTRAINT "PK_package_member_role" PRIMARY KEY (package_id, user_id),
     CONSTRAINT "FK_package_group" FOREIGN KEY (package_id) REFERENCES public.package_group(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.package_member_role OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.package_service (
      package_id character varying NOT NULL,
@@ -791,20 +748,17 @@ CREATE TABLE IF NOT EXISTS public.package_service (
      CONSTRAINT "FK_package_group" FOREIGN KEY (package_id) REFERENCES public.package_group(id) ON DELETE CASCADE ON UPDATE CASCADE,
      CONSTRAINT "FK_package_group_workspace" FOREIGN KEY (workspace_id) REFERENCES public.package_group(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.package_service OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.package_transition (
      old_package_id character varying NOT NULL,
      new_package_id character varying NOT NULL
 );
-ALTER TABLE public.package_transition OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.published_content_messages (
      checksum character varying NOT NULL,
      messages jsonb,
      CONSTRAINT "PK_published_content_messages" PRIMARY KEY (checksum)
 );
-ALTER TABLE public.published_content_messages OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.published_data (
      package_id character varying NOT NULL,
@@ -814,7 +768,6 @@ CREATE TABLE IF NOT EXISTS public.published_data (
      CONSTRAINT "PK_published_data" PRIMARY KEY (checksum, package_id),
      CONSTRAINT published_data_package_group_id_fk FOREIGN KEY (package_id) REFERENCES public.package_group(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.published_data OWNER TO apihub;
 
 COMMENT ON COLUMN public.published_data.media_type IS 'HTTP media-type';
 
@@ -826,7 +779,6 @@ CREATE TABLE IF NOT EXISTS public.published_document_open_count (
      CONSTRAINT published_document_open_count_pkey PRIMARY KEY (package_id, version, slug),
      CONSTRAINT published_document_open_count_package_group_id_fk FOREIGN KEY (package_id) REFERENCES public.package_group(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.published_document_open_count OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.published_sources (
     package_id character varying NOT NULL,
@@ -837,14 +789,12 @@ CREATE TABLE IF NOT EXISTS public.published_sources (
     archive_checksum character varying,
     CONSTRAINT "FK_published_sources_version_revision" FOREIGN KEY (package_id,"version",revision) REFERENCES public.published_version(package_id,"version",revision) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.published_sources OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.published_sources_archives (
      checksum character varying NOT NULL,
      data bytea,
      CONSTRAINT published_sources_archives_pk PRIMARY KEY (checksum)
 );
-ALTER TABLE public.published_sources_archives OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.published_version_open_count (
     package_id character varying NOT NULL,
@@ -853,7 +803,6 @@ CREATE TABLE IF NOT EXISTS public.published_version_open_count (
     CONSTRAINT published_version_open_count_pkey PRIMARY KEY (package_id, version),
     CONSTRAINT published_version_open_count_package_group_id_fk FOREIGN KEY (package_id) REFERENCES public.package_group(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.published_version_open_count OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.published_version_reference (
     package_id character varying NOT NULL,
@@ -869,7 +818,6 @@ CREATE TABLE IF NOT EXISTS public.published_version_reference (
     CONSTRAINT "PK_published_version_reference" PRIMARY KEY (package_id, version, revision, reference_id, reference_version, reference_revision, parent_reference_id, parent_reference_version, parent_reference_revision),
     CONSTRAINT "FK_published_version" FOREIGN KEY (package_id,"version",revision) REFERENCES public.published_version(package_id,"version",revision) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.published_version_reference OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.published_version_revision_content (
     package_id character varying NOT NULL,
@@ -891,7 +839,6 @@ CREATE TABLE IF NOT EXISTS public.published_version_revision_content (
     CONSTRAINT "FK_published_data" FOREIGN KEY (checksum,package_id) REFERENCES public.published_data(checksum,package_id) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "FK_published_version_revision" FOREIGN KEY (package_id,"version",revision) REFERENCES public.published_version(package_id,"version",revision) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.published_version_revision_content OWNER TO apihub;
 COMMENT ON COLUMN public.published_version_revision_content.data_type IS 'OpenAPI / Swagger / MD';
 
 CREATE TABLE IF NOT EXISTS public.published_version_validation (
@@ -904,7 +851,6 @@ CREATE TABLE IF NOT EXISTS public.published_version_validation (
     CONSTRAINT "PK_published_version_validation" PRIMARY KEY (package_id, version, revision),
     CONSTRAINT "FK_published_version_validation" FOREIGN KEY (package_id,"version",revision) REFERENCES public.published_version(package_id,"version",revision) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.published_version_validation OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.role (
     id character varying NOT NULL,
@@ -914,7 +860,6 @@ CREATE TABLE IF NOT EXISTS public.role (
     read_only boolean,
     CONSTRAINT role_pkey PRIMARY KEY (id)
 );
-ALTER TABLE public.role OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.shared_url_info (
      package_id character varying NOT NULL,
@@ -925,14 +870,12 @@ CREATE TABLE IF NOT EXISTS public.shared_url_info (
      CONSTRAINT shared_url_info__file_info UNIQUE (package_id, version, file_id),
      CONSTRAINT shared_url_info_package_group_id_fk FOREIGN KEY (package_id) REFERENCES public.package_group(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.shared_url_info OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.system_role (
       user_id character varying NOT NULL,
       role character varying NOT NULL,
       CONSTRAINT "PK_system_role" PRIMARY KEY (user_id)
 );
-ALTER TABLE public.system_role OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.transformed_content_data (
     package_id character varying NOT NULL,
@@ -947,7 +890,6 @@ CREATE TABLE IF NOT EXISTS public.transformed_content_data (
     CONSTRAINT transformed_content_data_pkey PRIMARY KEY (package_id, version, revision, api_type, group_id, build_type, format),
     CONSTRAINT "FK_transformed_content_data_operation_group" FOREIGN KEY (group_id) REFERENCES public.operation_group(group_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.transformed_content_data OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.ts_graphql_operation_data (
     data_hash character varying NOT NULL,
@@ -956,14 +898,12 @@ CREATE TABLE IF NOT EXISTS public.ts_graphql_operation_data (
     scope_annotation tsvector,
     CONSTRAINT pk_ts_graphql_operation_data PRIMARY KEY (data_hash)
 );
-ALTER TABLE public.ts_graphql_operation_data OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.ts_operation_data (
     data_hash character varying NOT NULL,
     scope_all tsvector,
     CONSTRAINT pk_ts_operation_data PRIMARY KEY (data_hash)
 );
-ALTER TABLE public.ts_operation_data OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.ts_rest_operation_data (
     data_hash character varying NOT NULL,
@@ -975,7 +915,6 @@ CREATE TABLE IF NOT EXISTS public.ts_rest_operation_data (
     CONSTRAINT pk_ts_rest_operation_data PRIMARY KEY (data_hash),
     CONSTRAINT "FK_operation_data" FOREIGN KEY (data_hash) REFERENCES public.operation_data(data_hash) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.ts_rest_operation_data OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.user_avatar_data (
     user_id character varying NOT NULL,
@@ -983,7 +922,6 @@ CREATE TABLE IF NOT EXISTS public.user_avatar_data (
     checksum bytea,
     CONSTRAINT "PK_user_avatar_data" PRIMARY KEY (user_id)
 );
-ALTER TABLE public.user_avatar_data OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.user_integration (
     user_id character varying NOT NULL,
@@ -996,7 +934,6 @@ CREATE TABLE IF NOT EXISTS public.user_integration (
     failed_refresh_attempts integer DEFAULT 0,
     CONSTRAINT "PK_user_integration" PRIMARY KEY (user_id, integration_type)
 );
-ALTER TABLE public.user_integration OWNER TO apihub;
 COMMENT ON COLUMN public.user_integration.integration_type IS 'GitLab';
 
 CREATE TABLE IF NOT EXISTS public.versions_cleanup_run (
@@ -1010,7 +947,6 @@ CREATE TABLE IF NOT EXISTS public.versions_cleanup_run (
     CONSTRAINT pk_versions_cleanup_run PRIMARY KEY (run_id),
     CONSTRAINT versions_cleanup_run_package_group_id_fk FOREIGN KEY (package_id) REFERENCES public.package_group(id) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE public.versions_cleanup_run OWNER TO apihub;
 
 CREATE TABLE IF NOT EXISTS public.csv_dashboard_publication(
     publish_id varchar,
@@ -1019,10 +955,6 @@ CREATE TABLE IF NOT EXISTS public.csv_dashboard_publication(
     csv_report bytea,
     PRIMARY KEY(publish_id)
 );
-ALTER TABLE public.csv_dashboard_publication OWNER TO apihub;
-
--- initial data for apihub_api_keys table
-INSERT INTO public.apihub_api_keys VALUES ('api-key_766e637d-a59d-401a-af3c-277b5204fdf7', '*', 'system_api_key', 'adminatexample-com', '2024-12-13 08:08:50.66232', NULL, NULL, 'ecda7f95b0a6907d28792346b637758294458e9f44530ad6ae4172a31836e4d5', '{"System administrator"}', NULL);
 
 -- initial data for ROLE table
 INSERT INTO public.role VALUES ('admin', 'Admin', 1000, '{read,create_and_update_package,delete_package,manage_draft_version,manage_release_version,manage_archived_version,user_access_management,access_token_management}', true);
@@ -1034,13 +966,3 @@ INSERT INTO public.role VALUES ('editor', 'Editor', 2, '{read,manage_draft_versi
 
 
 INSERT INTO public.schema_migrations VALUES (1, false);
-INSERT INTO public.system_role VALUES ('adminatexample-com', 'System administrator');
-INSERT INTO public.user_data VALUES ('adminatexample-com', 'admin@example.com', 'admin@example.com', NULL, '\x243261243130246e7457765776544652497459327836667a517446787531374e4b6e636e4665625a384b6e324f587945466431654c2f6b712f757771', 'adminatexample-com');
--- extra data for activity tracking
-INSERT INTO public.package_group
-(id, kind, "name", alias, parent_id, image_url, description, deleted_at, created_at,
- created_by, deleted_by, default_role, default_released_version, service_name, release_version_pattern,
- exclude_from_search, rest_grouping_prefix)
-VALUES('*', 'workspace', 'Dev', 'dev', NULL, NULL, NULL, '2023-08-25 07:35:13.549', '2023-08-24 13:07:10.020',
-       'aldo0322', 'aldo0322', 'viewer', NULL, NULL, NULL,
-       false, NULL);
