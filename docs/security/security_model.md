@@ -24,14 +24,16 @@ TODO: description
 ## Api keys
 TODO
 
-## PAT
+## Personal Access Tokens
 TODO
 
 # Authorization
+Apihub have built-in authorization model which is based on roles for packages.
+User have a set of roles for particular package.
+Role have a set of permissions.
 
+Package have a default role.
 
-roles, permissions
-bound to packages
+TODO
 
-default role
 
