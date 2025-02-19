@@ -1,14 +1,14 @@
 
 
-#Authentification
+# Authentification
 Apihub provides no anonymous access except some dedicated endpoints like shared document or it's own openapi spec.
 Apihub supports SSO and local(disabled in production mode) authentication.
 
 SSO is implemented via SAML and tested with ADFS.
 
-##SSO via Saml
+## SSO via Saml
 
-[SSO auth flow](sso_flow.png)
+![SSO auth flow](./sso_flow.png)
 
 Notes:
 * Apihub is using external authentication, but issuing it's own Bearer token which is used for all requests to Apihub.
@@ -27,7 +27,7 @@ TODO
 ## PAT
 TODO
 
-#Authorization
+# Authorization
 
 
 roles, permissions
