@@ -28,12 +28,23 @@ TODO
 TODO
 
 # Authorization
-Apihub have built-in authorization model which is based on roles for packages.
-User have a set of roles for particular package.
-Role have a set of permissions.
+First of all let's define some terms used in the following description.
+'Workspace' is a top grouping entity which may contain groups, packages, dashboards.
+'Group' is a grouping entity for a list of packages.
+'Package' is a representation of a service with API.
+'Dashboard' is representation for a set of particulate versions of services, i.e. it's like deployment.
 
-Package have a default role.
+Apihub have built-in authorization model which is based on granted roles for workspace/group/package/dashboard.
+
+
+User have a set of roles for particular entity.
+Role have a set of permissions.
+Roles are defined system-wide by system administrators.
+Roles have an hierarchy which limits privilege escalation.
+
+Workspace/group/package/dashboard have a default role that is assigned to a user which have no granted role.
 
 TODO
+
 
 
