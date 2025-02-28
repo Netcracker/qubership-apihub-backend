@@ -699,6 +699,7 @@ func MakeSimplePackageView(entity *PackageEntity, parents []view.ParentPackageIn
 		Kind:                  entity.Kind,
 		DefaultRole:           entity.DefaultRole,
 		UserPermissions:       userPermissions,
+		CreatedAt:             entity.CreatedAt,
 		DefaultReleaseVersion: entity.DefaultReleaseVersion,
 		ReleaseVersionPattern: entity.ReleaseVersionPattern,
 		ExcludeFromSearch:     &entity.ExcludeFromSearch,
