@@ -1,13 +1,10 @@
-
-
-# Authentification
+# Authentication
 Apihub provides no anonymous access except some dedicated endpoints like shared document or it's own openapi spec.
-Apihub supports SSO and local(disabled in production mode) authentication.
+System supports SSO and local(disabled in production mode) authentication.
 
 At this moment SSO is implemented via SAML and tested with ADFS.
 
 ## SSO via Saml
-
 ![SSO auth flow](./sso_flow.png)
 
 Notes:
@@ -34,7 +31,6 @@ Api key is bound to workspace/group/package/dashboard (see Data entities chapter
 
 However system API keys exist as well, but it could be issued only by system administrators.
 
-
 ## Personal Access Tokens
 PAT is equals to the bearer token when we talk about the permissions and user representation, but it have different properties in terms of TTL. Lifetime is configurable on creation and could be unlimited.  
 PAT is intended for personal automation, for example for VS code plugin.  
@@ -50,7 +46,6 @@ First of all let's define some terms/entities used in the following description.
 'Dashboard' is representation for a set of particulate versions of services, i.e. it's like deployment.
 
 ## Roles and permissions
-
 Apihub have built-in authorization model which is based on granted roles for workspace/group/package/dashboard and system roles.
 
 ```mermaid
@@ -111,7 +106,6 @@ Built-in roles:
 * Admin - full access to the entity
 * Release Manager - role to manage release versions
 
-
 It's possible to create a new custom role with any set of permissions(but read permission is mandatory).
 
 Example:  
@@ -126,10 +120,8 @@ It's possible to edit or delete roles other than "Admin" and "Viewer":
 ![delete role](delete_role.png)
 
 ### Permissions configuration
-
 Default permissions configuration:
 ![default permissions](roles.png)
-
 
 The roles configuration provides flexibility to create required roles with required set of permissions.
 
@@ -159,13 +151,11 @@ Add role "Owner" for the specific package:
 ![inheritance example 4](inheritance_example_4.png)
 
 ### Roles hierarchy
-
 The roles have an hierarchy which is used in access management.
 User may not assign a role higher than his own. (It's not used in default hierarchy)
 
 Default roles Hierarchy:
 ![roles hierarchy](roles_hierarchy.png)
-
 
 #### Example:  
 * Create a role "Gatekeeper" with permission to manage user access only. Move it to the top of hierarchy.  
@@ -185,7 +175,6 @@ Currently the only built-in system role is "system administrator".
 It gives:
 * access to all packages with maximum permissions
 * access to admin-only actions
-
 
 ## Entity visibility(privacy)
 Workspace/group/package/dashboard invisibility(privacy) is implemented via missing read permission.  
