@@ -13817,6 +13817,38 @@ components:
             Groups for the package version are calculated during publication of this version.
           type: string
           example: "/api/v1/{group}/"
+        allowedOasExtensions:
+          description: >-
+            List of OAS extensions that shall be preserverd when user exports OpenAPI specification(s) with remove OAS extensions option. 
+          type: array
+          items:
+            type: object 
+            properties:
+              oasExtension:
+                description: OAS extension that shall be preserverd when user exports OpenAPI specification(s) with remove OAS extensions option.
+                type: string
+                pattern: ^x-
+                example:
+                  - x-internal-info
+                  - x-design-details
+              inheritance:
+                type: object
+                description: Information about package from which OAS extention was inherited. If the object is not defined, it means that the OAS extension is directly specified for the current package.
+                properties:
+                  packageId:
+                    description: Package unique string identifier (full alias)
+                    type: string
+                    example: WS.GRP.PCKG
+                  kind:
+                    description: Package kind
+                    type: string
+                    enum:
+                      - workspace
+                      - group
+                  name:
+                    description: Name of the package
+                    type: string
+                    example: Resource Inventory
     PackageList:
       description: Base package object for parents list.
       type: object
@@ -13894,6 +13926,16 @@ components:
         restGroupingPrefix:
           description: Regular expression used as criteria for grouping operations.
           type: string
+        allowedOasExtensions:
+          description: >-
+            List of OAS extensions that shall be preserverd when user exports OpenAPI specification(s) with remove OAS extensions option.
+          type: array
+          items:
+            type: string
+            pattern: ^x-
+          example:
+            - x-internal-info
+            - x-design-details
     GitBranch:
       description: External Git branch params
       type: object
