@@ -13828,25 +13828,23 @@ components:
                 description: OAS extension that shall be preserverd when user exports OpenAPI specification(s) with remove OAS extensions option.
                 type: string
                 pattern: ^x-
-                example:
-                  - x-internal-info
-                  - x-design-details
+                example: x-internal-info
               inheritance:
                 type: object
                 description: Information about package from which OAS extention was inherited. If the object is not defined, it means that the OAS extension is directly specified for the current package.
                 properties:
                   packageId:
-                    description: Package unique string identifier (full alias)
+                    description: Package unique string identifier (full alias).
                     type: string
                     example: WS.GRP.PCKG
                   kind:
-                    description: Package kind
+                    description: Kind of the package.
                     type: string
                     enum:
                       - workspace
                       - group
                   name:
-                    description: Name of the package
+                    description: Name of the package.
                     type: string
                     example: Resource Inventory
     PackageList:
