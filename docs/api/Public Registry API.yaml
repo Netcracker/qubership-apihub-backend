@@ -13825,13 +13825,17 @@ components:
             type: object 
             properties:
               oasExtension:
-                description: OAS extension that shall be preserverd when user exports OpenAPI specification(s) with remove OAS extensions option.
+                description: |
+                  OAS extension that shall be preserverd when user exports OpenAPI specification(s) with remove OAS extensions option.
+                  List of OAS extention is unique among all OAS extensions in the package, including inherited ones.
                 type: string
                 pattern: ^x-
                 example: x-internal-info
               inheritance:
                 type: object
-                description: Information about package from which OAS extention was inherited. If the object is not defined, it means that the OAS extension is directly specified for the current package.
+                description: |
+                  Information about package from which OAS extention was inherited. If the object is not defined, it means that the OAS extension is directly specified for the current package.\
+                  Inherited extensions cannot be changed in child package.
                 properties:
                   packageId:
                     description: Package unique string identifier (full alias).
@@ -13925,8 +13929,9 @@ components:
           description: Regular expression used as criteria for grouping operations.
           type: string
         allowedOasExtensions:
-          description: >-
-            List of OAS extensions that shall be preserverd when user exports OpenAPI specification(s) with remove OAS extensions option.
+          description: |
+            List of OAS extensions that shall be preserverd when user exports OpenAPI specification(s) with remove OAS extensions option.\
+            List of OAS extention is unique among all OAS extensions in the package, including inherited ones.
           type: array
           items:
             type: string
