@@ -132,7 +132,7 @@ func main() {
 
 	go func(migrationReadyChan chan bool) { // Do not use safe async here to enable panic
 		passed := <-migrationPassedChan
-		err = initSrv.Shutdown(context.Background())
+		err := initSrv.Shutdown(context.Background())
 		if err != nil {
 			log.Fatalf("Failed to shutdown initial server")
 		}
