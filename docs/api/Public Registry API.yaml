@@ -13974,7 +13974,6 @@ components:
               oasExtension:
                 description: |
                   OAS extension that shall be preserverd when user exports OpenAPI specification(s) with remove OAS extensions option.
-                  List of OAS extentions is unique within current package.
                 type: string
                 pattern: ^x-
                 example: x-internal-info
@@ -14001,7 +14000,7 @@ components:
         allowedOasExtensions:
           description: |
             List of OAS extensions that shall be preserverd when user exports OpenAPI specification(s) with remove OAS extensions option.
-            List of OAS extention is unique within current package.
+            List of OAS extentions is unique within current package.
           type: array
           uniqueItems: true
           items:
