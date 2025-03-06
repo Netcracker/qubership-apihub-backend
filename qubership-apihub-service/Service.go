@@ -150,25 +150,25 @@ func main() {
 	go func() { // Do not use safe async here to enable panic
 		defer wg.Done()
 
-		//currentVersion, newVersion, migrationRequired, err := dbMigrationService.Migrate(basePath)
-		//if err != nil {
-		//	log.Error("Failed perform DB migration: " + err.Error())
-		//	time.Sleep(time.Second * 10) // Give a chance to read the unrecoverable error
-		//	panic("Failed perform DB migration: " + err.Error())
-		//}
-		//// to perform migrations, which could not be implemented with "pure" SQL
-		//err = dbMigrationService.SoftMigrateDb(currentVersion, newVersion, migrationRequired)
-		//if err != nil {
-		//	log.Errorf("Failed to perform db migrations: %v", err.Error())
-		//	time.Sleep(time.Second * 10) // Give a chance to read the unrecoverable error
-		//	panic("Failed to perform db migrations: " + err.Error())
-		//}
+		currentVersion, newVersion, migrationRequired, err := dbMigrationService.Migrate(basePath)
+		if err != nil {
+			log.Error("Failed perform DB migration: " + err.Error())
+			time.Sleep(time.Second * 10) // Give a chance to read the unrecoverable error
+			panic("Failed perform DB migration: " + err.Error())
+		}
+		// to perform migrations, which could not be implemented with "pure" SQL
+		err = dbMigrationService.SoftMigrateDb(currentVersion, newVersion, migrationRequired)
+		if err != nil {
+			log.Errorf("Failed to perform db migrations: %v", err.Error())
+			time.Sleep(time.Second * 10) // Give a chance to read the unrecoverable error
+			panic("Failed to perform db migrations: " + err.Error())
+		}
 
 		migrationPassedChan <- true
 	}()
 
 	wg.Wait()
-	//_ = <-initSrvStoppedChan // wait for the init srv to stop to avoid multiple servers started race condition
+	_ = <-initSrvStoppedChan // wait for the init srv to stop to avoid multiple servers started race condition
 	log.Infof("Migration step passed, continue initialization")
 
 	gitIntegrationRepository, err := repository.NewGitIntegrationRepositoryPG(cp)
@@ -665,7 +665,6 @@ func main() {
 
 	r.PathPrefix("/").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// TODO: return not implemented if request matches /api /ws
-		log.Infof("Requested path: %v %v", r.Method, r.RequestURI)
 		w.Header().Add("Cache-Control", "max-age=57600") // 16h
 		if r.URL.Path != "/" {
 			if strings.HasPrefix(r.URL.Path, "/editor") {
