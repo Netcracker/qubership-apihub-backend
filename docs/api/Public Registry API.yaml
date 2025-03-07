@@ -14000,7 +14000,7 @@ components:
         allowedOasExtensions:
           description: |
             List of OAS extensions that shall be preserverd when user exports OpenAPI specification(s) with remove OAS extensions option.
-            List of OAS extentions is unique within current package.\
+            List of OAS extensions is unique within current package.\
             The full list of direct extensions must be included in the request, as the request replaces the items in the array rather than adding to them.
           type: array
           uniqueItems: true
