@@ -226,7 +226,6 @@ paths:
                   $ref: "#/components/examples/InternalServerError"
   "/api/v1/export/publish/{publishId}/status":
     parameters:
-      - $ref: '#/components/parameters/slug'
       - name: publishId
         description: Publish Id
         in: path
