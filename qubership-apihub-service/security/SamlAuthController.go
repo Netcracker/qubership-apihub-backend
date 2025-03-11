@@ -237,7 +237,7 @@ func (a *authenticationControllerImpl) setUserViewCookie(w http.ResponseWriter, 
 		Name:     "userView",
 		Value:    cookieValue,
 		MaxAge:   int((time.Hour * 12).Seconds()),
-		Secure:   true,
+		Secure:   false,
 		HttpOnly: false,
 		Path:     "/",
 	})
