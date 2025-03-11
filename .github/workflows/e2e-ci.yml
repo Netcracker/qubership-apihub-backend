@@ -1,0 +1,14 @@
+name: E2E CI Workflow
+on:
+  push:
+    branches:
+      - '**'
+
+jobs:
+  call-e2e-ci-workflow:
+    uses: netcracker/qubership-apihub-ci/.github/workflows/e2e-ci.yml@e2e
+    with:
+      compose-repository-url: "https://github.com/Netcracker/qubership-apihub"
+      compose-repository-branch: "main"
+      compose-repository-compose-folder: "docker-compose"
+      compose-repository-compose-file: "docker-compose.yml"
