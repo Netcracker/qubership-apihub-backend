@@ -13948,6 +13948,7 @@ components:
         - groupName
         - apiType
         - buildType
+        - format
       properties:
         exportedEntity:
           description: The entity to be exported.
@@ -13979,6 +13980,16 @@ components:
           enum:
             - reducedSourceSpecifications
             - mergedSpecification
+        format:
+          description: | 
+            Format of the exported file.\
+            If buidType = reducedSourceSpecifications, then format can be yaml, json or html.\
+            If buidType = mergedspecification, then format can be yaml or json; html is not supported for this buildType.
+          type: string
+          enum:
+            - yaml
+            - json
+            - html
         removeOasExtensions:
           description: |
             Flag defines whether OAS extensions shall be removed (taking into
