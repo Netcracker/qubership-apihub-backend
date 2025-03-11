@@ -146,6 +146,178 @@ paths:
               examples:
                 InternalServerError:
                   $ref: "#/components/examples/InternalServerError"
+  "/api/v1/export":
+    post:
+      tags:
+        - Export
+      summary: Async export entity
+      description: | 
+        Start export of package version, one document or operations group. GET /api/v1/export/publish/{publishId}/status shall be used to get status of export and exported file itself.\
+        Export of document is currently intended for document with type openapi-3-1 / openapi-3-0 / openapi-2-0. For other documnet types GET /api/v2/packages/{packageId}/versions/{version}/files/{slug}/raw shall be used.\
+        Export of operations group is currently intended for groups with apiType = REST.
+      operationId: postExport
+      security:
+        - BearerAuth: []
+        - api-key: []
+      requestBody:
+        description: |
+          Defines entity that shall be exported and export settings.\
+          The following entities can be exported:
+            - **version** - in this case all documents from version will be exported as zip file. If version contains documents with type openapi-3-1 / openapi-3-0 / openapi-2-0, zip will inlude interative (HTML) format for these documents.
+            - **document** - export of one specific document with type openapi-3-1 / openapi-3-0 / openapi-2-0
+            - **opetation group** - export of operation group. Only operation group with apiType = REST can be exported.
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/ExportVersion"
+                - $ref: "#/components/schemas/ExportDocument"
+                - $ref: "#/components/schemas/ExportOperationsGroup"
+              discriminator:
+                propertyName: exportedEntity
+      responses:
+        "202":
+          description: Export process started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  publishId:
+                    type: string
+                    description: Export process Id
+                    format: uuid
+                    example: 9c8e9045-dd9c-4946-b9e4-e05e3f41c4cc
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                IncorrectInputParams:
+                  $ref: "#/components/examples/IncorrectInputParameters"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                PackageNotFound:
+                  $ref: "#/components/examples/PackageNotFound"
+                VersionNotFound:
+                  $ref: "#/components/examples/VersionNotFound"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v1/export/publish/{publishId}/status":
+    parameters:
+      - $ref: '#/components/parameters/slug'
+      - name: publishId
+        description: Publish Id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 9c8e9045-dd9c-4946-b9e4-e05e3f41c4cc
+    get:
+      tags:
+        - Export
+      summary: Get export status
+      description: |
+        Get export status. If export artifact for export is ready, then it will be returned.
+      operationId: getExportPublishIdStatus
+      security:
+        - BearerAuth: []
+        - api-key: []
+        - PersonalAcccessToken: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    description: Publish process status.
+                    type: string
+                    enum:
+                      - running
+                      - error
+                      - none
+                  message:
+                    description: The message for **error** status.
+                    type: string
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+                description: |
+                  File to download.
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                description: | 
+                  File name for exported entity.
+                    - if version was exported: <pacakge name>_<version>.<extension>
+                    - if document was exported: <file name>_<packageId>_<version>.<extention>
+                    - if operations group was exported: <group name>_<packageId>_<version>.<extention>
+                example: attachment; filename="PCKG1.zip"
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                IncorrectInputParams:
+                  $ref: '#/components/examples/IncorrectInputParameters'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples: {}
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                PackageNotFound:
+                  $ref: '#/components/examples/PackageNotFound'
+                VersionNotFound:
+                  $ref: '#/components/examples/VersionNotFound'
+                FileNotFound:
+                  $ref: '#/components/examples/FileNotFound'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                InternalServerError:
+                  $ref: '#/components/examples/InternalServerError'
   /api/v2/activity:
     get:
       tags:
@@ -1466,7 +1638,7 @@ paths:
               examples:
                 InternalServerError:
                   $ref: "#/components/examples/InternalServerError"
-  /api/v2/packages/{packageId}/activity:
+  "/api/v2/packages/{packageId}/activity":
     get:
       tags:
         - Packages
@@ -6226,6 +6398,8 @@ paths:
         schema:
           type: string
     post:
+      deprecated: true
+      x-deprecation-reason: POST /api/v1/export shall be used instead of the current operation.
       tags:
         - Versions
         - Operation groups
@@ -6507,6 +6681,8 @@ paths:
         schema:
           type: string
     get:
+      deprecated: true
+      x-deprecation-reason: POST /api/v1/export shall be used instead of the current operation.
       tags:
         - Export
         - Operation groups
@@ -6668,6 +6844,8 @@ paths:
       - $ref: "#/components/parameters/version"
       - $ref: "#/components/parameters/slug"
     get:
+      deprecated: true
+      x-deprecation-reason: POST /api/v1/export shall be used instead of the current operation.
       tags:
         - Export
       summary: Export offline API documentation by selected file
@@ -6828,6 +7006,8 @@ paths:
       - $ref: "#/components/parameters/packageId"
       - $ref: "#/components/parameters/version"
     get:
+      deprecated: true
+      x-deprecation-reason: POST /api/v1/export shall be used instead of the current operation.
       tags:
         - Export
       summary: Export offline API documentation by selected versions
@@ -13687,6 +13867,126 @@ components:
         - rest
         - graphql
         - protobuf
+    ExportVersion:
+      type: object
+      title: Export entire version.
+      description: Export settings for exporting the version.
+      required:
+        - exportedEntity
+        - packageId
+        - version
+      properties:
+        exportedEntity:
+          description: The entity to be exported.
+          type: string
+          enum:
+            - version
+        packageId:
+          description: Package unique string identifier (full alias)
+          type: string
+          example: WS.GRP.PCKG
+        version:
+          description: Package version
+          type: string
+          example: 2024.2
+        removeOasExtensions:
+          description: |
+            Flag defines whether OAS extensions shall be removed (taking into
+            account allowed list of OAS extensions defined on package) from
+            exported OpenAPI specifications or not.
+          type: boolean
+          default: false
+    ExportDocument:
+      type: object
+      title: Export one document
+      description: Export settings for exporting one document. The option is applicable only for document types - openapi-3-1 / openapi-3-0 / openapi-2-0.
+      required: 
+        - exportedEntity
+        - packageId
+        - version
+        - slug
+        - format
+      properties:
+        exportedEntity:
+          description: The entity to be exported.
+          type: string
+          enum:
+            - document
+        packageId:
+          description: Package unique string identifier (full alias).
+          type: string
+          example: WS.GRP.PCKG
+        version:
+          description: Package version
+          type: string
+          example: 2024.2
+        slug: 
+          description: Unique string identifier of document to export. Type of this document must be openapi-3-1 / openapi-3-0 / openapi-2-0.
+          type: string
+          pattern: "^[a-z0-9-]"
+          example: "qitmf-v5-11-json"
+        format:
+          description: | 
+            File format for export.
+          type: string
+          enum:
+            - yaml
+            - json
+            - html
+        removeOasExtensions:
+          description: |
+            Flag defines whether OAS extensions shall be removed (taking into account allowed list of OAS extensions defined on package) from exported specification or not.
+          type: boolean
+          default: false
+    ExportOperationsGroup:
+      type: object
+      title: Export operations group.
+      description: Export settings for exporting the operations group.
+      required: 
+        - exportedEntity
+        - packageId
+        - version
+        - groupName
+        - apiType
+        - buildType
+      properties:
+        exportedEntity:
+          description: The entity to be exported.
+          type: string
+          enum:
+            - version
+        packageId:
+          description: Package unique string identifier (full alias).
+          type: string
+          example: WS.GRP.PCKG
+        version:
+          description: Package version.
+          type: string
+          example: 2024.2
+        groupName:
+          description: Name of the operations group to export.
+          type: string
+        apiType:
+          description: Type of the API of operation group.
+          type: string
+          enum:
+            - rest
+        buildType:
+          description: |
+            Type of the build process for OpeanAPI specification tranformation. Available options are:
+            - **reducedSourceSpecifications** - proccess that finds source specifications for all operations from operation group and removes from these specifications operations other than those that are included into operation group.
+            - **mergedSpecification** - process the merges all operations from an operation group into one specification.
+          type: string
+          enum:
+            - reducedSourceSpecifications
+            - mergedSpecification
+        removeOasExtensions:
+          description: |
+            Flag defines whether OAS extensions shall be removed (taking into
+            account allowed list of OAS extensions defined on package) from
+            exported specification or not.
+          type: boolean
+          default: false
     PackageCreate:
       description: Parameters for the package creation
       required:
