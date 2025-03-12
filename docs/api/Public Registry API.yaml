@@ -150,22 +150,23 @@ paths:
     post:
       tags:
         - Export
-      summary: Async export of version, document and operations group
+      summary: Async export of version, document or operations group
       description: | 
-        Start export of package version, one document or operations group. GET /api/v1/export/publish/{publishId}/status shall be used to get status of export and exported file itself.\
-        Export of document is currently intended for document with type openapi-3-1 / openapi-3-0 / openapi-2-0. For other documnet types GET /api/v2/packages/{packageId}/versions/{version}/files/{slug}/raw shall be used.\
-        Export of operations group is currently intended for groups with apiType = REST.
+        Start export of package version, one document or operations group. Use GET /api/v1/export/publish/{publishId}/status to get status of export and exported file itself.\
+        Export of document is currently available for documents with type openapi-3-1, openapi-3-0, or openapi-2-0 and is intended to retrieve content with some transformations. For other document types, use GET /api/v2/packages/{packageId}/versions/{version}/files/{slug} to obtain the original document content.\
+        Export of operations group is currently available for groups with apiType = REST.
       operationId: postExport
       security:
         - BearerAuth: []
         - api-key: []
+        - PersonalAccessToken: []
       requestBody:
         description: |
-          Defines entity that shall be exported and export settings.\
+          Defines an entity that shall be exported and export settings.\
           The following entities can be exported:
-            - **version** - in this case all documents from version will be exported as zip file. If version contains documents with type openapi-3-1 / openapi-3-0 / openapi-2-0, zip will inlude interative (HTML) format for these documents.
-            - **document** - export of one specific document with type openapi-3-1 / openapi-3-0 / openapi-2-0
-            - **opetation group** - export of operation group. Only operation group with apiType = REST can be exported.
+            - **version** - export of all documents from the version.
+            - **document** - export of one specific document with type openapi-3-1, openapi-3-0, or openapi-2-0.
+            - **operations group** - export of operations group. Only operations group with apiType = REST can be exported.
         content:
           application/json:
             schema:
@@ -224,10 +225,10 @@ paths:
               examples:
                 InternalServerError:
                   $ref: "#/components/examples/InternalServerError"
-  "/api/v1/export/publish/{publishId}/status":
+  "/api/v1/export/{exportId}/status":
     parameters:
-      - name: publishId
-        description: Publish Id
+      - name: exportId
+        description: Export process id.
         in: path
         required: true
         schema:
@@ -237,14 +238,14 @@ paths:
     get:
       tags:
         - Export
-      summary: Get status of async export operation (POST /api/v1/export)
+      summary: Get status of async export
       description: |
-        Get export status. If export artifact for export is ready, then it will be returned.
-      operationId: getExportPublishIdStatus
+        Get status of async export operation (POST /api/v1/export). If file for export is ready, then it will be returned. The resulting file is stored temporarily; once deleted, it is needed to run the asynchronous export process again.
+      operationId: getExportIdStatus
       security:
         - BearerAuth: []
         - api-key: []
-        - PersonalAcccessToken: []
+        - PersonalAccessToken: []
       responses:
         '200':
           description: Success
@@ -13869,7 +13870,9 @@ components:
     ExportVersion:
       type: object
       title: Export entire version.
-      description: Export settings for exporting the version.
+      description: | 
+        Export settings for exporting a version (i.e., all documents from the version).
+        The export result includes a ZIP file containing interactive HTML for OpenAPI documents (i.e., those with types openapi-3-1, openapi-3-0, or openapi-2-0) and raw files for all other document types.
       required:
         - exportedEntity
         - packageId
@@ -13898,7 +13901,9 @@ components:
     ExportDocument:
       type: object
       title: Export one document
-      description: Export settings for exporting one document. The option is applicable only for document types - openapi-3-1 / openapi-3-0 / openapi-2-0.
+      description: |
+        Export settings for exporting one document. The option is applicable only for document types - openapi-3-1 / openapi-3-0 / openapi-2-0.
+        The export result is determined by the "format" parameter.
       required: 
         - exportedEntity
         - packageId
@@ -13939,8 +13944,10 @@ components:
           default: false
     ExportOperationsGroup:
       type: object
-      title: Export operations group.
-      description: Export settings for exporting the operations group.
+      title: Export operations group. 
+      description: | 
+        Export settings for exporting the operations group. The option is applicable only for groups with apiType = REST.
+        The export result is determined by the "format" and "buildType" parameters.
       required: 
         - exportedEntity
         - packageId
@@ -13962,7 +13969,7 @@ components:
         version:
           description: Package version.
           type: string
-          example: 2024.2
+          example: "2024.2"
         groupName:
           description: Name of the operations group to export.
           type: string
