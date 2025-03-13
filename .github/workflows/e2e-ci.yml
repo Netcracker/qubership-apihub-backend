@@ -38,20 +38,35 @@ on:
           description: "Collections to execute"
           type: string
           default: "./e2e/1_1_Smoke_Portal.postman_collection.json,./e2e/2_1_Negative_Portal.postman_collection.json,./e2e/3_1_Stories_Bugs.postman_collection.json,./e2e/4_Access_control.postman_collection.json"
-    
+      playwright-tests-run:
+        description: "Flag for executing playwright tests"
+        type: boolean
+        default: true
+      playwright-repository-url:
+          description: "URL of the repository to clone"
+          type: string
+          required: true
+          default: "https://github.com/Netcracker/qubership-apihub-ui-tests"
+      playwright-repository-branch:
+          description: "Branch to clone"
+          type: string
+          default: "main"
 
 jobs:
   call-e2e-ci-workflow:
     uses: netcracker/qubership-apihub-ci/.github/workflows/e2e-ci.yml@e2e
     with:
-      compose-repository-url: "https://github.com/Netcracker/qubership-apihub"
-      compose-repository-branch: "main"
-      compose-repository-compose-folder: "docker-compose"
-      compose-repository-compose-file: "docker-compose.yml"
-      postman-collections-run: true
-      postman-repository-url: "https://github.com/Netcracker/qubership-apihub-postman-collections"
-      postman-repository-branch: "main"
-      postman-collections-list: "./e2e/1_1_Smoke_Portal.postman_collection.json,./e2e/3_1_Stories_Bugs.postman_collection.json"
+      compose-repository-url: ${{ github.event.inputs.compose-repository-url || 'https://github.com/Netcracker/qubership-apihub' }}
+      compose-repository-branch: ${{ github.event.inputs.compose-repository-branch || 'main' }}
+      compose-repository-compose-folder: ${{ github.event.inputs.compose-repository-compose-folder || 'docker-compose' }}
+      compose-repository-compose-file: ${{ github.event.inputs.compose-repository-compose-file || 'docker-compose.yml' }}
+      postman-collections-run: ${{ github.event.inputs.postman-collections-run || true}}
+      postman-repository-url: ${{ github.event.inputs.postman-repository-url || 'https://github.com/Netcracker/qubership-apihub-postman-collections' }}
+      postman-repository-branch: ${{ github.event.inputs.postman-repository-branch || 'main' }}
+      postman-collections-list: ${{ github.event.inputs.postman-collections-list || './e2e/1_1_Smoke_Portal.postman_collection.json' }}
+      playwright-repository-url: ${{ github.event.inputs.playwright-repository-url || 'https://github.com/Netcracker/qubership-apihub-ui-tests' }}
+      playwright-repository-branch: ${{ github.event.inputs.playwright-repository-branch || 'main' }}
+      playwright-tests-run: ${{ github.event.inputs.playwright-tests-run || true }}
     secrets:
       APIHUB_ACCESS_TOKEN: ${{ secrets.APIHUB_ACCESS_TOKEN }}
       APIHUB_ADMIN_EMAIL: ${{ secrets.APIHUB_ADMIN_EMAIL }}
