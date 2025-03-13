@@ -1,9 +1,43 @@
 name: E2E CI Workflow
 on:
-  push:
-    branches:
-      - '**'
+  pull_request:
+    types: [opened, reopened, synchronize]
   workflow_dispatch:
+    inputs:
+      compose-repository-url:
+          description: "URL of the repository to clone"
+          type: string
+          required: true
+          default: "https://github.com/Netcracker/qubership-apihub"
+      compose-repository-branch:
+          description: "Branch to clone"
+          type: string
+          default: "main"
+      compose-repository-compose-folder:
+          description: "Path to the folder with docker-compose file"
+          type: string
+          default: "docker-compose"
+      compose-repository-compose-file:
+          description: "docker-compose filename"
+          type: string
+          default: "docker-compose.yml"
+      postman-collections-run:
+          description: "Flag for executing postman collections"
+          type: boolean
+          default: true
+      postman-repository-url:
+          description: "URL of the repository to clone"
+          type: string
+          required: true
+          default: "https://github.com/Netcracker/qubership-apihub-postman-collections"
+      postman-repository-branch:
+          description: "Branch to clone"
+          type: string
+          default: "main"
+      postman-collections-list:
+          description: "Collections to execute"
+          type: string
+          default: "./e2e/1_1_Smoke_Portal.postman_collection.json,./e2e/2_1_Negative_Portal.postman_collection.json,./e2e/3_1_Stories_Bugs.postman_collection.json,./e2e/4_Access_control.postman_collection.json"
     
 
 jobs:
