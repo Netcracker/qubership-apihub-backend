@@ -1,10 +1,13 @@
-name: Docker CI Workflow
+name: Docker Build and publish workflow
+
 on:
-  release:
-    types: [created]
   push:
     branches:
       - '**'
+    tags:
+      - '*'
+  pull_request:
+    types: [opened, synchronize, reopened]
 
 jobs:
   call-docker-ci-workflow:
