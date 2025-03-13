@@ -27,7 +27,7 @@ jobs:
     with:
       postman-collections-run: false
       postman-collections-list: './e2e/1_1_Smoke_Portal.postman_collection.json,./e2e/2_1_Negative_Portal.postman_collection.json,./e2e/3_1_Stories_Bugs.postman_collection.json,./e2e/4_Access_control.postman_collection.json'
-      backend_image_tag: ${{ needs.call-docker-ci-workflow.outputs.image_tag }}
+      backend-image-tag: ${{ needs.call-docker-ci-workflow.outputs.image_tag }}
     secrets:
       APIHUB_ACCESS_TOKEN: ${{ secrets.APIHUB_ACCESS_TOKEN }}
       APIHUB_ADMIN_EMAIL: ${{ secrets.APIHUB_ADMIN_EMAIL }}
