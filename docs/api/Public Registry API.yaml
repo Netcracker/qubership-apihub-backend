@@ -278,9 +278,9 @@ paths:
                 type: string
                 description: | 
                   File name for exported entity.
-                    - if version was exported: <pacakge name>_<version>.<extension>
-                    - if document was exported: <file name>_<packageId>_<version>.<extention>
-                    - if operations group was exported: <group name>_<packageId>_<version>.<extention>
+                    - if version was exported: <packageId>_<version>.<extension>
+                    - if document was exported: <packageId>_<version>_<file name>.<extension>
+                    - if operations group was exported: <packageId>_<version>_<group name>.<extension>
                 example: attachment; filename="PCKG1.zip"
         '400':
           description: Bad request
