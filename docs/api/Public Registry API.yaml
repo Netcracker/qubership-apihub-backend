@@ -13868,7 +13868,7 @@ components:
         - exportedEntity
         - packageId
         - version
-        - slug
+        - documentId
         - format
       properties:
         exportedEntity:
