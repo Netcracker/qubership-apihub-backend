@@ -12217,7 +12217,7 @@ paths:
                             packageRef:
                               description: |
                                 Referenced package and version link. Created by the concatenation of the packageId and version name with At sign.\
-                                Parameter is required if the operation is called for package with kind = dashboard; otherwise, parameter will not be returned.
+                                Parameter is required if operation is called for the package with kind = dashboard; otherwise, parameter will not be returned.
                               type: string
                               example: "QS.CloudQSS.CPQ.Q-TMF@2023.2"
                   packages:
