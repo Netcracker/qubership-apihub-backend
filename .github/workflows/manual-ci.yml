@@ -30,18 +30,33 @@ on:
           description: "Flag for make the job green even if there are failed tests"
           type: boolean
           default: true
+      backend-image-tag:
+          description: "Branch to clone"
+          type: string
+          default: "dev"
+      task-consumer-image-tag:
+          description: "Branch to clone"
+          type: string
+          default: "dev"
+      ui-image-tag:
+          description: "Branch to clone"
+          type: string
+          default: "dev"
 
 jobs:
   call-e2e-ci-workflow:
     uses: netcracker/qubership-apihub-ci/.github/workflows/e2e-ci.yml@e2e
     with:
-      compose-repository-branch: ${{ github.event.inputs.compose-repository-branch || 'main' }}
-      postman-collections-run: ${{ github.event.inputs.postman-collections-run || true}}
-      postman-repository-branch: ${{ github.event.inputs.postman-repository-branch || 'main' }}
-      postman-collections-list: ${{ github.event.inputs.postman-collections-list || './e2e/1_1_Smoke_Portal.postman_collection.json' }}
-      playwright-repository-branch: ${{ github.event.inputs.playwright-repository-branch || 'main' }}
-      playwright-tests-run: ${{ github.event.inputs.playwright-tests-run || true }}
-      fail-because-of-tests: ${{ github.event.inputs.fail-because-of-tests || true }}
+      compose-repository-branch: ${{ github.event.inputs.compose-repository-branch }}
+      postman-collections-run: ${{ github.event.inputs.postman-collections-run }}
+      postman-repository-branch: ${{ github.event.inputs.postman-repository-branch }}
+      postman-collections-list: ${{ github.event.inputs.postman-collections-list }}
+      playwright-repository-branch: ${{ github.event.inputs.playwright-repository-branch }}
+      playwright-tests-run: ${{ github.event.inputs.playwright-tests-run }}
+      fail-because-of-tests: ${{ github.event.inputs.fail-because-of-tests }}
+      backend-image-tag: ${{ github.event.inputs.backend-image-tag }}
+      task-consumer-image-tag: ${{ github.event.inputs.task-consumer-image-tag }}
+      ui-image-tag: ${{ github.event.inputs.ui-image-tag }}
     secrets:
       APIHUB_ACCESS_TOKEN: ${{ secrets.APIHUB_ACCESS_TOKEN }}
       APIHUB_ADMIN_EMAIL: ${{ secrets.APIHUB_ADMIN_EMAIL }}
