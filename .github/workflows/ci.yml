@@ -11,7 +11,7 @@ on:
 
 jobs:
   call-docker-ci-workflow:
-    uses: netcracker/qubership-apihub-ci/.github/workflows/docker-ci.yml@e2e
+    uses: netcracker/qubership-apihub-ci/.github/workflows/docker-ci.yml@main
     with:
         name: qubership-apihub-backend
         file: Dockerfile
@@ -21,7 +21,7 @@ jobs:
             maintainer=qubership
 
   call-docker-compose-run-and-test-ci-workflow:
-    uses: netcracker/qubership-apihub-ci/.github/workflows/docker-compose-run-and-test-ci.yml@e2e
+    uses: netcracker/qubership-apihub-ci/.github/workflows/docker-compose-run-and-test-ci.yml@main
     needs: call-docker-ci-workflow
     if: github.event_name == 'pull_request'
     with:
