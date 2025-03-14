@@ -23,9 +23,8 @@ jobs:
   call-e2e-ci-workflow:
     uses: netcracker/qubership-apihub-ci/.github/workflows/e2e-ci.yml@e2e
     needs: call-docker-ci-workflow
-    # if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request'
     with:
-      postman-collections-run: false
       postman-collections-list: './e2e/1_1_Smoke_Portal.postman_collection.json,./e2e/2_1_Negative_Portal.postman_collection.json,./e2e/3_1_Stories_Bugs.postman_collection.json,./e2e/4_Access_control.postman_collection.json'
       backend-image-tag: ${{ needs.call-docker-ci-workflow.outputs.image_tag }}
     secrets:
