@@ -8093,7 +8093,7 @@ paths:
                     format: binary
                   config.json:
                     oneOf:
-                      - $ref: "#/components/schemas/PublihsBuildConfig"
+                      - $ref: "#/components/schemas/PublishBuildConfig"
                       - $ref: "#/components/schemas/ExportVersionBuildConfig"
                       - $ref: "#/components/schemas/ExportDocumentBuildConfig"
                       - $ref: "#/components/schemas/ExportOperationsGroupBuildConfig"
@@ -12216,8 +12216,8 @@ paths:
                           properties:
                             packageRef:
                               description: |
-                                Referenced package and version link. 
-                                Created by the concatenation of the packageId and version name with At sign.
+                                Referenced package and version link. Created by the concatenation of the packageId and version name with At sign.\
+                                Parameter is required if the operation is called for package with kind = dashboard; otherwise, parameter will not be returned.
                               type: string
                               example: "QS.CloudQSS.CPQ.Q-TMF@2023.2"
                   packages:
@@ -13914,7 +13914,7 @@ components:
         - version
         - groupName
         - apiType
-        - buildType
+        - operationsSpecTransformation
         - format
       properties:
         exportedEntity:
@@ -16547,7 +16547,7 @@ components:
                   Required for conflict resolution case when different versions of the same package appear in the publication config.
                   All excluded refs will be ignored (but will still be visible for package version). 
                 type: boolean
-    PublihsBuildConfig:
+    PublishBuildConfig:
       type: object
       description: | 
         Configuration for publication process.\
