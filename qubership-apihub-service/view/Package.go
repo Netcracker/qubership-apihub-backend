@@ -81,7 +81,7 @@ type SimplePackage struct {
 	DeletionDate          *time.Time          `json:"-"`
 	DeletedBy             string              `json:"-"`
 	CreatedBy             string              `json:"-"`
-	CreatedAt             time.Time           `json:"-"`
+	CreatedAt             time.Time           `json:"createdAt,omitempty"`
 	DefaultReleaseVersion string              `json:"defaultReleaseVersion"`
 	DefaultVersion        string              `json:"defaultVersion"`
 	ReleaseVersionPattern string              `json:"releaseVersionPattern"`
@@ -116,6 +116,7 @@ type PackagesInfo struct {
 	LastReleaseVersionDetails *VersionDetails     `json:"lastReleaseVersionDetails,omitempty"`
 	RestGroupingPrefix        string              `json:"restGroupingPrefix,omitempty"`
 	ReleaseVersionPattern     string              `json:"releaseVersionPattern,omitempty"`
+	CreatedAt                 time.Time           `json:"createdAt,omitempty"`
 }
 
 type ParentPackageInfo struct {
