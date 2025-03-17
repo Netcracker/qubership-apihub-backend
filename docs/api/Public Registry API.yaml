@@ -13945,8 +13945,8 @@ components:
         format:
           description: | 
             Format of the exported file.\
-            If buidType = reducedSourceSpecifications, then format can be yaml, json or html. The export result includes a ZIP file containing files in selected format.\ 
-            If buidType = mergedspecification, then format can be yaml or json; html is not supported for this buildType.
+            If operationsSpecTransformation = reducedSourceSpecifications, then format can be yaml, json or html. The export result includes a ZIP file containing files in selected format.\ 
+            If operationsSpecTransformation = mergedspecification, then format can be yaml or json; html is not supported for this buildType.
           type: string
           enum:
             - yaml
@@ -16776,12 +16776,6 @@ components:
             specific revision.
           type: string
           example: 2022.3@3
-        apiType:
-          description: |
-            Document transformation is available only for apiType = REST
-          type: string
-          enum:
-            - rest
         groupName:
           description: Name of the group
           type: string
@@ -16797,6 +16791,10 @@ components:
             - mergedSpecification
         format:
           type: string
+          description: | 
+            Format of the exported file.\
+            If operationsSpecTransformation = reducedSourceSpecifications, then format can be yaml, json or html. The export result includes a ZIP file containing files in selected format.\ 
+            If operationsSpecTransformation = mergedspecification, then format can be yaml or json; html is not supported for this buildType.
           enum:
             - yaml
             - json
