@@ -16651,7 +16651,7 @@ components:
           enum:
             - exportVersion
         packageId:
-          description: Package unique identifier (full alias).
+          description: Package unique identifier (full alias) of package with kind = package.
           type: string
           example: NC.CBSS.CPQ.TMF
         version:
