@@ -13824,7 +13824,7 @@ components:
       type: object
       title: Export entire version
       description: | 
-        Export settings for exporting a version (i.e., all documents from the version).\
+        Export settings for exporting a version (i.e., all documents from the version). Only version of package with kind = package can be exported.\
           * format = html: the export result includes a ZIP file containing interactive HTML for OpenAPI documents (i.e., those with types openapi-3-1, openapi-3-0, or openapi-2-0) and raw files for all other document types.
       required:
         - exportedEntity
@@ -13838,7 +13838,7 @@ components:
           enum:
             - version
         packageId:
-          description: Package unique string identifier (full alias)
+          description: Package unique string identifier (full alias) of package with kind = package.
           type: string
           example: WS.GRP.PCKG
         version:
