@@ -6274,6 +6274,12 @@ paths:
             - json
             - html
           default: json
+      - name: removeOasExtensions
+        in: query
+        description: Flag defines whether OAS extensions shall be removed (taking into account allowed list of OAS extensions defined on package) from exported specification or not.
+        schema:
+          type: boolean
+          default: false
       responses:
         "200":
           description: Documents transformation completed successfully
@@ -6320,6 +6326,17 @@ paths:
                       - yaml
                       - json
                       - html
+                  allowedOasExtensions:
+                    description: |
+                      List of OAS extensions that shall be preserverd when user exports OpenAPI specification(s) with remove OAS extensions options:
+                      * If allowedOasExtensions is empty array, then this means OAS extensions shall be removed, but there is no allowed OAS exntesions, i.e. all OAS extensions shall be removed.
+                      * If allowedOasExtensions is undefined, then this means that OAS extensions shall **not** be removed (i.e. removeOasExtensions = false).
+                      * If allowedOasExtensions has some value(s), then this means that OAS extensions shall be removed except for the provided value(s) of allowed OAS extension(s).
+                    type: array
+                    items:
+                      type: string
+                      pattern: '^x-'
+                    example: [x-internal-info, x-design-details]
                   createdBy:
                     description: The user who created the object
                     type: string
@@ -6532,6 +6549,12 @@ paths:
               - json
               - html
             default: json
+        - name: removeOasExtensions
+          in: query
+          description: Flag defines whether OAS extensions shall be removed (taking into account allowed list of OAS extensions defined on package) from exported specification or not.
+          schema:
+            type: boolean
+            default: false
       responses:
         "200":
           description: Success
@@ -6749,6 +6772,200 @@ paths:
               examples:
                 InternalServerError:
                   $ref: "#/components/examples/InternalServerError"
+  "/api/v1/packages/{packageId}/versions/{version}/export/files/{slug}/spec":
+    parameters:
+      - $ref: "#/components/parameters/packageId"
+      - $ref: "#/components/parameters/version"
+      - $ref: "#/components/parameters/slug"
+    get:
+      tags:
+        - Export
+      summary: Async export of API specification
+      description: |
+        Export API specification in one of the following format:
+        - interactive - zip file with interaction html.
+        - raw - yaml/json file.
+        This endpoint must be used only for documents with openapi-3-1, openapi-3-0, openapi-2-0 types. If slug is provided for another document type, then 400 error will be returned.
+      operationId: getPackageIdVersionExportSlugSpec
+      security:
+        - BearerAuth: []
+        - api-key: []
+      parameters:
+        - name: docType
+          in: query
+          description: Type of the exported documentation.
+          required: false
+          schema:
+            type: string
+            enum:
+              - interactive
+              - raw
+            default: interactive
+        - name: removeOasExtensions
+          in: query
+          description: Flag defines whether OAS extensions shall be removed (taking into account whitelist of OAS extensions defined on package) from exported specification or not.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '202':
+          description: Export process started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  publishId:
+                    type: string
+                    description: Export process Id
+                    format: uuid
+                    example: 9c8e9045-dd9c-4946-b9e4-e05e3f41c4cc
+        "301":
+          description: Moved Permanently
+          headers:
+            Location:
+              schema: 
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                IncorrectInputParams:
+                  $ref: "#/components/examples/IncorrectInputParameters"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                PackageNotFound:
+                  $ref: "#/components/examples/PackageNotFound"
+                VersionNotFound:
+                  $ref: "#/components/examples/VersionNotFound"
+                FileNotFound:
+                  $ref: "#/components/examples/FileNotFound"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v1/packages/{packageId}/versions/{version}/export/files/{slug}/spec/publish/{publishId}/status":
+    parameters:
+      - $ref: "#/components/parameters/packageId"
+      - $ref: "#/components/parameters/version"
+      - $ref: "#/components/parameters/slug"
+      - name: publishId
+        description: Publish Id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 9c8e9045-dd9c-4946-b9e4-e05e3f41c4cc
+    get:
+      tags:
+        - Export
+      summary: Get status of API specification export
+      description: |
+        Get status of API specification export
+      operationId: getPackageIdVersionExportSlugSpecPublishIdStatus
+      security:
+        - BearerAuth: []
+        - api-key: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    description: Publish process status.
+                    type: string
+                    enum:
+                      - running
+                      - error
+                      - none
+                  message:
+                    description: The message for **error** status.
+                    type: string
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+                description: |
+                  Documentation ZIP file (if docType = interactive) or yaml/json
+                  (if docType = raw) to download
+        "301":
+          description: Moved Permanently
+          headers:
+            Location:
+              schema: 
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                IncorrectInputParams:
+                  $ref: "#/components/examples/IncorrectInputParameters"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                PackageNotFound:
+                  $ref: "#/components/examples/PackageNotFound"
+                VersionNotFound:
+                  $ref: "#/components/examples/VersionNotFound"
+                FileNotFound:
+                  $ref: "#/components/examples/FileNotFound"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
   "/api/v2/packages/{packageId}/versions/{version}/sourceData":
     parameters:
       - $ref: "#/components/parameters/packageId"
@@ -6896,6 +7113,185 @@ paths:
                   $ref: "#/components/examples/PackageNotFound"
                 VersionNotFound:
                   $ref: "#/components/examples/VersionNotFound"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v1/packages/{packageId}/versions/{version}/export/spec":
+    parameters:
+      - $ref: "#/components/parameters/packageId"
+      - $ref: "#/components/parameters/version"
+      - $ref: "#/components/parameters/slug"
+    get:
+      tags:
+        - Export
+      summary: Async export of all package version documents
+      description: |
+        Export all documents from package version in zip file.\
+        If pacakge version has OpenAPI specification(s), it will be exported as interactive html. All other documents will be exported as is.
+      operationId: getPackageIdVersionExportSpec
+      security:
+        - BearerAuth: []
+        - api-key: []
+      parameters:
+        - name: removeOasExtensions
+          in: query
+          description: Flag defines whether OAS extensions shall be removed (taking into account whitelist of OAS extensions defined on package) from exported OpenAPI specifications or not. Flag is applicable only to documents type openapi-3-1, openapi-3-0, openapi-2-0.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '202':
+          description: Export process started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  publishId:
+                    type: string
+                    description: Export process Id
+                    format: uuid
+                    example: 9c8e9045-dd9c-4946-b9e4-e05e3f41c4cc
+        "301":
+          description: Moved Permanently
+          headers:
+            Location:
+              schema: 
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                IncorrectInputParams:
+                  $ref: "#/components/examples/IncorrectInputParameters"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                PackageNotFound:
+                  $ref: "#/components/examples/PackageNotFound"
+                VersionNotFound:
+                  $ref: "#/components/examples/VersionNotFound"
+                FileNotFound:
+                  $ref: "#/components/examples/FileNotFound"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v1/packages/{packageId}/versions/{version}/export/spec/publish/{publishId}/status":
+    parameters:
+      - $ref: "#/components/parameters/packageId"
+      - $ref: "#/components/parameters/version"
+      - name: publishId
+        description: Publish Id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: 9c8e9045-dd9c-4946-b9e4-e05e3f41c4cc
+    get:
+      tags:
+        - Export
+      summary: Get status of export of all package version documents
+      description: |
+        Get status of export of all package version documents
+      operationId: getPackageIdVersionExportSpecPublishIdStatus
+      security:
+        - BearerAuth: []
+        - api-key: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    description: Publish process status.
+                    type: string
+                    enum:
+                      - running
+                      - error
+                      - none
+                  message:
+                    description: The message for **error** status.
+                    type: string
+            application/zip:
+              schema:
+                type: string
+                format: binary
+                description: Documentation ZIP file to download
+        "301":
+          description: Moved Permanently
+          headers:
+            Location:
+              schema: 
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                IncorrectInputParams:
+                  $ref: "#/components/examples/IncorrectInputParameters"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                PackageNotFound:
+                  $ref: "#/components/examples/PackageNotFound"
+                VersionNotFound:
+                  $ref: "#/components/examples/VersionNotFound"
+                FileNotFound:
+                  $ref: "#/components/examples/FileNotFound"
         "500":
           description: Internal Server Error
           content:
@@ -13817,6 +14213,17 @@ components:
             Groups for the package version are calculated during publication of this version.
           type: string
           example: "/api/v1/{group}/"
+        allowedOasExtensions:
+          description: List of OAS extensions that shall be preserverd when user exports OpenAPI specification(s) with remove OAS extensions options.
+          type: array
+          items:
+            type: string
+            pattern: '^x-'
+          example: [x-internal-info, x-design-details]
+        inheritAllowedOasExtensions: #open question if we need this
+          description: Flag defines whether list of OAS extensions shall be inherited from the direct package or not. If true, then it is impossible to override value on the package.
+          type: boolean
+          default: true
     PackageList:
       description: Base package object for parents list.
       type: object
@@ -13894,6 +14301,17 @@ components:
         restGroupingPrefix:
           description: Regular expression used as criteria for grouping operations.
           type: string
+        allowedOasExtensions:
+          description: List of OAS extensions that shall be preserverd when user exports OpenAPI specification(s) with remove OAS extensions options.
+          type: array
+          items:
+            type: string
+            pattern: '^x-'
+          example: [x-internal-info, x-design-details]
+        inheritAllowedOasExtensions: #open question if we need this
+          description: Flag defines whether list of OAS extensions shall be inherited from the direct package or not. If true, then it is impossible to override value on the package.
+          type: boolean
+          default: true
     GitBranch:
       description: External Git branch params
       type: object
@@ -15635,6 +16053,19 @@ components:
                 - json
                 - html
               default: json
+            allowedOasExtensions:
+              description: |
+                List of OAS extensions that shall be preserverd when user exports OpenAPI specification(s) with remove OAS extensions options:
+                * If allowedOasExtensions is empty array, then this means OAS extensions shall be removed, but there is no allowed OAS exntesions, i.e. all OAS extensions shall be removed.
+                * If allowedOasExtensions is undefined, then this means that OAS extensions shall **not** be removed (i.e. removeOasExtensions = false).
+                * If allowedOasExtensions has some value(s), then this means that OAS extensions shall be removed except for the provided value(s) of allowed OAS extension(s).
+              type: array
+              items:
+                type: string
+                pattern: ^x-
+              example:
+                - x-internal-info
+                - x-design-details
             metadata:
               description: Common publish metadata.
               type: object
