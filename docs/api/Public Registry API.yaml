@@ -172,8 +172,8 @@ paths:
             schema:
               oneOf:
                 - $ref: "#/components/schemas/ExportVersion"
-                - $ref: "#/components/schemas/ExportDocument"
-                - $ref: "#/components/schemas/ExportOperationsGroup"
+                - $ref: "#/components/schemas/ExportRestDocument"
+                - $ref: "#/components/schemas/ExportRestOperationsGroup"
               discriminator:
                 propertyName: exportedEntity
       responses:
@@ -8095,8 +8095,8 @@ paths:
                     oneOf:
                       - $ref: "#/components/schemas/PublishBuildConfig"
                       - $ref: "#/components/schemas/ExportVersionBuildConfig"
-                      - $ref: "#/components/schemas/ExportDocumentBuildConfig"
-                      - $ref: "#/components/schemas/ExportOperationsGroupBuildConfig"
+                      - $ref: "#/components/schemas/ExportRestDocumentBuildConfig"
+                      - $ref: "#/components/schemas/ExportRestOperationsGroupBuildConfig"
                     discriminator:
                       propertyName: buildType
         "204":
@@ -13858,7 +13858,7 @@ components:
           type: string
           enum:
             - html
-    ExportDocument:
+    ExportRestDocument:
       type: object
       title: Export one document
       description: |
@@ -13875,7 +13875,7 @@ components:
           description: The entity to be exported.
           type: string
           enum:
-            - document
+            - restDocument
         packageId:
           description: Package unique string identifier (full alias).
           type: string
@@ -13902,7 +13902,7 @@ components:
             Flag defines whether OAS extensions shall be removed (taking into account allowed list of OAS extensions defined on package) from exported specification or not.
           type: boolean
           default: false
-    ExportOperationsGroup:
+    ExportRestOperationsGroup:
       type: object
       title: Export operations group
       description: | 
@@ -13921,7 +13921,7 @@ components:
           description: The entity to be exported.
           type: string
           enum:
-            - version
+            - restOperationsGroup
         packageId:
           description: Package unique string identifier (full alias).
           type: string
@@ -16690,7 +16690,7 @@ components:
           example:
             - x-internal-info
             - x-design-details
-    ExportDocumentBuildConfig:
+    ExportRestDocumentBuildConfig:
       description: Build config for export of one document.
       type: object
       required:
@@ -16749,7 +16749,7 @@ components:
           example:
             - x-internal-info
             - x-design-details
-    ExportOperationsGroupBuildConfig:
+    ExportRestOperationsGroupBuildConfig:
       description: Build config for export of operations group.
       type: object
       required:
