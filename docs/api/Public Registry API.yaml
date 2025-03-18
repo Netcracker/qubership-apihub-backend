@@ -16690,7 +16690,7 @@ components:
             - x-internal-info
             - x-design-details
     ExportRestDocumentBuildConfig:
-      description: Build config for export of on OpenAPI document.
+      description: Build config for export of one OpenAPI document.
       type: object
       required:
         - buildType
