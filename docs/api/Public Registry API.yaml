@@ -13913,7 +13913,6 @@ components:
         - packageId
         - version
         - groupName
-        - apiType
         - operationsSpecTransformation
         - format
       properties:
