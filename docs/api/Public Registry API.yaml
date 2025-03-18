@@ -165,8 +165,8 @@ paths:
           Defines an entity that shall be exported and export settings.\
           The following entities can be exported:
             - **version** - export of all documents from the version.
-            - **document** - export of one specific document with type openapi-3-1, openapi-3-0, or openapi-2-0.
-            - **operations group** - export of operations group. Only operations group with apiType = REST can be exported.
+            - **OpnAPI document** - export of one specific document with type openapi-3-1, openapi-3-0, or openapi-2-0.
+            - **REST operations group** - export of operations group. Only operations group with apiType = REST can be exported.
         content:
           application/json:
             schema:
