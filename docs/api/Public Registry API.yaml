@@ -13860,7 +13860,7 @@ components:
             - html
     ExportRestDocument:
       type: object
-      title: Export one document
+      title: Export one OpenAPI document
       description: |
         Export settings for exporting one document. The option is applicable only for document types - openapi-3-1 / openapi-3-0 / openapi-2-0.
         The export result is determined by the "format" parameter.
@@ -13904,7 +13904,7 @@ components:
           default: false
     ExportRestOperationsGroup:
       type: object
-      title: Export operations group
+      title: Export REST operations group
       description: | 
         Export settings for exporting the operations group. The option is applicable only for groups with apiType = REST.
         The export result is determined by the "format" and "buildType" parameters.
@@ -16690,7 +16690,7 @@ components:
             - x-internal-info
             - x-design-details
     ExportRestDocumentBuildConfig:
-      description: Build config for export of one document.
+      description: Build config for export of on OpenAPI document.
       type: object
       required:
         - buildType
@@ -16749,7 +16749,7 @@ components:
             - x-internal-info
             - x-design-details
     ExportRestOperationsGroupBuildConfig:
-      description: Build config for export of operations group.
+      description: Build config for export of REST operations group.
       type: object
       required:
         - buildType
