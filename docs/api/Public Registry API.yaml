@@ -16704,7 +16704,7 @@ components:
           description: Type of the build process.
           type: string
           enum:
-            - exportDocument
+            - exportRestDocument
         packageId:
           description: Package unique identifier (full alias).
           type: string
@@ -16764,7 +16764,7 @@ components:
           description: Type of the build process.
           type: string
           enum:
-            - exportOperationsGroup        
+            - exportRestOperationsGroup        
         packageId:
           description: Package unique identifier (full alias).
           type: string
