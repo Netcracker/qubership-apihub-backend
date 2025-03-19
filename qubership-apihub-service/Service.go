@@ -632,9 +632,9 @@ func main() {
 		r.HandleFunc("/api/internal/websocket/files/log", security.Secure(fileWSController.TestGetWebsocketClientMessages)).Methods(http.MethodGet)
 		r.HandleFunc("/api/internal/websocket/files/send", security.Secure(fileWSController.TestSendMessageToWebsocket)).Methods(http.MethodPut)
 
-		r.HandleFunc("/api/internal/users/{userId}/systemRole", security.Secure(roleController.TestSetUserSystemRole)).Methods(http.MethodPost)
-		r.HandleFunc("/api/internal/users", security.NoSecure(userController.CreateInternalUser)).Methods("POST")
-		r.HandleFunc("/api/v2/auth/local", security.NoSecure(security.CreateLocalUserToken)).Methods("POST")
+		r.HandleFunc("/api/internal/users/{userId}/systemRole", security.Secure(roleController.TestSetUserSystemRole)).Methods(http.MethodPost) // TODO: remove? not actual
+		r.HandleFunc("/api/internal/users", security.NoSecure(userController.CreateInternalUser)).Methods(http.MethodPost)
+		r.HandleFunc("/api/v2/auth/local", security.NoSecure(security.CreateLocalUserToken)).Methods(http.MethodPost)
 
 		r.HandleFunc("/api/internal/clear/{testId}", security.Secure(cleanupController.ClearTestData)).Methods(http.MethodDelete)
 		r.HandleFunc("/api/internal/websocket/loadbalancer", security.Secure(branchWSController.DebugSessionsLoadBalance)).Methods(http.MethodGet)

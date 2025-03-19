@@ -31,6 +31,7 @@ Need to make sure that the API was reviewed(confirm with BE, FE teams) and all c
 BA ticket branch should be merged to BE ticket branch before merging to develop.
 
 # Code
+
 ## Projects structure
 Most the feature code is separated into structural folders - controllers, services, repositories, views, entities.
 But some outstanding/common functionality like DB migration is placed in functional folders.
@@ -68,11 +69,11 @@ All errors should be logged to ERROR log.
 ### Async operations
 Async operation start should be logged with info log containing request data and generated id.
 Example:
-* log.Infof("Starting Quality Gate validation v3 with params %+v, id = %s", req, id)
+* log.Infof("Starting validation with params %+v, id = %s", req, id)
 
 All async operation logs should include operation id as a prefix.
 Example: 
-* log.Errorf("Quality Gate %s: Failed to search package %s versions by textFilter: %s", report.Id, packageId, err.Error())
+* log.Errorf("Validation %s: Failed to search package %s versions by textFilter: %s", report.Id, packageId, err.Error())
 
 It's recommended to log all major steps in INFO and some minor with DEBUG.
 
@@ -80,18 +81,18 @@ Async operation end should be logged with INFO log.
 Example:
 * log.Infof("Operations migration process %s complete", id)
 
+# Branching strategy
+Stable development branch is `develop`. feature branches should be from develop.   
+Pull requests should be created from feature branches to develop.
+`develop` branch is merged to `main` every release cycle. Then release tag is created.  
+Hotfixes to `main` are allowed only in case of blocker or really critical bugs, and the hotfix should be cherry picked to `develop`.
+
 # Pull requests
 ## Title
-PR title should contain issue id, otherwise it couldn't be merged by rules.  
-The title should be in the following format: `ISSUE-ID Changes short summary`
+PR title should reflect the changes made.
 
-
-## Merge options
-It's recommended to delete dev branch after merge and squash commits to get clean develop/main branches history.
-
-So both checkboxes should be checked:
-* Delete source branch when merge request is accepted. 
-* **Squash commits when merge request is accepted.**
+## Link to issue
+Pull request should be linked to corresponding github issue.
 
 ## Code review
 Everyone is welcome to the code reviews.
