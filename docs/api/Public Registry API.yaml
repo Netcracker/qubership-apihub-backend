@@ -7931,6 +7931,19 @@ paths:
                         description: Previous release version package id.
                         type: string
                         example: "QS.CQSS.CPQ.TMF"
+                      validationRulesSeverity:
+                        type: object
+                        description: Configuration for validation rules severity levels
+                        default:
+                          brokenRefs: "error"
+                        properties:
+                          brokenRefs:
+                            type: string
+                            enum:
+                              - "error"
+                              - "warning"
+                            default: "error"
+                            description: Severity level for broken references validation
                       status:
                         $ref: "#/components/schemas/VersionStatusEnum"
                       versionLabels:
