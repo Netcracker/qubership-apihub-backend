@@ -12,28 +12,29 @@ Notes:
 * Attributes "User-Principal-Name", "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress" are mandatory in SAML response.
 * Attributes "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname", "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname", "thumbnailPhoto" are not mandatory, but expected in SAML response to fill the user profile.
 
-In the result of successful IDP auth, user is synced to Apihub DB and bearer token is generated. The token validity period is limited to 12h, but it could be refreshed with 
+In the result of successful IDP auth, user is synced to Apihub DB and bearer token is generated. The token validity period is limited to 12h, but it could be re-issued with corresponding refresh token.
 The bearer token is used for authentication/authorization, it should be passed in "Authorization" header for any API calls.  
 Library https://github.com/shaj13/go-guardian is used on the backend to issue and check JWT tokens.
 
 ## Internal(local) user management
-Apihub supports local user management, but this functionality is disabled in production.
+Apihub supports local user management, but this functionality is disabled in production.  
+(Production mode is configured via `PRODUCTION_MODE` env, false by default)
 
 There's no registration page, but it's possible to create local user via API.
 Local login is supported via UI page("/login") and dedicated endpoint ("/api/v2/auth/local").
 
-## Api keys
-Api key is another auth method intended for some automation.
+## API keys
+API key is another auth method intended for some automation.
 Despite API key have "created by" and "created for" relations with users, it acts like a separate entity. 
-E.x. if some version was published with API key, it's "created by" property will point to the key, not to user.
+E.g. if some version was published with API key, it's "created by" property will point to the key, not to user.
 
-Api key is bound to workspace/group/package/dashboard (see Data entities chapter), so it limit's the scope of the key.
+API key is bound to workspace/group/package/dashboard (see Data entities chapter), so it limit's the scope of the key.
 
-However system API keys exist as well, but it could be issued only by system administrators.
+However, system API keys exist as well, but it could be issued only by system administrators.
 
 ## Personal Access Tokens
 PAT is equals to the bearer token when we talk about the permissions and user representation, but it have different properties in terms of TTL. Lifetime is configurable on creation and could be unlimited.  
-PAT is intended for personal automation, for example for VS code plugin.  
+PAT is intended for personal automation, for example for Qubership APIHUB VS Code extension ( https://github.com/Netcracker/qubership-apihub-vscode ).  
 It's possible to delete a token.  
 There's a limit for 100 PAT per user in the system.  
 
@@ -78,7 +79,7 @@ flowchart LR
 User have a set of roles for particular entity.  
 Role have a set of permissions.  
 Roles are defined system-wide by system administrators.  
-Roles have an hierarchy which limits privilege escalation. 
+Roles have a hierarchy which limits privilege escalation. 
 
 Permission in required to execute some action like view content, publish version, create package, etc.
 
