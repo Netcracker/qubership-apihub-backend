@@ -146,36 +146,10 @@ func BuildConfigFromMap(confAsMap map[string]interface{}, publishId string) (*Bu
 	return &bc, nil
 }
 
-func BcRefsToRefs(refs []BCRef) []Ref {
-	var result []Ref
-	for _, ref := range refs {
-		result = append(result, BCRefToRef(ref))
-	}
-	return result
-}
-
-func BCRefToRef(r BCRef) Ref {
-	return Ref{
-		RefPackageId:      r.RefId,
-		RefPackageName:    "",
-		RefPackageVersion: r.Version,
-		Status:            "",
-		VersionStatus:     "",
-		Kind:              "",
-	}
-}
-
 type PublishStatusResponse struct {
 	PublishId string `json:"publishId"`
 	Status    string `json:"status"`
 	Message   string `json:"message"`
-}
-
-func IsBuildFinished(status BuildStatusEnum) bool {
-	if status == StatusComplete || status == StatusError {
-		return true
-	}
-	return false
 }
 
 type BuildsStatusRequest struct {
