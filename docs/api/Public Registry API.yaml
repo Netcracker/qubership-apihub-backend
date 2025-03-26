@@ -7933,16 +7933,14 @@ paths:
                         example: "QS.CQSS.CPQ.TMF"
                       validationRulesSeverity:
                         type: object
-                        description: Configuration for validation rules severity levels
-                        default:
-                          brokenRefs: "error"
+                        description: Configuration for validation rules severity levels                        
                         properties:
                           brokenRefs:
                             type: string
                             enum:
                               - "error"
                               - "warning"
-                            default: "error"
+                            default: "warning"
                             description: Severity level for broken references validation
                       status:
                         $ref: "#/components/schemas/VersionStatusEnum"
