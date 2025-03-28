@@ -16046,7 +16046,8 @@ components:
           $ref: "#/components/schemas/VersionStatusEnum"
         validationRulesSeverity:
           type: object
-          description: Configuration for validation rules severity levels                        
+          description: Configuration for validation rules severity levels          
+          readOnly: true
           properties:
             brokenRefs:
               type: string
