@@ -24,31 +24,32 @@ import (
 )
 
 type BuildConfig struct {
-	PackageId                string                 `json:"packageId"`
-	Version                  string                 `json:"version"`
-	BuildType                string                 `json:"buildType"`
-	PreviousVersion          string                 `json:"previousVersion"`
-	PreviousVersionPackageId string                 `json:"previousVersionPackageId"`
-	Status                   string                 `json:"status"`
-	Refs                     []BCRef                `json:"refs,omitempty"`
-	Files                    []BCFile               `json:"files,omitempty"`
-	PublishId                string                 `json:"publishId"`
-	Metadata                 BuildConfigMetadata    `json:"metadata,omitempty"`
-	CreatedBy                string                 `json:"createdBy"`
-	NoChangelog              bool                   `json:"noChangeLog,omitempty"`    // for migration
-	PublishedAt              time.Time              `json:"publishedAt,omitempty"`    // for migration
-	MigrationBuild           bool                   `json:"migrationBuild,omitempty"` //for migration
-	MigrationId              string                 `json:"migrationId,omitempty"`    //for migration
-	ComparisonRevision       int                    `json:"comparisonRevision,omitempty"`
-	ComparisonPrevRevision   int                    `json:"comparisonPrevRevision,omitempty"`
-	UnresolvedRefs           bool                   `json:"unresolvedRefs,omitempty"`
-	ResolveRefs              bool                   `json:"resolveRefs,omitempty"`
-	ResolveConflicts         bool                   `json:"resolveConflicts,omitempty"`
-	ServiceName              string                 `json:"serviceName,omitempty"`
-	ApiType                  string                 `json:"apiType,omitempty"`   //for operation group
-	GroupName                string                 `json:"groupName,omitempty"` //for operation group
-	Format                   string                 `json:"format,omitempty"`    //for operation group
-	ExternalMetadata         map[string]interface{} `json:"externalMetadata,omitempty"`
+	PackageId                string                  `json:"packageId"`
+	Version                  string                  `json:"version"`
+	BuildType                string                  `json:"buildType"`
+	PreviousVersion          string                  `json:"previousVersion"`
+	PreviousVersionPackageId string                  `json:"previousVersionPackageId"`
+	Status                   string                  `json:"status"`
+	Refs                     []BCRef                 `json:"refs,omitempty"`
+	Files                    []BCFile                `json:"files,omitempty"`
+	PublishId                string                  `json:"publishId"`
+	Metadata                 BuildConfigMetadata     `json:"metadata,omitempty"`
+	CreatedBy                string                  `json:"createdBy"`
+	NoChangelog              bool                    `json:"noChangeLog,omitempty"`    // for migration
+	PublishedAt              time.Time               `json:"publishedAt,omitempty"`    // for migration
+	MigrationBuild           bool                    `json:"migrationBuild,omitempty"` //for migration
+	MigrationId              string                  `json:"migrationId,omitempty"`    //for migration
+	ComparisonRevision       int                     `json:"comparisonRevision,omitempty"`
+	ComparisonPrevRevision   int                     `json:"comparisonPrevRevision,omitempty"`
+	UnresolvedRefs           bool                    `json:"unresolvedRefs,omitempty"`
+	ResolveRefs              bool                    `json:"resolveRefs,omitempty"`
+	ResolveConflicts         bool                    `json:"resolveConflicts,omitempty"`
+	ServiceName              string                  `json:"serviceName,omitempty"`
+	ApiType                  string                  `json:"apiType,omitempty"`   //for operation group
+	GroupName                string                  `json:"groupName,omitempty"` //for operation group
+	Format                   string                  `json:"format,omitempty"`    //for operation group
+	ExternalMetadata         map[string]interface{}  `json:"externalMetadata,omitempty"`
+	ValidationRulesSeverity  ValidationRulesSeverity `json:"validationRulesSeverity,omitempty"`
 }
 
 type BuildConfigMetadata struct {
@@ -211,4 +212,11 @@ type DocumentTransformConfigView struct {
 	GroupName string `json:"groupName"`
 	CreatedBy string `json:"createdBy"`
 	BuildId   string `json:"buildId"`
+}
+
+const BrokenRefsSeverityError = "error"
+const BrokenRefsSeverityWarning = "warning"
+
+type ValidationRulesSeverity struct {
+	BrokenRefs string `json:"brokenRefs"`
 }

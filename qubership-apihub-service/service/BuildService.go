@@ -220,8 +220,23 @@ func (b *buildServiceImpl) PublishVersion(ctx context.SecurityContext, config vi
 	}
 }
 
+func (b *buildServiceImpl) setValidationRulesSeverity(config view.BuildConfig) view.BuildConfig {
+	var severity string
+	if b.systemInfoService.FailBuildOnBrokenRefs() {
+		severity = view.BrokenRefsSeverityError
+	} else {
+		severity = view.BrokenRefsSeverityWarning
+	}
+	config.ValidationRulesSeverity = view.ValidationRulesSeverity{
+		BrokenRefs: severity,
+	}
+	return config
+}
+
 // CreateChangelogBuild deprecated. use to CreateBuildWithoutDependencies
 func (b *buildServiceImpl) CreateChangelogBuild(config view.BuildConfig, isExternal bool, builderId string) (string, error) {
+	config = b.setValidationRulesSeverity(config)
+
 	status := view.StatusNotStarted
 	if isExternal {
 		status = view.StatusRunning
@@ -264,6 +279,8 @@ func (b *buildServiceImpl) CreateChangelogBuild(config view.BuildConfig, isExter
 }
 
 func (b *buildServiceImpl) CreateBuildWithoutDependencies(config view.BuildConfig, clientBuild bool, builderId string) (string, error) {
+	config = b.setValidationRulesSeverity(config)
+
 	status := view.StatusNotStarted
 	if clientBuild {
 		status = view.StatusRunning
@@ -309,8 +326,9 @@ func (b *buildServiceImpl) CreateBuildWithoutDependencies(config view.BuildConfi
 	return buildEnt.BuildId, nil
 }
 
-// AddBuild this is intended for build only, shouldn't be called if build is not required in scope of publish
 func (b *buildServiceImpl) addBuild(ctx context.SecurityContext, config view.BuildConfig, src []byte, clientBuild bool, builderId string, dependencies []string) (string, error) {
+	config = b.setValidationRulesSeverity(config)
+
 	status := view.StatusNotStarted
 	if clientBuild {
 		status = view.StatusRunning

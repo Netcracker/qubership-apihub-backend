@@ -76,6 +76,7 @@ const (
 	APIHUB_ADMIN_EMAIL                     = "APIHUB_ADMIN_EMAIL"
 	APIHUB_ADMIN_PASSWORD                  = "APIHUB_ADMIN_PASSWORD"
 	APIHUB_SYSTEM_API_KEY                  = "APIHUB_ACCESS_TOKEN"
+	FAIL_BUILDS_ON_BROKEN_REFS             = "FAIL_BUILDS_ON_BROKEN_REFS"
 )
 
 type SystemInfoService interface {
@@ -131,6 +132,7 @@ type SystemInfoService interface {
 	GetAllowedHosts() []string
 	GetZeroDayAdminCreds() (string, string, error)
 	GetSystemApiKey() (string, error)
+	FailBuildOnBrokenRefs() bool
 }
 
 func (g systemInfoServiceImpl) GetCredsFromEnv() *view.DbCredentials {
@@ -793,4 +795,21 @@ func (g systemInfoServiceImpl) GetSystemApiKey() (string, error) {
 		return "", fmt.Errorf("system api key env '%s' is empty or not set", APIHUB_SYSTEM_API_KEY)
 	}
 	return apiKey, nil
+}
+
+func (g systemInfoServiceImpl) setFailBuildOnBrokenRefs() {
+	envVal := os.Getenv(FAIL_BUILDS_ON_BROKEN_REFS)
+	if envVal == "" {
+		envVal = "false"
+	}
+	val, err := strconv.ParseBool(envVal)
+	if err != nil {
+		log.Errorf("failed to parse %v env value: %v. Value by default - false", FAIL_BUILDS_ON_BROKEN_REFS, err.Error())
+		val = false
+	}
+	g.systemInfoMap[FAIL_BUILDS_ON_BROKEN_REFS] = val
+}
+
+func (g systemInfoServiceImpl) FailBuildOnBrokenRefs() bool {
+	return g.systemInfoMap[FAIL_BUILDS_ON_BROKEN_REFS].(bool)
 }
