@@ -817,7 +817,7 @@ func (g systemInfoServiceImpl) GetEditorDisabled() bool {
 func (g systemInfoServiceImpl) setFailBuildOnBrokenRefs() {
 	envVal := os.Getenv(FAIL_BUILDS_ON_BROKEN_REFS)
 	if envVal == "" {
-		envVal = "false"
+		envVal = "true"
 	}
 	val, err := strconv.ParseBool(envVal)
 	if err != nil {
