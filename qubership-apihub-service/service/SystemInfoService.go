@@ -239,6 +239,7 @@ func (g systemInfoServiceImpl) Init() error {
 	g.setCustomPathPrefixes()
 	g.setAllowedHosts()
 	g.setEditorDisabled()
+	g.setFailBuildOnBrokenRefs()
 
 	return nil
 }
