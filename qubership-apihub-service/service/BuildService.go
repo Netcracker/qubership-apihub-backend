@@ -208,7 +208,7 @@ func (b *buildServiceImpl) PublishVersion(ctx context.SecurityContext, config vi
 		}
 	}
 
-	publishId, err := b.addBuild(ctx, config, src, clientBuild, builderId, dependencies)
+	publishId, config, err := b.addBuild(ctx, config, src, clientBuild, builderId, dependencies)
 	if err != nil {
 		return nil, err
 	}
@@ -326,7 +326,7 @@ func (b *buildServiceImpl) CreateBuildWithoutDependencies(config view.BuildConfi
 	return buildEnt.BuildId, nil
 }
 
-func (b *buildServiceImpl) addBuild(ctx context.SecurityContext, config view.BuildConfig, src []byte, clientBuild bool, builderId string, dependencies []string) (string, error) {
+func (b *buildServiceImpl) addBuild(ctx context.SecurityContext, config view.BuildConfig, src []byte, clientBuild bool, builderId string, dependencies []string) (string, view.BuildConfig, error) {
 	config = b.setValidationRulesSeverity(config)
 
 	status := view.StatusNotStarted
@@ -360,7 +360,7 @@ func (b *buildServiceImpl) addBuild(ctx context.SecurityContext, config view.Bui
 
 	confAsMap, err := view.BuildConfigToMap(config)
 	if err != nil {
-		return "", err
+		return "", config, err
 	}
 
 	sourceEnt := entity.BuildSourceEntity{
@@ -376,7 +376,7 @@ func (b *buildServiceImpl) addBuild(ctx context.SecurityContext, config view.Bui
 
 	err = b.buildRepository.StoreBuild(buildEnt, sourceEnt, depends)
 	if err != nil {
-		return "", err
+		return "", config, err
 	}
 
 	if !clientBuild {
@@ -385,7 +385,7 @@ func (b *buildServiceImpl) addBuild(ctx context.SecurityContext, config view.Bui
 		log.Infof("Build %s added as external", buildEnt.BuildId)
 	}
 
-	return buildEnt.BuildId, nil
+	return buildEnt.BuildId, config, nil
 }
 
 func (b *buildServiceImpl) GetStatus(buildId string) (string, string, error) {
