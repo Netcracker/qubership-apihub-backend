@@ -42,12 +42,12 @@ type BuildService interface {
 	GetStatuses(buildIds []string) ([]view.PublishStatusResponse, error)
 	UpdateBuildStatus(buildId string, status view.BuildStatusEnum, details string) error
 	GetFreeBuild(builderId string) ([]byte, error)
-	CreateChangelogBuild(config view.BuildConfig, isExternal bool, builderId string) (string, error) //deprecated
+	CreateChangelogBuild(config view.BuildConfig, isExternal bool, builderId string) (string, view.BuildConfig, error) //deprecated
 	GetBuildViewByChangelogSearchQuery(searchRequest view.ChangelogBuildSearchRequest) (*view.BuildView, error)
 	GetBuildViewByDocumentGroupSearchQuery(searchRequest view.DocumentGroupBuildSearchRequest) (*view.BuildView, error)
 	ValidateBuildOwnership(buildId string, builderId string) error
 
-	CreateBuildWithoutDependencies(config view.BuildConfig, isExternal bool, builderId string) (string, error)
+	CreateBuildWithoutDependencies(config view.BuildConfig, isExternal bool, builderId string) (string, view.BuildConfig, error)
 	AwaitBuildCompletion(buildId string) error
 }
 
@@ -234,7 +234,7 @@ func (b *buildServiceImpl) setValidationRulesSeverity(config view.BuildConfig) v
 }
 
 // CreateChangelogBuild deprecated. use to CreateBuildWithoutDependencies
-func (b *buildServiceImpl) CreateChangelogBuild(config view.BuildConfig, isExternal bool, builderId string) (string, error) {
+func (b *buildServiceImpl) CreateChangelogBuild(config view.BuildConfig, isExternal bool, builderId string) (string, view.BuildConfig, error) {
 	config = b.setValidationRulesSeverity(config)
 
 	status := view.StatusNotStarted
@@ -263,7 +263,7 @@ func (b *buildServiceImpl) CreateChangelogBuild(config view.BuildConfig, isExter
 
 	confAsMap, err := view.BuildConfigToMap(config)
 	if err != nil {
-		return "", err
+		return "", config, err
 	}
 
 	sourceEnt := entity.BuildSourceEntity{
@@ -273,12 +273,12 @@ func (b *buildServiceImpl) CreateChangelogBuild(config view.BuildConfig, isExter
 
 	err = b.buildRepository.StoreBuild(buildEnt, sourceEnt, nil)
 	if err != nil {
-		return "", err
+		return "", config, err
 	}
-	return buildEnt.BuildId, nil
+	return buildEnt.BuildId, config, nil
 }
 
-func (b *buildServiceImpl) CreateBuildWithoutDependencies(config view.BuildConfig, clientBuild bool, builderId string) (string, error) {
+func (b *buildServiceImpl) CreateBuildWithoutDependencies(config view.BuildConfig, clientBuild bool, builderId string) (string, view.BuildConfig, error) {
 	config = b.setValidationRulesSeverity(config)
 
 	status := view.StatusNotStarted
@@ -311,7 +311,7 @@ func (b *buildServiceImpl) CreateBuildWithoutDependencies(config view.BuildConfi
 
 	confAsMap, err := view.BuildConfigToMap(config)
 	if err != nil {
-		return "", err
+		return "", config, err
 	}
 
 	sourceEnt := entity.BuildSourceEntity{
@@ -321,9 +321,9 @@ func (b *buildServiceImpl) CreateBuildWithoutDependencies(config view.BuildConfi
 
 	err = b.buildRepository.StoreBuild(buildEnt, sourceEnt, nil)
 	if err != nil {
-		return "", err
+		return "", config, err
 	}
-	return buildEnt.BuildId, nil
+	return buildEnt.BuildId, config, nil
 }
 
 func (b *buildServiceImpl) addBuild(ctx context.SecurityContext, config view.BuildConfig, src []byte, clientBuild bool, builderId string, dependencies []string) (string, view.BuildConfig, error) {
