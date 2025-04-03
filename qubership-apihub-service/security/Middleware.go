@@ -16,14 +16,14 @@ package security
 
 import (
 	"fmt"
-	"net/http"
-	"runtime/debug"
-
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/controller"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	"github.com/shaj13/go-guardian/v2/auth"
 	"github.com/shaj13/go-guardian/v2/auth/strategies/union"
 	log "github.com/sirupsen/logrus"
+	"net/http"
+	"runtime/debug"
 )
 
 func Secure(next http.HandlerFunc) http.HandlerFunc {
@@ -41,7 +41,7 @@ func Secure(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 		}()
-		_, user, err := strategy.AuthenticateRequest(r)
+		_, user, err := defaultAuthStrategy.AuthenticateRequest(r)
 		if err != nil {
 			if multiError, ok := err.(union.MultiError); ok {
 				for _, e := range multiError {
@@ -62,7 +62,7 @@ func Secure(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func SecureJWT(next http.HandlerFunc) http.HandlerFunc {
+func SecureUser(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
@@ -77,7 +77,8 @@ func SecureJWT(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 		}()
-		user, err := jwtStrategy.Authenticate(r.Context(), r)
+		//TODO: add PAT strategy and cookie strategy
+		user, err := userAuthStrategy.Authenticate(r.Context(), r)
 		if err != nil {
 			respondWithAuthFailedError(w, err)
 			return
@@ -103,9 +104,10 @@ func SecureWebsocket(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 		}()
+		//TODO: is it still required ?
 		token := r.URL.Query().Get("token")
 		r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-		_, user, err := strategy.AuthenticateRequest(r)
+		_, user, err := defaultAuthStrategy.AuthenticateRequest(r)
 		if err != nil {
 			respondWithAuthFailedError(w, err)
 			return
@@ -150,7 +152,8 @@ func SecureAgentProxy(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 		}()
-		user, err := customJwtStrategy.Authenticate(r.Context(), r)
+		//TODO: add cookie strategy
+		user, err := proxyAuthStrategy.Authenticate(r.Context(), r)
 		if err != nil {
 			respondWithAuthFailedError(w, err)
 			return
@@ -175,13 +178,22 @@ func SecureProxy(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 		}()
-		user, err := customJwtStrategy.Authenticate(r.Context(), r)
+		//TODO: add cookie strategy
+		user, err := proxyAuthStrategy.Authenticate(r.Context(), r)
 		if err != nil {
 			respondWithAuthFailedError(w, err)
 			return
 		}
 		r = auth.RequestWithUser(user, r)
 		r.Header.Del(CustomJwtAuthHeader)
+		//TODO: do not forget to delete cookie from request
+		cookies := r.Cookies()
+		r.Header.Del("Cookie")
+		for _, cookie := range cookies {
+			if cookie.Name != view.SessionCookieName {
+				r.AddCookie(cookie)
+			}
+		}
 		next.ServeHTTP(w, r)
 	}
 }

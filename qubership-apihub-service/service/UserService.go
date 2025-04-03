@@ -17,9 +17,12 @@ package service
 import (
 	"crypto/sha256"
 	"fmt"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
+	"github.com/golang-jwt/jwt/v4"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-ldap/ldap"
 
@@ -46,14 +49,16 @@ type UserService interface {
 	GetUserAvatar(userId string) (*view.UserAvatar, error)
 	AuthenticateUser(email string, password string) (*view.User, error)
 	SearchUsersInLdap(ldapSearch view.LdapSearchFilterReq, withAvatars bool) (*view.LdapUsers, error)
+	GetExtendedUser(ctx context.SecurityContext) (*view.ExtendedUser, error)
 }
 
-func NewUserService(repo repository.UserRepository, gitClientProvider GitClientProvider, systemInfoService SystemInfoService, privateUserPackageService PrivateUserPackageService) UserService {
+func NewUserService(repo repository.UserRepository, gitClientProvider GitClientProvider, systemInfoService SystemInfoService, privateUserPackageService PrivateUserPackageService, integrationService IntegrationsService) UserService {
 	return &usersServiceImpl{
 		repo:                      repo,
 		gitClientProvider:         gitClientProvider,
 		systemInfoService:         systemInfoService,
 		privateUserPackageService: privateUserPackageService,
+		integrationService:        integrationService,
 	}
 }
 
@@ -62,6 +67,7 @@ type usersServiceImpl struct {
 	gitClientProvider         GitClientProvider
 	systemInfoService         SystemInfoService
 	privateUserPackageService PrivateUserPackageService
+	integrationService        IntegrationsService
 }
 
 func (u usersServiceImpl) saveUserAvatar(userAvatar *view.UserAvatar) error {
@@ -551,6 +557,65 @@ func (u usersServiceImpl) AuthenticateUser(email string, password string) (*view
 	}
 
 	return entity.MakeUserView(userEntity), nil
+}
+
+func (u usersServiceImpl) GetExtendedUser(ctx context.SecurityContext) (*view.ExtendedUser, error) {
+	userId := ctx.GetUserId()
+	userEntity, err := u.repo.GetUserById(userId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user from DB: %v", err)
+	}
+	if userEntity != nil {
+		status, err := u.integrationService.GetUserApiKeyStatus(view.GitlabIntegration, userId)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check gitlab integration status: %v", err)
+		}
+		gitIntegrationStatus := false
+		if status.Status == ApiKeyStatusPresent {
+			gitIntegrationStatus = true
+		}
+		var ttlSeconds *int
+		if ctx.GetUserToken() != "" {
+			ttlSeconds, err = getTokenRemainingSeconds(ctx.GetUserToken())
+			if err != nil {
+				return nil, fmt.Errorf("failed to get token remaining seconds: %v", err)
+			}
+		}
+		return entity.MakeExtendedUserView(userEntity, gitIntegrationStatus, ctx.GetUserSystemRole(), ttlSeconds), nil
+	}
+	return nil, nil
+}
+
+func getTokenRemainingSeconds(token string) (*int, error) {
+	parsedToken, _, err := new(jwt.Parser).ParseUnverified(token, jwt.MapClaims{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse JWT token: %w", err)
+	}
+
+	claims, ok := parsedToken.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil, fmt.Errorf("failed to extract claims from token")
+	}
+
+	expClaim, exists := claims["exp"]
+	if !exists {
+		return nil, fmt.Errorf("token does not contain expiration time")
+	}
+
+	expFloat, ok := expClaim.(float64)
+	if !ok {
+		return nil, fmt.Errorf("expiration time is not in expected format")
+	}
+	expTime := int64(expFloat)
+	currentTime := time.Now().Unix()
+	remainingSeconds := int(expTime - currentTime)
+
+	if remainingSeconds < 0 {
+		remainingSeconds = 0
+	}
+
+	return &remainingSeconds, nil
+
 }
 
 func createBcryptHashedPassword(password string) ([]byte, error) {

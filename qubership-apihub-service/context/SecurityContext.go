@@ -15,6 +15,10 @@
 package context
 
 import (
+	"encoding/base64"
+	"encoding/json"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
+	log "github.com/sirupsen/logrus"
 	"net/http"
 	"strings"
 
@@ -115,8 +119,38 @@ func MergeApikeyRoles(roles []string) string {
 }
 
 func getAuthorizationToken(r *http.Request) string {
+	authHeaderToken := getTokenFromAuthHeader(r)
+	if authHeaderToken != "" {
+		return authHeaderToken
+	}
+	return getTokenFromSessionCookie(r)
+}
+
+func getTokenFromAuthHeader(r *http.Request) string {
 	authorizationHeaderValue := r.Header.Get("authorization")
 	return strings.ReplaceAll(authorizationHeaderValue, "Bearer ", "")
+}
+
+func getTokenFromSessionCookie(r *http.Request) string {
+	cookie, err := r.Cookie(view.SessionCookieName)
+	if err != nil || cookie.Value == "" {
+		return ""
+	}
+
+	decodedBytes, err := base64.StdEncoding.DecodeString(cookie.Value)
+	if err != nil {
+		log.Warnf("Failed to decode session cookie: %s", err.Error())
+		return ""
+	}
+
+	var authCookie view.SessionCookie
+	err = json.Unmarshal(decodedBytes, &authCookie)
+	if err != nil {
+		log.Warnf("Failed to unmarshal session cookie: %s", err.Error())
+		return ""
+	}
+
+	return authCookie.AccessToken
 }
 
 func getApihubApiKey(r *http.Request) string {

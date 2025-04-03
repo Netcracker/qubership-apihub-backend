@@ -17,12 +17,13 @@ package security
 import (
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"net/http"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	"github.com/shaj13/go-guardian/v2/auth"
@@ -36,28 +37,24 @@ import (
 	"time"
 )
 
-var apihubApiKeyStrategy auth.Strategy
-var jwtStrategy auth.Strategy
-var strategy union.Union
+var defaultAuthStrategy union.Union
+var userAuthStrategy union.Union
+var proxyAuthStrategy union.Union
 var keeper jwt.SecretsKeeper
-var integrationService service.IntegrationsService
 var userService service.UserService
 var roleService service.RoleService
 var systemInfoService service.SystemInfoService
 
-var customJwtStrategy auth.Strategy
+var refreshTokenStrategy auth.Strategy
 
 const CustomJwtAuthHeader = "X-Apihub-Authorization"
 
 var publicKey []byte
 
-const gitIntegrationExt = "gitIntegration"
-
-func SetupGoGuardian(intService service.IntegrationsService, userServiceLocal service.UserService, roleServiceLocal service.RoleService, apiKeyService service.ApihubApiKeyService, patService service.PersonalAccessTokenService, systemService service.SystemInfoService) error {
-	integrationService = intService
+func SetupGoGuardian(userServiceLocal service.UserService, roleServiceLocal service.RoleService, apiKeyService service.ApihubApiKeyService, patService service.PersonalAccessTokenService, systemService service.SystemInfoService) error {
 	userService = userServiceLocal
 	roleService = roleServiceLocal
-	apihubApiKeyStrategy = NewApihubApiKeyStrategy(apiKeyService)
+	apihubApiKeyStrategy := NewApihubApiKeyStrategy(apiKeyService)
 	personalAccessTokenStrategy := NewApihubPATStrategy(patService)
 	systemInfoService = systemService
 
@@ -79,20 +76,73 @@ func SetupGoGuardian(intService service.IntegrationsService, userServiceLocal se
 	}
 
 	cache := libcache.LRU.New(1000)
-	cache.SetTTL(time.Minute * 60)
+	cache.SetTTL(time.Second * time.Duration(systemInfoService.GetAccessTokenDurationSec()))
 	cache.RegisterOnExpired(func(key, _ interface{}) {
 		cache.Delete(key)
 	})
-	jwtStrategy = jwt.New(cache, keeper)
-	strategy = union.New(jwtStrategy, apihubApiKeyStrategy, personalAccessTokenStrategy)
-	customJwtStrategy = jwt.New(cache, keeper, token.SetParser(token.XHeaderParser(CustomJwtAuthHeader)))
+	bearerTokenStrategy := jwt.New(cache, keeper)
+	sessionCookieStrategy := jwt.New(cache, keeper, token.SetParser(accessTokenCookieParser()))
+	defaultAuthStrategy = union.New(bearerTokenStrategy, sessionCookieStrategy, apihubApiKeyStrategy, personalAccessTokenStrategy)
+	userAuthStrategy = union.New(bearerTokenStrategy, sessionCookieStrategy, personalAccessTokenStrategy)
+	customJwtStrategy := jwt.New(cache, keeper, token.SetParser(token.XHeaderParser(CustomJwtAuthHeader)))
+	proxyAuthStrategy = union.New(customJwtStrategy, sessionCookieStrategy)
+
+	refreshTokenCache := libcache.LRU.New(1000)
+	refreshTokenCache.SetTTL(time.Second * time.Duration(systemInfoService.GetRefreshTokenDurationSec()))
+	refreshTokenCache.RegisterOnExpired(func(key, _ interface{}) {
+		refreshTokenCache.Delete(key)
+	})
+	refreshTokenStrategy = jwt.New(refreshTokenCache, keeper, token.SetParser(refreshTokenCookieParser()))
 	return nil
 }
 
-type UserView struct {
-	AccessToken string    `json:"token"`
-	RenewToken  string    `json:"renewToken"`
-	User        view.User `json:"user"`
+type parser func(r *http.Request) (string, error)
+
+func (p parser) Token(r *http.Request) (string, error) {
+	return p(r)
+}
+
+func accessTokenCookieParser() token.Parser {
+	tokenCookieParser := func(r *http.Request) (string, error) {
+		authCookie, err := extractSessionCookie(r)
+		if err != nil {
+			return "", err
+		}
+		return authCookie.AccessToken, nil
+	}
+
+	return parser(tokenCookieParser)
+}
+
+func refreshTokenCookieParser() token.Parser {
+	tokenCookieParser := func(r *http.Request) (string, error) {
+		authCookie, err := extractSessionCookie(r)
+		if err != nil {
+			return "", err
+		}
+		return authCookie.RefreshToken, nil
+	}
+
+	return parser(tokenCookieParser)
+}
+
+func extractSessionCookie(r *http.Request) (*view.SessionCookie, error) {
+	cookie, err := r.Cookie(view.SessionCookieName)
+	if err != nil {
+		return nil, fmt.Errorf("session cookie not found: %w", err)
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(cookie.Value)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode session cookie value: %w", err)
+	}
+
+	var session view.SessionCookie
+	if err := json.Unmarshal(decoded, &session); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal session cookie: %w", err)
+	}
+
+	return &session, nil
 }
 
 func CreateLocalUserToken(w http.ResponseWriter, r *http.Request) {
@@ -106,32 +156,32 @@ func CreateLocalUserToken(w http.ResponseWriter, r *http.Request) {
 		respondWithAuthFailedError(w, err)
 		return
 	}
-	userView, err := CreateTokenForUser(*user)
+	authCookie, err := CreateTokenForUser(*user)
 	if err != nil {
 		respondWithAuthFailedError(w, err)
 		return
 	}
 
-	response, _ := json.Marshal(userView)
-	w.Header().Set("Content-Type", "application/json")
+	response, _ := json.Marshal(authCookie)
+	cookieValue := base64.StdEncoding.EncodeToString(response)
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     view.SessionCookieName,
+		Value:    cookieValue,
+		MaxAge:   systemInfoService.GetRefreshTokenDurationSec(),
+		Secure:   true,
+		HttpOnly: true,
+		Path:     "/",
+	})
 	w.WriteHeader(http.StatusOK)
-	w.Write(response)
 }
 
-func CreateTokenForUser(dbUser view.User) (*UserView, error) {
+func CreateTokenForUser(dbUser view.User) (*view.SessionCookie, error) {
 	user := auth.NewUserInfo(dbUser.Name, dbUser.Id, []string{}, auth.Extensions{})
-	accessDuration := jwt.SetExpDuration(time.Hour * 12) // should be more than one minute!
+	accessTokenDurationSec := systemInfoService.GetAccessTokenDurationSec()
+	accessDuration := jwt.SetExpDuration(time.Second * time.Duration(accessTokenDurationSec)) // should be more than one minute!
 
-	status, err := integrationService.GetUserApiKeyStatus(view.GitlabIntegration, dbUser.Id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check gitlab integration status: %v", err)
-	}
 	extensions := user.GetExtensions()
-
-	gitIntegrationExtensionValue := "false"
-	if status.Status == service.ApiKeyStatusPresent {
-		gitIntegrationExtensionValue = "true"
-	}
 	systemRole, err := roleService.GetUserSystemRole(user.GetID())
 	if err != nil {
 		return nil, fmt.Errorf("failed to check user system role: %v", err.Error())
@@ -139,7 +189,6 @@ func CreateTokenForUser(dbUser view.User) (*UserView, error) {
 	if systemRole != "" {
 		extensions.Set(context.SystemRoleExt, systemRole)
 	}
-	extensions.Set(gitIntegrationExt, gitIntegrationExtensionValue)
 	user.SetExtensions(extensions)
 
 	token, err := jwt.IssueAccessToken(user, keeper, accessDuration)
@@ -148,14 +197,64 @@ func CreateTokenForUser(dbUser view.User) (*UserView, error) {
 		return nil, err
 	}
 
-	renewDuration := jwt.SetExpDuration(time.Hour * 24 * 30) // approximately one month
-	renewToken, err := jwt.IssueAccessToken(user, keeper, renewDuration)
+	refreshTokenDurationSec := systemInfoService.GetRefreshTokenDurationSec()
+	refreshDuration := jwt.SetExpDuration(time.Second * time.Duration(refreshTokenDurationSec))
+	refreshToken, err := jwt.IssueAccessToken(user, keeper, refreshDuration)
 	if err != nil {
 		return nil, err
 	}
 
-	userView := UserView{AccessToken: token, RenewToken: renewToken, User: dbUser}
-	return &userView, nil
+	authCookie := view.SessionCookie{AccessToken: token, RefreshToken: refreshToken}
+	return &authCookie, nil
+}
+
+func RefreshToken(w http.ResponseWriter, r *http.Request) {
+	// TODO: should we support other ways to transfer refresh token other than session cookie ?
+	userInfo, err := refreshTokenStrategy.Authenticate(r.Context(), r)
+	if err != nil {
+		respondWithAuthFailedError(w, err)
+		return
+	}
+	sessionCookie, err := extractSessionCookie(r)
+	if err != nil {
+		respondWithAuthFailedError(w, err)
+		return
+	}
+
+	newSessionCookie, err := refreshAccessToken(userInfo, sessionCookie.RefreshToken)
+	if err != nil {
+		respondWithAuthFailedError(w, err)
+		return
+	}
+
+	response, _ := json.Marshal(newSessionCookie)
+	cookieValue := base64.StdEncoding.EncodeToString(response)
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     view.SessionCookieName,
+		Value:    cookieValue,
+		MaxAge:   systemInfoService.GetRefreshTokenDurationSec(),
+		Secure:   true,
+		HttpOnly: true,
+		Path:     "/",
+	})
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func refreshAccessToken(userInfo auth.Info, refreshToken string) (*view.SessionCookie, error) {
+	accessTokenDurationSec := systemInfoService.GetAccessTokenDurationSec()
+	accessDuration := jwt.SetExpDuration(time.Second * time.Duration(accessTokenDurationSec))
+
+	newAccessToken, err := jwt.IssueAccessToken(userInfo, keeper, accessDuration)
+	if err != nil {
+		return nil, err
+	}
+
+	return &view.SessionCookie{
+		AccessToken:  newAccessToken,
+		RefreshToken: refreshToken,
+	}, nil
 }
 
 func GetPublicKey() []byte {

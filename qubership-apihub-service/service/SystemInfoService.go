@@ -78,6 +78,8 @@ const (
 	APIHUB_SYSTEM_API_KEY                  = "APIHUB_ACCESS_TOKEN"
 	EDITOR_DISABLED                        = "EDITOR_DISABLED"
 	FAIL_BUILDS_ON_BROKEN_REFS             = "FAIL_BUILDS_ON_BROKEN_REFS"
+	APIHUB_ACCESS_TOKEN_DURATION_SEC       = "APIHUB_ACCESS_TOKEN_DURATION_SEC"
+	APIHUB_REFRESH_TOKEN_DURATION_SEC      = "APIHUB_REFRESH_TOKEN_DURATION_SEC"
 )
 
 type SystemInfoService interface {
@@ -135,6 +137,8 @@ type SystemInfoService interface {
 	GetSystemApiKey() (string, error)
 	GetEditorDisabled() bool
 	FailBuildOnBrokenRefs() bool
+	GetAccessTokenDurationSec() int
+	GetRefreshTokenDurationSec() int
 }
 
 func (g systemInfoServiceImpl) GetCredsFromEnv() *view.DbCredentials {
@@ -240,6 +244,8 @@ func (g systemInfoServiceImpl) Init() error {
 	g.setAllowedHosts()
 	g.setEditorDisabled()
 	g.setFailBuildOnBrokenRefs()
+	g.setAccessTokenDurationSec()
+	g.setRefreshTokenDurationSec()
 
 	return nil
 }
@@ -829,4 +835,49 @@ func (g systemInfoServiceImpl) setFailBuildOnBrokenRefs() {
 
 func (g systemInfoServiceImpl) FailBuildOnBrokenRefs() bool {
 	return g.systemInfoMap[FAIL_BUILDS_ON_BROKEN_REFS].(bool)
+}
+
+func (g systemInfoServiceImpl) setAccessTokenDurationSec() {
+	envVal := os.Getenv(APIHUB_ACCESS_TOKEN_DURATION_SEC)
+	if envVal == "" {
+		g.systemInfoMap[APIHUB_ACCESS_TOKEN_DURATION_SEC] = 3600 //1 hour
+		return
+	}
+	val, err := strconv.Atoi(envVal)
+	if err != nil {
+		log.Errorf("failed to parse %v env value: %v. Value by default - 3600", APIHUB_ACCESS_TOKEN_DURATION_SEC, err.Error())
+		g.systemInfoMap[APIHUB_ACCESS_TOKEN_DURATION_SEC] = 3600
+		return
+	}
+	//TODO: what is the minimum value ?
+	if val <= 60 {
+		err = fmt.Errorf("env %v has incorrect value, value must be greater than 60. Value by default - 3600", APIHUB_ACCESS_TOKEN_DURATION_SEC)
+		g.systemInfoMap[APIHUB_ACCESS_TOKEN_DURATION_SEC] = 3600
+		return
+	}
+	g.systemInfoMap[APIHUB_ACCESS_TOKEN_DURATION_SEC] = val
+}
+
+func (g systemInfoServiceImpl) GetAccessTokenDurationSec() int {
+	return g.systemInfoMap[APIHUB_ACCESS_TOKEN_DURATION_SEC].(int)
+}
+
+func (g systemInfoServiceImpl) setRefreshTokenDurationSec() {
+	envVal := os.Getenv(APIHUB_REFRESH_TOKEN_DURATION_SEC)
+	if envVal == "" {
+		g.systemInfoMap[APIHUB_REFRESH_TOKEN_DURATION_SEC] = 43200 //12 hours
+		return
+	}
+	val, err := strconv.Atoi(envVal)
+	if err != nil {
+		log.Errorf("failed to parse %v env value: %v. Value by default - 43200", APIHUB_REFRESH_TOKEN_DURATION_SEC, err.Error())
+		g.systemInfoMap[APIHUB_REFRESH_TOKEN_DURATION_SEC] = 43200
+		return
+	}
+	//TODO: what is the minimum value ?
+	g.systemInfoMap[APIHUB_REFRESH_TOKEN_DURATION_SEC] = val
+}
+
+func (g systemInfoServiceImpl) GetRefreshTokenDurationSec() int {
+	return g.systemInfoMap[APIHUB_REFRESH_TOKEN_DURATION_SEC].(int)
 }

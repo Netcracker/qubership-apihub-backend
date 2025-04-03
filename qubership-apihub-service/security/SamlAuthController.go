@@ -191,7 +191,7 @@ func (a *authenticationControllerImpl) AssertionConsumerHandler(w http.ResponseW
 	}
 
 	// Add Apihub auth info cookie
-	a.setUserViewCookie(w, assertion)
+	a.setAuthCookie(w, assertion)
 
 	// Extract original redirect URI from request tracking cookie
 	redirectURI := "/"
@@ -221,27 +221,27 @@ func (a *authenticationControllerImpl) AssertionConsumerHandler(w http.ResponseW
 	http.Redirect(w, r, redirectURI, http.StatusFound)
 }
 
-func (a *authenticationControllerImpl) setUserViewCookie(w http.ResponseWriter, assertion *saml.Assertion) {
+func (a *authenticationControllerImpl) setAuthCookie(w http.ResponseWriter, assertion *saml.Assertion) {
 	assertionAttributes := getAssertionAttributes(assertion)
 
-	userView, err := a.getOrCreateUser(assertionAttributes)
+	authCookie, err := a.getOrCreateUser(assertionAttributes)
 	if err != nil {
 		controller.RespondWithError(w, "Failed to get or create SSO user", err)
 		return
 	}
 
-	response, _ := json.Marshal(userView)
+	response, _ := json.Marshal(authCookie)
 	cookieValue := base64.StdEncoding.EncodeToString(response)
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     "userView",
+		Name:     view.SessionCookieName,
 		Value:    cookieValue,
-		MaxAge:   int((time.Hour * 12).Seconds()),
+		MaxAge:   systemInfoService.GetRefreshTokenDurationSec(),
 		Secure:   true,
-		HttpOnly: false,
+		HttpOnly: true,
 		Path:     "/",
 	})
-	log.Debugf("Auth user result object: %+v", userView)
+	log.Debugf("Auth user result object: %+v", authCookie)
 }
 
 func getAssertionAttributes(assertion *saml.Assertion) map[string][]string {
@@ -260,7 +260,7 @@ func getAssertionAttributes(assertion *saml.Assertion) map[string][]string {
 	return assertionAttributes
 }
 
-func (a *authenticationControllerImpl) getOrCreateUser(assertionAttributes map[string][]string) (*UserView, error) {
+func (a *authenticationControllerImpl) getOrCreateUser(assertionAttributes map[string][]string) (*view.SessionCookie, error) {
 	samlUser := view.User{}
 	if len(assertionAttributes[samlAttributeUserId]) != 0 {
 		userLogin := assertionAttributes[samlAttributeUserId][0]
@@ -323,7 +323,7 @@ func (a *authenticationControllerImpl) getOrCreateUser(assertionAttributes map[s
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user for SSO integration: %w", err)
 	}
-	userView, err := CreateTokenForUser(*user)
+	authCookie, err := CreateTokenForUser(*user)
 	if err != nil {
 		return nil, &exception.CustomError{
 			Status:  http.StatusInternalServerError,
@@ -331,7 +331,7 @@ func (a *authenticationControllerImpl) getOrCreateUser(assertionAttributes map[s
 			Debug:   err.Error(),
 		}
 	}
-	return userView, nil
+	return authCookie, nil
 }
 
 func (a *authenticationControllerImpl) GetSystemSSOInfo(w http.ResponseWriter, r *http.Request) {

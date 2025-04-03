@@ -245,7 +245,7 @@ func main() {
 	}
 	privateUserPackageService := service.NewPrivateUserPackageService(publishedRepository, usersRepository, roleRepository, favoritesRepository)
 	integrationsService := service.NewIntegrationsService(gitIntegrationRepository, gitClientProvider)
-	userService := service.NewUserService(usersRepository, gitClientProvider, systemInfoService, privateUserPackageService)
+	userService := service.NewUserService(usersRepository, gitClientProvider, systemInfoService, privateUserPackageService, integrationsService)
 
 	projectService := service.NewProjectService(gitClientProvider, projectRepository, favoritesRepository, publishedRepository)
 	groupService := service.NewGroupService(projectRepository, projectService, favoritesRepository, publishedRepository, usersRepository)
@@ -505,12 +505,15 @@ func main() {
 	r.HandleFunc("/api/v2/auth/apiKey", security.NoSecure(apihubApiKeyController.GetApiKeyByKey)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/auth/apiKey/{apiKeyId}", security.Secure(apihubApiKeyController.GetApiKeyById)).Methods(http.MethodGet)
 
+	r.HandleFunc("/api/v1/auth/refreshToken", security.NoSecure(security.RefreshToken)).Methods(http.MethodPost)
+
 	r.HandleFunc("/api/v2/users/{userId}/profile/avatar", security.NoSecure(userController.GetUserAvatar)).Methods(http.MethodGet) // Should not be secured! FE renders avatar as <img src='avatarUrl' and it couldn't include auth header
 	r.HandleFunc("/api/v2/users", security.Secure(userController.GetUsers)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/users/{userId}", security.Secure(userController.GetUserById)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/users/{userId}/space", security.Secure(userController.CreatePrivatePackageForUser)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v2/space", security.SecureJWT(userController.CreatePrivateUserPackage)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v2/space", security.SecureJWT(userController.GetPrivateUserPackage)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/space", security.SecureUser(userController.CreatePrivateUserPackage)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v2/space", security.SecureUser(userController.GetPrivateUserPackage)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/user", security.SecureUser(userController.GetExtendedUser)).Methods(http.MethodGet)
 
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/changes/summary", security.Secure(comparisonController.GetComparisonChangesSummary)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/operations", security.Secure(operationController.GetOperationList)).Methods(http.MethodGet)
@@ -695,7 +698,7 @@ func main() {
 		}
 	})
 
-	err = security.SetupGoGuardian(integrationsService, userService, roleService, apihubApiKeyService, personalAccessTokenService, systemInfoService)
+	err = security.SetupGoGuardian(userService, roleService, apihubApiKeyService, personalAccessTokenService, systemInfoService)
 	if err != nil {
 		log.Fatalf("Can't setup go_guardian. Error - %s", err.Error())
 	}

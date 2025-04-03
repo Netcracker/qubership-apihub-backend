@@ -16,13 +16,12 @@ package security
 
 import (
 	"crypto/tls"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"time"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/controller"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
@@ -162,28 +161,6 @@ func (o oauth20ControllerImpl) GitlabOauthCallback(w http.ResponseWriter, r *htt
 		return
 	}
 
-	userView, err := CreateTokenForUser(*user)
-	if err != nil {
-		log.Errorf("Create token for saml process has error -%s", err.Error())
-		controller.RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusInternalServerError,
-			Message: "Create token for saml process has error - $error",
-			Params:  map[string]interface{}{"error": err.Error()},
-		})
-		return
-	}
-
-	response, _ := json.Marshal(userView)
-	cookieValue := base64.StdEncoding.EncodeToString(response)
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     "userView",
-		Value:    cookieValue,
-		MaxAge:   int((time.Hour * 12).Seconds()),
-		Secure:   true,
-		HttpOnly: false,
-		Path:     "/",
-	})
 	http.Redirect(w, r, redirectUri, http.StatusFound)
 }
 
