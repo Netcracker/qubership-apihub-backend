@@ -7331,7 +7331,7 @@ paths:
                   type: array
                   items:
                     type: string
-                  example: [admin, owner, release-manager, editor, viewer, none]
+                  example: [admin, owner, editor, viewer, none]
       responses:
         "204":
           description: No content
@@ -16395,6 +16395,18 @@ components:
           example: "QS.CloudOSS.PL.MC"
         status:
           $ref: "#/components/schemas/VersionStatusEnum"
+        validationRulesSeverity:
+          type: object
+          description: Configuration for validation rules severity levels          
+          readOnly: true
+          properties:
+            brokenRefs:
+              type: string
+              enum:
+                - "error"
+                - "warning"
+              default: "warning"
+              description: Severity level for broken references validation
         groupName:
           description: |
             Operation group name. groupName is required if buildType = documentGroup.
