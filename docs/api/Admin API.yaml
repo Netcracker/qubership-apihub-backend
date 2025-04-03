@@ -24,6 +24,7 @@ servers:
         default: apihub
 security:
   - BearerAuth: []
+  - CookieAuth: []
 tags:
   - name: Transition
     description: Operations to move packages
@@ -38,6 +39,7 @@ paths:
       operationId: movePackage
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       requestBody:
         description: Package coordinates
@@ -119,6 +121,7 @@ paths:
       operationId: getMoveStatus
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - name: id
@@ -174,6 +177,7 @@ paths:
       operationId: listActivities
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - name: offset
@@ -236,6 +240,7 @@ paths:
       operationId: listPackageTransitions
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       responses:
         "200":
@@ -367,6 +372,11 @@ components:
       description: Bearer token authentication. Default secutity scheme for API usage.
       scheme: bearer
       bearerFormat: JWT
+    CookieAuth:
+      type: apiKey
+      in: cookie
+      name: apihub-session
+      description: Authentication via the `apihub-session` cookie.
     api-key:
       type: apiKey
       description: Api-key authentication.

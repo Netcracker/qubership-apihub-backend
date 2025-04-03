@@ -2982,6 +2982,10 @@ components:
       description: Common security scheme for API usage
       scheme: bearer
       bearerFormat: JWT
+    CookieAuth:
+      type: apiKey
+      in: cookie
+      name: apihub-session
     api-key:
       type: apiKey
       description: Api-key authentication
@@ -3024,4 +3028,5 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
 security:
   - BearerAuth: []
+  - CookieAuth: []
   - api-key: []

@@ -24,6 +24,7 @@ servers:
         default: apihub
 security:
   - BearerAuth: []
+  - CookieAuth: []
 tags:
   - name: Auth
     description: APIs for auth integrations.
@@ -62,12 +63,12 @@ tags:
 paths:
   "/api/v1/system/configuration":
     get:
-      tags: 
+      tags:
         - Auth
       summary: System configuration
       description: Global parameters of system configuration.
       operationId: getSystemConfiguration
-      security: 
+      security:
         - {}
       responses:
         "200":
@@ -76,8 +77,9 @@ paths:
             application/json:
               schema:
                 type: object
-                required: 
+                required:
                   - autoRedirect
+                  - authConfig
                 properties:
                   ssoIntegrationEnabled:
                     type: boolean
@@ -87,6 +89,36 @@ paths:
                     description: Id of the workspace, which is used by default while working with the system.
                     type: string
                     example: WSPACE1
+                  authConfig:
+                    type: object
+                    required:
+                      - identityProviders
+                      - defaultProviderId
+                    properties:
+                      identityProviders:
+                        type: array
+                        items:
+                          type: object
+                          required:
+                            - id
+                            - type
+                            - displayName
+                            - imageSvg
+                            - url
+                          properties:
+                            id:
+                              type: string
+                            type:
+                              type: string
+                              enum: [ internal, external ]
+                            displayName:
+                              type: string
+                            imageSvg:
+                              type: string
+                            url:
+                              type: string
+                      defaultProviderId:
+                        type: string
         "500":
           description: Internal Server Error
           content:
@@ -107,7 +139,7 @@ paths:
 
         In case of successful authentication, the request will be redirected to the **redirectUri** and 
         the response will contain cookie with access token for future API calls.
-        All subsequent APIHUB calls must use this token in a **BearerAuth** authentication.
+        All subsequent APIHUB calls must use this token in a **BearerAuth** authentication or directly use this cookie in **CookieAuth**.
       operationId: postAuthSAML
       security: [{}]
       parameters:
@@ -121,13 +153,13 @@ paths:
             example: "https://apihub.qubership.org/portal"
       responses:
         "302":
-          description: Moved Temporarily
+          description: Status Found
           headers:
             Set-Cookie:
-              description: A base64 encoded userView cookie, containing the user data and access token.
+              description: A base64 encoded `apihub-session` cookie, containing access and refresh tokens.
               schema:
                 type: string
-                example: "userView=eyJ0b2tlbiI6ImV5SmhiR2NpT2lKSVV6STFOaUlzSW10cFpDSTZJbk5sWTNKbGRDMXBaQ0lzSW5SNWNDSTZJa3BYVkNKOS5leUpGZUhSbGJuTnBiMjV6SWpwN2ZTd2lSM0p2ZFhCeklqcGJYU3dpU1VRaU9pSmxkbVZzTURJeE9TSXNJazVoYldVaU9pSmxkbVZzTURJeE9TSXNJbUYxWkNJNld5SWlYU3dpWlhod0lqb3hOamMwTURZNU1UVTRMQ0pwWVhRaU9qRTJOelF3TWpVNU5UZ3NJbTVpWmlJNk1UWTNOREF5TlRrMU9Dd2ljM1ZpSWpvaVpYWmxiREF5TVRraWZRLk45d2poeGhLRkoyTlEzNXpCaGw0VEs4VFBOS3RoeDE5czNQQnNheTNkclEiLCJyZW5ld1Rva2VuIjoiZXlKaGJHY2lPaUpJVXpJMU5pSXNJbXRwWkNJNkluTmxZM0psZEMxcFpDSXNJblI1Y0NJNklrcFhWQ0o5LmV5SkZlSFJsYm5OcGIyNXpJanA3ZlN3aVIzSnZkWEJ6SWpwYlhTd2lTVVFpT2lKbGRtVnNNREl4T1NJc0lrNWhiV1VpT2lKbGRtVnNNREl4T1NJc0ltRjFaQ0k2V3lJaVhTd2laWGh3SWpveE5qYzJOakUzT1RVNExDSnBZWFFpT2pFMk56UXdNalU1TlRnc0ltNWlaaUk2TVRZM05EQXlOVGsxT0N3aWMzVmlJam9pWlhabGJEQXlNVGtpZlEuUnRyZEEwNkJrN2lIQnA1bVRYUE1PSnVJdmhtQ0FudHRnVlBqNGZicXN6WSIsInVzZXIiOnsiaWQiOiJldmVsMDIxOSIsImVtYWlsIjoiZXZnZW5paS5lbGl6YXJvdkBuZXRjcmFja2VyLmNvbSIsIm5hbWUiOiJFdmdlbmlpIEVsaXphcm92IiwiYXZhdGFyVXJsIjoiL2FwaS92Mi91c2Vycy9ldmVsMDIxOS9wcm9maWxlL2F2YXRhciJ9fQ==;"
+                example: "apihub-session=eyJhY2Nlc3NUb2tlbiI6ImV5SmhiR2NpT2lKU1V6STFOaUlzSW10cFpDSTZJbk5sWTNKbGRDMXBaQ0lzSW5SNWNDSTZJa3BYVkNKOS5leUpGZUhSbGJuTnBiMjV6SWpwN0luTjVjM1JsYlZKdmJHVWlPbHNpVTNsemRHVnRJR0ZrYldsdWFYTjBjbUYwYjNJaVhYMHNJa2R5YjNWd2N5STZXMTBzSWtsRUlqb2lZWEJwYUhWaUlpd2lUbUZ0WlNJNkltRndhV2gxWWlJc0ltRjFaQ0k2V3lJaVhTd2laWGh3SWpveE56UXpOamMzTVRjMUxDSnBZWFFpT2pFM05ETTJOek0xTnpVc0ltNWlaaUk2TVRjME16WTNNelUzTlN3aWMzVmlJam9pWVhCcGFIVmlJbjAudTJLdWZZM1ZQQ1ZDSlRiYkg0Q1lOdUpUSjJwTkgxX0xwVW1fWlRBam5NZ0kyNHZ0ZlFFZ21jLXpEejR6QUJmcjhwYUlOVG5NcFZiLWd6akdyNkNNTnVjNEFjZFFLUXpIbTZpTm1EZ0ZWcGxoanFYSGtCVXh2VXA2dVkwcUtIU09fa2JwWDU3RnRKb3FhVTVMS1JVdmg5b28zUjZmTWp2b0c3VWlta1ZnanZDSFlvNmJYOThvblBBQXhwNWVYZGptUnRsRHd1bG84aVJudDcycUdCdkFCc01KaGtoSkZxLWs0Qy1RclR5V2FncHp3TjBRcEtDRGNVVEZrTk52dnhvVUFUb29kbDRVdFQ3dmU1b3h5TmpCX1ZMRWJCZHpJQkZvcEgxTndoZ1VsN01JZEJyTFJTTml0bmZGUmFSbTlUQTZ4XzJiUzhXeGE0VkM3OTJpZGN3c3VBIiwicmVmcmVzaFRva2VuIjoiZXlKaGJHY2lPaUpTVXpJMU5pSXNJbXRwWkNJNkluTmxZM0psZEMxcFpDSXNJblI1Y0NJNklrcFhWQ0o5LmV5SkZlSFJsYm5OcGIyNXpJanA3SW5ONWMzUmxiVkp2YkdVaU9sc2lVM2x6ZEdWdElHRmtiV2x1YVhOMGNtRjBiM0lpWFgwc0lrZHliM1Z3Y3lJNlcxMHNJa2xFSWpvaVlYQnBhSFZpSWl3aVRtRnRaU0k2SW1Gd2FXaDFZaUlzSW1GMVpDSTZXeUlpWFN3aVpYaHdJam94TnpRek56RTJOemMxTENKcFlYUWlPakUzTkRNMk56TTFOelVzSW01aVppSTZNVGMwTXpZM016VTNOU3dpYzNWaUlqb2lZWEJwYUhWaUluMC5wQ2d1UktGakZvQm5GdzI0cUJpbkVZZzlkV0p5VmdoM0lwUVJHWTlvUWVoYUwzc2dtZTYzNFNxT3NuR25xWDUtR1Z3SEUyVm9DZFJzRmJTZE1vei0xemE4eTl4VWFncGZHdmt4SnZ6V0VjaHZKanhyQ25EVlVuczNNZFl5WndfOTdyaVp5WWNhVVZ3bk1WTTRSM0VYbWVRbXNrcThOTzNDSEpQRmxRa3JwRmVtZjZlbUlsQTJjUE1lejF3RGg3ZTVKeTVwMjcyV1c1ODNkMDg1WWo1TGwwTVVFengtaTlVTF9DeUFFenptd21mcmZUYW9xUTFVVDY5NDY1bndRdUY4M0U4TU15ME8wYkZzTHZ2WFJCNkp4aVZwWTk1QVZkVTVXSjhZamNpVGlXX3JoYzhZbWFmVFBqU1hLaHVUdmpORFZadGpWRms2YzBlNThSUmZMdE1IY2cifQ==;"
         "400":
           description: Bad request
           content:
@@ -138,6 +170,69 @@ paths:
                 IncorrectInputParams:
                   $ref: "#/components/examples/IncorrectInputParameters"
         "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  /api/v1/auth/refreshToken:
+    post:
+      tags:
+        - Auth
+      summary: Refresh access token
+      description: Refreshes the access token using the refresh token from the provided apihub-session cookie.
+      operationId: refreshAuthToken
+      security:
+        - CookieAuth: []
+      responses:
+        '200':
+          description: Success
+          headers:
+            Set-Cookie:
+              description: A base64 encoded `apihub-session` cookie containing the new access token and the old refresh token.
+              schema:
+                type: string
+                example: "apihub-session=eyJhY2Nlc3NUb2tlbiI6ImV5SmhiR2NpT2lKU1V6STFOaUlzSW10cFpDSTZJbk5sWTNKbGRDMXBaQ0lzSW5SNWNDSTZJa3BYVkNKOS5leUpGZUhSbGJuTnBiMjV6SWpwN0luTjVjM1JsYlZKdmJHVWlPbHNpVTNsemRHVnRJR0ZrYldsdWFYTjBjbUYwYjNJaVhYMHNJa2R5YjNWd2N5STZXMTBzSWtsRUlqb2lZWEJwYUhWaUlpd2lUbUZ0WlNJNkltRndhV2gxWWlJc0ltRjFaQ0k2V3lJaVhTd2laWGh3SWpveE56UXpOamMzTVRjMUxDSnBZWFFpT2pFM05ETTJOek0xTnpVc0ltNWlaaUk2TVRjME16WTNNelUzTlN3aWMzVmlJam9pWVhCcGFIVmlJbjAudTJLdWZZM1ZQQ1ZDSlRiYkg0Q1lOdUpUSjJwTkgxX0xwVW1fWlRBam5NZ0kyNHZ0ZlFFZ21jLXpEejR6QUJmcjhwYUlOVG5NcFZiLWd6akdyNkNNTnVjNEFjZFFLUXpIbTZpTm1EZ0ZWcGxoanFYSGtCVXh2VXA2dVkwcUtIU09fa2JwWDU3RnRKb3FhVTVMS1JVdmg5b28zUjZmTWp2b0c3VWlta1ZnanZDSFlvNmJYOThvblBBQXhwNWVYZGptUnRsRHd1bG84aVJudDcycUdCdkFCc01KaGtoSkZxLWs0Qy1RclR5V2FncHp3TjBRcEtDRGNVVEZrTk52dnhvVUFUb29kbDRVdFQ3dmU1b3h5TmpCX1ZMRWJCZHpJQkZvcEgxTndoZ1VsN01JZEJyTFJTTml0bmZGUmFSbTlUQTZ4XzJiUzhXeGE0VkM3OTJpZGN3c3VBIiwicmVmcmVzaFRva2VuIjoiZXlKaGJHY2lPaUpTVXpJMU5pSXNJbXRwWkNJNkluTmxZM0psZEMxcFpDSXNJblI1Y0NJNklrcFhWQ0o5LmV5SkZlSFJsYm5OcGIyNXpJanA3SW5ONWMzUmxiVkp2YkdVaU9sc2lVM2x6ZEdWdElHRmtiV2x1YVhOMGNtRjBiM0lpWFgwc0lrZHliM1Z3Y3lJNlcxMHNJa2xFSWpvaVlYQnBhSFZpSWl3aVRtRnRaU0k2SW1Gd2FXaDFZaUlzSW1GMVpDSTZXeUlpWFN3aVpYaHdJam94TnpRek56RTJOemMxTENKcFlYUWlPakUzTkRNMk56TTFOelVzSW01aVppSTZNVGMwTXpZM016VTNOU3dpYzNWaUlqb2lZWEJwYUhWaUluMC5wQ2d1UktGakZvQm5GdzI0cUJpbkVZZzlkV0p5VmdoM0lwUVJHWTlvUWVoYUwzc2dtZTYzNFNxT3NuR25xWDUtR1Z3SEUyVm9DZFJzRmJTZE1vei0xemE4eTl4VWFncGZHdmt4SnZ6V0VjaHZKanhyQ25EVlVuczNNZFl5WndfOTdyaVp5WWNhVVZ3bk1WTTRSM0VYbWVRbXNrcThOTzNDSEpQRmxRa3JwRmVtZjZlbUlsQTJjUE1lejF3RGg3ZTVKeTVwMjcyV1c1ODNkMDg1WWo1TGwwTVVFengtaTlVTF9DeUFFenptd21mcmZUYW9xUTFVVDY5NDY1bndRdUY4M0U4TU15ME8wYkZzTHZ2WFJCNkp4aVZwWTk1QVZkVTVXSjhZamNpVGlXX3JoYzhZbWFmVFBqU1hLaHVUdmpORFZadGpWRms2YzBlNThSUmZMdE1IY2cifQ==;"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example: {}
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  /api/v1/logout:
+    post:
+      tags:
+        - Auth
+      summary: User logout
+      description: Logs out the authenticated user and invalidates all active sessions.
+      operationId: logoutUser
+      security:
+        - CookieAuth: []
+      responses:
+        "204":
+          description: No content
+          content: {}
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example: {}
+        '500':
           description: Internal Server Error
           content:
             application/json:
@@ -158,6 +253,7 @@ paths:
       operationId: getActivity
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - name: onlyFavorite
@@ -429,6 +525,7 @@ paths:
       operationId: getActivityV3
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - name: onlyFavorite
@@ -691,6 +788,7 @@ paths:
       operationId: getActivityV4
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - name: onlyFavorite
@@ -947,7 +1045,7 @@ paths:
                               title: ParamsForPatchOperationsGroup
                               description: |
                                 params for the update_operations_group_parameters event
-                              required: 
+                              required:
                                 - version
                                 - groupName
                                 - groupsParams
@@ -1228,6 +1326,7 @@ paths:
       operationId: getPackagesId
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/showParents"
@@ -1277,7 +1376,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -1321,6 +1420,7 @@ paths:
       operationId: patchPackagesId
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       requestBody:
         description: Package update parameters
@@ -1354,7 +1454,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -1418,6 +1518,7 @@ paths:
       operationId: deletePackagesId
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       responses:
         "204":
@@ -1427,7 +1528,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -1478,6 +1579,7 @@ paths:
       operationId: getPackageIdActivity
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - name: packageId
@@ -1695,7 +1797,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -1746,6 +1848,7 @@ paths:
       operationId: getPackageIdActivityV3
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - name: packageId
@@ -1956,7 +2059,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -2005,6 +2108,7 @@ paths:
       operationId: getPackageIdActivityV4
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - name: packageId
@@ -2288,7 +2392,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -2333,6 +2437,7 @@ paths:
       operationId: getPackagesIdStatus
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       responses:
         "200":
@@ -2346,7 +2451,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -2390,6 +2495,7 @@ paths:
       operationId: postPackagesIdApiKeys
       security:
         - BearerAuth: []
+        - CookieAuth: []
       requestBody:
         description: Create API key parameters
         content:
@@ -2449,7 +2555,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -2505,6 +2611,7 @@ paths:
       operationId: getPackagesIdApiKeys
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       responses:
         "200":
@@ -2589,6 +2696,7 @@ paths:
       operationId: postPackagesIdApiKeysV3
       security:
         - BearerAuth: []
+        - CookieAuth: []
       requestBody:
         description: Create API key parameters
         content:
@@ -2695,6 +2803,7 @@ paths:
       operationId: getPackagesIdApiKeysV3
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       responses:
         "200":
@@ -2737,7 +2846,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -2788,6 +2897,7 @@ paths:
       operationId: postPackagesIdApiKeysV4
       security:
         - BearerAuth: []
+        - CookieAuth: []
       requestBody:
         description: Create API key parameters
         content:
@@ -2873,6 +2983,7 @@ paths:
       operationId: getPackagesIdApiKeysV4
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       responses:
         "200":
@@ -2892,7 +3003,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -2941,6 +3052,7 @@ paths:
       operationId: deletePackagesIdApiKeysId
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       responses:
         "204":
@@ -2950,7 +3062,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -2998,6 +3110,7 @@ paths:
       operationId: postPersonalAccessToken
       security:
         - BearerAuth: []
+        - CookieAuth: []
       requestBody:
         description: Create personal access token parameters
         content:
@@ -3028,7 +3141,7 @@ paths:
                 allOf:
                   - $ref: '#/components/schemas/PersonalAccessToken'
                   - type: object
-                    required: 
+                    required:
                       - token
                     properties:
                       token:
@@ -3078,6 +3191,7 @@ paths:
       operationId: getPersonalAccessToken
       security:
         - BearerAuth: []
+        - CookieAuth: []
       responses:
         '200':
           description: Success
@@ -3128,6 +3242,7 @@ paths:
       operationId: deletePersonalAccessToken
       security:
         - BearerAuth: []
+        - CookieAuth: []
       responses:
         '204':
           description: No content
@@ -3180,7 +3295,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -3230,7 +3345,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -3283,6 +3398,7 @@ paths:
       operationId: postPackagesIdPublish
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - name: clientBuild
@@ -3295,7 +3411,7 @@ paths:
         - name: resolveRefs
           in: query
           required: false
-          description: With resolveRefs=true all references will be resolved into a flat list. With resolveRefs=false it's expected that all references are already resolved. 
+          description: With resolveRefs=true all references will be resolved into a flat list. With resolveRefs=false it's expected that all references are already resolved.
           schema:
             type: boolean
             default: true
@@ -3363,7 +3479,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -3432,6 +3548,7 @@ paths:
       operationId: postPackagesIdPublishIdStatus
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       requestBody:
         description: |
@@ -3469,7 +3586,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -3521,6 +3638,7 @@ paths:
       operationId: getPackagesIdPublishIdStatus
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       responses:
         "200":
@@ -3545,7 +3663,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -3596,6 +3714,7 @@ paths:
       operationId: postPackagesIdPublishIdStatusV3
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       requestBody:
         description: |
@@ -3633,7 +3752,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -3700,6 +3819,7 @@ paths:
       operationId: DashboardPublishWithOperationsGroup
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       requestBody:
         content:
@@ -3822,6 +3942,7 @@ paths:
       operationId: getDashboardPublishWithOperationsGroupStatus
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       responses:
         '200':
@@ -3901,6 +4022,7 @@ paths:
       operationId: getDashboardPublishWithOperationsGroupStatusReport
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       responses:
         '200':
@@ -3956,6 +4078,7 @@ paths:
       operationId: getPackagesIdVersions
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/limit"
@@ -4001,7 +4124,7 @@ paths:
             enum:
               - version
               - createdAt
-            default: version  
+            default: version
         - name: sortOrder
           in: query
           description: Sorting order
@@ -4068,7 +4191,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -4127,6 +4250,7 @@ paths:
       operationId: getPackagesIdVersionsV3
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/limit"
@@ -4172,7 +4296,7 @@ paths:
             enum:
               - version
               - createdAt
-            default: version  
+            default: version
         - name: sortOrder
           in: query
           description: Sorting order
@@ -4200,7 +4324,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -4254,6 +4378,7 @@ paths:
       operationId: getPackagesIdVersionsId
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - name: version
@@ -4364,7 +4489,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -4423,6 +4548,7 @@ paths:
       operationId: patchPackagesIdVersionsIdV2
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/version"
@@ -4453,7 +4579,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -4518,6 +4644,7 @@ paths:
       operationId: deletePackagesIdVersionsId
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/version"
@@ -4529,7 +4656,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -4579,6 +4706,7 @@ paths:
       operationId: getPackagesIdVersionsIdV4
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - name: version
@@ -4616,7 +4744,7 @@ paths:
             enum:
               - version
               - createdAt
-            default: version  
+            default: version
         - name: sortOrder
           in: query
           description: Sorting order
@@ -4647,7 +4775,7 @@ paths:
                               allOf:
                                 - $ref: '#/components/schemas/ChangeSummary'
                                 - type: object
-                                  description: Number of declarative changes in the version. 
+                                  description: Number of declarative changes in the version.
                             numberOfImpactedOperations:
                               allOf:
                                 - $ref: '#/components/schemas/ChangeSummary'
@@ -4674,7 +4802,7 @@ paths:
                                 properties:
                                   currentAudience:
                                     type: string
-                                    description: Current apiAudience value (currentAudience must not be equal to previousAudience) 
+                                    description: Current apiAudience value (currentAudience must not be equal to previousAudience)
                                     enum:
                                       - internal
                                       - external
@@ -4719,7 +4847,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -4769,6 +4897,7 @@ paths:
       operationId: getPackageIdVersionChangesSummary
       security:
         - BearerAuth: []
+        - CookieAuth: []
       parameters:
         - $ref: "#/components/parameters/packageId"
         - $ref: "#/components/parameters/version"
@@ -4904,7 +5033,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -4949,6 +5078,7 @@ paths:
       operationId: getPackagesIdVersionsIdApiTypeChanges
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/apiType"
@@ -5128,7 +5258,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -5177,6 +5307,7 @@ paths:
       operationId: getPackagesIdVersionsIdApiTypeChangesV3
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/apiType"
@@ -5377,7 +5508,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -5492,6 +5623,7 @@ paths:
       operationId: getPackageIdVersionIdChangesExport
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       responses:
         "200":
@@ -5512,7 +5644,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -5591,6 +5723,7 @@ paths:
       operationId: getPackageIdVersionIdChangesExport
       security:
         - BearerAuth: [ ]
+        - CookieAuth: [ ]
         - api-key: [ ]
       responses:
         "200":
@@ -5611,7 +5744,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -5674,6 +5807,7 @@ paths:
       operationId: getPackagesIdVersionsIdSources
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       responses:
         "200":
@@ -5732,6 +5866,7 @@ paths:
       operationId: getPackagesIdVersionsIdConfig
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       responses:
         "200":
@@ -5784,6 +5919,7 @@ paths:
       operationId: getPackageIdVersionIdCopy
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       requestBody:
         content:
@@ -5837,7 +5973,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -5897,6 +6033,7 @@ paths:
       operationId: postCompare
       security:
         - BearerAuth: []
+        - CookieAuth: []
       parameters:
         - name: clientBuild
           in: query
@@ -6069,6 +6206,7 @@ paths:
       operationId: postGenerateDocument
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
       - name: clientBuild
@@ -6158,7 +6296,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -6238,6 +6376,7 @@ paths:
       operationId: postGenerateDocumentV3
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
       - name: clientBuild
@@ -6346,7 +6485,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -6399,6 +6538,7 @@ paths:
       operationId: getPackagesIdVersionsIdExportGroupName
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - name: format
@@ -6432,7 +6572,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -6516,6 +6656,7 @@ paths:
       operationId: getPackagesIdVersionsIdExportGroupNameV3
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - name: format
@@ -6561,7 +6702,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -6612,6 +6753,7 @@ paths:
       operationId: getPackagesIdVersionsIdFilesSlugRaw
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       responses:
         "200":
@@ -6630,7 +6772,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -6679,6 +6821,7 @@ paths:
       operationId: getPackagesIdVersionsIdFilesSlugDoc
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - name: docType
@@ -6704,7 +6847,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -6763,6 +6906,7 @@ paths:
       operationId: getPackageVersionSourcesWithBuildConfig
       security:
           - BearerAuth: [ ]
+          - CookieAuth: [ ]
           - api-key: [ ]
       responses:
         "200":
@@ -6838,6 +6982,7 @@ paths:
       operationId: getPackagesIdVersionsIdDoc
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - name: docType
@@ -6862,7 +7007,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -7235,6 +7380,7 @@ paths:
       operationId: getPackagesIdAvailableRoles
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - name: id
@@ -7276,7 +7422,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -7321,6 +7467,7 @@ paths:
       operationId: postPackagesIdMembers
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       requestBody:
         description: Package members assignment parameters
@@ -7345,7 +7492,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -7400,6 +7547,7 @@ paths:
       operationId: getPackagesIdMembers
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       responses:
         "200":
@@ -7418,7 +7566,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -7469,6 +7617,7 @@ paths:
       operationId: patchPackagesIdMembersId
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       requestBody:
         description: Package member update parameters
@@ -7498,7 +7647,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -7556,6 +7705,7 @@ paths:
       operationId: deletePackagesIdMembersId
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       responses:
         "200":
@@ -7574,7 +7724,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -7894,6 +8044,7 @@ paths:
       operationId: postBuilderIdTasks
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       responses:
         "200":
@@ -7910,7 +8061,7 @@ paths:
                       **Required**, if the files array is filled in config.
                     format: binary
                   config.json:
-                    $ref: "#/components/schemas/BuildConfig"                    
+                    $ref: "#/components/schemas/BuildConfig"
         "204":
           description: No content
           content: {}
@@ -8605,7 +8756,7 @@ paths:
               schema:
                 type: object
                 properties:
-                  version: 
+                  version:
                     type: string
                     description: Expected version of Agents
           description: Success
@@ -8870,6 +9021,46 @@ paths:
               examples:
                 InternalServerError:
                   $ref: "#/components/examples/InternalServerError"
+  "/api/v1/user":
+    get:
+      tags:
+        - Users
+      summary: Get Extended User Information
+      description: Retrieves detailed information about the authenticated user.
+      operationId: getExtendedUser
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtendedUser"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
+        "404":
+          description: User Not Found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
   "/api/v2/users":
     get:
       tags:
@@ -8879,6 +9070,7 @@ paths:
       operationId: getUsers
       security:
         - BearerAuth: []
+        - CookieAuth: []
       parameters:
         - name: textFilter
           in: query
@@ -8934,6 +9126,7 @@ paths:
             example: user1221
       security:
         - BearerAuth: [ ]
+        - CookieAuth: [ ]
       responses:
         "200":
           description: Success
@@ -9043,6 +9236,7 @@ paths:
         Operation is considered a ghost operation if it was included in this group for previous version revision and was deleted in the current version revision
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/apiType"
@@ -9162,7 +9356,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -9217,6 +9411,7 @@ paths:
       operationId: getPackagesIdVersionsIdApiTypeOperations
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/apiType"
@@ -9387,7 +9582,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -9435,6 +9630,7 @@ paths:
       operationId: getPackageIdVersionDeprecatedSummaryV3
       security:
         - BearerAuth: [ ]
+        - CookieAuth: [ ]
       parameters:
         - $ref: "#/components/parameters/packageId"
         - $ref: "#/components/parameters/version"
@@ -9523,7 +9719,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -9564,6 +9760,7 @@ paths:
       operationId: getPackagesIdVersionsIdApiTypeDeprecations
       security:
         - BearerAuth: [ ]
+        - CookieAuth: [ ]
         - api-key: [ ]
       parameters:
         - $ref: "#/components/parameters/apiType"
@@ -9743,7 +9940,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -9785,6 +9982,7 @@ paths:
       operationId: getPackagesIdVersionsApiTypeOperationsIddeprecatedItems
       security:
         - BearerAuth: [ ]
+        - CookieAuth: [ ]
         - api-key: [ ]
       parameters:
         - $ref: "#/components/parameters/apiType"
@@ -9805,7 +10003,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -9846,6 +10044,7 @@ paths:
       operationId: getPackagesIdVersionsApiTypeOperationsIdModelsModelName
       security:
         - BearerAuth: [ ]
+        - CookieAuth: [ ]
         - api-key: [ ]
       parameters:
         - $ref: "#/components/parameters/apiType"
@@ -9880,7 +10079,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -9921,6 +10120,7 @@ paths:
       operationId: getPackagesIdVersionsIdApiTypeOperationsExport
       security:
         - BearerAuth: [ ]
+        - CookieAuth: [ ]
         - api-key: [ ]
       parameters:
         - $ref: "#/components/parameters/apiType"
@@ -9981,7 +10181,7 @@ paths:
             Either "group" or "emptyGroup" (= true) can be sent in the request, if both of them are specified then 400 will be returned in the response.
           schema:
             type: boolean
-            default: false  
+            default: false
         - name: refPackageId
           description: Filter by package id of ref package, shall be used in case of dashboard.
           in: query
@@ -10006,7 +10206,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -10054,6 +10254,7 @@ paths:
       operationId: getPackagesIdVersionsIdApiTypeOperationsExport
       security:
         - BearerAuth: [ ]
+        - CookieAuth: [ ]
         - api-key: [ ]
       parameters:
         - $ref: "#/components/parameters/apiType"
@@ -10137,7 +10338,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -10186,6 +10387,7 @@ paths:
       operationId: getPackagesIdVersionsIdApiTypeOperationsId
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/apiType"
@@ -10218,7 +10420,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -10268,6 +10470,7 @@ paths:
       operationId: getPackagesIdVersionsApiTypeOperationsIdChanges
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/apiType"
@@ -10304,7 +10507,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -10346,6 +10549,7 @@ paths:
       operationId: getPackagesIdVersionsIdApiTypeTags
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/apiType"
@@ -10412,7 +10616,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -10454,7 +10658,7 @@ paths:
   "/api/v2/packages/{packageId}/versions/{version}/{apiType}/groups":
     post:
       deprecated: true
-      x-deprecation-reason: New version of API is created - POST /api/v3/packages/{packageId}/versions/{version}/{apiType}/groups 
+      x-deprecation-reason: New version of API is created - POST /api/v3/packages/{packageId}/versions/{version}/{apiType}/groups
       tags:
         - Versions
         - Operation groups
@@ -10464,6 +10668,7 @@ paths:
         It is needed to be able to distinguish between groups created manually and groups created automatically via restPrefixGrouping.
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/packageId"
@@ -10492,7 +10697,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -10543,6 +10748,7 @@ paths:
       operationId: PostPackageIdVersionApiTypeGroupsV3
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/packageId"
@@ -10577,7 +10783,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -10626,6 +10832,7 @@ paths:
           Get list of operations from operation group. The result list depends on the API type.
         security:
           - BearerAuth: []
+          - CookieAuth: []
           - api-key: []
         parameters:
           - $ref: "#/components/parameters/apiType"
@@ -10768,7 +10975,7 @@ paths:
             description: Moved Permanently
             headers:
               Location:
-                schema: 
+                schema:
                   type: string
                 description: Current ednpoint with new packageId of moved package
               X-New-Package-Id:
@@ -10818,6 +11025,7 @@ paths:
         It is prohibited to update the prefix groups, only manual groups can be updated.
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/apiType"
@@ -10869,7 +11077,7 @@ paths:
             description: Moved Permanently
             headers:
               Location:
-                schema: 
+                schema:
                   type: string
                 description: Current ednpoint with new packageId of moved package
               X-New-Package-Id:
@@ -10912,12 +11120,13 @@ paths:
       tags:
         - Versions
         - Operation groups
-      summary: Update parameters of operation group 
+      summary: Update parameters of operation group
       description: |
         Update parameters of operation group ( in path).\
         It is prohibited to update the prefix groups, only manual groups can be updated.
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - name: groupName
@@ -10950,7 +11159,7 @@ paths:
             description: Moved Permanently
             headers:
               Location:
-                schema: 
+                schema:
                   type: string
                 description: Current ednpoint with new packageId of moved package
               X-New-Package-Id:
@@ -11006,6 +11215,7 @@ paths:
       operationId: getPackagesIdVersionsIdApiTypeGroups
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/apiType"
@@ -11020,7 +11230,7 @@ paths:
             description: Moved Permanently
             headers:
               Location:
-                schema: 
+                schema:
                   type: string
                 description: Current ednpoint with new packageId of moved package
               X-New-Package-Id:
@@ -11062,12 +11272,13 @@ paths:
       tags:
         - Versions
         - Operation groups
-      summary: Update parameters of operation group 
+      summary: Update parameters of operation group
       description: |
         Update parameters of operations group.
       operationId: patchPackageIdVersionApiTypeGroupName
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - name: groupName
@@ -11132,7 +11343,7 @@ paths:
             description: Moved Permanently
             headers:
               Location:
-                schema: 
+                schema:
                   type: string
                 description: Current ednpoint with new packageId of moved package
               X-New-Package-Id:
@@ -11191,6 +11402,7 @@ paths:
         It is prohibited to update operation in the rest path prefix group, only manual groups can be updated.
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - name: apiType
@@ -11259,7 +11471,7 @@ paths:
             description: Moved Permanently
             headers:
               Location:
-                schema: 
+                schema:
                   type: string
                 description: Current ednpoint with new packageId of moved package
               X-New-Package-Id:
@@ -11308,6 +11520,7 @@ paths:
       operationId: getPackageIdVersionApiTypeGroupNameTemplate
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/apiType"
@@ -11333,7 +11546,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -11382,6 +11595,7 @@ paths:
       operationId: postPackagesIdRecalculateGroups
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/packageId"
@@ -11410,7 +11624,7 @@ paths:
             description: Moved Permanently
             headers:
               Location:
-                schema: 
+                schema:
                   type: string
                 description: Current ednpoint with new packageId of moved package
               X-New-Package-Id:
@@ -11450,6 +11664,7 @@ paths:
       operationId: postPackagesIdRecalculateGroups
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/packageId"
@@ -11460,7 +11675,7 @@ paths:
             description: Moved Permanently
             headers:
               Location:
-                schema: 
+                schema:
                   type: string
                 description: Current ednpoint with new packageId of moved package
               X-New-Package-Id:
@@ -11507,6 +11722,7 @@ paths:
       operationId: getPackagesIdVersionsIdDocuments
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/limit"
@@ -11569,7 +11785,7 @@ paths:
             description: Moved Permanently
             headers:
               Location:
-                schema: 
+                schema:
                   type: string
                 description: Current ednpoint with new packageId of moved package
               X-New-Package-Id:
@@ -11614,6 +11830,7 @@ paths:
       operationId: getPackagesIdVersionsIdDocumentsSlugV2
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       responses:
         "200":
@@ -11647,7 +11864,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -11693,6 +11910,7 @@ paths:
       operationId: getPackagesIdVersionsIdDocumentsSlug
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       responses:
         "200":
@@ -11846,6 +12064,7 @@ paths:
       operationId: getPackagesIdVersionsIdTransformationDocuments
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/limit"
@@ -11946,7 +12165,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -12006,6 +12225,7 @@ paths:
       operationId: getPackagesIdVersionsIdTransformationDocumentsV3
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/limit"
@@ -12030,7 +12250,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -12091,6 +12311,7 @@ paths:
       operationId: postOperationGroupPublish
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       requestBody:
         content:
@@ -12216,6 +12437,7 @@ paths:
       operationId: getOperationGroupPublishStatus
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       responses:
         "200":
@@ -12283,6 +12505,7 @@ paths:
       operationId: getPackagesIdVersionsIdReferences
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/limit"
@@ -12443,6 +12666,7 @@ paths:
       operationId: getPackagesIdVersionsIdReferencesv3
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       responses:
         "200":
@@ -12497,7 +12721,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -12541,6 +12765,7 @@ paths:
       operationId: getPackagesIdVersionsIdRevisions
       security:
         - BearerAuth: [ ]
+        - CookieAuth: [ ]
         - api-key: [ ]
       parameters:
         - $ref: "#/components/parameters/packageId"
@@ -12632,7 +12857,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -12690,6 +12915,7 @@ paths:
       operationId: getPackagesIdVersionsIdRevisionsV3
       security:
         - BearerAuth: [ ]
+        - CookieAuth: [ ]
         - api-key: [ ]
       parameters:
         - $ref: "#/components/parameters/packageId"
@@ -12719,7 +12945,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -12771,6 +12997,7 @@ paths:
       operationId: deleteExpiredVersionsRecursively
       security:
         - BearerAuth: [ ]
+        - CookieAuth: [ ]
         - api-key: [ ]
       requestBody:
         description: Recursive delete parameters
@@ -12839,6 +13066,7 @@ paths:
       operationId: getPackagesIdAvailableStatuses
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       responses:
         "200":
@@ -12857,7 +13085,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -12890,13 +13118,14 @@ paths:
                   $ref: "#/components/examples/InternalServerError"
   "/api/v2/space":
     get:
-      tags: 
+      tags:
         - Users
       summary: Get user's private workspace
-      description: Get personal private workspace of the current user. 
+      description: Get personal private workspace of the current user.
       operationId: getSpace
       security:
         - BearerAuth: []
+        - CookieAuth: []
       responses:
         "200":
           description: Success
@@ -12935,6 +13164,7 @@ paths:
       operationId: postspace
       security:
         - BearerAuth: []
+        - CookieAuth: []
       responses:
         "201":
           description: Created
@@ -12990,6 +13220,7 @@ paths:
       operationId: postUsersIdAvailablePackagePromoteStatuses
       security:
         - BearerAuth: []
+        - CookieAuth: []
       parameters:
         - name: userId
           description: Login of the user
@@ -13057,6 +13288,7 @@ paths:
       operationId: getUsersIdAvailablePackagePromoteStatuses
       security:
         - BearerAuth: []
+        - CookieAuth: []
       parameters:
         - name: userId
           description: Login of the user
@@ -13190,6 +13422,7 @@ paths:
       operationId: getBusinessMetrics
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - name: format
@@ -13279,6 +13512,7 @@ paths:
       x-api-kind: no-BWC
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - name: status
@@ -13402,9 +13636,9 @@ components:
       description: Filter API changes by severity.
       schema:
         type: array
-        items: 
+        items:
           type: string
-          enum: 
+          enum:
             - breaking
             - non-breaking
             - deprecated
@@ -13789,7 +14023,7 @@ components:
           type: string
         imageUrl:
           deprecated: true
-          x-deprecation-reason: UI for logo is deprecated. imageUrl parameter will be deleted in 2025.1 
+          x-deprecation-reason: UI for logo is deprecated. imageUrl parameter will be deleted in 2025.1
           type: string
           description: Path to the package icon
           format: URL
@@ -13884,6 +14118,25 @@ components:
           description: Avatar of the user
           type: string
           format: URL
+    ExtendedUser:
+      allOf:
+        - $ref: "#/components/schemas/User"
+        - type: object
+          required:
+            - gitIntegrationStatus
+            - systemRole
+          properties:
+            gitIntegrationStatus:
+              type: boolean
+              description: Indicates if the user has active git integration.
+            systemRole:
+              type: string
+              description: System role of the user.
+            ttlSeconds:
+              type: integer
+              format: int32
+              nullable: true
+              description: Optional time-to-live in seconds.
     RoleCreate:
       description: Role with set of permissions for creation.
       type: object
@@ -14279,7 +14532,7 @@ components:
           - $ref: "#/components/schemas/User"
           - $ref: "#/components/schemas/ApiKey"
         - type: object
-          required: 
+          required:
             - type
           properties:
             type:
@@ -14685,7 +14938,7 @@ components:
           enum:
             - active
             - expired
-    SpecificationType:  
+    SpecificationType:
       title: type
       description: Type of the specification notation.
       type: string
@@ -15255,7 +15508,7 @@ components:
                               description:
                                 type: string
                               url:
-                                type: string            
+                                type: string
         comparisons.json:
           type: object
           properties:
@@ -15494,7 +15747,7 @@ components:
                         additionalProperties:
                           type: string
                         example:
-                          all: "Quote Snapshot V6 Performs full text search ofQuotes Statistics By Phrase fullTextSearchStatistics searchPhrase offset int32 limit int32 fields 200 OK application/json quote anonymousCustomerData assignTo The name of the user/team to whom the Quote is assigned cancellationReason The entity that represents common information about a customer's request cancellationReasonDescription The reason (from the free text field) why the Quote has been cancelled contactMedium A list of contact mediums (ContactMedium [*]). Indicates the contact medium that could be used to contact the party deliveryMethod Id of the Delivery Method (from the Delivery Method list) for Quote description Description of the Quote extendedParameters additionalProperties The attribute contains additional parameters of the Quote The attribute contains additional parameters of the Quote Map<String,List<String>> The attribute contains additional parameters of the Quote externalRefs Represents a reference to an external object id Unique identifier of the Quote name Quote name quoteDate Date and time when the Quote was created date-time quoteTotalPrice Represents Quote total price relatedParty A list of related party references (RelatedPartyRef [*]).A related party defines party or party role linked to a specific entity relatedQuote A list of related quotes (RelatedQuote [*]). It represents another revision of the in-flight Quote from the same chain, i.e. in-flight Quote with the same initialBaselineQuoteId value. This class is returned in the API response only in case of enhancedListQuotes API operation is called. It can be empty if there are no other in-flight Quotes in this chain revision Attribute is used to mark in-flight Quote. Increased in case changes are done to the Quote after submission int32 state State of the Quote updatedWhen Date and time when the Quote was updated date-time validFor Quote with reduced scope of attributes quoteItemStatistic Shows the number of Quote's root Quote Items grouped by some criteria(e.g. by Product Offering, Action) action Numbers of root Quote Items grouped by Action count Number of Quote Items for the specific value int32 name Action name Shows the number of Customer's Product Instances for specified criteria (e.g. Product Family, Billing Account and so on) productFamilyId Unique identifier of Product Family productFamilyName Product family name. Name is returned in the default locale. If alternative locale is passed in Accept-language header in the API request the system returns corresponding localized name in the response. productOfferingId Unique identifier of Product Offering productOfferingName Product offering name. Attribute is returned in the response for catalog entities only (product offering). Name is returned in the default locale. If alternative locale is passed in Accept-language header in the API request the system returns corresponding localized name in the response Shows the number of Quote's root Quote Items grouped by some criteria(e.g. by Product Offering, Action) Shows the Quote with a number of root Quote Items 4XX default response application/json;charset=UTF-8;model=errorResponse;version=1 5XX default response application/json;charset=UTF-8;model=errorResponse;version=1 "        
+                          all: "Quote Snapshot V6 Performs full text search ofQuotes Statistics By Phrase fullTextSearchStatistics searchPhrase offset int32 limit int32 fields 200 OK application/json quote anonymousCustomerData assignTo The name of the user/team to whom the Quote is assigned cancellationReason The entity that represents common information about a customer's request cancellationReasonDescription The reason (from the free text field) why the Quote has been cancelled contactMedium A list of contact mediums (ContactMedium [*]). Indicates the contact medium that could be used to contact the party deliveryMethod Id of the Delivery Method (from the Delivery Method list) for Quote description Description of the Quote extendedParameters additionalProperties The attribute contains additional parameters of the Quote The attribute contains additional parameters of the Quote Map<String,List<String>> The attribute contains additional parameters of the Quote externalRefs Represents a reference to an external object id Unique identifier of the Quote name Quote name quoteDate Date and time when the Quote was created date-time quoteTotalPrice Represents Quote total price relatedParty A list of related party references (RelatedPartyRef [*]).A related party defines party or party role linked to a specific entity relatedQuote A list of related quotes (RelatedQuote [*]). It represents another revision of the in-flight Quote from the same chain, i.e. in-flight Quote with the same initialBaselineQuoteId value. This class is returned in the API response only in case of enhancedListQuotes API operation is called. It can be empty if there are no other in-flight Quotes in this chain revision Attribute is used to mark in-flight Quote. Increased in case changes are done to the Quote after submission int32 state State of the Quote updatedWhen Date and time when the Quote was updated date-time validFor Quote with reduced scope of attributes quoteItemStatistic Shows the number of Quote's root Quote Items grouped by some criteria(e.g. by Product Offering, Action) action Numbers of root Quote Items grouped by Action count Number of Quote Items for the specific value int32 name Action name Shows the number of Customer's Product Instances for specified criteria (e.g. Product Family, Billing Account and so on) productFamilyId Unique identifier of Product Family productFamilyName Product family name. Name is returned in the default locale. If alternative locale is passed in Accept-language header in the API request the system returns corresponding localized name in the response. productOfferingId Unique identifier of Product Offering productOfferingName Product offering name. Attribute is returned in the response for catalog entities only (product offering). Name is returned in the default locale. If alternative locale is passed in Accept-language header in the API request the system returns corresponding localized name in the response Shows the number of Quote's root Quote Items grouped by some criteria(e.g. by Product Offering, Action) Shows the Quote with a number of root Quote Items 4XX default response application/json;charset=UTF-8;model=errorResponse;version=1 5XX default response application/json;charset=UTF-8;model=errorResponse;version=1 "
     BuildResult:
       description: |
         Result of build operation in ZIP archive.
@@ -15762,7 +16015,7 @@ components:
                                 properties:
                                   currentAudience:
                                     type: string
-                                    description: Current apiAudience value (currentAudience must not be equal to previousAudience) 
+                                    description: Current apiAudience value (currentAudience must not be equal to previousAudience)
                                     enum:
                                       - internal
                                       - external
@@ -15871,7 +16124,7 @@ components:
                         additionalProperties:
                           type: string
                         example:
-                          all: "Quote Snapshot V6 Performs full text search ofQuotes Statistics By Phrase fullTextSearchStatistics searchPhrase offset int32 limit int32 fields 200 OK application/json quote anonymousCustomerData assignTo The name of the user/team to whom the Quote is assigned cancellationReason The entity that represents common information about a customer's request cancellationReasonDescription The reason (from the free text field) why the Quote has been cancelled contactMedium A list of contact mediums (ContactMedium [*]). Indicates the contact medium that could be used to contact the party deliveryMethod Id of the Delivery Method (from the Delivery Method list) for Quote description Description of the Quote extendedParameters additionalProperties The attribute contains additional parameters of the Quote The attribute contains additional parameters of the Quote Map<String,List<String>> The attribute contains additional parameters of the Quote externalRefs Represents a reference to an external object id Unique identifier of the Quote name Quote name quoteDate Date and time when the Quote was created date-time quoteTotalPrice Represents Quote total price relatedParty A list of related party references (RelatedPartyRef [*]).A related party defines party or party role linked to a specific entity relatedQuote A list of related quotes (RelatedQuote [*]). It represents another revision of the in-flight Quote from the same chain, i.e. in-flight Quote with the same initialBaselineQuoteId value. This class is returned in the API response only in case of enhancedListQuotes API operation is called. It can be empty if there are no other in-flight Quotes in this chain revision Attribute is used to mark in-flight Quote. Increased in case changes are done to the Quote after submission int32 state State of the Quote updatedWhen Date and time when the Quote was updated date-time validFor Quote with reduced scope of attributes quoteItemStatistic Shows the number of Quote's root Quote Items grouped by some criteria(e.g. by Product Offering, Action) action Numbers of root Quote Items grouped by Action count Number of Quote Items for the specific value int32 name Action name Shows the number of Customer's Product Instances for specified criteria (e.g. Product Family, Billing Account and so on) productFamilyId Unique identifier of Product Family productFamilyName Product family name. Name is returned in the default locale. If alternative locale is passed in Accept-language header in the API request the system returns corresponding localized name in the response. productOfferingId Unique identifier of Product Offering productOfferingName Product offering name. Attribute is returned in the response for catalog entities only (product offering). Name is returned in the default locale. If alternative locale is passed in Accept-language header in the API request the system returns corresponding localized name in the response Shows the number of Quote's root Quote Items grouped by some criteria(e.g. by Product Offering, Action) Shows the Quote with a number of root Quote Items 4XX default response application/json;charset=UTF-8;model=errorResponse;version=1 5XX default response application/json;charset=UTF-8;model=errorResponse;version=1 "   
+                          all: "Quote Snapshot V6 Performs full text search ofQuotes Statistics By Phrase fullTextSearchStatistics searchPhrase offset int32 limit int32 fields 200 OK application/json quote anonymousCustomerData assignTo The name of the user/team to whom the Quote is assigned cancellationReason The entity that represents common information about a customer's request cancellationReasonDescription The reason (from the free text field) why the Quote has been cancelled contactMedium A list of contact mediums (ContactMedium [*]). Indicates the contact medium that could be used to contact the party deliveryMethod Id of the Delivery Method (from the Delivery Method list) for Quote description Description of the Quote extendedParameters additionalProperties The attribute contains additional parameters of the Quote The attribute contains additional parameters of the Quote Map<String,List<String>> The attribute contains additional parameters of the Quote externalRefs Represents a reference to an external object id Unique identifier of the Quote name Quote name quoteDate Date and time when the Quote was created date-time quoteTotalPrice Represents Quote total price relatedParty A list of related party references (RelatedPartyRef [*]).A related party defines party or party role linked to a specific entity relatedQuote A list of related quotes (RelatedQuote [*]). It represents another revision of the in-flight Quote from the same chain, i.e. in-flight Quote with the same initialBaselineQuoteId value. This class is returned in the API response only in case of enhancedListQuotes API operation is called. It can be empty if there are no other in-flight Quotes in this chain revision Attribute is used to mark in-flight Quote. Increased in case changes are done to the Quote after submission int32 state State of the Quote updatedWhen Date and time when the Quote was updated date-time validFor Quote with reduced scope of attributes quoteItemStatistic Shows the number of Quote's root Quote Items grouped by some criteria(e.g. by Product Offering, Action) action Numbers of root Quote Items grouped by Action count Number of Quote Items for the specific value int32 name Action name Shows the number of Customer's Product Instances for specified criteria (e.g. Product Family, Billing Account and so on) productFamilyId Unique identifier of Product Family productFamilyName Product family name. Name is returned in the default locale. If alternative locale is passed in Accept-language header in the API request the system returns corresponding localized name in the response. productOfferingId Unique identifier of Product Offering productOfferingName Product offering name. Attribute is returned in the response for catalog entities only (product offering). Name is returned in the default locale. If alternative locale is passed in Accept-language header in the API request the system returns corresponding localized name in the response Shows the number of Quote's root Quote Items grouped by some criteria(e.g. by Product Offering, Action) Shows the Quote with a number of root Quote Items 4XX default response application/json;charset=UTF-8;model=errorResponse;version=1 5XX default response application/json;charset=UTF-8;model=errorResponse;version=1 "
     SingleOperationChange:
       allOf:
         - type: object
@@ -16012,10 +16265,10 @@ components:
           example: [["components/schemas/Cat/minProperties", "components/schemas/Dog/minProperties"],["/quoteManagement/v5/quote"]]
         previousKey:
           type: string
-          description: Previous key (name) of the renamed entity. 
+          description: Previous key (name) of the renamed entity.
         currentKey:
           type: string
-          description: Current key (name) of the renamed entity. 
+          description: Current key (name) of the renamed entity.
     BuildConfig:
       type: object
       description: |
@@ -16046,7 +16299,7 @@ components:
           $ref: "#/components/schemas/VersionStatusEnum"
         validationRulesSeverity:
           type: object
-          description: Configuration for validation rules severity levels          
+          description: Configuration for validation rules severity levels
           readOnly: true
           properties:
             brokenRefs:
@@ -16096,7 +16349,7 @@ components:
             versionLabels:
               description: List of version labels. Label is a string.
               type: array
-              items: 
+              items:
                 type: string
               example: ["part-of:CloudQSS-CPQBE"]
             cloudName:
@@ -16345,7 +16598,7 @@ components:
       type: object
       properties:
         errors:
-          type: string 
+          type: string
           description: Build error message.
     ChangeSeverity:
       description: Severity of the particular change.
@@ -16480,6 +16733,11 @@ components:
       description: Bearer token authentication. Default security scheme for API usage.
       scheme: bearer
       bearerFormat: JWT
+    CookieAuth:
+      type: apiKey
+      in: cookie
+      name: apihub-session
+      description: Authentication via the `apihub-session` cookie.
     api-key:
       type: apiKey
       description: Api-key authentication.
