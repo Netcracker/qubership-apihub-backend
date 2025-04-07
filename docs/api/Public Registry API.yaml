@@ -24,6 +24,7 @@ servers:
         default: apihub
 security:
   - BearerAuth: []
+  - PersonalAccessToken: []
 tags:
   - name: Auth
     description: APIs for auth integrations.
@@ -109,7 +110,8 @@ paths:
         the response will contain cookie with access token for future API calls.
         All subsequent APIHUB calls must use this token in a **BearerAuth** authentication.
       operationId: postAuthSAML
-      security: [{}]
+      security:
+        - {}
       parameters:
         - name: redirectUri
           in: query
@@ -690,7 +692,6 @@ paths:
         Get activity history. Return the last N events in descending date order.
       operationId: getActivityV4
       security:
-        - BearerAuth: []
         - api-key: []
       parameters:
         - name: onlyFavorite
@@ -1227,7 +1228,6 @@ paths:
       description: Common information about the selected package without files and references.
       operationId: getPackagesId
       security:
-        - BearerAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/showParents"
@@ -1320,7 +1320,6 @@ paths:
         * The empty parameter value in request sets the empty value in database.
       operationId: patchPackagesId
       security:
-        - BearerAuth: []
         - api-key: []
       requestBody:
         description: Package update parameters
@@ -1417,7 +1416,6 @@ paths:
       description: Delete the package and all included published versions.
       operationId: deletePackagesId
       security:
-        - BearerAuth: []
         - api-key: []
       responses:
         "204":
@@ -2004,7 +2002,6 @@ paths:
         Get activity history for specific package. Return the last N events in descending date order.
       operationId: getPackageIdActivityV4
       security:
-        - BearerAuth: []
         - api-key: []
       parameters:
         - name: packageId
@@ -2332,7 +2329,6 @@ paths:
       description: Get package status.
       operationId: getPackagesIdStatus
       security:
-        - BearerAuth: []
         - api-key: []
       responses:
         "200":
@@ -2786,8 +2782,6 @@ paths:
         The Api Key for package with kind:group is acceptable for all child groups and packages.\
         If packageId = '\*', then system tokens shall be created. Only system administrator can specify packageId = '\*'. 
       operationId: postPackagesIdApiKeysV4
-      security:
-        - BearerAuth: []
       requestBody:
         description: Create API key parameters
         content:
@@ -2872,7 +2866,6 @@ paths:
         If packageId = '\*', then system tokens shall be returned. Only system administrator can specify packageId = '\*'. 
       operationId: getPackagesIdApiKeysV4
       security:
-        - BearerAuth: []
         - api-key: []
       responses:
         "200":
@@ -2940,7 +2933,6 @@ paths:
         If packageId = '\*', then system token with specified id shall be deleted. Only system administrator can specify packageId = '\*'. 
       operationId: deletePackagesIdApiKeysId
       security:
-        - BearerAuth: []
         - api-key: []
       responses:
         "204":
@@ -2996,8 +2988,6 @@ paths:
         Generates a new personal access token for the current user.\
         User cannot have more than 100 tokens. The limitation is applicable to active and expired tokens which are not deleted. 
       operationId: postPersonalAccessToken
-      security:
-        - BearerAuth: []
       requestBody:
         description: Create personal access token parameters
         content:
@@ -3076,8 +3066,6 @@ paths:
         Retrieve all personal access token that have been generated for the current user.\ 
         User cannot have more than 100 tokens. The limitation is applicable to active and expired tokens which are not deleted. 
       operationId: getPersonalAccessToken
-      security:
-        - BearerAuth: []
       responses:
         '200':
           description: Success
@@ -3126,8 +3114,6 @@ paths:
       description: >
         Delete personal access token. Deleted token cannot be used to authenticate to APIHUB.
       operationId: deletePersonalAccessToken
-      security:
-        - BearerAuth: []
       responses:
         '204':
           description: No content
@@ -3282,7 +3268,6 @@ paths:
         The 204 response will be returned in success.
       operationId: postPackagesIdPublish
       security:
-        - BearerAuth: []
         - api-key: []
       parameters:
         - name: clientBuild
@@ -3520,7 +3505,6 @@ paths:
       description: Get publish process status.
       operationId: getPackagesIdPublishIdStatus
       security:
-        - BearerAuth: []
         - api-key: []
       responses:
         "200":
@@ -3595,7 +3579,6 @@ paths:
       description: Store publish status and result.
       operationId: postPackagesIdPublishIdStatusV3
       security:
-        - BearerAuth: []
         - api-key: []
       requestBody:
         description: |
@@ -3699,7 +3682,6 @@ paths:
         with all found operations.
       operationId: DashboardPublishWithOperationsGroup
       security:
-        - BearerAuth: []
         - api-key: []
       requestBody:
         content:
@@ -3821,7 +3803,6 @@ paths:
         Get dashboard version publication from CSV file status. 
       operationId: getDashboardPublishWithOperationsGroupStatus
       security:
-        - BearerAuth: []
         - api-key: []
       responses:
         '200':
@@ -3900,7 +3881,6 @@ paths:
         error messages for each row.
       operationId: getDashboardPublishWithOperationsGroupStatusReport
       security:
-        - BearerAuth: []
         - api-key: []
       responses:
         '200':
@@ -4126,7 +4106,6 @@ paths:
       description: Get the published package's versions list.
       operationId: getPackagesIdVersionsV3
       security:
-        - BearerAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/limit"
@@ -4422,7 +4401,6 @@ paths:
         * The array of labels will be fully replaced as-it-send, no JSON-Patch approach for arrays is applicable.
       operationId: patchPackagesIdVersionsIdV2
       security:
-        - BearerAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/version"
@@ -4517,7 +4495,6 @@ paths:
         If the version was placed as a "defaultReleaseVersion" on a package, it will be cleared on this package (without the previous version restore).
       operationId: deletePackagesIdVersionsId
       security:
-        - BearerAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/version"
@@ -4578,7 +4555,6 @@ paths:
       description: Get the published package's version content. Returns all content objects and folders.
       operationId: getPackagesIdVersionsIdV4
       security:
-        - BearerAuth: []
         - api-key: []
       parameters:
         - name: version
@@ -4767,8 +4743,6 @@ paths:
       description: |
         Get summary of changes between two packages versions.
       operationId: getPackageIdVersionChangesSummary
-      security:
-        - BearerAuth: []
       parameters:
         - $ref: "#/components/parameters/packageId"
         - $ref: "#/components/parameters/version"
@@ -5176,7 +5150,6 @@ paths:
         The result list depends on the API type.
       operationId: getPackagesIdVersionsIdApiTypeChangesV3
       security:
-        - BearerAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/apiType"
@@ -5491,7 +5464,6 @@ paths:
       description: Export API changes to xlsx file
       operationId: getPackageIdVersionIdChangesExport
       security:
-        - BearerAuth: []
         - api-key: []
       responses:
         "200":
@@ -5673,7 +5645,6 @@ paths:
         Export sources of package version as a zip archive. 
       operationId: getPackagesIdVersionsIdSources
       security:
-        - BearerAuth: []
         - api-key: []
       responses:
         "200":
@@ -5731,7 +5702,6 @@ paths:
         Get content of package version config
       operationId: getPackagesIdVersionsIdConfig
       security:
-        - BearerAuth: []
         - api-key: []
       responses:
         "200":
@@ -5783,7 +5753,6 @@ paths:
         The final specifications will be stored using the POST /packages/{packageId}/publish/{publishId}/status. 202 response and the publish process Id will be returned in success.
       operationId: getPackageIdVersionIdCopy
       security:
-        - BearerAuth: []
         - api-key: []
       requestBody:
         content:
@@ -5895,8 +5864,6 @@ paths:
 
         * **202 Accepted** will be returned after starting of the async changelog calculation.
       operationId: postCompare
-      security:
-        - BearerAuth: []
       parameters:
         - name: clientBuild
           in: query
@@ -6237,7 +6204,6 @@ paths:
         * **202 Accepted** will be returned after starting process for documents transformation.
       operationId: postGenerateDocumentV3
       security:
-        - BearerAuth: []
         - api-key: []
       parameters:
       - name: clientBuild
@@ -6515,7 +6481,6 @@ paths:
         Export all operations from an operations group (with apiType = REST API) as OpenAPI specification(s).
       operationId: getPackagesIdVersionsIdExportGroupNameV3
       security:
-        - BearerAuth: []
         - api-key: []
       parameters:
         - name: format
@@ -6611,7 +6576,6 @@ paths:
       description: Get the published content object in a RAW format
       operationId: getPackagesIdVersionsIdFilesSlugRaw
       security:
-        - BearerAuth: []
         - api-key: []
       responses:
         "200":
@@ -6678,7 +6642,6 @@ paths:
         - raw - yaml/json document.
       operationId: getPackagesIdVersionsIdFilesSlugDoc
       security:
-        - BearerAuth: []
         - api-key: []
       parameters:
         - name: docType
@@ -6762,7 +6725,6 @@ paths:
         Export sources of package version as a zip archive and build configuration that was used for this version.
       operationId: getPackageVersionSourcesWithBuildConfig
       security:
-          - BearerAuth: [ ]
           - api-key: [ ]
       responses:
         "200":
@@ -6837,7 +6799,6 @@ paths:
         * interactive - html document.
       operationId: getPackagesIdVersionsIdDoc
       security:
-        - BearerAuth: []
         - api-key: []
       parameters:
         - name: docType
@@ -7234,7 +7195,6 @@ paths:
         List of available roles to change for package and current user (by access token).
       operationId: getPackagesIdAvailableRoles
       security:
-        - BearerAuth: []
         - api-key: []
       parameters:
         - name: id
@@ -7320,7 +7280,6 @@ paths:
         A member may be added to the package if the assigned role is greater than the existing one.
       operationId: postPackagesIdMembers
       security:
-        - BearerAuth: []
         - api-key: []
       requestBody:
         description: Package members assignment parameters
@@ -7399,7 +7358,6 @@ paths:
       description: List of all users and their roles, assigned to the particular package
       operationId: getPackagesIdMembers
       security:
-        - BearerAuth: []
         - api-key: []
       responses:
         "200":
@@ -7468,7 +7426,6 @@ paths:
         Change the member parameters on the package
       operationId: patchPackagesIdMembersId
       security:
-        - BearerAuth: []
         - api-key: []
       requestBody:
         description: Package member update parameters
@@ -7555,7 +7512,6 @@ paths:
         * 204 - if the user has only direct role assigned to the current package, this assignment will be deleted.
       operationId: deletePackagesIdMembersId
       security:
-        - BearerAuth: []
         - api-key: []
       responses:
         "200":
@@ -7837,7 +7793,8 @@ paths:
       summary: Get shared file data
       description: Get shared file data by public shared link
       operationId: getSharedFilesId
-      security: [{}]
+      security:
+        - {}
       parameters:
         - name: sharedFileId
           in: path
@@ -7893,7 +7850,6 @@ paths:
         Returns empty response 204 (in case of no free build task to assign) or multipart form (src+config, matching current start build payload)
       operationId: postBuilderIdTasks
       security:
-        - BearerAuth: []
         - api-key: []
       responses:
         "200":
@@ -8882,7 +8838,8 @@ paths:
         * One email may be connected to several users at one time, no unique constraint.
         * The password will be stored in an encrypted form locally.
       operationId: postUsers
-      security: [{}]
+      security:
+        - {}
       requestBody:
         description: User for creation
         content:
@@ -8957,8 +8914,6 @@ paths:
       summary: Get users list
       description: List of all users with detailed info
       operationId: getUsers
-      security:
-        - BearerAuth: []
       parameters:
         - name: textFilter
           in: query
@@ -9065,7 +9020,8 @@ paths:
         Get the user avatar.
         API returns the data of photo file in a png format.
       operationId: getUsersIdProfileAvatar
-      security: [{}]
+      security:
+        - {}
       parameters:
         - name: userId
           description: Login of the user
@@ -9122,7 +9078,6 @@ paths:
       description: |
         Operation is considered a ghost operation if it was included in this group for previous version revision and was deleted in the current version revision
       security:
-        - BearerAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/apiType"
@@ -9296,7 +9251,6 @@ paths:
         The result list depends on the API type.
       operationId: getPackagesIdVersionsIdApiTypeOperations
       security:
-        - BearerAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/apiType"
@@ -9513,8 +9467,6 @@ paths:
       description: |
         Get summary of deprecated operations in the version
       operationId: getPackageIdVersionDeprecatedSummaryV3
-      security:
-        - BearerAuth: [ ]
       parameters:
         - $ref: "#/components/parameters/packageId"
         - $ref: "#/components/parameters/version"
@@ -9643,7 +9595,6 @@ paths:
         List of deprecated operations in the current version
       operationId: getPackagesIdVersionsIdApiTypeDeprecations
       security:
-        - BearerAuth: [ ]
         - api-key: [ ]
       parameters:
         - $ref: "#/components/parameters/apiType"
@@ -9864,7 +9815,6 @@ paths:
         Deprecated item is entity that is deprecated inside of API operation. For example for REST API it can be parameter or schema, for GraphQL API - field or enum value.
       operationId: getPackagesIdVersionsApiTypeOperationsIddeprecatedItems
       security:
-        - BearerAuth: [ ]
         - api-key: [ ]
       parameters:
         - $ref: "#/components/parameters/apiType"
@@ -9925,7 +9875,6 @@ paths:
         Get list of operations that have the same model
       operationId: getPackagesIdVersionsApiTypeOperationsIdModelsModelName
       security:
-        - BearerAuth: [ ]
         - api-key: [ ]
       parameters:
         - $ref: "#/components/parameters/apiType"
@@ -10000,7 +9949,6 @@ paths:
         Export operations of specific API type.
       operationId: getPackagesIdVersionsIdApiTypeOperationsExport
       security:
-        - BearerAuth: [ ]
         - api-key: [ ]
       parameters:
         - $ref: "#/components/parameters/apiType"
@@ -10133,7 +10081,6 @@ paths:
         Export operations of specific API type.
       operationId: getPackagesIdVersionsIdApiTypeOperationsExport
       security:
-        - BearerAuth: [ ]
         - api-key: [ ]
       parameters:
         - $ref: "#/components/parameters/apiType"
@@ -10265,7 +10212,6 @@ paths:
         The result depends on the API type.
       operationId: getPackagesIdVersionsIdApiTypeOperationsId
       security:
-        - BearerAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/apiType"
@@ -10347,7 +10293,6 @@ paths:
         The result depends on the API type.
       operationId: getPackagesIdVersionsApiTypeOperationsIdChanges
       security:
-        - BearerAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/apiType"
@@ -10425,7 +10370,6 @@ paths:
         The result list depends on the API type.
       operationId: getPackagesIdVersionsIdApiTypeTags
       security:
-        - BearerAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/apiType"
@@ -10622,7 +10566,6 @@ paths:
         Manual groups can be created for both packages and dashboards. One group can contain operations of one API type only.
       operationId: PostPackageIdVersionApiTypeGroupsV3
       security:
-        - BearerAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/packageId"
@@ -10705,7 +10648,6 @@ paths:
         description: |
           Get list of operations from operation group. The result list depends on the API type.
         security:
-          - BearerAuth: []
           - api-key: []
         parameters:
           - $ref: "#/components/parameters/apiType"
@@ -11085,7 +11027,6 @@ paths:
         Delete version group.
       operationId: getPackagesIdVersionsIdApiTypeGroups
       security:
-        - BearerAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/apiType"
@@ -11147,7 +11088,6 @@ paths:
         Update parameters of operations group.
       operationId: patchPackageIdVersionApiTypeGroupName
       security:
-        - BearerAuth: []
         - api-key: []
       parameters:
         - name: groupName
@@ -11387,7 +11327,6 @@ paths:
         This feature is supported only for apiType = rest.
       operationId: getPackageIdVersionApiTypeGroupNameTemplate
       security:
-        - BearerAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/apiType"
@@ -11461,7 +11400,6 @@ paths:
         This is in-flight calculation, i.e. calculated groups will not be saved.
       operationId: postPackagesIdRecalculateGroups
       security:
-        - BearerAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/packageId"
@@ -11529,7 +11467,6 @@ paths:
         Recalculate package groups by specified restGroupingPrefix on the package
       operationId: postPackagesIdRecalculateGroups
       security:
-        - BearerAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/packageId"
@@ -11586,7 +11523,6 @@ paths:
           The returned list will contain only leaves - referenced packages of the lowest level with their published documents.
       operationId: getPackagesIdVersionsIdDocuments
       security:
-        - BearerAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/limit"
@@ -11693,7 +11629,6 @@ paths:
       description: Get the published content object's details by ID.
       operationId: getPackagesIdVersionsIdDocumentsSlugV2
       security:
-        - BearerAuth: []
         - api-key: []
       responses:
         "200":
@@ -12085,7 +12020,6 @@ paths:
         Get list of package version documents of operations from operation group.
       operationId: getPackagesIdVersionsIdTransformationDocumentsV3
       security:
-        - BearerAuth: []
         - api-key: []
       parameters:
         - $ref: "#/components/parameters/limit"
@@ -12170,7 +12104,6 @@ paths:
         In this process all operations from operation group will be published to the selected package version.
       operationId: postOperationGroupPublish
       security:
-        - BearerAuth: []
         - api-key: []
       requestBody:
         content:
@@ -12295,7 +12228,6 @@ paths:
         Get operation group publish status.
       operationId: getOperationGroupPublishStatus
       security:
-        - BearerAuth: []
         - api-key: []
       responses:
         "200":
@@ -12522,7 +12454,6 @@ paths:
         Get flat list of all version references
       operationId: getPackagesIdVersionsIdReferencesv3
       security:
-        - BearerAuth: []
         - api-key: []
       responses:
         "200":
@@ -12769,7 +12700,6 @@ paths:
         Get the list of version revisions.
       operationId: getPackagesIdVersionsIdRevisionsV3
       security:
-        - BearerAuth: [ ]
         - api-key: [ ]
       parameters:
         - $ref: "#/components/parameters/packageId"
@@ -12850,7 +12780,6 @@ paths:
       description: Recursively delete all expired versions in 'Draft' status under group or workspace
       operationId: deleteExpiredVersionsRecursively
       security:
-        - BearerAuth: [ ]
         - api-key: [ ]
       requestBody:
         description: Recursive delete parameters
@@ -12918,7 +12847,6 @@ paths:
         List depends on the current user access rights.
       operationId: getPackagesIdAvailableStatuses
       security:
-        - BearerAuth: []
         - api-key: []
       responses:
         "200":
@@ -12975,8 +12903,6 @@ paths:
       summary: Get user's private workspace
       description: Get personal private workspace of the current user. 
       operationId: getSpace
-      security:
-        - BearerAuth: []
       responses:
         "200":
           description: Success
@@ -13013,8 +12939,6 @@ paths:
         Any user is able to create one personal private workspace (*no permissions required*)
         PackageId for this workspace could be set via user creation endpoint (only for new users) or generated automatically when user first logs in to apihub
       operationId: postspace
-      security:
-        - BearerAuth: []
       responses:
         "201":
           description: Created
@@ -13068,8 +12992,6 @@ paths:
         
         PackageId for this workspace could be set via user creation endpoint (only for new users) or generated automatically when user first logs in to apihub
       operationId: postUsersIdAvailablePackagePromoteStatuses
-      security:
-        - BearerAuth: []
       parameters:
         - name: userId
           description: Login of the user
@@ -13135,8 +13057,6 @@ paths:
         
         The response is a **mapped list** of statuses to the packageIds.
       operationId: getUsersIdAvailablePackagePromoteStatuses
-      security:
-        - BearerAuth: []
       parameters:
         - name: userId
           description: Login of the user
@@ -13269,7 +13189,6 @@ paths:
         Returns collected business metrics 
       operationId: getBusinessMetrics
       security:
-        - BearerAuth: []
         - api-key: []
       parameters:
         - name: format
@@ -13358,7 +13277,6 @@ paths:
       operationId: getPublishHistory
       x-api-kind: no-BWC
       security:
-        - BearerAuth: []
         - api-key: []
       parameters:
         - name: status
