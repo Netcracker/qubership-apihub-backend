@@ -2766,14 +2766,21 @@ components:
         productionMode:
           description: Production environment flag
           type: boolean
+        linterEnabled:
+          description: Linter service availability flag
+          type: boolean
         externalLinks:
           description: List of links to the external resource, for example URL to the documentation or URL pointing to the contact information of support group.
           type: array
-          items: 
+          items:
             description: |
               Title for the link and corresponding URL. Value must written in the following format <linkTitle>|<URL>. If array item does not contain vertical bar (|), then this item will be skipped.
             type: string
-          example: [User guide|https://www.example.com/guide, Support team|https://www.example.com/support]
+          example:
+            [
+              User guide|https://www.example.com/guide,
+              Support team|https://www.example.com/support,
+            ]
     ValidationParams:
       description: qubership product release custom API validation parameters
       properties:
