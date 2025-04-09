@@ -15233,6 +15233,12 @@ components:
             - internal
             - external
             - unknown
+        tags:
+          description: Tags of operation. For rest - tag is taken from OAS, for graphql - tag is root schema type (query, mutation, subscription).
+          type: array
+          items:
+            type: string
+          example: ["Access Control API, Address Management API"]
         dataHash:
           description: Operation hash.
           type: string
@@ -16104,19 +16110,19 @@ components:
               items:
                 type: object
                 required:
-                  - operationId
                   - changes
                   - changesSummary
                 properties:
                   operationId:
                     description: >-
-                      Operation unique identifier. Not the same as
-                      operationId tag from the OpenAPI file.
+                      Operation unique identifier (not the same as operationId tag from the OpenAPI file).\
+                      Parameter is required if operation was added or modified.
                     type: string
                     example: get-quoteManagement-v5-quote-quoteId
                   previousOperationId:
                     description: >-
-                      Operation unique identifier from previous version. Not the same as operationId tag from the OpenAPI file.
+                      Operation unique identifier from previous version (not the same as operationId tag from the OpenAPI file).\
+                      Parameter is required if operation was deleted or modified.
                     type: string
                     example: get-quoteManagement-v5-quote-id
                   dataHash:
