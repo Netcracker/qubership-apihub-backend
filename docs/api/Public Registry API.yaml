@@ -205,6 +205,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
               examples: {}
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
         "404":
           description: Not found
           content:

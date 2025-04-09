@@ -15,7 +15,11 @@
 package controller
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -30,6 +34,7 @@ import (
 )
 
 type ExportController interface {
+	// TODO: need to check all exports and mark as deprecated
 	GenerateVersionDoc(w http.ResponseWriter, r *http.Request)
 	GenerateFileDoc(w http.ResponseWriter, r *http.Request)
 	GenerateApiChangesExcelReportV3(w http.ResponseWriter, r *http.Request)
@@ -38,6 +43,9 @@ type ExportController interface {
 	GenerateDeprecatedOperationsExcelReport(w http.ResponseWriter, r *http.Request)
 	ExportOperationGroupAsOpenAPIDocuments_deprecated(w http.ResponseWriter, r *http.Request)
 	ExportOperationGroupAsOpenAPIDocuments(w http.ResponseWriter, r *http.Request)
+
+	StartAsyncExport(w http.ResponseWriter, r *http.Request)
+	GetAsyncExportStatus(w http.ResponseWriter, r *http.Request)
 }
 
 func NewExportController(publishedService service.PublishedService,
@@ -46,7 +54,8 @@ func NewExportController(publishedService service.PublishedService,
 	roleService service.RoleService,
 	excelService service.ExcelService,
 	versionService service.VersionService,
-	monitoringService service.MonitoringService) ExportController {
+	monitoringService service.MonitoringService,
+	exportService service.ExportService) ExportController {
 	return &exportControllerImpl{
 		publishedService:  publishedService,
 		portalService:     portalService,
@@ -55,6 +64,7 @@ func NewExportController(publishedService service.PublishedService,
 		excelService:      excelService,
 		versionService:    versionService,
 		monitoringService: monitoringService,
+		exportService:     exportService,
 	}
 }
 
@@ -66,6 +76,7 @@ type exportControllerImpl struct {
 	excelService      service.ExcelService
 	versionService    service.VersionService
 	monitoringService service.MonitoringService
+	exportService     service.ExportService
 }
 
 func (e exportControllerImpl) ExportOperationGroupAsOpenAPIDocuments_deprecated(w http.ResponseWriter, r *http.Request) {
@@ -1082,4 +1093,190 @@ func (e exportControllerImpl) GenerateDeprecatedOperationsExcelReport(w http.Res
 	w.Header().Set("Content-Transfer-Encoding", "binary")
 	w.Header().Set("Expires", "0")
 	deprecatedOperationsReport.Write(w)
+}
+
+func (e exportControllerImpl) StartAsyncExport(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.BadRequestBody,
+			Message: exception.BadRequestBodyMsg,
+			Debug:   err.Error(),
+		})
+		return
+	}
+
+	var discriminator view.ExportRequestDiscriminator
+
+	err = json.Unmarshal(body, &discriminator)
+	if err != nil {
+		RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.BadRequestBody,
+			Message: exception.BadRequestBodyMsg,
+			Debug:   err.Error(),
+		})
+		return
+	}
+
+	var exportRequest interface{}
+	switch discriminator.ExportedEntity {
+	case view.ExportEntityVersion:
+		exportRequest = &view.ExportVersionReq{}
+	case view.ExportEntityRestDocument:
+		exportRequest = &view.ExportOASDocumentReq{}
+	case view.ExportEntityRestOperationsGroup:
+		exportRequest = &view.ExportRestOperationsGroupReq{}
+	default:
+		RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidParameterValue,
+			Message: "Invalid exportedEntity value",
+			Params:  map[string]interface{}{"param": "exportedEntity"},
+		})
+		return
+	}
+
+	err = json.Unmarshal(body, &exportRequest)
+	if err != nil {
+		RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.BadRequestBody,
+			Message: exception.BadRequestBodyMsg,
+			Debug:   err.Error(),
+		})
+		return
+	}
+
+	validationErr := utils.ValidateObject(exportRequest)
+	if validationErr != nil {
+		var customError *exception.CustomError
+		if errors.As(validationErr, &customError) {
+			RespondWithCustomError(w, customError)
+			return
+		}
+	}
+
+	// TODO: CHECK PERMISSIONS!!!!!!!!!!!!!!!!!!!!!!!!
+
+	ctx := context.Create(r)
+
+	var exportID string
+	switch discriminator.ExportedEntity {
+	case view.ExportEntityVersion:
+		exportID, err = e.startAsyncVersionExport(ctx, exportRequest.(*view.ExportVersionReq))
+	case view.ExportEntityRestDocument:
+		exportID, err = e.startAsyncOASDocExport(ctx, exportRequest.(*view.ExportOASDocumentReq))
+	case view.ExportEntityRestOperationsGroup:
+		exportID, err = e.startRESTOpGroupExport(ctx, exportRequest.(*view.ExportRestOperationsGroupReq))
+	}
+
+	if err != nil {
+		var customError *exception.CustomError
+		if errors.As(err, &customError) {
+			RespondWithCustomError(w, customError)
+			return
+		}
+	}
+	RespondWithJson(w, http.StatusAccepted, view.ExportResponse{
+		ExportID: exportID,
+	})
+}
+
+func (e exportControllerImpl) startAsyncVersionExport(ctx context.SecurityContext, req *view.ExportVersionReq) (string, error) {
+	err := e.validateExportPermission(ctx, req.PackageID)
+	if err != nil {
+		return "", err
+	}
+
+	// TODO: validate request!
+
+	return e.exportService.StartVersionExport(ctx, *req)
+}
+
+func (e exportControllerImpl) startAsyncOASDocExport(ctx context.SecurityContext, req *view.ExportOASDocumentReq) (string, error) {
+	err := e.validateExportPermission(ctx, req.PackageID)
+	if err != nil {
+		return "", err
+	}
+
+	// TODO: validate request!
+
+	return e.exportService.StartOASDocExport(ctx, *req)
+}
+
+func (e exportControllerImpl) startRESTOpGroupExport(ctx context.SecurityContext, req *view.ExportRestOperationsGroupReq) (string, error) {
+	err := e.validateExportPermission(ctx, req.PackageID)
+	if err != nil {
+		return "", err
+	}
+
+	// TODO: validate request!
+
+	return e.exportService.StartRESTOpGroupExport(ctx, *req)
+}
+
+func (e exportControllerImpl) validateExportPermission(ctx context.SecurityContext, packageId string) error {
+	//FIXME: IMPLEMENT!!!!!!
+	/*sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
+	if err != nil {
+		RespondWithError(w, "Failed to check user privileges", err)
+		return
+	}
+	if !sufficientPrivileges {
+		RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusForbidden,
+			Code:    exception.InsufficientPrivileges,
+			Message: exception.InsufficientPrivilegesMsg,
+		})
+		return
+	}*/
+
+	return nil
+}
+
+func (e exportControllerImpl) GetAsyncExportStatus(w http.ResponseWriter, r *http.Request) {
+
+	// TODO: check that the user_id matches created_by of the build instead
+	/*ctx := context.Create(r)
+	sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
+	if err != nil {
+		RespondWithError(w, "Failed to check user privileges", err)
+		return
+	}
+	if !sufficientPrivileges {
+		RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusForbidden,
+			Code:    exception.InsufficientPrivileges,
+			Message: exception.InsufficientPrivilegesMsg,
+		})
+		return
+	}*/
+	exportId := getStringParam(r, "exportId")
+
+	status, result, err := e.exportService.GetAsyncExportStatus(exportId)
+	if err != nil {
+		RespondWithError(w, "Failed to get publish status", err)
+		return
+	}
+
+	if status == nil && result == nil {
+		RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusNotFound,
+			Message: "build not found",
+		})
+		return
+	}
+
+	if status != nil {
+		RespondWithJson(w, http.StatusOK, status)
+	}
+	if result != nil {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%v", result.FileName))
+		w.WriteHeader(http.StatusOK)
+		w.Write(result.Data)
+	}
 }

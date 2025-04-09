@@ -311,6 +311,8 @@ func main() {
 	personalAccessTokenService := service.NewPersonalAccessTokenService(personalAccessTokenRepository, userService, roleService)
 	packageExportConfigService := service.NewPackageExportConfigService(packageExportConfigRepository)
 
+	exportService := service.NewExportService(portalService, buildService)
+
 	integrationsController := controller.NewIntegrationsController(integrationsService)
 	projectController := controller.NewProjectController(projectService, groupService, searchService)
 	branchController := controller.NewBranchController(branchService, commitService, projectFilesService, searchService, publishedService, branchEditorsService, wsBranchService)
@@ -332,7 +334,7 @@ func main() {
 	agentProxyController := controller.NewAgentProxyController(agentService, systemInfoService)
 	playgroundProxyController := controller.NewPlaygroundProxyController(systemInfoService)
 	publishV2Controller := controller.NewPublishV2Controller(buildService, publishedService, buildResultService, roleService, systemInfoService)
-	exportController := controller.NewExportController(publishedService, portalService, searchService, roleService, excelService, versionService, monitoringService)
+	exportController := controller.NewExportController(publishedService, portalService, searchService, roleService, excelService, versionService, monitoringService, exportService)
 
 	packageController := controller.NewPackageController(packageService, publishedService, portalService, searchService, roleService, monitoringService, ptHandler)
 	versionController := controller.NewVersionController(versionService, roleService, monitoringService, ptHandler, roleService.IsSysadm)
@@ -491,8 +493,8 @@ func main() {
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/problems", security.Secure(versionController.GetVersionProblems)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/sharedFiles", security.Secure(versionController.SharePublishedFile)).Methods(http.MethodPost)
 
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/doc", security.Secure(exportController.GenerateVersionDoc)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/files/{slug}/doc", security.Secure(exportController.GenerateFileDoc)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/doc", security.Secure(exportController.GenerateVersionDoc)).Methods(http.MethodGet)           // TODO: deprecated
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/files/{slug}/doc", security.Secure(exportController.GenerateFileDoc)).Methods(http.MethodGet) // TODO: deprecated
 
 	r.HandleFunc("/api/v2/auth/saml", security.NoSecure(samlAuthController.StartSamlAuthentication)).Methods(http.MethodGet) // deprecated.
 	r.HandleFunc("/login/sso/saml", security.NoSecure(samlAuthController.StartSamlAuthentication)).Methods(http.MethodGet)
@@ -620,6 +622,9 @@ func main() {
 
 	r.HandleFunc("/api/v1/packages/{packageId}/exportConfig", security.Secure(packageExportConfigController.GetConfig)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/packages/{packageId}/exportConfig", security.Secure(packageExportConfigController.SetConfig)).Methods(http.MethodPatch)
+
+	r.HandleFunc("/api/v1/export", security.Secure(exportController.StartAsyncExport)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v1/export/{exportId}/status", security.Secure(exportController.GetAsyncExportStatus)).Methods(http.MethodGet)
 
 	//debug + cleanup
 	if !systemInfoService.GetSystemInfo().ProductionMode {
