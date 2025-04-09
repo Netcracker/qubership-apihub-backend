@@ -10500,7 +10500,8 @@ paths:
           example: QS.RUNENV.K8S-SERVER.CJM-QSS-DEV-2.Q-TMF
         - in: query
           name: previousVersionOperationId
-          description: Operation unique identifier from previous version. Not the same as operationId tag from the OpenAPI file.
+          description: Operation unique identifier from previous version (not the same as operationId tag from the OpenAPI file).\
+            Empty, if requested operation is added in the current version; otherwise, must be specified.
           schema:
             type: string
             example: get-quoteManagement-v5-quote-id
