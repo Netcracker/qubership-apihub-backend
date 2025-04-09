@@ -14,4 +14,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: "Update PR body"
+        if: ${{ github.event.pull_request.base.repo.id == github.event.pull_request.head.repo.id }}
         uses: netcracker/qubership-workflow-hub/actions/pr-add-messages@main
+      - name: "Warning"
+        if: ${{ github.event.pull_request.base.repo.id == github.event.pull_request.head.repo.id }}
+        run: |
+          echo "⚠️ Pull request from fork! ⚠️" >> $GITHUB_STEP_SUMMARY
+          echo "Can not change PR body." >> $GITHUB_STEP_SUMMARY
+
