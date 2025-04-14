@@ -6,6 +6,7 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	"github.com/google/uuid"
+	"time"
 )
 
 type ExportService interface {
@@ -42,7 +43,9 @@ func (e exportServiceImpl) StartVersionExport(ctx context.SecurityContext, req v
 
 	// FIXME: temporary implementation!!!
 	buildId := uuid.NewString()
+	e.tempHtmlFNameCache[buildId] = "running"
 	utils.SafeAsync(func() {
+		time.Sleep(time.Second * 10)
 		data, filename, err := e.portalService.GenerateInteractivePageForPublishedVersion(req.PackageID, req.Version)
 		if err != nil {
 			e.tempErrCache[buildId] = err
@@ -50,7 +53,6 @@ func (e exportServiceImpl) StartVersionExport(ctx context.SecurityContext, req v
 		}
 		e.tempHtmlCache[buildId] = data
 		e.tempHtmlFNameCache[buildId] = filename
-
 	})
 	return buildId, nil
 }
@@ -61,7 +63,9 @@ func (e exportServiceImpl) StartOASDocExport(ctx context.SecurityContext, req vi
 
 	// FIXME: temporary implementation!!!
 	buildId := uuid.NewString()
+	e.tempHtmlFNameCache[buildId] = "running"
 	utils.SafeAsync(func() {
+		time.Sleep(time.Second * 10)
 		data, filename, err := e.portalService.GenerateInteractivePageForPublishedFile(req.PackageID, req.Version, req.DocumentID)
 		if err != nil {
 			e.tempErrCache[buildId] = err
@@ -112,6 +116,17 @@ func (e exportServiceImpl) GetAsyncExportStatus(exportId string) (*view.ExportSt
 				Message: &str,
 			}, nil, nil
 		}
+		/////
+		isRunning := e.tempHtmlFNameCache[exportId]
+		if isRunning == "running" {
+			return &view.ExportStatus{
+				Status:  string(view.StatusRunning),
+				Message: nil,
+			}, nil, nil
+		}
+
+		//////
+
 		if res, ok := e.tempHtmlCache[exportId]; ok {
 			fName := e.tempHtmlFNameCache[exportId]
 			if fName == "" {
