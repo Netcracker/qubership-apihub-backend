@@ -104,15 +104,16 @@ type DeprecatedItems struct {
 }
 
 type OperationComparison struct {
-	OperationId      string                 `json:"operationId" validate:"required"`
-	DataHash         string                 `json:"dataHash,omitempty"`
-	PreviousDataHash string                 `json:"previousDataHash,omitempty"`
-	ChangeSummary    ChangeSummary          `json:"changeSummary,omitempty"`
-	Changes          []interface{}          `json:"changes" validate:"required,dive,required"`
-	JsonPath         []string               `json:"jsonPath,omitempty"`
-	Action           string                 `json:"action,omitempty"`
-	Severity         string                 `json:"severity,omitempty"`
-	Metadata         map[string]interface{} `json:"metadata"`
+	OperationId         string                 `json:"operationId"`
+	PreviousOperationId string                 `json:"previousOperationId"`
+	DataHash            string                 `json:"dataHash,omitempty"`
+	PreviousDataHash    string                 `json:"previousDataHash,omitempty"`
+	ChangeSummary       ChangeSummary          `json:"changeSummary,omitempty"`
+	Changes             []interface{}          `json:"changes" validate:"required,dive,required"`
+	JsonPath            []string               `json:"jsonPath,omitempty"`
+	Action              string                 `json:"action,omitempty"`
+	Severity            string                 `json:"severity,omitempty"`
+	Metadata            map[string]interface{} `json:"metadata"`
 }
 
 type SingleOperationChangeAdd struct {
@@ -372,21 +373,6 @@ func ValidSeverity(s string) bool {
 		return true
 	}
 	return false
-}
-
-func ParseApiKind(s string) (ApiKind, error) {
-	switch s {
-	case string(BwcApiKind):
-		return BwcApiKind, nil
-	case string(NoBwcApiKind):
-		return NoBwcApiKind, nil
-	case string(DebugApiKind):
-		return DebugApiKind, nil
-	case string(ExperimentalApiKind):
-		return ExperimentalApiKind, nil
-	default:
-		return "", fmt.Errorf("unknown API Kind: %v", s)
-	}
 }
 
 type ApiType string

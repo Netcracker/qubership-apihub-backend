@@ -85,18 +85,19 @@ type OperationDataEntity struct {
 type OperationComparisonEntity struct {
 	tableName struct{} `pg:"operation_comparison"`
 
-	PackageId         string                 `pg:"package_id, type:varchar, use_zero"`
-	Version           string                 `pg:"version, type:varchar, use_zero"`
-	Revision          int                    `pg:"revision, type:integer, use_zero"`
-	PreviousPackageId string                 `pg:"previous_package_id, type:varchar, use_zero"`
-	PreviousVersion   string                 `pg:"previous_version, type:varchar, use_zero"`
-	PreviousRevision  int                    `pg:"previous_revision, type:integer, use_zero"`
-	ComparisonId      string                 `pg:"comparison_id, type:varchar"`
-	OperationId       string                 `pg:"operation_id, type:varchar"`
-	DataHash          string                 `pg:"data_hash, type:varchar"`
-	PreviousDataHash  string                 `pg:"previous_data_hash, type:varchar"`
-	ChangesSummary    view.ChangeSummary     `pg:"changes_summary, type:jsonb"`
-	Changes           map[string]interface{} `pg:"changes, type:jsonb"`
+	PackageId           string                 `pg:"package_id, type:varchar, use_zero"`
+	Version             string                 `pg:"version, type:varchar, use_zero"`
+	Revision            int                    `pg:"revision, type:integer, use_zero"`
+	OperationId         string                 `pg:"operation_id, type:varchar"`
+	PreviousPackageId   string                 `pg:"previous_package_id, type:varchar, use_zero"`
+	PreviousVersion     string                 `pg:"previous_version, type:varchar, use_zero"`
+	PreviousRevision    int                    `pg:"previous_revision, type:integer, use_zero"`
+	PreviousOperationId string                 `pg:"previous_operation_id, type:varchar, use_zero"`
+	ComparisonId        string                 `pg:"comparison_id, type:varchar"`
+	DataHash            string                 `pg:"data_hash, type:varchar"`
+	PreviousDataHash    string                 `pg:"previous_data_hash, type:varchar"`
+	ChangesSummary      view.ChangeSummary     `pg:"changes_summary, type:jsonb"`
+	Changes             map[string]interface{} `pg:"changes, type:jsonb"`
 }
 
 type VersionComparisonEntity struct {
