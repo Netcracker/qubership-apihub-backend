@@ -13833,6 +13833,7 @@ components:
       description: | 
         Export settings for exporting a version (i.e., all documents from the version). Only version of package with kind = package can be exported.\
           * format = html: the export result includes a ZIP file containing interactive HTML for OpenAPI documents (i.e., those with types openapi-3-1, openapi-3-0, or openapi-2-0) and raw files for all other document types.
+          * format = yaml/json: the export result includes a ZIP file containing OpenAPI documents in yaml/json format accordingly, and raw files for all other document types.
       required:
         - exportedEntity
         - packageId
@@ -13864,6 +13865,8 @@ components:
             File format for export.
           type: string
           enum:
+            - yaml
+            - json
             - html
     ExportRestDocument:
       type: object
@@ -13951,8 +13954,10 @@ components:
         format:
           description: | 
             Format of the exported file.\
-            If operationsSpecTransformation = reducedSourceSpecifications, then format can be yaml, json or html. The export result includes a ZIP file containing files in selected format.\ 
-            If operationsSpecTransformation = mergedspecification, then format can be yaml or json; html is not supported for this buildType.
+            If operationsSpecTransformation = reducedSourceSpecifications, then export result is a ZIP file containing files in selected format.\ 
+            If operationsSpecTransformation = mergedSpecification:
+              * if format = html, then export result is a ZIP file containing interactive HTML for OpenAPI document.
+              * if format = yaml/json, then export result is one OpenAPI file in the appropriate format.
           type: string
           enum:
             - yaml
@@ -16683,8 +16688,11 @@ components:
           description: | 
             File format for export.\
             * format = html: the export result includes a ZIP file containing interactive HTML for OpenAPI documents (i.e., those with types openapi-3-1, openapi-3-0, or openapi-2-0) and raw files for all other document types.
+            * format = yaml/json: the export result includes a ZIP file containing OpenAPI documents in yaml/json format accordingly, and raw files for all other document types.
           type: string
           enum:
+            - yaml
+            - json
             - html
         allowedOasExtensions:
           description: |
@@ -16811,8 +16819,10 @@ components:
           type: string
           description: | 
             Format of the exported file.\
-            If operationsSpecTransformation = reducedSourceSpecifications, then format can be yaml, json or html. The export result includes a ZIP file containing files in selected format.\ 
-            If operationsSpecTransformation = mergedspecification, then format can be yaml or json; html is not supported for this buildType.
+            If operationsSpecTransformation = reducedSourceSpecifications, then export result includes a ZIP file containing files in selected format.\ 
+            If operationsSpecTransformation = mergedSpecification:
+              * if format = html, then export result is a ZIP file containing interactive HTML for OpenAPI document.
+              * if format = yaml/json, then export result is one OpenAPI file in the appropriate format.
           enum:
             - yaml
             - json
