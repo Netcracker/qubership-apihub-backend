@@ -16,6 +16,7 @@ package controller
 
 import (
 	"crypto/tls"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"io"
 	"net/http"
 	"net/url"
@@ -51,11 +52,11 @@ func (a *agentProxyControllerImpl) Proxy(w http.ResponseWriter, r *http.Request)
 
 	agent, err := a.agentRegistrationService.GetAgent(agentId)
 	if err != nil {
-		RespondWithError(w, "Failed to proxy a request", err)
+		utils.RespondWithError(w, "Failed to proxy a request", err)
 		return
 	}
 	if agent == nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusNotFound,
 			Code:    exception.AgentNotFound,
 			Message: exception.AgentNotFoundMsg,
@@ -64,7 +65,7 @@ func (a *agentProxyControllerImpl) Proxy(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if agent.Status != view.AgentStatusActive {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusFailedDependency,
 			Code:    exception.InactiveAgent,
 			Message: exception.InactiveAgentMsg,
@@ -72,7 +73,7 @@ func (a *agentProxyControllerImpl) Proxy(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if agent.AgentVersion == "" {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusFailedDependency,
 			Code:    exception.IncompatibleAgentVersion,
 			Message: exception.IncompatibleAgentVersionMsg,
@@ -80,14 +81,14 @@ func (a *agentProxyControllerImpl) Proxy(w http.ResponseWriter, r *http.Request)
 		})
 	}
 	if agent.CompatibilityError != nil && agent.CompatibilityError.Severity == view.SeverityError {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusFailedDependency,
 			Message: agent.CompatibilityError.Message,
 		})
 	}
 	agentUrl, err := url.Parse(agent.AgentUrl)
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusFailedDependency,
 			Code:    exception.InvalidAgentUrl,
 			Message: exception.InvalidAgentUrlMsg,
@@ -104,7 +105,7 @@ func (a *agentProxyControllerImpl) Proxy(w http.ResponseWriter, r *http.Request)
 		}
 	}
 	if !validHost {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.HostNotAllowed,
 			Message: exception.HostNotAllowedMsg,
@@ -119,7 +120,7 @@ func (a *agentProxyControllerImpl) Proxy(w http.ResponseWriter, r *http.Request)
 	log.Debugf("Sending proxy request to %s", r.URL)
 	resp, err := a.tr.RoundTrip(r)
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusFailedDependency,
 			Code:    exception.ProxyFailed,
 			Message: exception.ProxyFailedMsg,

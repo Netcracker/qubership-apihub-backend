@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package security
+package controller
 
 import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/controller"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -71,7 +71,7 @@ func (o oauth20ControllerImpl) GitlabOauthCallback(w http.ResponseWriter, r *htt
 	code := r.FormValue("code")
 	if code == "" {
 		log.Error("Gitlab access code is empty")
-		controller.RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusInternalServerError,
 			Message: "Access code from gitlab is empty",
 		})
@@ -90,7 +90,7 @@ func (o oauth20ControllerImpl) GitlabOauthCallback(w http.ResponseWriter, r *htt
 			}
 		}
 		if !validHost {
-			controller.RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.HostNotAllowed,
 				Message: exception.HostNotAllowedMsg,
@@ -109,7 +109,7 @@ func (o oauth20ControllerImpl) GitlabOauthCallback(w http.ResponseWriter, r *htt
 	resp, err := req.Post(url)
 	if resp.StatusCode() == http.StatusNotFound {
 		log.Error("Couldn't call gitlab Oauth2.0 rest url")
-		controller.RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusNotFound,
 			Message: "Couldn't call gitlab Oauth2.0 rest url",
 			Debug:   err.Error()})
@@ -117,7 +117,7 @@ func (o oauth20ControllerImpl) GitlabOauthCallback(w http.ResponseWriter, r *htt
 	}
 	if err != nil || resp.StatusCode() != http.StatusOK {
 		log.Errorf("Failed to get access token from gitlab: status code %d %v", resp.StatusCode(), err)
-		controller.RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  resp.StatusCode(),
 			Message: "Failed to get access token from gitlab",
 			Debug:   err.Error()})
@@ -127,7 +127,7 @@ func (o oauth20ControllerImpl) GitlabOauthCallback(w http.ResponseWriter, r *htt
 	var gitlabOauthAccessResponse view.OAuthAccessResponse
 	if err := json.Unmarshal(resp.Body(), &gitlabOauthAccessResponse); err != nil {
 		log.Errorf("Couldn't parse JSON response from gitlab Oauth: %v", err)
-		controller.RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusInternalServerError,
 			Message: "Couldn't parse JSON response from gitlab Oauth",
 			Debug:   err.Error()})
@@ -139,7 +139,7 @@ func (o oauth20ControllerImpl) GitlabOauthCallback(w http.ResponseWriter, r *htt
 	gitlabUser, err := getUserByToken(o.gitlabUrl, accessToken)
 
 	if err != nil {
-		controller.RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusInternalServerError,
 			Message: "Couldn't get username from gitlab",
 			Debug:   err.Error()})
@@ -147,12 +147,12 @@ func (o oauth20ControllerImpl) GitlabOauthCallback(w http.ResponseWriter, r *htt
 	}
 	user, err := o.userService.GetOrCreateUserForIntegration(view.User{Id: gitlabUser.Username, Email: gitlabUser.Email, Name: gitlabUser.Name}, view.ExternalGitlabIntegration)
 	if err != nil {
-		controller.RespondWithError(w, "Failed to login via gitlab", err)
+		utils.RespondWithError(w, "Failed to login via gitlab", err)
 		return
 	}
 	err = o.integrationService.SetOauthGitlabTokenForUser(view.GitlabIntegration, user.Id, accessToken, gitlabOauthAccessResponse.RefreshToken, expiresIn, authRedirectUri)
 	if err != nil {
-		controller.RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusInternalServerError,
 			Message: "failed to set oauth token for user - $user",
 			Debug:   err.Error(),
@@ -178,7 +178,7 @@ func (o oauth20ControllerImpl) StartOauthProcessWithGitlab(w http.ResponseWriter
 			}
 		}
 		if !validHost {
-			controller.RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.HostNotAllowed,
 				Message: exception.HostNotAllowedMsg,

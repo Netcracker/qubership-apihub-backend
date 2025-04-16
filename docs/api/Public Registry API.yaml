@@ -139,7 +139,7 @@ paths:
 
         In case of successful authentication, the request will be redirected to the **redirectUri** and 
         the response will contain cookie with access token for future API calls.
-        All subsequent APIHUB calls must use this token in a **BearerAuth** authentication or directly use this cookie in **CookieAuth**.
+        All subsequent APIHUB calls must use this token in a **BearerAuth** authentication.
       operationId: postAuthSAML
       security: [{}]
       parameters:
@@ -151,6 +151,64 @@ paths:
             type: string
             format: uri
             example: "https://apihub.qubership.org/portal"
+      responses:
+        "302":
+          description: Status Found
+          headers:
+            Set-Cookie:
+              description: A base64 encoded userView cookie, containing the user data and access token.
+              schema:
+                type: string
+                example: "userView=eyJ0b2tlbiI6ImV5SmhiR2NpT2lKSVV6STFOaUlzSW10cFpDSTZJbk5sWTNKbGRDMXBaQ0lzSW5SNWNDSTZJa3BYVkNKOS5leUpGZUhSbGJuTnBiMjV6SWpwN2ZTd2lSM0p2ZFhCeklqcGJYU3dpU1VRaU9pSmxkbVZzTURJeE9TSXNJazVoYldVaU9pSmxkbVZzTURJeE9TSXNJbUYxWkNJNld5SWlYU3dpWlhod0lqb3hOamMwTURZNU1UVTRMQ0pwWVhRaU9qRTJOelF3TWpVNU5UZ3NJbTVpWmlJNk1UWTNOREF5TlRrMU9Dd2ljM1ZpSWpvaVpYWmxiREF5TVRraWZRLk45d2poeGhLRkoyTlEzNXpCaGw0VEs4VFBOS3RoeDE5czNQQnNheTNkclEiLCJyZW5ld1Rva2VuIjoiZXlKaGJHY2lPaUpJVXpJMU5pSXNJbXRwWkNJNkluTmxZM0psZEMxcFpDSXNJblI1Y0NJNklrcFhWQ0o5LmV5SkZlSFJsYm5OcGIyNXpJanA3ZlN3aVIzSnZkWEJ6SWpwYlhTd2lTVVFpT2lKbGRtVnNNREl4T1NJc0lrNWhiV1VpT2lKbGRtVnNNREl4T1NJc0ltRjFaQ0k2V3lJaVhTd2laWGh3SWpveE5qYzJOakUzT1RVNExDSnBZWFFpT2pFMk56UXdNalU1TlRnc0ltNWlaaUk2TVRZM05EQXlOVGsxT0N3aWMzVmlJam9pWlhabGJEQXlNVGtpZlEuUnRyZEEwNkJrN2lIQnA1bVRYUE1PSnVJdmhtQ0FudHRnVlBqNGZicXN6WSIsInVzZXIiOnsiaWQiOiJldmVsMDIxOSIsImVtYWlsIjoiZXZnZW5paS5lbGl6YXJvdkBuZXRjcmFja2VyLmNvbSIsIm5hbWUiOiJFdmdlbmlpIEVsaXphcm92IiwiYXZhdGFyVXJsIjoiL2FwaS92Mi91c2Vycy9ldmVsMDIxOS9wcm9maWxlL2F2YXRhciJ9fQ==;"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                IncorrectInputParams:
+                  $ref: "#/components/examples/IncorrectInputParameters"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/login/sso":
+    post:
+      x-nc-api-audience: noBWC
+      tags:
+        - Auth
+      summary: Authentication via an external Identity Provider
+      description: |
+        Starts the authentication process in APIHUB via an external Identity Provider.
+
+        In case of successful authentication, the request will be redirected to the **redirectUri** and 
+        the response will contain cookie with access and refresh tokens for future API calls.
+        All subsequent APIHUB calls must use this cookie in **CookieAuth**.
+      operationId: postAuth
+      security: [ { } ]
+      parameters:
+        - name: redirectUri
+          in: query
+          description: URI, where user must be redirected in case of successful APIHUB authentication.
+          required: true
+          schema:
+            type: string
+            format: uri
+            example: "https://apihub.qubership.org/portal"
+        - name: idpId
+          in: query
+          description: IDP id to be used for the authentication process.
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: ac24e662-1952-4a2e-8405-bfa7b02a0ded
       responses:
         "302":
           description: Status Found
@@ -170,40 +228,6 @@ paths:
                 IncorrectInputParams:
                   $ref: "#/components/examples/IncorrectInputParameters"
         "500":
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                InternalServerError:
-                  $ref: "#/components/examples/InternalServerError"
-  /api/v1/auth/refreshToken:
-    post:
-      tags:
-        - Auth
-      summary: Refresh access token
-      description: Refreshes the access token using the refresh token from the provided apihub-session cookie.
-      operationId: refreshAuthToken
-      security:
-        - CookieAuth: []
-      responses:
-        '200':
-          description: Success
-          headers:
-            Set-Cookie:
-              description: A base64 encoded `apihub-session` cookie containing the new access token and the old refresh token.
-              schema:
-                type: string
-                example: "apihub-session=eyJhY2Nlc3NUb2tlbiI6ImV5SmhiR2NpT2lKU1V6STFOaUlzSW10cFpDSTZJbk5sWTNKbGRDMXBaQ0lzSW5SNWNDSTZJa3BYVkNKOS5leUpGZUhSbGJuTnBiMjV6SWpwN0luTjVjM1JsYlZKdmJHVWlPbHNpVTNsemRHVnRJR0ZrYldsdWFYTjBjbUYwYjNJaVhYMHNJa2R5YjNWd2N5STZXMTBzSWtsRUlqb2lZWEJwYUhWaUlpd2lUbUZ0WlNJNkltRndhV2gxWWlJc0ltRjFaQ0k2V3lJaVhTd2laWGh3SWpveE56UXpOamMzTVRjMUxDSnBZWFFpT2pFM05ETTJOek0xTnpVc0ltNWlaaUk2TVRjME16WTNNelUzTlN3aWMzVmlJam9pWVhCcGFIVmlJbjAudTJLdWZZM1ZQQ1ZDSlRiYkg0Q1lOdUpUSjJwTkgxX0xwVW1fWlRBam5NZ0kyNHZ0ZlFFZ21jLXpEejR6QUJmcjhwYUlOVG5NcFZiLWd6akdyNkNNTnVjNEFjZFFLUXpIbTZpTm1EZ0ZWcGxoanFYSGtCVXh2VXA2dVkwcUtIU09fa2JwWDU3RnRKb3FhVTVMS1JVdmg5b28zUjZmTWp2b0c3VWlta1ZnanZDSFlvNmJYOThvblBBQXhwNWVYZGptUnRsRHd1bG84aVJudDcycUdCdkFCc01KaGtoSkZxLWs0Qy1RclR5V2FncHp3TjBRcEtDRGNVVEZrTk52dnhvVUFUb29kbDRVdFQ3dmU1b3h5TmpCX1ZMRWJCZHpJQkZvcEgxTndoZ1VsN01JZEJyTFJTTml0bmZGUmFSbTlUQTZ4XzJiUzhXeGE0VkM3OTJpZGN3c3VBIiwicmVmcmVzaFRva2VuIjoiZXlKaGJHY2lPaUpTVXpJMU5pSXNJbXRwWkNJNkluTmxZM0psZEMxcFpDSXNJblI1Y0NJNklrcFhWQ0o5LmV5SkZlSFJsYm5OcGIyNXpJanA3SW5ONWMzUmxiVkp2YkdVaU9sc2lVM2x6ZEdWdElHRmtiV2x1YVhOMGNtRjBiM0lpWFgwc0lrZHliM1Z3Y3lJNlcxMHNJa2xFSWpvaVlYQnBhSFZpSWl3aVRtRnRaU0k2SW1Gd2FXaDFZaUlzSW1GMVpDSTZXeUlpWFN3aVpYaHdJam94TnpRek56RTJOemMxTENKcFlYUWlPakUzTkRNMk56TTFOelVzSW01aVppSTZNVGMwTXpZM016VTNOU3dpYzNWaUlqb2lZWEJwYUhWaUluMC5wQ2d1UktGakZvQm5GdzI0cUJpbkVZZzlkV0p5VmdoM0lwUVJHWTlvUWVoYUwzc2dtZTYzNFNxT3NuR25xWDUtR1Z3SEUyVm9DZFJzRmJTZE1vei0xemE4eTl4VWFncGZHdmt4SnZ6V0VjaHZKanhyQ25EVlVuczNNZFl5WndfOTdyaVp5WWNhVVZ3bk1WTTRSM0VYbWVRbXNrcThOTzNDSEpQRmxRa3JwRmVtZjZlbUlsQTJjUE1lejF3RGg3ZTVKeTVwMjcyV1c1ODNkMDg1WWo1TGwwTVVFengtaTlVTF9DeUFFenptd21mcmZUYW9xUTFVVDY5NDY1bndRdUY4M0U4TU15ME8wYkZzTHZ2WFJCNkp4aVZwWTk1QVZkVTVXSjhZamNpVGlXX3JoYzhZbWFmVFBqU1hLaHVUdmpORFZadGpWRms2YzBlNThSUmZMdE1IY2cifQ==;"
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example: {}
-        '500':
           description: Internal Server Error
           content:
             application/json:
@@ -14132,11 +14156,11 @@ components:
             systemRole:
               type: string
               description: System role of the user.
-            ttlSeconds:
+            accessTokenTTLSeconds:
               type: integer
               format: int32
               nullable: true
-              description: Optional time-to-live in seconds.
+              description: Optional access token time-to-live in seconds.
     RoleCreate:
       description: Role with set of permissions for creation.
       type: object

@@ -12,88 +12,99 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package security
+package controller
 
 import (
-	"context"
-	"crypto/rsa"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
-	"net/url"
-	"os"
-	"strings"
-	"time"
-
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/controller"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/cookie"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	"github.com/crewjam/saml"
 	"github.com/crewjam/saml/samlsp"
-	dsig "github.com/russellhaering/goxmldsig"
 	log "github.com/sirupsen/logrus"
-
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
+	"net/http"
+	"net/url"
+	"strings"
 )
 
-type SamlAuthController interface {
+const (
+	samlAttributeEmail      string = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
+	samlAttributeName       string = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname"
+	samlAttributeSurname    string = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname"
+	samlAttributeUserAvatar string = "thumbnailPhoto"
+	samlAttributeUserId     string = "User-Principal-Name"
+)
+
+type AuthController interface {
 	AssertionConsumerHandler(w http.ResponseWriter, r *http.Request)
-	StartSamlAuthentication(w http.ResponseWriter, r *http.Request)
+	StartAuthentication(w http.ResponseWriter, r *http.Request)
 	ServeMetadata(w http.ResponseWriter, r *http.Request)
-	GetSystemSSOInfo(w http.ResponseWriter, r *http.Request)
 }
 
-func NewSamlAuthController(userService service.UserService, systemInfoService service.SystemInfoService) SamlAuthController {
-	return &authenticationControllerImpl{
-		samlInstance:      createSamlInstance(systemInfoService),
+func NewAuthController(userService service.UserService, systemInfoService service.SystemInfoService, idpManager idp.IDPManager) AuthController {
+	return &authControllerImpl{
+		idpManager:        idpManager,
 		userService:       userService,
 		systemInfoService: systemInfoService,
 	}
 }
 
-type SamlInstance struct {
-	saml  *samlsp.Middleware
-	error error
-}
-type authenticationControllerImpl struct {
-	samlInstance      SamlInstance
+type authControllerImpl struct {
+	idpManager        idp.IDPManager
 	userService       service.UserService
 	systemInfoService service.SystemInfoService
 }
 
-const samlAttributeEmail string = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
-const samlAttributeName string = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname"
-const samlAttributeSurname string = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname"
-const samlAttributeUserAvatar string = "thumbnailPhoto"
-const samlAttributeUserId string = "User-Principal-Name"
+func (a *authControllerImpl) ServeMetadata(w http.ResponseWriter, r *http.Request) {
+	idpId := getStringParam(r, "idpId")
+	provider, exists := a.idpManager.GetProvider(idpId)
+	if exists {
+		serveMetadata(w, r, provider.Saml)
+	} else {
+		serveMetadata(w, r, nil)
+	}
+}
 
-func (a *authenticationControllerImpl) ServeMetadata(w http.ResponseWriter, r *http.Request) {
-	if a.samlInstance.error != nil {
+func serveMetadata(w http.ResponseWriter, r *http.Request, samlInstance *samlsp.Middleware) {
+	if samlInstance == nil {
 		log.Errorf("Cannot serveMetadata with nil samlInstanse")
-		controller.RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusInternalServerError,
 			Code:    exception.SamlInstanceIsNull,
 			Message: exception.SamlInstanceIsNullMsg,
-			Params:  map[string]interface{}{"error": a.samlInstance.error.Error()},
+			Params:  map[string]interface{}{"error": "saml instance is not initialized"},
 		})
 		return
 	}
-	a.samlInstance.saml.ServeMetadata(w, r)
+	samlInstance.ServeMetadata(w, r)
 }
 
-// StartSamlAuthentication Frontend calls this endpoint to SSO login user via SAML
-func (a *authenticationControllerImpl) StartSamlAuthentication(w http.ResponseWriter, r *http.Request) {
-	if a.samlInstance.error != nil {
+// StartAuthentication Frontend calls this endpoint to SSO login user via SAML
+func (a *authControllerImpl) StartAuthentication(w http.ResponseWriter, r *http.Request) {
+	idpId := r.URL.Query().Get("idpId")
+	provider, exists := a.idpManager.GetProvider(idpId)
+	if exists {
+		startSAMLAuthentication(w, r, provider.Saml, a.systemInfoService.GetAllowedHosts())
+	} else {
+		startSAMLAuthentication(w, r, nil, nil)
+	}
+}
+
+func startSAMLAuthentication(w http.ResponseWriter, r *http.Request, samlInstance *samlsp.Middleware, allowedHosts []string) {
+	if samlInstance == nil {
 		log.Errorf("Cannot StartSamlAuthentication with nil samlInstance")
-		controller.RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusInternalServerError,
 			Code:    exception.SamlInstanceIsNull,
 			Message: exception.SamlInstanceIsNullMsg,
-			Params:  map[string]interface{}{"error": a.samlInstance.error.Error()},
+			Params:  map[string]interface{}{"error": "saml instance is not initialized"},
 		})
 		return
 	}
@@ -103,7 +114,7 @@ func (a *authenticationControllerImpl) StartSamlAuthentication(w http.ResponseWr
 
 	redirectUrl, err := url.Parse(redirectUrlStr)
 	if err != nil {
-		controller.RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.IncorrectRedirectUrlError,
 			Message: exception.IncorrectRedirectUrlErrorMsg,
@@ -112,14 +123,14 @@ func (a *authenticationControllerImpl) StartSamlAuthentication(w http.ResponseWr
 		return
 	}
 	var validHost bool
-	for _, host := range a.systemInfoService.GetAllowedHosts() {
+	for _, host := range allowedHosts {
 		if strings.Contains(redirectUrl.Host, host) {
 			validHost = true
 			break
 		}
 	}
 	if !validHost {
-		controller.RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.HostNotAllowed,
 			Message: exception.HostNotAllowedMsg,
@@ -136,18 +147,28 @@ func (a *authenticationControllerImpl) StartSamlAuthentication(w http.ResponseWr
 	r.URL = redirectUrl
 
 	// Note that we do not use built-in session mechanism from saml lib except request tracking cookie
-	a.samlInstance.saml.HandleStartAuthFlow(w, r)
+	samlInstance.HandleStartAuthFlow(w, r)
 }
 
 // AssertionConsumerHandler This endpoint is called by ADFS when auth procedure is complete on it's side. ADFS posts the response here.
-func (a *authenticationControllerImpl) AssertionConsumerHandler(w http.ResponseWriter, r *http.Request) {
-	if a.samlInstance.error != nil {
+func (a *authControllerImpl) AssertionConsumerHandler(w http.ResponseWriter, r *http.Request) {
+	idpId := getStringParam(r, "idpId")
+	provider, exists := a.idpManager.GetProvider(idpId)
+	if exists {
+		handleAssertion(w, r, provider.Saml, a.setApihubSessionCookie)
+	} else {
+		handleAssertion(w, r, nil, nil)
+	}
+}
+
+func handleAssertion(w http.ResponseWriter, r *http.Request, samlInstance *samlsp.Middleware, setAuthCookie func(w http.ResponseWriter, assertion *saml.Assertion)) {
+	if samlInstance == nil {
 		log.Errorf("Cannot run AssertionConsumerHandler with nill samlInstanse")
-		controller.RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusInternalServerError,
 			Code:    exception.SamlInstanceIsNull,
 			Message: exception.SamlInstanceIsNullMsg,
-			Params:  map[string]interface{}{"error": a.samlInstance.error.Error()},
+			Params:  map[string]interface{}{"error": "saml instance is not initialized"},
 		})
 		return
 	}
@@ -157,14 +178,14 @@ func (a *authenticationControllerImpl) AssertionConsumerHandler(w http.ResponseW
 		return
 	}
 	possibleRequestIDs := []string{}
-	if a.samlInstance.saml.ServiceProvider.AllowIDPInitiated {
+	if samlInstance.ServiceProvider.AllowIDPInitiated {
 		possibleRequestIDs = append(possibleRequestIDs, "")
 	}
-	trackedRequests := a.samlInstance.saml.RequestTracker.GetTrackedRequests(r)
+	trackedRequests := samlInstance.RequestTracker.GetTrackedRequests(r)
 	for _, tr := range trackedRequests {
 		possibleRequestIDs = append(possibleRequestIDs, tr.SAMLRequestID)
 	}
-	assertion, err := a.samlInstance.saml.ServiceProvider.ParseResponse(r, possibleRequestIDs)
+	assertion, err := samlInstance.ServiceProvider.ParseResponse(r, possibleRequestIDs)
 	if err != nil {
 		log.Errorf("Parsing SAML response process error: %s", err.Error())
 		var ire *saml.InvalidResponseError
@@ -172,7 +193,7 @@ func (a *authenticationControllerImpl) AssertionConsumerHandler(w http.ResponseW
 			log.Errorf("Parsing SAML response process private error: %s", ire.PrivateErr.Error())
 			log.Debugf("ACS response data: %s", ire.Response)
 		}
-		controller.RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusInternalServerError,
 			Code:    exception.SamlResponseHasParsingError,
 			Message: exception.SamlResponseHasParsingErrorMsg,
@@ -182,7 +203,7 @@ func (a *authenticationControllerImpl) AssertionConsumerHandler(w http.ResponseW
 	}
 	if assertion == nil {
 		log.Errorf("Assertion from SAML response is nil")
-		controller.RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusInternalServerError,
 			Code:    exception.AssertionIsNull,
 			Message: exception.AssertionIsNullMsg,
@@ -191,24 +212,24 @@ func (a *authenticationControllerImpl) AssertionConsumerHandler(w http.ResponseW
 	}
 
 	// Add Apihub auth info cookie
-	a.setAuthCookie(w, assertion)
+	setAuthCookie(w, assertion)
 
 	// Extract original redirect URI from request tracking cookie
 	redirectURI := "/"
 	if trackedRequestIndex := r.Form.Get("RelayState"); trackedRequestIndex != "" {
 		log.Debugf("trackedRequestIndex = %s", trackedRequestIndex)
-		trackedRequest, err := a.samlInstance.saml.RequestTracker.GetTrackedRequest(r, trackedRequestIndex)
+		trackedRequest, err := samlInstance.RequestTracker.GetTrackedRequest(r, trackedRequestIndex)
 		if err != nil {
-			if errors.Is(err, http.ErrNoCookie) && a.samlInstance.saml.ServiceProvider.AllowIDPInitiated {
+			if errors.Is(err, http.ErrNoCookie) && samlInstance.ServiceProvider.AllowIDPInitiated {
 				if uri := r.Form.Get("RelayState"); uri != "" {
 					redirectURI = uri
 					log.Debugf("redirectURI is found in RelayState and updated to %s", redirectURI)
 				}
 			}
-			controller.RespondWithError(w, "Unable to retrieve redirect URL: failed to get tracked request", err)
+			utils.RespondWithError(w, "Unable to retrieve redirect URL: failed to get tracked request", err)
 			return
 		} else {
-			err = a.samlInstance.saml.RequestTracker.StopTrackingRequest(w, r, trackedRequestIndex)
+			err = samlInstance.RequestTracker.StopTrackingRequest(w, r, trackedRequestIndex)
 			if err != nil {
 				log.Warnf("Failed to stop tracking request: %s", err)
 				// but it's not a showstopper, so continue processing
@@ -221,12 +242,22 @@ func (a *authenticationControllerImpl) AssertionConsumerHandler(w http.ResponseW
 	http.Redirect(w, r, redirectURI, http.StatusFound)
 }
 
-func (a *authenticationControllerImpl) setAuthCookie(w http.ResponseWriter, assertion *saml.Assertion) {
+func (a *authControllerImpl) setApihubSessionCookie(w http.ResponseWriter, assertion *saml.Assertion) {
 	assertionAttributes := getAssertionAttributes(assertion)
 
-	authCookie, err := a.getOrCreateUser(assertionAttributes)
+	user, err := getOrCreateUser(a.userService, assertionAttributes)
 	if err != nil {
-		controller.RespondWithError(w, "Failed to get or create SSO user", err)
+		utils.RespondWithError(w, "Failed to get or create SSO user", err)
+		return
+	}
+
+	authCookie, err := security.CreateTokenForUser(*user)
+	if err != nil {
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusInternalServerError,
+			Message: "Failed to create token for SSO user",
+			Debug:   err.Error(),
+		})
 		return
 	}
 
@@ -234,10 +265,10 @@ func (a *authenticationControllerImpl) setAuthCookie(w http.ResponseWriter, asse
 	cookieValue := base64.StdEncoding.EncodeToString(response)
 
 	http.SetCookie(w, &http.Cookie{
-		Name:     view.SessionCookieName,
+		Name:     cookie.SessionCookieName,
 		Value:    cookieValue,
-		MaxAge:   systemInfoService.GetRefreshTokenDurationSec(),
-		Secure:   true,
+		MaxAge:   a.systemInfoService.GetRefreshTokenDurationSec(),
+		Secure:   false, //TODO: set to true
 		HttpOnly: true,
 		Path:     "/",
 	})
@@ -260,7 +291,7 @@ func getAssertionAttributes(assertion *saml.Assertion) map[string][]string {
 	return assertionAttributes
 }
 
-func (a *authenticationControllerImpl) getOrCreateUser(assertionAttributes map[string][]string) (*view.SessionCookie, error) {
+func getOrCreateUser(userService service.UserService, assertionAttributes map[string][]string) (*view.User, error) {
 	samlUser := view.User{}
 	if len(assertionAttributes[samlAttributeUserId]) != 0 {
 		userLogin := assertionAttributes[samlAttributeUserId][0]
@@ -313,149 +344,16 @@ func (a *authenticationControllerImpl) getOrCreateUser(assertionAttributes map[s
 				Debug:   "Failed to decode user avatar",
 			}
 		}
-		err = a.userService.StoreUserAvatar(samlUser.Id, decodedAvatar)
+		err = userService.StoreUserAvatar(samlUser.Id, decodedAvatar)
 		if err != nil {
 			return nil, fmt.Errorf("failed to store user avatar: %w", err)
 		}
 	}
 
-	user, err := a.userService.GetOrCreateUserForIntegration(samlUser, view.ExternalSamlIntegration)
+	user, err := userService.GetOrCreateUserForIntegration(samlUser, view.ExternalSamlIntegration)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user for SSO integration: %w", err)
 	}
-	authCookie, err := CreateTokenForUser(*user)
-	if err != nil {
-		return nil, &exception.CustomError{
-			Status:  http.StatusInternalServerError,
-			Message: "Failed to create token for SSO user",
-			Debug:   err.Error(),
-		}
-	}
-	return authCookie, nil
-}
 
-func (a *authenticationControllerImpl) GetSystemSSOInfo(w http.ResponseWriter, r *http.Request) {
-	controller.RespondWithJson(w, http.StatusOK,
-		view.SystemConfigurationInfo{
-			SSOIntegrationEnabled: a.samlInstance.error == nil,
-			AutoRedirect:          a.samlInstance.error == nil,
-			DefaultWorkspaceId:    a.systemInfoService.GetDefaultWorkspaceId(),
-		})
-}
-
-func createSamlInstance(systemInfoService service.SystemInfoService) SamlInstance {
-	var samlInstance SamlInstance
-	var err error
-	crt, err := os.CreateTemp("", "apihub.cert")
-	if err != nil {
-		log.Errorf("Apihub.cert temp file wasn't created. Error - %s", err.Error())
-		samlInstance.error = err
-		return samlInstance
-	}
-	decodeSamlCert, err := base64.StdEncoding.DecodeString(systemInfoService.GetSamlCrt())
-	if err != nil {
-		samlInstance.error = err
-		return samlInstance
-	}
-
-	_, err = crt.WriteString(string(decodeSamlCert))
-
-	if err != nil {
-		log.Errorf("SAML_CRT error - %s", err)
-		samlInstance.error = err
-		return samlInstance
-	}
-
-	key, err := os.CreateTemp("", "apihub.key")
-	if err != nil {
-		log.Errorf("Apihub.key temp file wasn't created. Error - %s", err.Error())
-		samlInstance.error = err
-		return samlInstance
-	}
-	decodePrivateKey, err := base64.StdEncoding.DecodeString(systemInfoService.GetSamlKey())
-	if err != nil {
-		samlInstance.error = err
-		return samlInstance
-	}
-
-	_, err = key.WriteString(string(decodePrivateKey))
-
-	if err != nil {
-		log.Errorf("SAML_KEY error - %s", err)
-		samlInstance.error = err
-		return samlInstance
-	}
-
-	defer key.Close()
-	defer crt.Close()
-	defer os.Remove(key.Name())
-	defer os.Remove(crt.Name())
-
-	keyPair, err := tls.LoadX509KeyPair(crt.Name(), key.Name())
-	if err != nil {
-		log.Errorf("keyPair error - %s", err)
-		samlInstance.error = err
-		return samlInstance
-	}
-
-	keyPair.Leaf, err = x509.ParseCertificate(keyPair.Certificate[0])
-	if err != nil {
-		log.Errorf("keyPair.Leaf error - %s", err)
-		samlInstance.error = err
-		return samlInstance
-	}
-	metadataUrl := systemInfoService.GetADFSMetadataUrl()
-	if metadataUrl == "" {
-		log.Error("metadataUrl env is empty")
-		samlInstance.error = err
-		return samlInstance
-	}
-	idpMetadataURL, err := url.Parse(metadataUrl)
-	if err != nil {
-		log.Errorf("idpMetadataURL error - %s", err)
-		samlInstance.error = err
-		return samlInstance
-	}
-
-	tr := http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
-	cl := http.Client{Transport: &tr, Timeout: time.Second * 60}
-	idpMetadata, err := samlsp.FetchMetadata(context.Background(), &cl, *idpMetadataURL)
-
-	if err != nil {
-		log.Errorf("idpMetadata error - %s", err)
-		samlInstance.error = err
-		return samlInstance
-	}
-	rootURLPath := systemInfoService.GetAPIHubUrl()
-	if rootURLPath == "" {
-		log.Error("rootURLPath env is empty")
-		samlInstance.error = err
-		return samlInstance
-	}
-	rootURL, err := url.Parse(rootURLPath)
-	if err != nil {
-		log.Errorf("rootURL error - %s", err)
-		samlInstance.error = err
-		return samlInstance
-	}
-
-	samlSP, err := samlsp.New(samlsp.Options{
-		URL:         *rootURL,
-		Key:         keyPair.PrivateKey.(*rsa.PrivateKey),
-		Certificate: keyPair.Leaf,
-		IDPMetadata: idpMetadata,
-		EntityID:    rootURL.Path,
-	})
-	if err != nil {
-		log.Errorf("New saml instanse wasn't created. Error -%s", err.Error())
-		samlInstance.error = err
-		return samlInstance
-	}
-
-	samlSP.ServiceProvider.SignatureMethod = dsig.RSASHA256SignatureMethod
-	samlSP.ServiceProvider.AuthnNameIDFormat = saml.TransientNameIDFormat
-	samlSP.ServiceProvider.AllowIDPInitiated = true
-	log.Infof("SAML instance initialized")
-	samlInstance.saml = samlSP
-	return samlInstance
+	return user, nil
 }

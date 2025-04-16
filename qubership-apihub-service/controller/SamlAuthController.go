@@ -1,0 +1,115 @@
+// Copyright 2024-2025 NetCracker Technology Corporation
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package controller
+
+import (
+	"encoding/base64"
+	"encoding/json"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
+	"github.com/crewjam/saml"
+	"github.com/crewjam/saml/samlsp"
+	log "github.com/sirupsen/logrus"
+	"net/http"
+)
+
+type SamlAuthController interface {
+	AssertionConsumerHandler_deprecated(w http.ResponseWriter, r *http.Request)
+	StartSamlAuthentication_deprecated(w http.ResponseWriter, r *http.Request)
+	ServeMetadata_deprecated(w http.ResponseWriter, r *http.Request)
+	GetSystemSSOInfo(w http.ResponseWriter, r *http.Request)
+}
+
+func NewSamlAuthController(userService service.UserService, systemInfoService service.SystemInfoService, idpManager idp.IDPManager) SamlAuthController {
+	var samlInstance *samlsp.Middleware
+	for _, provider := range idpManager.GetAuthConfig().Providers {
+		if provider.IdpType == idp.IDPTypeExternal && provider.Protocol == idp.AuthProtocolSAML {
+			samlInstance, _ = idp.CreateSAMLInstance("", provider.SAMLConfiguration)
+			break
+		}
+	}
+	return &authenticationControllerImpl{
+		samlInstance:      samlInstance,
+		userService:       userService,
+		systemInfoService: systemInfoService,
+	}
+}
+
+type authenticationControllerImpl struct {
+	samlInstance      *samlsp.Middleware
+	userService       service.UserService
+	systemInfoService service.SystemInfoService
+}
+
+func (a *authenticationControllerImpl) ServeMetadata_deprecated(w http.ResponseWriter, r *http.Request) {
+	serveMetadata(w, r, a.samlInstance)
+}
+
+// StartSamlAuthentication_deprecated Frontend calls this endpoint to SSO login user via SAML (legacy auth)
+func (a *authenticationControllerImpl) StartSamlAuthentication_deprecated(w http.ResponseWriter, r *http.Request) {
+	startSAMLAuthentication(w, r, a.samlInstance, a.systemInfoService.GetAllowedHosts())
+}
+
+// AssertionConsumerHandler_deprecated This endpoint is called by ADFS when auth procedure is complete on it's side. ADFS posts the response here. (legacy auth)
+func (a *authenticationControllerImpl) AssertionConsumerHandler_deprecated(w http.ResponseWriter, r *http.Request) {
+	handleAssertion(w, r, a.samlInstance, a.setUserViewCookie)
+}
+
+func (a *authenticationControllerImpl) setUserViewCookie(w http.ResponseWriter, assertion *saml.Assertion) {
+	assertionAttributes := getAssertionAttributes(assertion)
+
+	user, err := getOrCreateUser(a.userService, assertionAttributes)
+	if err != nil {
+		utils.RespondWithError(w, "Failed to get or create SSO user", err)
+		return
+	}
+
+	userView, err := security.CreateTokenForUser_deprecated(*user)
+	if err != nil {
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusInternalServerError,
+			Message: "Failed to create token for SSO user",
+			Debug:   err.Error(),
+		})
+		return
+	}
+
+	response, _ := json.Marshal(userView)
+	cookieValue := base64.StdEncoding.EncodeToString(response)
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "userView",
+		Value:    cookieValue,
+		MaxAge:   a.systemInfoService.GetRefreshTokenDurationSec(),
+		Secure:   false, //TODO: set to true
+		HttpOnly: false,
+		Path:     "/",
+	})
+	log.Debugf("Auth user result object: %+v", userView)
+}
+
+func (a *authenticationControllerImpl) GetSystemSSOInfo(w http.ResponseWriter, r *http.Request) {
+	utils.RespondWithJson(w, http.StatusOK,
+		view.SystemConfigurationInfo{
+			SSOIntegrationEnabled: a.samlInstance != nil,
+			AutoRedirect:          a.samlInstance != nil,
+			DefaultWorkspaceId:    a.systemInfoService.GetDefaultWorkspaceId(),
+			AuthConfig:            a.systemInfoService.GetAuthConfig(),
+		})
+}

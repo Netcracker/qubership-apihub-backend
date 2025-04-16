@@ -14,6 +14,10 @@
 
 package view
 
+import (
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
+)
+
 type SystemInfo struct {
 	BackendVersion  string   `json:"backendVersion"`
 	FrontendVersion string   `json:"frontendVersion"`
@@ -23,7 +27,8 @@ type SystemInfo struct {
 }
 
 type SystemConfigurationInfo struct {
-	SSOIntegrationEnabled bool   `json:"ssoIntegrationEnabled"`
-	AutoRedirect          bool   `json:"autoRedirect"`
-	DefaultWorkspaceId    string `json:"defaultWorkspaceId"`
+	SSOIntegrationEnabled bool           `json:"ssoIntegrationEnabled"`
+	AutoRedirect          bool           `json:"autoRedirect"`
+	DefaultWorkspaceId    string         `json:"defaultWorkspaceId"`
+	AuthConfig            idp.AuthConfig `json:"authConfig"`
 }

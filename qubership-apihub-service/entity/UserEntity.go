@@ -57,9 +57,9 @@ func MakeExtendedUserView(userEntity *UserEntity, gitIntegrationStatus bool, sys
 			Email:     userEntity.Email,
 			AvatarUrl: userEntity.AvatarUrl,
 		},
-		GitIntegrationStatus: gitIntegrationStatus,
-		SystemRole:           systemRole,
-		TTLSeconds:           ttlSeconds,
+		GitIntegrationStatus:  gitIntegrationStatus,
+		SystemRole:            systemRole,
+		AccessTokenTTLSeconds: ttlSeconds,
 	}
 }
 

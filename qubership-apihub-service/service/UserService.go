@@ -18,13 +18,11 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
-	"github.com/golang-jwt/jwt/v4"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
+	"github.com/go-ldap/ldap"
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
-
-	"github.com/go-ldap/ldap"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
@@ -575,47 +573,13 @@ func (u usersServiceImpl) GetExtendedUser(ctx context.SecurityContext) (*view.Ex
 			gitIntegrationStatus = true
 		}
 		var ttlSeconds *int
-		if ctx.GetUserToken() != "" {
-			ttlSeconds, err = getTokenRemainingSeconds(ctx.GetUserToken())
-			if err != nil {
-				return nil, fmt.Errorf("failed to get token remaining seconds: %v", err)
-			}
+		if ctx.GetTokenExpirationTimestamp() > 0 {
+			remainingSeconds := int(utils.GetRemainingSeconds(ctx.GetTokenExpirationTimestamp()))
+			ttlSeconds = &remainingSeconds
 		}
 		return entity.MakeExtendedUserView(userEntity, gitIntegrationStatus, ctx.GetUserSystemRole(), ttlSeconds), nil
 	}
 	return nil, nil
-}
-
-func getTokenRemainingSeconds(token string) (*int, error) {
-	parsedToken, _, err := new(jwt.Parser).ParseUnverified(token, jwt.MapClaims{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse JWT token: %w", err)
-	}
-
-	claims, ok := parsedToken.Claims.(jwt.MapClaims)
-	if !ok {
-		return nil, fmt.Errorf("failed to extract claims from token")
-	}
-
-	expClaim, exists := claims["exp"]
-	if !exists {
-		return nil, fmt.Errorf("token does not contain expiration time")
-	}
-
-	expFloat, ok := expClaim.(float64)
-	if !ok {
-		return nil, fmt.Errorf("expiration time is not in expected format")
-	}
-	expTime := int64(expFloat)
-	currentTime := time.Now().Unix()
-	remainingSeconds := int(expTime - currentTime)
-
-	if remainingSeconds < 0 {
-		remainingSeconds = 0
-	}
-
-	return &remainingSeconds, nil
-
 }
 
 func createBcryptHashedPassword(password string) ([]byte, error) {

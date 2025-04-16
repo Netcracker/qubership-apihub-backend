@@ -16,14 +16,15 @@ package security
 
 import (
 	"fmt"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/controller"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/cookie"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/shaj13/go-guardian/v2/auth"
 	"github.com/shaj13/go-guardian/v2/auth/strategies/union"
 	log "github.com/sirupsen/logrus"
 	"net/http"
 	"runtime/debug"
+	"strconv"
 )
 
 func Secure(next http.HandlerFunc) http.HandlerFunc {
@@ -33,7 +34,7 @@ func Secure(next http.HandlerFunc) http.HandlerFunc {
 				log.Errorf("Request failed with panic: %v", err)
 				log.Tracef("Stacktrace: %v", string(debug.Stack()))
 				debug.PrintStack()
-				controller.RespondWithCustomError(w, &exception.CustomError{
+				utils.RespondWithCustomError(w, &exception.CustomError{
 					Status:  http.StatusInternalServerError,
 					Message: http.StatusText(http.StatusInternalServerError),
 					Debug:   fmt.Sprintf("%v", err),
@@ -41,13 +42,13 @@ func Secure(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 		}()
-		_, user, err := defaultAuthStrategy.AuthenticateRequest(r)
+		_, user, err := fullAuthStrategy.AuthenticateRequest(r)
 		if err != nil {
 			if multiError, ok := err.(union.MultiError); ok {
 				for _, e := range multiError {
 					if customError, ok := e.(*exception.CustomError); ok {
 						if customError.Status == http.StatusForbidden {
-							controller.RespondWithCustomError(w, customError)
+							utils.RespondWithCustomError(w, customError)
 							return
 						}
 					}
@@ -55,6 +56,9 @@ func Secure(next http.HandlerFunc) http.HandlerFunc {
 			}
 			respondWithAuthFailedError(w, err)
 			return
+		}
+		if user.GetExtensions().Get(SetCookieExt) != "" {
+			setSessionCookie(w, user)
 		}
 
 		r = auth.RequestWithUser(user, r)
@@ -69,7 +73,7 @@ func SecureUser(next http.HandlerFunc) http.HandlerFunc {
 				log.Errorf("Request failed with panic: %v", err)
 				log.Tracef("Stacktrace: %v", string(debug.Stack()))
 				debug.PrintStack()
-				controller.RespondWithCustomError(w, &exception.CustomError{
+				utils.RespondWithCustomError(w, &exception.CustomError{
 					Status:  http.StatusInternalServerError,
 					Message: http.StatusText(http.StatusInternalServerError),
 					Debug:   fmt.Sprintf("%v", err),
@@ -77,11 +81,42 @@ func SecureUser(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 		}()
-		//TODO: add PAT strategy and cookie strategy
 		user, err := userAuthStrategy.Authenticate(r.Context(), r)
 		if err != nil {
 			respondWithAuthFailedError(w, err)
 			return
+		}
+		if user.GetExtensions().Get(SetCookieExt) != "" {
+			setSessionCookie(w, user)
+		}
+
+		r = auth.RequestWithUser(user, r)
+		next.ServeHTTP(w, r)
+	}
+}
+
+func SecureJWT(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Errorf("Request failed with panic: %v", err)
+				log.Tracef("Stacktrace: %v", string(debug.Stack()))
+				debug.PrintStack()
+				utils.RespondWithCustomError(w, &exception.CustomError{
+					Status:  http.StatusInternalServerError,
+					Message: http.StatusText(http.StatusInternalServerError),
+					Debug:   fmt.Sprintf("%v", err),
+				})
+				return
+			}
+		}()
+		user, err := jwtAuthStrategy.Authenticate(r.Context(), r)
+		if err != nil {
+			respondWithAuthFailedError(w, err)
+			return
+		}
+		if user.GetExtensions().Get(SetCookieExt) != "" {
+			setSessionCookie(w, user)
 		}
 
 		r = auth.RequestWithUser(user, r)
@@ -96,7 +131,7 @@ func SecureWebsocket(next http.HandlerFunc) http.HandlerFunc {
 				log.Errorf("Request failed with panic: %v", err)
 				log.Tracef("Stacktrace: %v", string(debug.Stack()))
 				debug.PrintStack()
-				controller.RespondWithCustomError(w, &exception.CustomError{
+				utils.RespondWithCustomError(w, &exception.CustomError{
 					Status:  http.StatusInternalServerError,
 					Message: http.StatusText(http.StatusInternalServerError),
 					Debug:   fmt.Sprintf("%v", err),
@@ -104,10 +139,10 @@ func SecureWebsocket(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 		}()
-		//TODO: is it still required ?
+		//TODO: should be removed
 		token := r.URL.Query().Get("token")
 		r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-		_, user, err := defaultAuthStrategy.AuthenticateRequest(r)
+		_, user, err := fullAuthStrategy.AuthenticateRequest(r)
 		if err != nil {
 			respondWithAuthFailedError(w, err)
 			return
@@ -125,7 +160,7 @@ func NoSecure(next http.HandlerFunc) http.HandlerFunc {
 				log.Errorf("Request failed with panic: %v", err)
 				log.Tracef("Stacktrace: %v", string(debug.Stack()))
 				debug.PrintStack()
-				controller.RespondWithCustomError(w, &exception.CustomError{
+				utils.RespondWithCustomError(w, &exception.CustomError{
 					Status:  http.StatusInternalServerError,
 					Message: http.StatusText(http.StatusInternalServerError),
 					Debug:   fmt.Sprintf("%v", err),
@@ -144,7 +179,7 @@ func SecureAgentProxy(next http.HandlerFunc) http.HandlerFunc {
 				log.Errorf("Request failed with panic: %v", err)
 				log.Tracef("Stacktrace: %v", string(debug.Stack()))
 				debug.PrintStack()
-				controller.RespondWithCustomError(w, &exception.CustomError{
+				utils.RespondWithCustomError(w, &exception.CustomError{
 					Status:  http.StatusInternalServerError,
 					Message: http.StatusText(http.StatusInternalServerError),
 					Debug:   fmt.Sprintf("%v", err),
@@ -152,12 +187,16 @@ func SecureAgentProxy(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 		}()
-		//TODO: add cookie strategy
+		//TODO: need to remove customJwtStrategy and use sessionCookie strategy only
 		user, err := proxyAuthStrategy.Authenticate(r.Context(), r)
 		if err != nil {
 			respondWithAuthFailedError(w, err)
 			return
 		}
+		if user.GetExtensions().Get(SetCookieExt) != "" {
+			setSessionCookie(w, user)
+		}
+		//TODO: add custom header to the request
 		r = auth.RequestWithUser(user, r)
 		next.ServeHTTP(w, r)
 	}
@@ -170,7 +209,7 @@ func SecureProxy(next http.HandlerFunc) http.HandlerFunc {
 				log.Errorf("Request failed with panic: %v", err)
 				log.Tracef("Stacktrace: %v", string(debug.Stack()))
 				debug.PrintStack()
-				controller.RespondWithCustomError(w, &exception.CustomError{
+				utils.RespondWithCustomError(w, &exception.CustomError{
 					Status:  http.StatusInternalServerError,
 					Message: http.StatusText(http.StatusInternalServerError),
 					Debug:   fmt.Sprintf("%v", err),
@@ -178,24 +217,41 @@ func SecureProxy(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 		}()
-		//TODO: add cookie strategy
 		user, err := proxyAuthStrategy.Authenticate(r.Context(), r)
 		if err != nil {
 			respondWithAuthFailedError(w, err)
 			return
 		}
+		if user.GetExtensions().Get(SetCookieExt) != "" {
+			setSessionCookie(w, user)
+		}
 		r = auth.RequestWithUser(user, r)
+		//TODO: remove after frontend testing
 		r.Header.Del(CustomJwtAuthHeader)
-		//TODO: do not forget to delete cookie from request
 		cookies := r.Cookies()
 		r.Header.Del("Cookie")
-		for _, cookie := range cookies {
-			if cookie.Name != view.SessionCookieName {
-				r.AddCookie(cookie)
+		for _, cookieValue := range cookies {
+			if cookieValue.Name != cookie.SessionCookieName {
+				r.AddCookie(cookieValue)
 			}
 		}
 		next.ServeHTTP(w, r)
 	}
+}
+
+func setSessionCookie(w http.ResponseWriter, user auth.Info) {
+	tokenExpTimestamp, _ := strconv.ParseInt(user.GetExtensions().Get(RefreshTokenExpiresAtExt), 0, 64)
+	maxAge := utils.GetRemainingSeconds(tokenExpTimestamp)
+	http.SetCookie(w, &http.Cookie{
+		Name:     cookie.SessionCookieName,
+		Value:    user.GetExtensions().Get(SetCookieExt),
+		MaxAge:   int(maxAge),
+		Secure:   true,
+		HttpOnly: true,
+		Path:     "/",
+	})
+	user.GetExtensions().Del(SetCookieExt)
+	user.GetExtensions().Del(RefreshTokenExpiresAtExt)
 }
 
 func respondWithAuthFailedError(w http.ResponseWriter, err error) {
@@ -205,5 +261,5 @@ func respondWithAuthFailedError(w http.ResponseWriter, err error) {
 		Message: http.StatusText(http.StatusUnauthorized),
 		Debug:   fmt.Sprintf("%v", err),
 	}
-	controller.RespondWithJson(w, customErr.Status, customErr)
+	utils.RespondWithJson(w, customErr.Status, customErr)
 }

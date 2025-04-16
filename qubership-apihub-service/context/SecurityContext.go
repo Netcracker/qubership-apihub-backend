@@ -15,11 +15,9 @@
 package context
 
 import (
-	"encoding/base64"
-	"encoding/json"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
-	log "github.com/sirupsen/logrus"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/cookie"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/shaj13/go-guardian/v2/auth"
@@ -29,6 +27,7 @@ const SystemRoleExt = "systemRole"
 const ApikeyRoleExt = "apikeyRole"
 const ApikeyPackageIdExt = "apikeyPackageId"
 const ApikeyIdExt = "apikeyId"
+const TokenExpiresAtExt = "expiresAt"
 
 type SecurityContext interface {
 	GetUserId() string
@@ -36,6 +35,7 @@ type SecurityContext interface {
 	GetApikeyRoles() []string
 	GetApikeyPackageId() string
 	GetUserToken() string
+	GetTokenExpirationTimestamp() int64
 	GetApiKey() string
 	GetApiKeyId() string
 }
@@ -47,16 +47,18 @@ func Create(r *http.Request) SecurityContext {
 	apikeyId := user.GetExtensions().Get(ApikeyIdExt)
 	apikeyRole := user.GetExtensions().Get(ApikeyRoleExt)
 	apikeyPackageId := user.GetExtensions().Get(ApikeyPackageIdExt)
-	token := getAuthorizationToken(r)
+	tokenExpirationTimestamp, _ := strconv.ParseInt(user.GetExtensions().Get(TokenExpiresAtExt), 0, 64)
+	token := getAccessToken(r)
 	if token != "" {
 		return &securityContextImpl{
-			userId:          userId,
-			systemRole:      systemRole,
-			apikeyPackageId: apikeyPackageId,
-			apikeyRole:      apikeyRole,
-			token:           token,
-			apiKey:          "",
-			apikeyId:        "",
+			userId:                   userId,
+			systemRole:               systemRole,
+			apikeyPackageId:          apikeyPackageId,
+			apikeyRole:               apikeyRole,
+			token:                    token,
+			tokenExpirationTimestamp: tokenExpirationTimestamp,
+			apiKey:                   "",
+			apikeyId:                 "",
 		}
 	} else {
 		return &securityContextImpl{
@@ -82,13 +84,14 @@ func CreateFromId(userId string) SecurityContext {
 }
 
 type securityContextImpl struct {
-	userId          string
-	systemRole      string
-	apikeyRole      string
-	apikeyPackageId string
-	token           string
-	apikeyId        string
-	apiKey          string
+	userId                   string
+	systemRole               string
+	apikeyRole               string
+	apikeyPackageId          string
+	token                    string
+	tokenExpirationTimestamp int64
+	apikeyId                 string
+	apiKey                   string
 }
 
 func (ctx securityContextImpl) GetUserId() string {
@@ -118,39 +121,28 @@ func MergeApikeyRoles(roles []string) string {
 	return strings.Join(roles, ",")
 }
 
-func getAuthorizationToken(r *http.Request) string {
-	authHeaderToken := getTokenFromAuthHeader(r)
-	if authHeaderToken != "" {
-		return authHeaderToken
+func getAccessToken(r *http.Request) string {
+	if token := getTokenFromAuthHeader(r); token != "" {
+		return token
 	}
 	return getTokenFromSessionCookie(r)
 }
 
 func getTokenFromAuthHeader(r *http.Request) string {
-	authorizationHeaderValue := r.Header.Get("authorization")
-	return strings.ReplaceAll(authorizationHeaderValue, "Bearer ", "")
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" || !strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+		return ""
+	}
+	return strings.TrimSpace(authHeader[7:])
 }
 
 func getTokenFromSessionCookie(r *http.Request) string {
-	cookie, err := r.Cookie(view.SessionCookieName)
-	if err != nil || cookie.Value == "" {
-		return ""
-	}
-
-	decodedBytes, err := base64.StdEncoding.DecodeString(cookie.Value)
+	sessionCookie, err := cookie.ExtractSessionCookie(r)
 	if err != nil {
-		log.Warnf("Failed to decode session cookie: %s", err.Error())
 		return ""
 	}
 
-	var authCookie view.SessionCookie
-	err = json.Unmarshal(decodedBytes, &authCookie)
-	if err != nil {
-		log.Warnf("Failed to unmarshal session cookie: %s", err.Error())
-		return ""
-	}
-
-	return authCookie.AccessToken
+	return sessionCookie.AccessToken
 }
 
 func getApihubApiKey(r *http.Request) string {
@@ -159,6 +151,9 @@ func getApihubApiKey(r *http.Request) string {
 
 func (ctx securityContextImpl) GetUserToken() string {
 	return ctx.token
+}
+func (ctx securityContextImpl) GetTokenExpirationTimestamp() int64 {
+	return ctx.tokenExpirationTimestamp
 }
 
 func (ctx securityContextImpl) GetApiKey() string {

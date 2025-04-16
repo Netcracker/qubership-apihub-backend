@@ -57,7 +57,7 @@ func (a agentControllerImpl) ProcessAgentSignal(w http.ResponseWriter, r *http.R
 	ctx := context.Create(r)
 	sufficientPrivileges := a.isSysadm(ctx)
 	if !sufficientPrivileges {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -67,7 +67,7 @@ func (a agentControllerImpl) ProcessAgentSignal(w http.ResponseWriter, r *http.R
 	defer r.Body.Close()
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.BadRequestBody,
 			Message: exception.BadRequestBodyMsg,
@@ -78,7 +78,7 @@ func (a agentControllerImpl) ProcessAgentSignal(w http.ResponseWriter, r *http.R
 	var message view.AgentKeepaliveMessage
 	err = json.Unmarshal(body, &message)
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.BadRequestBody,
 			Message: exception.BadRequestBodyMsg,
@@ -89,16 +89,16 @@ func (a agentControllerImpl) ProcessAgentSignal(w http.ResponseWriter, r *http.R
 	validationErr := utils.ValidateObject(message)
 	if validationErr != nil {
 		if customError, ok := validationErr.(*exception.CustomError); ok {
-			RespondWithCustomError(w, customError)
+			utils.RespondWithCustomError(w, customError)
 			return
 		}
 	}
 	version, err := a.agentRegistrationService.ProcessAgentSignal(message)
 	if err != nil {
-		RespondWithError(w, fmt.Sprintf("Failed to process agent keepalive message %+v", message), err)
+		utils.RespondWithError(w, fmt.Sprintf("Failed to process agent keepalive message %+v", message), err)
 		return
 	}
-	RespondWithJson(w, http.StatusOK, version)
+	utils.RespondWithJson(w, http.StatusOK, version)
 }
 
 func (a agentControllerImpl) ListAgents(w http.ResponseWriter, r *http.Request) {
@@ -108,7 +108,7 @@ func (a agentControllerImpl) ListAgents(w http.ResponseWriter, r *http.Request) 
 	if onlyActiveStr != "" {
 		onlyActive, err = strconv.ParseBool(onlyActiveStr)
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -124,7 +124,7 @@ func (a agentControllerImpl) ListAgents(w http.ResponseWriter, r *http.Request) 
 	if showIncompatibleStr != "" {
 		showIncompatible, err = strconv.ParseBool(showIncompatibleStr)
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -137,11 +137,11 @@ func (a agentControllerImpl) ListAgents(w http.ResponseWriter, r *http.Request) 
 
 	result, err := a.agentRegistrationService.ListAgents(onlyActive, showIncompatible)
 	if err != nil {
-		RespondWithError(w, "Failed to list agents", err)
+		utils.RespondWithError(w, "Failed to list agents", err)
 		return
 	}
 
-	RespondWithJson(w, http.StatusOK, result)
+	utils.RespondWithJson(w, http.StatusOK, result)
 }
 
 func (a agentControllerImpl) GetAgent(w http.ResponseWriter, r *http.Request) {
@@ -149,7 +149,7 @@ func (a agentControllerImpl) GetAgent(w http.ResponseWriter, r *http.Request) {
 
 	agent, err := a.agentRegistrationService.GetAgent(agentId)
 	if err != nil {
-		RespondWithError(w, "Failed to get agent", err)
+		utils.RespondWithError(w, "Failed to get agent", err)
 		return
 	}
 	if agent == nil {
@@ -157,7 +157,7 @@ func (a agentControllerImpl) GetAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	RespondWithJson(w, http.StatusOK, agent)
+	utils.RespondWithJson(w, http.StatusOK, agent)
 }
 
 func (a agentControllerImpl) GetAgentNamespaces(w http.ResponseWriter, r *http.Request) {
@@ -165,11 +165,11 @@ func (a agentControllerImpl) GetAgentNamespaces(w http.ResponseWriter, r *http.R
 
 	agent, err := a.agentRegistrationService.GetAgent(agentId)
 	if err != nil {
-		RespondWithError(w, "Failed to get agent namespaces", err)
+		utils.RespondWithError(w, "Failed to get agent namespaces", err)
 		return
 	}
 	if agent == nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusNotFound,
 			Code:    exception.AgentNotFound,
 			Message: exception.AgentNotFoundMsg,
@@ -178,7 +178,7 @@ func (a agentControllerImpl) GetAgentNamespaces(w http.ResponseWriter, r *http.R
 		return
 	}
 	if agent.Status != view.AgentStatusActive {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusFailedDependency,
 			Code:    exception.InactiveAgent,
 			Message: exception.InactiveAgentMsg,
@@ -186,7 +186,7 @@ func (a agentControllerImpl) GetAgentNamespaces(w http.ResponseWriter, r *http.R
 		return
 	}
 	if agent.AgentVersion == "" {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusFailedDependency,
 			Code:    exception.IncompatibleAgentVersion,
 			Message: exception.IncompatibleAgentVersionMsg,
@@ -195,7 +195,7 @@ func (a agentControllerImpl) GetAgentNamespaces(w http.ResponseWriter, r *http.R
 		return
 	}
 	if agent.CompatibilityError != nil && agent.CompatibilityError.Severity == view.SeverityError {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusFailedDependency,
 			Message: agent.CompatibilityError.Message,
 		})
@@ -203,10 +203,10 @@ func (a agentControllerImpl) GetAgentNamespaces(w http.ResponseWriter, r *http.R
 	}
 	agentNamespaces, err := a.agentClient.GetNamespaces(context.Create(r), agent.AgentUrl)
 	if err != nil {
-		RespondWithError(w, "Failed to get agent namespaces", err)
+		utils.RespondWithError(w, "Failed to get agent namespaces", err)
 		return
 	}
-	RespondWithJson(w, http.StatusOK, agentNamespaces)
+	utils.RespondWithJson(w, http.StatusOK, agentNamespaces)
 }
 
 func (a agentControllerImpl) ListServiceNames(w http.ResponseWriter, r *http.Request) {
@@ -215,11 +215,11 @@ func (a agentControllerImpl) ListServiceNames(w http.ResponseWriter, r *http.Req
 
 	agent, err := a.agentRegistrationService.GetAgent(agentId)
 	if err != nil {
-		RespondWithError(w, "Failed to get agent namespaces", err)
+		utils.RespondWithError(w, "Failed to get agent namespaces", err)
 		return
 	}
 	if agent == nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusNotFound,
 			Code:    exception.AgentNotFound,
 			Message: exception.AgentNotFoundMsg,
@@ -228,7 +228,7 @@ func (a agentControllerImpl) ListServiceNames(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if agent.Status != view.AgentStatusActive {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusFailedDependency,
 			Code:    exception.InactiveAgent,
 			Message: exception.InactiveAgentMsg,
@@ -236,7 +236,7 @@ func (a agentControllerImpl) ListServiceNames(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if agent.AgentVersion == "" {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusFailedDependency,
 			Code:    exception.IncompatibleAgentVersion,
 			Message: exception.IncompatibleAgentVersionMsg,
@@ -245,7 +245,7 @@ func (a agentControllerImpl) ListServiceNames(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if agent.CompatibilityError != nil && agent.CompatibilityError.Severity == view.SeverityError {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusFailedDependency,
 			Message: agent.CompatibilityError.Message,
 		})
@@ -254,10 +254,10 @@ func (a agentControllerImpl) ListServiceNames(w http.ResponseWriter, r *http.Req
 
 	serviceNames, err := a.agentClient.ListServiceNames(context.Create(r), agent.AgentUrl, namespace)
 	if err != nil {
-		RespondWithError(w, "Failed to get service names", err)
+		utils.RespondWithError(w, "Failed to get service names", err)
 		return
 	}
-	RespondWithJson(w, http.StatusOK, serviceNames)
+	utils.RespondWithJson(w, http.StatusOK, serviceNames)
 }
 
 func copyHeader(dst, src http.Header) {
