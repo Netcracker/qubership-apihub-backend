@@ -257,6 +257,8 @@ paths:
       description: |
         Performs authentication in APIHUB via the local Identity Provider.
 
+        **Note: This endpoint is not available in production mode.**
+
         In case of successful authentication, the response will contain an access token cookie and a refresh token cookie for future API calls.
         All subsequent APIHUB calls must use the access token cookie in **CookieAuth**.
 
