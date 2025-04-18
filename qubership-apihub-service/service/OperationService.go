@@ -34,6 +34,7 @@ type OperationService interface {
 	GetOperationChanges(packageId string, version string, operationId string, previousPackageId string, previousVersion string, severities []string) (*view.OperationChangesView, error)
 	GetOperationChanges_deprecated_2(packageId string, version string, operationId string, previousPackageId string, previousVersion string, severities []string) (*view.OperationChangesView, error)
 	GetVersionChanges_deprecated(packageId string, version string, apiType string, searchReq view.VersionChangesReq) (*view.VersionChangesView, error)
+	GetVersionChanges_deprecated_2(packageId string, version string, apiType string, searchReq view.VersionChangesReq) (*view.VersionChangesView, error)
 	GetVersionChanges(packageId string, version string, apiType string, searchReq view.VersionChangesReq) (*view.VersionChangesView, error)
 	SearchForOperations_deprecated(searchReq view.SearchQueryReq) (*view.SearchResult_deprecated, error)
 	SearchForOperations(searchReq view.SearchQueryReq) (*view.SearchResult, error)
@@ -635,6 +636,122 @@ func (o operationServiceImpl) GetVersionChanges_deprecated(packageId string, ver
 	packageVersions := make(map[string][]string, 0)
 	for _, changelogOperationEnt := range changelogOperationEnts {
 		operationComparisons = append(operationComparisons, entity.MakeOperationComparisonChangelogView_deprecated(changelogOperationEnt))
+		if packageRefKey := view.MakePackageRefKey(changelogOperationEnt.PackageId, changelogOperationEnt.Version, changelogOperationEnt.Revision); packageRefKey != "" {
+			packageVersions[changelogOperationEnt.PackageId] = append(packageVersions[changelogOperationEnt.PackageId], view.MakeVersionRefKey(changelogOperationEnt.Version, changelogOperationEnt.Revision))
+		}
+		if previousPackageRefKey := view.MakePackageRefKey(changelogOperationEnt.PreviousPackageId, changelogOperationEnt.PreviousVersion, changelogOperationEnt.PreviousRevision); previousPackageRefKey != "" {
+			packageVersions[changelogOperationEnt.PreviousPackageId] = append(packageVersions[changelogOperationEnt.PreviousPackageId], view.MakeVersionRefKey(changelogOperationEnt.PreviousVersion, changelogOperationEnt.PreviousRevision))
+		}
+	}
+	packagesRefs, err := o.packageVersionEnrichmentService.GetPackageVersionRefsMap(packageVersions)
+	if err != nil {
+		return nil, err
+	}
+	changelog := &view.VersionChangesView{
+		PreviousVersion:          view.MakeVersionRefKey(previousVersionEnt.Version, previousVersionEnt.Revision),
+		PreviousVersionPackageId: previousVersionEnt.PackageId,
+		Operations:               operationComparisons,
+		Packages:                 packagesRefs,
+	}
+	return changelog, nil
+}
+
+func (o operationServiceImpl) GetVersionChanges_deprecated_2(packageId string, version string, apiType string, searchReq view.VersionChangesReq) (*view.VersionChangesView, error) {
+	versionEnt, err := o.publishedRepo.GetVersion(packageId, version)
+	if err != nil {
+		return nil, err
+	}
+	if versionEnt == nil {
+		return nil, &exception.CustomError{
+			Status:  http.StatusNotFound,
+			Code:    exception.PublishedPackageVersionNotFound,
+			Message: exception.PublishedPackageVersionNotFoundMsg,
+			Params:  map[string]interface{}{"version": version, "packageId": packageId},
+		}
+	}
+
+	if searchReq.PreviousVersion == "" || searchReq.PreviousVersionPackageId == "" {
+		if versionEnt.PreviousVersion == "" {
+			return nil, &exception.CustomError{
+				Status:  http.StatusNotFound,
+				Code:    exception.NoPreviousVersion,
+				Message: exception.NoPreviousVersionMsg,
+				Params:  map[string]interface{}{"version": version},
+			}
+		}
+		searchReq.PreviousVersion = versionEnt.PreviousVersion
+		if versionEnt.PreviousVersionPackageId != "" {
+			searchReq.PreviousVersionPackageId = versionEnt.PreviousVersionPackageId
+		} else {
+			searchReq.PreviousVersionPackageId = packageId
+		}
+	}
+	previousVersionEnt, err := o.publishedRepo.GetVersion(searchReq.PreviousVersionPackageId, searchReq.PreviousVersion)
+	if err != nil {
+		return nil, err
+	}
+	if previousVersionEnt == nil {
+		return nil, &exception.CustomError{
+			Status:  http.StatusNotFound,
+			Code:    exception.PublishedPackageVersionNotFound,
+			Message: exception.PublishedPackageVersionNotFoundMsg,
+			Params:  map[string]interface{}{"version": searchReq.PreviousVersion, "packageId": searchReq.PreviousVersionPackageId},
+		}
+	}
+
+	comparisonId := view.MakeVersionComparisonId(
+		versionEnt.PackageId, versionEnt.Version, versionEnt.Revision,
+		previousVersionEnt.PackageId, previousVersionEnt.Version, previousVersionEnt.Revision,
+	)
+
+	versionComparison, err := o.publishedRepo.GetVersionComparison(comparisonId)
+	if err != nil {
+		return nil, err
+	}
+	if versionComparison == nil || versionComparison.NoContent {
+		return nil, &exception.CustomError{
+			Status:  http.StatusNotFound,
+			Code:    exception.ComparisonNotFound,
+			Message: exception.ComparisonNotFoundMsg,
+			Params: map[string]interface{}{
+				"comparisonId":      comparisonId,
+				"packageId":         versionEnt.PackageId,
+				"version":           versionEnt.Version,
+				"revision":          versionEnt.Revision,
+				"previousPackageId": previousVersionEnt.PackageId,
+				"previousVersion":   previousVersionEnt.Version,
+				"previousRevision":  previousVersionEnt.Revision,
+			},
+		}
+	}
+	searchQuery := entity.ChangelogSearchQueryEntity{
+		ComparisonId:   comparisonId,
+		ApiType:        apiType,
+		ApiKind:        searchReq.ApiKind,
+		TextFilter:     searchReq.TextFilter,
+		DocumentSlug:   searchReq.DocumentSlug,
+		Tags:           searchReq.Tags,
+		EmptyTag:       searchReq.EmptyTag,
+		RefPackageId:   searchReq.RefPackageId,
+		Limit:          searchReq.Limit,
+		Offset:         searchReq.Offset,
+		EmptyGroup:     searchReq.EmptyGroup,
+		Group:          searchReq.Group,
+		GroupPackageId: versionEnt.PackageId,
+		GroupVersion:   versionEnt.Version,
+		GroupRevision:  versionEnt.Revision,
+		Severities:     searchReq.Severities,
+		ApiAudience:    searchReq.ApiAudience,
+	}
+	operationComparisons := make([]interface{}, 0)
+	changelogOperationEnts, err := o.operationRepository.GetChangelog(searchQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	packageVersions := make(map[string][]string, 0)
+	for _, changelogOperationEnt := range changelogOperationEnts {
+		operationComparisons = append(operationComparisons, entity.MakeOperationComparisonChangelogView_deprecated_2(changelogOperationEnt))
 		if packageRefKey := view.MakePackageRefKey(changelogOperationEnt.PackageId, changelogOperationEnt.Version, changelogOperationEnt.Revision); packageRefKey != "" {
 			packageVersions[changelogOperationEnt.PackageId] = append(packageVersions[changelogOperationEnt.PackageId], view.MakeVersionRefKey(changelogOperationEnt.Version, changelogOperationEnt.Revision))
 		}

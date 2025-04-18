@@ -665,7 +665,8 @@ func (o operationRepositoryImpl) GetChangelog(searchQuery entity.ChangelogSearch
 		ColumnExpr("curr_op.kind kind").
 		ColumnExpr("prev_op.kind previous_kind").
 		ColumnExpr("curr_op.api_audience api_audience").
-		ColumnExpr("prev_op.api_audience previous_api_audience")
+		ColumnExpr("prev_op.api_audience previous_api_audience").
+		ColumnExpr("prev_op.metadata previous_metadata")
 
 	query.Join("left join operation curr_op").
 		JoinOn("curr_op.package_id = operation_comparison.package_id").

@@ -283,7 +283,8 @@ type OperationComparisonChangelogView_deprecated struct {
 	PreviousVersionPackageRef string        `json:"previousVersionPackageRef"`
 }
 
-type ComparisonOperationView struct {
+type GenericComparisonOperationView struct {
+	OperationId string `json:"operationId"`
 	Title       string `json:"title"`
 	ApiKind     string `json:"apiKind,omitempty"`
 	ApiAudience string `json:"apiAudience"`
@@ -291,11 +292,19 @@ type ComparisonOperationView struct {
 	PackageRef  string `json:"packageRef"`
 }
 
-type OperationComparisonChangelogView struct {
-	OperationId       string                   `json:"operationId"`
-	CurrentOperation  *ComparisonOperationView `json:"currentOperation,omitempty"`
-	PreviousOperation *ComparisonOperationView `json:"previousOperation,omitempty"`
-	ChangeSummary     ChangeSummary            `json:"changeSummary"`
+type ComparisonOperationView_deprecated struct {
+	Title       string `json:"title"`
+	ApiKind     string `json:"apiKind,omitempty"`
+	ApiAudience string `json:"apiAudience"`
+	DataHash    string `json:"dataHash,omitempty"`
+	PackageRef  string `json:"packageRef"`
+}
+
+type OperationComparisonChangelogView_deprecated_2 struct {
+	OperationId       string                              `json:"operationId"`
+	CurrentOperation  *ComparisonOperationView_deprecated `json:"currentOperation,omitempty"`
+	PreviousOperation *ComparisonOperationView_deprecated `json:"previousOperation,omitempty"`
+	ChangeSummary     ChangeSummary                       `json:"changeSummary"`
 }
 
 type OperationComparisonChangesView struct {
