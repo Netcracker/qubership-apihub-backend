@@ -15,6 +15,7 @@
 package controller
 
 import (
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -70,7 +71,7 @@ func (o operationControllerImpl) GetOperationList(w http.ResponseWriter, r *http
 		return
 	}
 	if !sufficientPrivileges {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -79,7 +80,7 @@ func (o operationControllerImpl) GetOperationList(w http.ResponseWriter, r *http
 	}
 	versionName, err := getUnescapedStringParam(r, "version")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -91,7 +92,7 @@ func (o operationControllerImpl) GetOperationList(w http.ResponseWriter, r *http
 
 	apiType, err := getUnescapedStringParam(r, "apiType")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -103,7 +104,7 @@ func (o operationControllerImpl) GetOperationList(w http.ResponseWriter, r *http
 
 	textFilter, err := url.QueryUnescape(r.URL.Query().Get("textFilter"))
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -115,7 +116,7 @@ func (o operationControllerImpl) GetOperationList(w http.ResponseWriter, r *http
 
 	kind, err := url.QueryUnescape(r.URL.Query().Get("kind"))
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -129,7 +130,7 @@ func (o operationControllerImpl) GetOperationList(w http.ResponseWriter, r *http
 		apiAudience = ""
 	}
 	if apiAudience != "" && !view.ValidApiAudience(apiAudience) {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidParameterValue,
 			Message: exception.InvalidParameterValueMsg,
@@ -140,7 +141,7 @@ func (o operationControllerImpl) GetOperationList(w http.ResponseWriter, r *http
 
 	tag, err := url.QueryUnescape(r.URL.Query().Get("tag"))
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -152,7 +153,7 @@ func (o operationControllerImpl) GetOperationList(w http.ResponseWriter, r *http
 
 	limit, customError := getLimitQueryParamWithExtendedMax(r)
 	if customError != nil {
-		RespondWithCustomError(w, customError)
+		utils.RespondWithCustomError(w, customError)
 		return
 	}
 
@@ -160,7 +161,7 @@ func (o operationControllerImpl) GetOperationList(w http.ResponseWriter, r *http
 	if r.URL.Query().Get("page") != "" {
 		page, err = strconv.Atoi(r.URL.Query().Get("page"))
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -182,7 +183,7 @@ func (o operationControllerImpl) GetOperationList(w http.ResponseWriter, r *http
 
 	hashList, err := getListFromParam(r, "hashList")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -194,7 +195,7 @@ func (o operationControllerImpl) GetOperationList(w http.ResponseWriter, r *http
 
 	ids, err := getListFromParam(r, "ids")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -208,7 +209,7 @@ func (o operationControllerImpl) GetOperationList(w http.ResponseWriter, r *http
 	if r.URL.Query().Get("includeData") != "" {
 		includeData, err = strconv.ParseBool(r.URL.Query().Get("includeData"))
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -223,7 +224,7 @@ func (o operationControllerImpl) GetOperationList(w http.ResponseWriter, r *http
 	if r.URL.Query().Get("emptyTag") != "" {
 		emptyTag, err = strconv.ParseBool(r.URL.Query().Get("emptyTag"))
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -242,7 +243,7 @@ func (o operationControllerImpl) GetOperationList(w http.ResponseWriter, r *http
 	if r.URL.Query().Get("skipRefs") != "" {
 		skipRefs, err = strconv.ParseBool(r.URL.Query().Get("skipRefs"))
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -255,7 +256,7 @@ func (o operationControllerImpl) GetOperationList(w http.ResponseWriter, r *http
 
 	documentSlug, err := url.QueryUnescape(r.URL.Query().Get("documentSlug"))
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -269,7 +270,7 @@ func (o operationControllerImpl) GetOperationList(w http.ResponseWriter, r *http
 	if r.URL.Query().Get("emptyGroup") != "" {
 		emptyGroup, err = strconv.ParseBool(r.URL.Query().Get("emptyGroup"))
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -281,7 +282,7 @@ func (o operationControllerImpl) GetOperationList(w http.ResponseWriter, r *http
 	}
 	group := r.URL.Query().Get("group")
 	if emptyGroup && group != "" {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.OverlappingQueryParameter,
 			Message: exception.OverlappingQueryParameterMsg,
@@ -291,7 +292,7 @@ func (o operationControllerImpl) GetOperationList(w http.ResponseWriter, r *http
 	}
 	refPackageId, err := url.QueryUnescape(r.URL.Query().Get("refPackageId"))
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -325,7 +326,7 @@ func (o operationControllerImpl) GetOperationList(w http.ResponseWriter, r *http
 		handlePkgRedirectOrRespondWithError(w, r, o.ptHandler, packageId, "Failed to get operations", err)
 		return
 	}
-	RespondWithJson(w, http.StatusOK, operations)
+	utils.RespondWithJson(w, http.StatusOK, operations)
 }
 
 func (o operationControllerImpl) GetOperation(w http.ResponseWriter, r *http.Request) {
@@ -337,7 +338,7 @@ func (o operationControllerImpl) GetOperation(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if !sufficientPrivileges {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -346,7 +347,7 @@ func (o operationControllerImpl) GetOperation(w http.ResponseWriter, r *http.Req
 	}
 	versionName, err := getUnescapedStringParam(r, "version")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -357,7 +358,7 @@ func (o operationControllerImpl) GetOperation(w http.ResponseWriter, r *http.Req
 	}
 	apiType, err := getUnescapedStringParam(r, "apiType")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -368,7 +369,7 @@ func (o operationControllerImpl) GetOperation(w http.ResponseWriter, r *http.Req
 	}
 	operationId, err := getUnescapedStringParam(r, "operationId")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -392,7 +393,7 @@ func (o operationControllerImpl) GetOperation(w http.ResponseWriter, r *http.Req
 		handlePkgRedirectOrRespondWithError(w, r, o.ptHandler, packageId, "Failed to get operation", err)
 		return
 	}
-	RespondWithJson(w, http.StatusOK, operation)
+	utils.RespondWithJson(w, http.StatusOK, operation)
 }
 
 func (o operationControllerImpl) GetOperationsTags(w http.ResponseWriter, r *http.Request) {
@@ -404,7 +405,7 @@ func (o operationControllerImpl) GetOperationsTags(w http.ResponseWriter, r *htt
 		return
 	}
 	if !sufficientPrivileges {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -413,7 +414,7 @@ func (o operationControllerImpl) GetOperationsTags(w http.ResponseWriter, r *htt
 	}
 	versionName, err := getUnescapedStringParam(r, "version")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -424,7 +425,7 @@ func (o operationControllerImpl) GetOperationsTags(w http.ResponseWriter, r *htt
 	}
 	apiType, err := getUnescapedStringParam(r, "apiType")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -435,14 +436,14 @@ func (o operationControllerImpl) GetOperationsTags(w http.ResponseWriter, r *htt
 	}
 	limit, customError := getLimitQueryParamWithIncreasedMax(r)
 	if customError != nil {
-		RespondWithCustomError(w, customError)
+		utils.RespondWithCustomError(w, customError)
 		return
 	}
 	page := 0
 	if r.URL.Query().Get("page") != "" {
 		page, err = strconv.Atoi(r.URL.Query().Get("page"))
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -454,7 +455,7 @@ func (o operationControllerImpl) GetOperationsTags(w http.ResponseWriter, r *htt
 	}
 	textFilter, err := url.QueryUnescape(r.URL.Query().Get("textFilter"))
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -465,7 +466,7 @@ func (o operationControllerImpl) GetOperationsTags(w http.ResponseWriter, r *htt
 	}
 	kind, err := url.QueryUnescape(r.URL.Query().Get("kind"))
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -479,7 +480,7 @@ func (o operationControllerImpl) GetOperationsTags(w http.ResponseWriter, r *htt
 		apiAudience = ""
 	}
 	if apiAudience != "" && !view.ValidApiAudience(apiAudience) {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidParameterValue,
 			Message: exception.InvalidParameterValueMsg,
@@ -491,7 +492,7 @@ func (o operationControllerImpl) GetOperationsTags(w http.ResponseWriter, r *htt
 	if r.URL.Query().Get("skipRefs") != "" {
 		skipRefs, err = strconv.ParseBool(r.URL.Query().Get("skipRefs"))
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -518,7 +519,7 @@ func (o operationControllerImpl) GetOperationsTags(w http.ResponseWriter, r *htt
 		handlePkgRedirectOrRespondWithError(w, r, o.ptHandler, packageId, "Failed to get operations tags", err)
 		return
 	}
-	RespondWithJson(w, http.StatusOK, tags)
+	utils.RespondWithJson(w, http.StatusOK, tags)
 }
 
 func (o operationControllerImpl) GetOperationChanges(w http.ResponseWriter, r *http.Request) {
@@ -530,7 +531,7 @@ func (o operationControllerImpl) GetOperationChanges(w http.ResponseWriter, r *h
 		return
 	}
 	if !sufficientPrivileges {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -539,7 +540,7 @@ func (o operationControllerImpl) GetOperationChanges(w http.ResponseWriter, r *h
 	}
 	versionName, err := getUnescapedStringParam(r, "version")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -550,7 +551,7 @@ func (o operationControllerImpl) GetOperationChanges(w http.ResponseWriter, r *h
 	}
 	operationId, err := getUnescapedStringParam(r, "operationId")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -564,7 +565,7 @@ func (o operationControllerImpl) GetOperationChanges(w http.ResponseWriter, r *h
 	previousVersionPackageId := r.URL.Query().Get("previousVersionPackageId")
 	severities, err := getListFromParam(r, "severity")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -575,7 +576,7 @@ func (o operationControllerImpl) GetOperationChanges(w http.ResponseWriter, r *h
 	}
 	for _, severity := range severities {
 		if !view.ValidSeverity(severity) {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.InvalidParameterValue,
 				Message: exception.InvalidParameterValueMsg,
@@ -589,7 +590,7 @@ func (o operationControllerImpl) GetOperationChanges(w http.ResponseWriter, r *h
 		handlePkgRedirectOrRespondWithError(w, r, o.ptHandler, packageId, "Failed to get operation changes", err)
 		return
 	}
-	RespondWithJson(w, http.StatusOK, changes)
+	utils.RespondWithJson(w, http.StatusOK, changes)
 }
 
 func (o operationControllerImpl) GetOperationsChanges_deprecated(w http.ResponseWriter, r *http.Request) {
@@ -601,7 +602,7 @@ func (o operationControllerImpl) GetOperationsChanges_deprecated(w http.Response
 		return
 	}
 	if !sufficientPrivileges {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -610,7 +611,7 @@ func (o operationControllerImpl) GetOperationsChanges_deprecated(w http.Response
 	}
 	versionName, err := getUnescapedStringParam(r, "version")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -621,7 +622,7 @@ func (o operationControllerImpl) GetOperationsChanges_deprecated(w http.Response
 	}
 	apiType, err := getUnescapedStringParam(r, "apiType")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -632,14 +633,14 @@ func (o operationControllerImpl) GetOperationsChanges_deprecated(w http.Response
 	}
 	limit, customError := getLimitQueryParam(r)
 	if customError != nil {
-		RespondWithCustomError(w, customError)
+		utils.RespondWithCustomError(w, customError)
 		return
 	}
 	page := 0
 	if r.URL.Query().Get("page") != "" {
 		page, err = strconv.Atoi(r.URL.Query().Get("page"))
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -651,7 +652,7 @@ func (o operationControllerImpl) GetOperationsChanges_deprecated(w http.Response
 	}
 	textFilter, err := url.QueryUnescape(r.URL.Query().Get("textFilter"))
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -671,7 +672,7 @@ func (o operationControllerImpl) GetOperationsChanges_deprecated(w http.Response
 	if emptyTagStr != "" {
 		emptyTag, err = strconv.ParseBool(emptyTagStr)
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -685,7 +686,7 @@ func (o operationControllerImpl) GetOperationsChanges_deprecated(w http.Response
 	if !emptyTag {
 		tags, err = getListFromParam(r, "tag")
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.InvalidURLEscape,
 				Message: exception.InvalidURLEscapeMsg,
@@ -699,7 +700,7 @@ func (o operationControllerImpl) GetOperationsChanges_deprecated(w http.Response
 	if r.URL.Query().Get("emptyGroup") != "" {
 		emptyGroup, err = strconv.ParseBool(r.URL.Query().Get("emptyGroup"))
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -711,7 +712,7 @@ func (o operationControllerImpl) GetOperationsChanges_deprecated(w http.Response
 	}
 	group := r.URL.Query().Get("group")
 	if emptyGroup && group != "" {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.OverlappingQueryParameter,
 			Message: exception.OverlappingQueryParameterMsg,
@@ -723,7 +724,7 @@ func (o operationControllerImpl) GetOperationsChanges_deprecated(w http.Response
 	severities := make([]string, 0)
 	severities, err = getListFromParam(r, "severity")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -735,7 +736,7 @@ func (o operationControllerImpl) GetOperationsChanges_deprecated(w http.Response
 	if len(severities) > 0 {
 		for _, severity := range severities {
 			if !view.ValidSeverity(severity) {
-				RespondWithCustomError(w, &exception.CustomError{
+				utils.RespondWithCustomError(w, &exception.CustomError{
 					Status:  http.StatusBadRequest,
 					Code:    exception.InvalidParameterValue,
 					Message: exception.InvalidParameterValueMsg,
@@ -767,7 +768,7 @@ func (o operationControllerImpl) GetOperationsChanges_deprecated(w http.Response
 		handlePkgRedirectOrRespondWithError(w, r, o.ptHandler, packageId, "Failed to get operations changelog", err)
 		return
 	}
-	RespondWithJson(w, http.StatusOK, changelog)
+	utils.RespondWithJson(w, http.StatusOK, changelog)
 }
 
 func (o operationControllerImpl) GetOperationsChanges(w http.ResponseWriter, r *http.Request) {
@@ -779,7 +780,7 @@ func (o operationControllerImpl) GetOperationsChanges(w http.ResponseWriter, r *
 		return
 	}
 	if !sufficientPrivileges {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -788,7 +789,7 @@ func (o operationControllerImpl) GetOperationsChanges(w http.ResponseWriter, r *
 	}
 	versionName, err := getUnescapedStringParam(r, "version")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -799,7 +800,7 @@ func (o operationControllerImpl) GetOperationsChanges(w http.ResponseWriter, r *
 	}
 	apiType, err := getUnescapedStringParam(r, "apiType")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -810,14 +811,14 @@ func (o operationControllerImpl) GetOperationsChanges(w http.ResponseWriter, r *
 	}
 	limit, customError := getLimitQueryParam(r)
 	if customError != nil {
-		RespondWithCustomError(w, customError)
+		utils.RespondWithCustomError(w, customError)
 		return
 	}
 	page := 0
 	if r.URL.Query().Get("page") != "" {
 		page, err = strconv.Atoi(r.URL.Query().Get("page"))
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -829,7 +830,7 @@ func (o operationControllerImpl) GetOperationsChanges(w http.ResponseWriter, r *
 	}
 	textFilter, err := url.QueryUnescape(r.URL.Query().Get("textFilter"))
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -844,7 +845,7 @@ func (o operationControllerImpl) GetOperationsChanges(w http.ResponseWriter, r *
 		apiAudience = ""
 	}
 	if apiAudience != "" && !view.ValidApiAudience(apiAudience) {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidParameterValue,
 			Message: exception.InvalidParameterValueMsg,
@@ -862,7 +863,7 @@ func (o operationControllerImpl) GetOperationsChanges(w http.ResponseWriter, r *
 	if emptyTagStr != "" {
 		emptyTag, err = strconv.ParseBool(emptyTagStr)
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -876,7 +877,7 @@ func (o operationControllerImpl) GetOperationsChanges(w http.ResponseWriter, r *
 	if !emptyTag {
 		tags, err = getListFromParam(r, "tag")
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.InvalidURLEscape,
 				Message: exception.InvalidURLEscapeMsg,
@@ -890,7 +891,7 @@ func (o operationControllerImpl) GetOperationsChanges(w http.ResponseWriter, r *
 	if r.URL.Query().Get("emptyGroup") != "" {
 		emptyGroup, err = strconv.ParseBool(r.URL.Query().Get("emptyGroup"))
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -902,7 +903,7 @@ func (o operationControllerImpl) GetOperationsChanges(w http.ResponseWriter, r *
 	}
 	group := r.URL.Query().Get("group")
 	if emptyGroup && group != "" {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.OverlappingQueryParameter,
 			Message: exception.OverlappingQueryParameterMsg,
@@ -914,7 +915,7 @@ func (o operationControllerImpl) GetOperationsChanges(w http.ResponseWriter, r *
 	severities := make([]string, 0)
 	severities, err = getListFromParam(r, "severity")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -926,7 +927,7 @@ func (o operationControllerImpl) GetOperationsChanges(w http.ResponseWriter, r *
 	if len(severities) > 0 {
 		for _, severity := range severities {
 			if !view.ValidSeverity(severity) {
-				RespondWithCustomError(w, &exception.CustomError{
+				utils.RespondWithCustomError(w, &exception.CustomError{
 					Status:  http.StatusBadRequest,
 					Code:    exception.InvalidParameterValue,
 					Message: exception.InvalidParameterValueMsg,
@@ -959,7 +960,7 @@ func (o operationControllerImpl) GetOperationsChanges(w http.ResponseWriter, r *
 		handlePkgRedirectOrRespondWithError(w, r, o.ptHandler, packageId, "Failed to get operations changelog", err)
 		return
 	}
-	RespondWithJson(w, http.StatusOK, changelog)
+	utils.RespondWithJson(w, http.StatusOK, changelog)
 }
 
 func (o operationControllerImpl) GetDeprecatedOperationsList(w http.ResponseWriter, r *http.Request) {
@@ -971,7 +972,7 @@ func (o operationControllerImpl) GetDeprecatedOperationsList(w http.ResponseWrit
 		return
 	}
 	if !sufficientPrivileges {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -980,7 +981,7 @@ func (o operationControllerImpl) GetDeprecatedOperationsList(w http.ResponseWrit
 	}
 	versionName, err := getUnescapedStringParam(r, "version")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -992,7 +993,7 @@ func (o operationControllerImpl) GetDeprecatedOperationsList(w http.ResponseWrit
 
 	apiType, err := getUnescapedStringParam(r, "apiType")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -1004,7 +1005,7 @@ func (o operationControllerImpl) GetDeprecatedOperationsList(w http.ResponseWrit
 
 	textFilter, err := url.QueryUnescape(r.URL.Query().Get("textFilter"))
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -1016,7 +1017,7 @@ func (o operationControllerImpl) GetDeprecatedOperationsList(w http.ResponseWrit
 
 	kind, err := url.QueryUnescape(r.URL.Query().Get("apiKind"))
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -1030,7 +1031,7 @@ func (o operationControllerImpl) GetDeprecatedOperationsList(w http.ResponseWrit
 		apiAudience = ""
 	}
 	if apiAudience != "" && !view.ValidApiAudience(apiAudience) {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidParameterValue,
 			Message: exception.InvalidParameterValueMsg,
@@ -1042,7 +1043,7 @@ func (o operationControllerImpl) GetDeprecatedOperationsList(w http.ResponseWrit
 	tags := make([]string, 0)
 	tags, err = getListFromParam(r, "tag")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -1054,7 +1055,7 @@ func (o operationControllerImpl) GetDeprecatedOperationsList(w http.ResponseWrit
 
 	limit, customError := getLimitQueryParam(r)
 	if customError != nil {
-		RespondWithCustomError(w, customError)
+		utils.RespondWithCustomError(w, customError)
 		return
 	}
 
@@ -1062,7 +1063,7 @@ func (o operationControllerImpl) GetDeprecatedOperationsList(w http.ResponseWrit
 	if r.URL.Query().Get("page") != "" {
 		page, err = strconv.Atoi(r.URL.Query().Get("page"))
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -1075,7 +1076,7 @@ func (o operationControllerImpl) GetDeprecatedOperationsList(w http.ResponseWrit
 
 	ids, err := getListFromParam(r, "ids")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -1089,7 +1090,7 @@ func (o operationControllerImpl) GetDeprecatedOperationsList(w http.ResponseWrit
 	if r.URL.Query().Get("includeDeprecatedItems") != "" {
 		includeDeprecatedItems, err = strconv.ParseBool(r.URL.Query().Get("includeDeprecatedItems"))
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -1102,7 +1103,7 @@ func (o operationControllerImpl) GetDeprecatedOperationsList(w http.ResponseWrit
 
 	documentSlug, err := url.QueryUnescape(r.URL.Query().Get("documentSlug"))
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -1114,7 +1115,7 @@ func (o operationControllerImpl) GetDeprecatedOperationsList(w http.ResponseWrit
 
 	refPackageId, err := url.QueryUnescape(r.URL.Query().Get("refPackageId"))
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -1128,7 +1129,7 @@ func (o operationControllerImpl) GetDeprecatedOperationsList(w http.ResponseWrit
 	if r.URL.Query().Get("emptyTag") != "" {
 		emptyTag, err = strconv.ParseBool(r.URL.Query().Get("emptyTag"))
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -1142,7 +1143,7 @@ func (o operationControllerImpl) GetDeprecatedOperationsList(w http.ResponseWrit
 	if r.URL.Query().Get("emptyGroup") != "" {
 		emptyGroup, err = strconv.ParseBool(r.URL.Query().Get("emptyGroup"))
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -1154,7 +1155,7 @@ func (o operationControllerImpl) GetDeprecatedOperationsList(w http.ResponseWrit
 	}
 	group := r.URL.Query().Get("group")
 	if emptyGroup && group != "" {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.OverlappingQueryParameter,
 			Message: exception.OverlappingQueryParameterMsg,
@@ -1187,7 +1188,7 @@ func (o operationControllerImpl) GetDeprecatedOperationsList(w http.ResponseWrit
 		handlePkgRedirectOrRespondWithError(w, r, o.ptHandler, packageId, "Failed to get operations", err)
 		return
 	}
-	RespondWithJson(w, http.StatusOK, operations)
+	utils.RespondWithJson(w, http.StatusOK, operations)
 }
 
 func (o operationControllerImpl) GetOperationDeprecatedItems(w http.ResponseWriter, r *http.Request) {
@@ -1199,7 +1200,7 @@ func (o operationControllerImpl) GetOperationDeprecatedItems(w http.ResponseWrit
 		return
 	}
 	if !sufficientPrivileges {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -1208,7 +1209,7 @@ func (o operationControllerImpl) GetOperationDeprecatedItems(w http.ResponseWrit
 	}
 	versionName, err := getUnescapedStringParam(r, "version")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -1220,7 +1221,7 @@ func (o operationControllerImpl) GetOperationDeprecatedItems(w http.ResponseWrit
 
 	apiType, err := getUnescapedStringParam(r, "apiType")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -1231,7 +1232,7 @@ func (o operationControllerImpl) GetOperationDeprecatedItems(w http.ResponseWrit
 	}
 	operationId, err := getUnescapedStringParam(r, "operationId")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -1255,7 +1256,7 @@ func (o operationControllerImpl) GetOperationDeprecatedItems(w http.ResponseWrit
 		handlePkgRedirectOrRespondWithError(w, r, o.ptHandler, packageId, "Failed to get operation deprecated items", err)
 		return
 	}
-	RespondWithJson(w, http.StatusOK, operationDeprecatedItems)
+	utils.RespondWithJson(w, http.StatusOK, operationDeprecatedItems)
 }
 
 func (o operationControllerImpl) GetDeprecatedOperationsSummary(w http.ResponseWriter, r *http.Request) {
@@ -1267,7 +1268,7 @@ func (o operationControllerImpl) GetDeprecatedOperationsSummary(w http.ResponseW
 		return
 	}
 	if !sufficientPrivileges {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -1276,7 +1277,7 @@ func (o operationControllerImpl) GetDeprecatedOperationsSummary(w http.ResponseW
 	}
 	versionName, err := getUnescapedStringParam(r, "version")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -1290,7 +1291,7 @@ func (o operationControllerImpl) GetDeprecatedOperationsSummary(w http.ResponseW
 		handlePkgRedirectOrRespondWithError(w, r, o.ptHandler, packageId, "Failed to get operation deprecated summary", err)
 		return
 	}
-	RespondWithJson(w, http.StatusOK, deprecatedOperationsSummary)
+	utils.RespondWithJson(w, http.StatusOK, deprecatedOperationsSummary)
 
 }
 
@@ -1303,7 +1304,7 @@ func (o operationControllerImpl) GetOperationModelUsages(w http.ResponseWriter, 
 		return
 	}
 	if !sufficientPrivileges {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -1312,7 +1313,7 @@ func (o operationControllerImpl) GetOperationModelUsages(w http.ResponseWriter, 
 	}
 	version, err := getUnescapedStringParam(r, "version")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -1323,7 +1324,7 @@ func (o operationControllerImpl) GetOperationModelUsages(w http.ResponseWriter, 
 	}
 	apiType, err := getUnescapedStringParam(r, "apiType")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -1334,7 +1335,7 @@ func (o operationControllerImpl) GetOperationModelUsages(w http.ResponseWriter, 
 	}
 	operationId, err := getUnescapedStringParam(r, "operationId")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -1345,7 +1346,7 @@ func (o operationControllerImpl) GetOperationModelUsages(w http.ResponseWriter, 
 	}
 	modelName, err := getUnescapedStringParam(r, "modelName")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -1359,5 +1360,5 @@ func (o operationControllerImpl) GetOperationModelUsages(w http.ResponseWriter, 
 		handlePkgRedirectOrRespondWithError(w, r, o.ptHandler, packageId, "Failed to get operation model usages", err)
 		return
 	}
-	RespondWithJson(w, http.StatusOK, modelUsages)
+	utils.RespondWithJson(w, http.StatusOK, modelUsages)
 }

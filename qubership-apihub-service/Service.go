@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
 	"io"
 	"net/http"
 	_ "net/http/pprof"
@@ -245,7 +246,7 @@ func main() {
 	}
 	privateUserPackageService := service.NewPrivateUserPackageService(publishedRepository, usersRepository, roleRepository, favoritesRepository)
 	integrationsService := service.NewIntegrationsService(gitIntegrationRepository, gitClientProvider)
-	userService := service.NewUserService(usersRepository, gitClientProvider, systemInfoService, privateUserPackageService)
+	userService := service.NewUserService(usersRepository, gitClientProvider, systemInfoService, privateUserPackageService, integrationsService)
 
 	projectService := service.NewProjectService(gitClientProvider, projectRepository, favoritesRepository, publishedRepository)
 	groupService := service.NewGroupService(projectRepository, projectService, favoritesRepository, publishedRepository, usersRepository)
@@ -311,6 +312,14 @@ func main() {
 	personalAccessTokenService := service.NewPersonalAccessTokenService(personalAccessTokenRepository, userService, roleService)
 	packageExportConfigService := service.NewPackageExportConfigService(packageExportConfigRepository, packageService)
 
+	tokenRevocationService := service.NewTokenRevocationService(olricProvider, systemInfoService.GetRefreshTokenDurationSec())
+
+	idpManager, err := idp.NewIDPManager(systemInfoService.GetAuthConfig())
+	if err != nil {
+		log.Error("Failed to initialize external IDP: " + err.Error())
+		panic("Failed to initialize external IDP: " + err.Error())
+	}
+
 	integrationsController := controller.NewIntegrationsController(integrationsService)
 	projectController := controller.NewProjectController(projectService, groupService, searchService)
 	branchController := controller.NewBranchController(branchService, commitService, projectFilesService, searchService, publishedService, branchEditorsService, wsBranchService)
@@ -337,10 +346,12 @@ func main() {
 	packageController := controller.NewPackageController(packageService, publishedService, portalService, searchService, roleService, monitoringService, ptHandler)
 	versionController := controller.NewVersionController(versionService, roleService, monitoringService, ptHandler, roleService.IsSysadm)
 	roleController := controller.NewRoleController(roleService)
-	samlAuthController := security.NewSamlAuthController(userService, systemInfoService)
+	samlAuthController := controller.NewSamlAuthController(userService, systemInfoService, idpManager) //deprecated
+	authController := controller.NewAuthController(userService, systemInfoService, idpManager)
 	userController := controller.NewUserController(userService, privateUserPackageService, roleService.IsSysadm)
-	jwtPubKeyController := security.NewJwtPubKeyController()
-	oauthController := security.NewOauth20Controller(integrationsService, userService, systemInfoService)
+	jwtPubKeyController := controller.NewJwtPubKeyController()
+	oauthController := controller.NewOauth20Controller(integrationsService, userService, systemInfoService)
+	logoutController := controller.NewLogoutController(tokenRevocationService)
 	operationController := controller.NewOperationController(roleService, operationService, buildService, monitoringService, ptHandler)
 	operationGroupController := controller.NewOperationGroupController(roleService, operationGroupService, versionService)
 	searchController := controller.NewSearchController(operationService, versionService, monitoringService)
@@ -494,10 +505,15 @@ func main() {
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/doc", security.Secure(exportController.GenerateVersionDoc)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/files/{slug}/doc", security.Secure(exportController.GenerateFileDoc)).Methods(http.MethodGet)
 
-	r.HandleFunc("/api/v2/auth/saml", security.NoSecure(samlAuthController.StartSamlAuthentication)).Methods(http.MethodGet) // deprecated.
-	r.HandleFunc("/login/sso/saml", security.NoSecure(samlAuthController.StartSamlAuthentication)).Methods(http.MethodGet)
-	r.HandleFunc("/saml/acs", security.NoSecure(samlAuthController.AssertionConsumerHandler)).Methods(http.MethodPost)
-	r.HandleFunc("/saml/metadata", security.NoSecure(samlAuthController.ServeMetadata)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/auth/saml", security.NoSecure(samlAuthController.StartSamlAuthentication_deprecated)).Methods(http.MethodGet) // deprecated.
+	r.HandleFunc("/login/sso/saml", security.NoSecure(samlAuthController.StartSamlAuthentication_deprecated)).Methods(http.MethodGet)
+	r.HandleFunc("/saml/acs", security.NoSecure(samlAuthController.AssertionConsumerHandler_deprecated)).Methods(http.MethodPost)
+	r.HandleFunc("/saml/metadata", security.NoSecure(samlAuthController.ServeMetadata_deprecated)).Methods(http.MethodGet)
+
+	//TODO: add access token refresh
+	r.HandleFunc("/api/v1/login/sso/{idpId}", security.NoSecure(authController.StartAuthentication)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/saml/{idpId}/acs", security.NoSecure(authController.AssertionConsumerHandler)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v1/saml/{idpId}/metadata", security.NoSecure(authController.ServeMetadata)).Methods(http.MethodGet)
 
 	// Required for agent to verify apihub tokens
 	r.HandleFunc("/api/v2/auth/publicKey", security.NoSecure(jwtPubKeyController.GetRsaPublicKey)).Methods(http.MethodGet)
@@ -505,12 +521,15 @@ func main() {
 	r.HandleFunc("/api/v2/auth/apiKey", security.NoSecure(apihubApiKeyController.GetApiKeyByKey)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/auth/apiKey/{apiKeyId}", security.Secure(apihubApiKeyController.GetApiKeyById)).Methods(http.MethodGet)
 
+	r.HandleFunc("/api/v1/logout", security.SecureJWT(logoutController.Logout)).Methods(http.MethodPost)
+
 	r.HandleFunc("/api/v2/users/{userId}/profile/avatar", security.NoSecure(userController.GetUserAvatar)).Methods(http.MethodGet) // Should not be secured! FE renders avatar as <img src='avatarUrl' and it couldn't include auth header
 	r.HandleFunc("/api/v2/users", security.Secure(userController.GetUsers)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/users/{userId}", security.Secure(userController.GetUserById)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/users/{userId}/space", security.Secure(userController.CreatePrivatePackageForUser)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v2/space", security.SecureJWT(userController.CreatePrivateUserPackage)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v2/space", security.SecureJWT(userController.GetPrivateUserPackage)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/space", security.SecureUser(userController.CreatePrivateUserPackage)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v2/space", security.SecureUser(userController.GetPrivateUserPackage)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/user", security.SecureUser(userController.GetExtendedUser)).Methods(http.MethodGet)
 
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/changes/summary", security.Secure(comparisonController.GetComparisonChangesSummary)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/operations", security.Secure(operationController.GetOperationList)).Methods(http.MethodGet)
@@ -633,7 +652,9 @@ func main() {
 		}
 		r.HandleFunc("/api/internal/users/{userId}/systemRole", security.Secure(roleController.TestSetUserSystemRole)).Methods(http.MethodPost)
 		r.HandleFunc("/api/internal/users", security.NoSecure(userController.CreateInternalUser)).Methods("POST")
-		r.HandleFunc("/api/v2/auth/local", security.NoSecure(security.CreateLocalUserToken)).Methods("POST")
+		r.HandleFunc("/api/v2/auth/local", security.NoSecure(security.CreateLocalUserToken_deprecated)).Methods("POST") //deprecated
+		//TODO: add access token refresh
+		r.HandleFunc("/api/v3/auth/local", security.NoSecure(security.CreateLocalUserToken)).Methods("POST")
 
 		r.HandleFunc("/api/internal/clear/{testId}", security.Secure(cleanupController.ClearTestData)).Methods(http.MethodDelete)
 
@@ -663,7 +684,7 @@ func main() {
 		//add routing for unknown paths with known path prefixes
 		r.PathPrefix(prefix).HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			log.Warnf("Requested unknown endpoint: %v %v", r.Method, r.RequestURI)
-			controller.RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusMisdirectedRequest,
 				Message: "Requested unknown endpoint",
 			})
@@ -695,7 +716,7 @@ func main() {
 		}
 	})
 
-	err = security.SetupGoGuardian(integrationsService, userService, roleService, apihubApiKeyService, personalAccessTokenService, systemInfoService)
+	err = security.SetupGoGuardian(userService, roleService, apihubApiKeyService, personalAccessTokenService, systemInfoService, tokenRevocationService)
 	if err != nil {
 		log.Fatalf("Can't setup go_guardian. Error - %s", err.Error())
 	}

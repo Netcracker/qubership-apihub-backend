@@ -12,21 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package view
+package utils
 
-type ExternalIntegration string
+import "time"
 
-const ExternalIdpIntegration ExternalIntegration = "idp"
-const ExternalGitlabIntegration ExternalIntegration = "gitlab"
-const ExternalLdapIntegration ExternalIntegration = "ldap"
+func GetRemainingSeconds(targetTimestamp int64) int64 {
+	currentTime := time.Now().Unix()
+	remainingSeconds := targetTimestamp - currentTime
 
-func GetIntegrationExternalId(user User, integration ExternalIntegration) string {
-	switch integration {
-	case ExternalIdpIntegration,
-		ExternalGitlabIntegration,
-		ExternalLdapIntegration:
-		return user.Id
-	default:
-		return ""
+	if remainingSeconds < 0 {
+		remainingSeconds = 0
 	}
+
+	return remainingSeconds
 }

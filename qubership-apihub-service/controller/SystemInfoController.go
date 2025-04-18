@@ -15,6 +15,7 @@
 package controller
 
 import (
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"net/http"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
@@ -33,5 +34,5 @@ type systemInfoControllerImpl struct {
 }
 
 func (g systemInfoControllerImpl) GetSystemInfo(w http.ResponseWriter, r *http.Request) {
-	RespondWithJson(w, http.StatusOK, g.service.GetSystemInfo())
+	utils.RespondWithJson(w, http.StatusOK, g.service.GetSystemInfo())
 }
