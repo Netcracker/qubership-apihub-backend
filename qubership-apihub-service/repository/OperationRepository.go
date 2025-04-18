@@ -133,7 +133,7 @@ func (o operationRepositoryImpl) GetOperations(packageId string, version string,
 		ColumnExpr("operation.*")
 
 	if !skipRefs {
-		query.Join(`inner join 
+		query.Join(`inner join
 		(with refs as(
 			select s.reference_id as package_id, s.reference_version as version, s.reference_revision as revision
 			from published_version_reference s
@@ -270,7 +270,7 @@ func (o operationRepositoryImpl) GetDeprecatedOperations(packageId string, versi
 	query := o.cp.GetConnection().Model(&result).
 		ColumnExpr("operation.*")
 
-	query.Join(`inner join 
+	query.Join(`inner join
 		(with refs as(
 			select s.reference_id as package_id, s.reference_version as version, s.reference_revision as revision
 			from published_version_reference s
@@ -299,7 +299,7 @@ func (o operationRepositoryImpl) GetDeprecatedOperations(packageId string, versi
 
 	query.Where("operation.type = ?", operationType)
 
-	query.Where(`((operation.deprecated_items is not null and jsonb_typeof(operation.deprecated_items) = 'array' and jsonb_array_length(operation.deprecated_items) != 0) 
+	query.Where(`((operation.deprecated_items is not null and jsonb_typeof(operation.deprecated_items) = 'array' and jsonb_array_length(operation.deprecated_items) != 0)
 		or operation.deprecated = true)`)
 
 	query.Order("operation.package_id",
@@ -420,12 +420,12 @@ func (o operationRepositoryImpl) GetOperationsTags(searchQuery entity.OperationT
 			and (?kind = '' or operation.kind = ?kind)
 			and (?api_audience = '' or operation.api_audience = ?api_audience)
 			)
-		select tag from 
+		select tag from
 		(
-			(select '' as tag 
+			(select '' as tag
 			from ops o where
 			?text_filter = ''
-			and not exists(select 1 from jsonb_array_elements(o.metadata -> 'tags') a where a.value != '""') 
+			and not exists(select 1 from jsonb_array_elements(o.metadata -> 'tags') a where a.value != '""')
 			limit 1)
 		union
 			select distinct replace(a.value::text,'"','') as tag
@@ -437,9 +437,9 @@ func (o operationRepositoryImpl) GetOperationsTags(searchQuery entity.OperationT
 		offset ?offset;`
 	} else {
 		query = `select tag
-		from 
+		from
 		(
-			(select '' as tag 
+			(select '' as tag
   				from operation o
 				where o.package_id = ?package_id
 				and o.version = ?version
@@ -448,7 +448,7 @@ func (o operationRepositoryImpl) GetOperationsTags(searchQuery entity.OperationT
 				and (?kind = '' or o.kind = ?kind)
 				and (?api_audience = '' or o.api_audience = ?api_audience)
 				and ?text_filter = ''
-				and not exists(select 1 from jsonb_array_elements(o.metadata -> 'tags') a where a.value != '""') 
+				and not exists(select 1 from jsonb_array_elements(o.metadata -> 'tags') a where a.value != '""')
 				limit 1)
 			union
 			select distinct replace(a.value::text,'"','') as tag
@@ -617,7 +617,7 @@ func (o operationRepositoryImpl) GetChangelog_deprecated(searchQuery entity.Chan
 	}
 
 	query.OrderExpr(`(operation_comparison.changes_summary -> 'breaking')::int > 0 DESC,
-((operation_comparison.changes_summary -> 'deprecated')::int > 0 and 
+((operation_comparison.changes_summary -> 'deprecated')::int > 0 and
 (operation_comparison.changes_summary -> 'breaking')::int = 0) DESC`,
 	)
 	query.Order("o.package_id",
@@ -663,7 +663,8 @@ func (o operationRepositoryImpl) GetChangelog(searchQuery entity.ChangelogSearch
 		ColumnExpr("curr_op.kind kind").
 		ColumnExpr("prev_op.kind previous_kind").
 		ColumnExpr("curr_op.api_audience api_audience").
-		ColumnExpr("prev_op.api_audience previous_api_audience")
+		ColumnExpr("prev_op.api_audience previous_api_audience").
+		ColumnExpr("prev_op.metadata previous_metadata")
 
 	query.Join("left join operation curr_op").
 		JoinOn("curr_op.package_id = operation_comparison.package_id").
@@ -674,7 +675,7 @@ func (o operationRepositoryImpl) GetChangelog(searchQuery entity.ChangelogSearch
 		JoinOn("prev_op.package_id = operation_comparison.previous_package_id").
 		JoinOn("prev_op.version = operation_comparison.previous_version").
 		JoinOn("prev_op.revision = operation_comparison.previous_revision").
-		JoinOn("prev_op.operation_id = operation_comparison.operation_id")
+		JoinOn("prev_op.operation_id = operation_comparison.previous_operation_id")
 	query.Join("inner join operation o").
 		JoinOn("o.package_id = operation_comparison.operation_package_id").
 		JoinOn("o.version = operation_comparison.operation_version").
@@ -753,7 +754,7 @@ func (o operationRepositoryImpl) GetChangelog(searchQuery entity.ChangelogSearch
 	}
 
 	query.OrderExpr(`(operation_comparison.changes_summary -> 'breaking')::int > 0 DESC,
-((operation_comparison.changes_summary -> 'deprecated')::int > 0 and 
+((operation_comparison.changes_summary -> 'deprecated')::int > 0 and
 (operation_comparison.changes_summary -> 'breaking')::int = 0) DESC`,
 	)
 	query.Order("o.package_id",
@@ -792,18 +793,18 @@ func (o operationRepositoryImpl) SearchForOperations_deprecated(searchQuery *ent
 							on pg.id = pv.package_id
 							and pg.exclude_from_search = false
 					--where (?packages = '{}' or package_id = ANY(?packages))
-					/* 
-					for now packages list serves as a list of parents and packages, 
+					/*
+					for now packages list serves as a list of parents and packages,
 					after adding new parents list need to uncomment line above and change condition below to use parents list
 					*/
 					where (?packages = '{}' or package_id like ANY(
 						select id from unnest(?packages::text[]) id
-						union 
+						union
 						select id||'.%' from unnest(?packages::text[]) id))
 					and (?versions = '{}' or version = ANY(?versions))
 					group by package_id, version, pg.name
 			),
-			versions as 
+			versions as
 			(
 					select pv.package_id, pv.version, pv.revision, pv.published_at, pv.status, maxrev.package_name
 					from published_version pv
@@ -839,7 +840,7 @@ func (o operationRepositoryImpl) SearchForOperations_deprecated(searchQuery *ent
 			o.type as api_type,
 			o.metadata,
 			parent_package_names(o.package_id) parent_names,
-			case 
+			case
 				when init_rank > 0 then init_rank + version_status_tf + operation_open_count
 				else 0
 			end rank,
@@ -855,12 +856,12 @@ func (o operationRepositoryImpl) SearchForOperations_deprecated(searchQuery *ent
 			left join (
 					select ts.data_hash, max(rank) as rank from (
 							with filtered as (select data_hash from operations)
-							select 
-							ts.data_hash, 
+							select
+							ts.data_hash,
 							case when scope_rank = 0 then detailed_scope_rank
 								 when detailed_scope_rank = 0 then scope_rank
 								 else scope_rank * detailed_scope_rank end rank
-							from 
+							from
 							ts_rest_operation_data ts,
 							filtered f,
 							to_tsquery(?search_filter) search_query,
@@ -880,7 +881,7 @@ func (o operationRepositoryImpl) SearchForOperations_deprecated(searchQuery *ent
 								(?filter_request and search_query @@ scope_request) or
 								(?filter_response and search_query @@ scope_response)
 								)
-								and 
+								and
 								(
 								(?filter_annotation = false and ?filter_examples = false and ?filter_properties = false) or
 								(?filter_annotation and search_query @@ scope_annotation) or
@@ -900,10 +901,10 @@ func (o operationRepositoryImpl) SearchForOperations_deprecated(searchQuery *ent
 			left join (
 					select ts.data_hash, max(rank) as rank from (
 							with filtered as (select data_hash from operations)
-							select 
-							ts.data_hash, 
+							select
+							ts.data_hash,
 							scope_rank rank
-							from 
+							from
 							ts_graphql_operation_data ts,
 							filtered f,
 							to_tsquery(?search_filter) search_query,
@@ -932,10 +933,10 @@ func (o operationRepositoryImpl) SearchForOperations_deprecated(searchQuery *ent
 			left join (
 					select ts.data_hash, max(rank) as rank from (
 							with filtered as (select data_hash from operations)
-							select 
-							ts.data_hash, 
+							select
+							ts.data_hash,
 							scope_rank rank
-							from 
+							from
 							ts_operation_data ts,
 							filtered f,
 							to_tsquery(?search_filter) search_query,
@@ -994,18 +995,18 @@ func (o operationRepositoryImpl) SearchForOperations(searchQuery *entity.Operati
 							on pg.id = pv.package_id
 							and pg.exclude_from_search = false
 					--where (?packages = '{}' or package_id = ANY(?packages))
-					/* 
-					for now packages list serves as a list of parents and packages, 
+					/*
+					for now packages list serves as a list of parents and packages,
 					after adding new parents list need to uncomment line above and change condition below to use parents list
 					*/
 					where (?packages = '{}' or package_id like ANY(
 						select id from unnest(?packages::text[]) id
-						union 
+						union
 						select id||'.%' from unnest(?packages::text[]) id))
 					and (?versions = '{}' or version = ANY(?versions))
 					group by package_id, version, pg.name
 			),
-			versions as 
+			versions as
 			(
 					select pv.package_id, pv.version, pv.revision, pv.published_at, pv.status, maxrev.package_name
 					from published_version pv
@@ -1020,7 +1021,7 @@ func (o operationRepositoryImpl) SearchForOperations(searchQuery *entity.Operati
 			),
 			operations as
 			(
-					select o.*, v.status version_status, v.package_name, v.published_at version_published_at 
+					select o.*, v.status version_status, v.package_name, v.published_at version_published_at
 					from operation o
 					inner join versions v
 							on v.package_id = o.package_id
@@ -1044,7 +1045,7 @@ func (o operationRepositoryImpl) SearchForOperations(searchQuery *entity.Operati
 			o.type,
 			o.metadata,
 			parent_package_names(o.package_id) parent_names,
-			case 
+			case
 				when init_rank > 0 then init_rank + version_status_tf + operation_open_count
 				else 0
 			end rank,
@@ -1060,12 +1061,12 @@ func (o operationRepositoryImpl) SearchForOperations(searchQuery *entity.Operati
 			left join (
 					select ts.data_hash, max(rank) as rank from (
 							with filtered as (select data_hash from operations)
-							select 
-							ts.data_hash, 
+							select
+							ts.data_hash,
 							case when scope_rank = 0 then detailed_scope_rank
 								 when detailed_scope_rank = 0 then scope_rank
 								 else scope_rank * detailed_scope_rank end rank
-							from 
+							from
 							ts_rest_operation_data ts,
 							filtered f,
 							to_tsquery(?search_filter) search_query,
@@ -1085,7 +1086,7 @@ func (o operationRepositoryImpl) SearchForOperations(searchQuery *entity.Operati
 								(?filter_request and search_query @@ scope_request) or
 								(?filter_response and search_query @@ scope_response)
 								)
-								and 
+								and
 								(
 								(?filter_annotation = false and ?filter_examples = false and ?filter_properties = false) or
 								(?filter_annotation and search_query @@ scope_annotation) or
@@ -1105,10 +1106,10 @@ func (o operationRepositoryImpl) SearchForOperations(searchQuery *entity.Operati
 			left join (
 					select ts.data_hash, max(rank) as rank from (
 							with filtered as (select data_hash from operations)
-							select 
-							ts.data_hash, 
+							select
+							ts.data_hash,
 							scope_rank rank
-							from 
+							from
 							ts_graphql_operation_data ts,
 							filtered f,
 							to_tsquery(?search_filter) search_query,
@@ -1137,10 +1138,10 @@ func (o operationRepositoryImpl) SearchForOperations(searchQuery *entity.Operati
 			left join (
 					select ts.data_hash, max(rank) as rank from (
 							with filtered as (select data_hash from operations)
-							select 
-							ts.data_hash, 
+							select
+							ts.data_hash,
 							scope_rank rank
-							from 
+							from
 							ts_operation_data ts,
 							filtered f,
 							to_tsquery(?search_filter) search_query,
@@ -1295,7 +1296,7 @@ func (o operationRepositoryImpl) GetDeprecatedOperationsSummary(packageId string
 	deprecatedOperationsSummaryQuery := `
 	with depr_count as (
 		select type, count(operation_id) cnt from operation
-		where ((operation.deprecated_items is not null and jsonb_typeof(operation.deprecated_items) = 'array' and jsonb_array_length(operation.deprecated_items) != 0) 
+		where ((operation.deprecated_items is not null and jsonb_typeof(operation.deprecated_items) = 'array' and jsonb_array_length(operation.deprecated_items) != 0)
 			or operation.deprecated = true)
 		and package_id = ? and version = ? and revision = ?
 		group by type
@@ -1303,13 +1304,13 @@ func (o operationRepositoryImpl) GetDeprecatedOperationsSummary(packageId string
  	tagss as (
 		 select type, array_agg(distinct x.value) as tags from operation
 			cross join lateral jsonb_array_elements_text(metadata->'tags') as x
-		 where package_id = ? and version = ? and revision = ? 
-		 and ((operation.deprecated_items is not null and jsonb_typeof(operation.deprecated_items) = 'array' and jsonb_array_length(operation.deprecated_items) != 0) 
+		 where package_id = ? and version = ? and revision = ?
+		 and ((operation.deprecated_items is not null and jsonb_typeof(operation.deprecated_items) = 'array' and jsonb_array_length(operation.deprecated_items) != 0)
 				or operation.deprecated = true)
 		 group by type
 	)
-	
-	select dc.type as type, 
+
+	select dc.type as type,
 	coalesce(dc.cnt, 0) as deprecated_count,
 	coalesce(tg.tags, '{}') as tags
 	from depr_count dc
@@ -1333,7 +1334,7 @@ func (o operationRepositoryImpl) GetDeprecatedOperationsRefsSummary(packageId st
 	var result []entity.DeprecatedOperationsSummaryEntity
 	deprecatedOperationsSummaryQuery := `
 	with refss as (
-		select operation.type, operation.package_id, operation.version, operation.revision,operation.deprecated,operation.metadata,operation.operation_id, operation.deprecated_items from operation inner join 
+		select operation.type, operation.package_id, operation.version, operation.revision,operation.deprecated,operation.metadata,operation.operation_id, operation.deprecated_items from operation inner join
 		(with refs as(
 			select s.reference_id as package_id, s.reference_version as version, s.reference_revision as revision
 			from published_version_reference s
@@ -1353,19 +1354,19 @@ func (o operationRepositoryImpl) GetDeprecatedOperationsRefsSummary(packageId st
 	),
 	depr_count as (
 		select type, count(operation_id) as cnt, package_id, version, revision from refss as r
-			where ((r.deprecated_items is not null and jsonb_typeof(r.deprecated_items) = 'array' and jsonb_array_length(r.deprecated_items) != 0) 
+			where ((r.deprecated_items is not null and jsonb_typeof(r.deprecated_items) = 'array' and jsonb_array_length(r.deprecated_items) != 0)
 				or r.deprecated = true)
 		group by package_id, version, revision,type
 	),
     tagss as (
-		 select type, array_agg(distinct x.value) as tags, package_id, version,revision from refss 
+		 select type, array_agg(distinct x.value) as tags, package_id, version,revision from refss
 			cross join lateral jsonb_array_elements_text(metadata->'tags') as x
-		where ((deprecated_items is not null and jsonb_typeof(deprecated_items) = 'array' and jsonb_array_length(deprecated_items) != 0) 
+		where ((deprecated_items is not null and jsonb_typeof(deprecated_items) = 'array' and jsonb_array_length(deprecated_items) != 0)
 			or deprecated = true)
 		 group by package_id, version, revision, type
 	)
-	
-	select dc.type as type, dc.package_id as package_id, dc.version as version, dc.revision as revision, 
+
+	select dc.type as type, dc.package_id as package_id, dc.version as version, dc.revision as revision,
 	coalesce(dc.cnt, 0) as deprecated_count,
 	coalesce(tg.tags, '{}') as tags
 	from depr_count dc
@@ -1558,11 +1559,11 @@ func (o operationRepositoryImpl) CalculateOperationGroups(packageId string, vers
 	var groups []group
 	operationGroupsQuery := `
 	select distinct coalesce(group_name, '') as group_name from (
-		select 
-		case 
-			when type = 'rest' 
+		select
+		case
+			when type = 'rest'
 				then case when ? = '' then null else substring(metadata ->> 'path', ?) end
-			when type = 'graphql' 
+			when type = 'graphql'
 				then case when ? = '' then null else substring(metadata ->> 'method', ?) end
 		end group_name
 		from operation
@@ -1613,7 +1614,7 @@ func (o operationRepositoryImpl) GetGroupedOperations(packageId string, version 
 	query := o.cp.GetConnection().Model(&result).
 		ColumnExpr("operation.*")
 
-	query.Join(`inner join 
+	query.Join(`inner join
 		(with refs as(
 			select s.reference_id as package_id, s.reference_version as version, s.reference_revision as revision
 			from published_version_reference s
@@ -1737,7 +1738,7 @@ func (o operationRepositoryImpl) GetOperationsByModelHash(packageId string, vers
 		from operation o, jsonb_each_text(o.models) m
 		where o.package_id = ?
 		and o.version = ?
-		and o.revision = ? 
+		and o.revision = ?
 		and o.type = ?
 	)
 	select m.operation_id, array_agg(m.key)::varchar[] models
