@@ -145,7 +145,7 @@ func (o oauth20ControllerImpl) GitlabOauthCallback(w http.ResponseWriter, r *htt
 			Debug:   err.Error()})
 		return
 	}
-	user, err := o.userService.GetOrCreateUserForIntegration(view.User{Id: gitlabUser.Username, Email: gitlabUser.Email, Name: gitlabUser.Name}, view.ExternalGitlabIntegration)
+	user, err := o.userService.GetOrCreateUserForIntegration(view.User{Id: gitlabUser.Username, Email: gitlabUser.Email, Name: gitlabUser.Name}, view.ExternalGitlabIntegration, "")
 	if err != nil {
 		utils.RespondWithError(w, "Failed to login via gitlab", err)
 		return

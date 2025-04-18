@@ -23,7 +23,6 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
-	"github.com/crewjam/saml"
 	"github.com/crewjam/saml/samlsp"
 	log "github.com/sirupsen/logrus"
 	"net/http"
@@ -68,26 +67,17 @@ func (a *authenticationControllerImpl) StartSamlAuthentication_deprecated(w http
 
 // AssertionConsumerHandler_deprecated This endpoint is called by ADFS when auth procedure is complete on it's side. ADFS posts the response here. (legacy auth)
 func (a *authenticationControllerImpl) AssertionConsumerHandler_deprecated(w http.ResponseWriter, r *http.Request) {
-	handleAssertion(w, r, a.samlInstance, a.setUserViewCookie)
+	handleAssertion(w, r, a.userService, a.samlInstance, "", a.setUserViewCookie)
 }
 
-func (a *authenticationControllerImpl) setUserViewCookie(w http.ResponseWriter, assertion *saml.Assertion) {
-	assertionAttributes := getAssertionAttributes(assertion)
-
-	user, err := getOrCreateUser(a.userService, assertionAttributes)
-	if err != nil {
-		utils.RespondWithError(w, "Failed to get or create SSO user", err)
-		return
-	}
-
+func (a *authenticationControllerImpl) setUserViewCookie(w http.ResponseWriter, user *view.User) error {
 	userView, err := security.CreateTokenForUser_deprecated(*user)
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		return &exception.CustomError{
 			Status:  http.StatusInternalServerError,
 			Message: "Failed to create token for SSO user",
 			Debug:   err.Error(),
-		})
-		return
+		}
 	}
 
 	response, _ := json.Marshal(userView)
@@ -102,6 +92,8 @@ func (a *authenticationControllerImpl) setUserViewCookie(w http.ResponseWriter, 
 		Path:     "/",
 	})
 	log.Debugf("Auth user result object: %+v", userView)
+
+	return nil
 }
 
 func (a *authenticationControllerImpl) GetSystemSSOInfo(w http.ResponseWriter, r *http.Request) {

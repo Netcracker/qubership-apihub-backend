@@ -88,7 +88,7 @@ func serveMetadata(w http.ResponseWriter, r *http.Request, samlInstance *samlsp.
 
 // StartAuthentication Frontend calls this endpoint to SSO login user via SAML
 func (a *authControllerImpl) StartAuthentication(w http.ResponseWriter, r *http.Request) {
-	idpId := r.URL.Query().Get("idpId")
+	idpId := getStringParam(r, "idpId")
 	provider, exists := a.idpManager.GetProvider(idpId)
 	if exists {
 		startSAMLAuthentication(w, r, provider.Saml, a.systemInfoService.GetAllowedHosts())
@@ -155,13 +155,13 @@ func (a *authControllerImpl) AssertionConsumerHandler(w http.ResponseWriter, r *
 	idpId := getStringParam(r, "idpId")
 	provider, exists := a.idpManager.GetProvider(idpId)
 	if exists {
-		handleAssertion(w, r, provider.Saml, a.setApihubSessionCookie)
+		handleAssertion(w, r, a.userService, provider.Saml, idpId, a.setApihubSessionCookie)
 	} else {
-		handleAssertion(w, r, nil, nil)
+		handleAssertion(w, r, nil, nil, "", nil)
 	}
 }
 
-func handleAssertion(w http.ResponseWriter, r *http.Request, samlInstance *samlsp.Middleware, setAuthCookie func(w http.ResponseWriter, assertion *saml.Assertion)) {
+func handleAssertion(w http.ResponseWriter, r *http.Request, userService service.UserService, samlInstance *samlsp.Middleware, providerId string, setAuthCookie func(w http.ResponseWriter, user *view.User) error) {
 	if samlInstance == nil {
 		log.Errorf("Cannot run AssertionConsumerHandler with nill samlInstanse")
 		utils.RespondWithCustomError(w, &exception.CustomError{
@@ -211,8 +211,19 @@ func handleAssertion(w http.ResponseWriter, r *http.Request, samlInstance *samls
 		return
 	}
 
+	assertionAttributes := getAssertionAttributes(assertion)
+
+	user, err := getOrCreateUser(userService, assertionAttributes, providerId)
+	if err != nil {
+		utils.RespondWithError(w, "Failed to get or create SSO user", err)
+		return
+	}
+
 	// Add Apihub auth info cookie
-	setAuthCookie(w, assertion)
+	if err = setAuthCookie(w, user); err != nil {
+		utils.RespondWithError(w, "Failed to set auth cookie", err)
+		return
+	}
 
 	// Extract original redirect URI from request tracking cookie
 	redirectURI := "/"
@@ -242,23 +253,14 @@ func handleAssertion(w http.ResponseWriter, r *http.Request, samlInstance *samls
 	http.Redirect(w, r, redirectURI, http.StatusFound)
 }
 
-func (a *authControllerImpl) setApihubSessionCookie(w http.ResponseWriter, assertion *saml.Assertion) {
-	assertionAttributes := getAssertionAttributes(assertion)
-
-	user, err := getOrCreateUser(a.userService, assertionAttributes)
-	if err != nil {
-		utils.RespondWithError(w, "Failed to get or create SSO user", err)
-		return
-	}
-
+func (a *authControllerImpl) setApihubSessionCookie(w http.ResponseWriter, user *view.User) error {
 	authCookie, err := security.CreateTokenForUser(*user)
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		return &exception.CustomError{
 			Status:  http.StatusInternalServerError,
 			Message: "Failed to create token for SSO user",
 			Debug:   err.Error(),
-		})
-		return
+		}
 	}
 
 	response, _ := json.Marshal(authCookie)
@@ -273,6 +275,7 @@ func (a *authControllerImpl) setApihubSessionCookie(w http.ResponseWriter, asser
 		Path:     "/",
 	})
 	log.Debugf("Auth user result object: %+v", authCookie)
+	return nil
 }
 
 func getAssertionAttributes(assertion *saml.Assertion) map[string][]string {
@@ -291,7 +294,7 @@ func getAssertionAttributes(assertion *saml.Assertion) map[string][]string {
 	return assertionAttributes
 }
 
-func getOrCreateUser(userService service.UserService, assertionAttributes map[string][]string) (*view.User, error) {
+func getOrCreateUser(userService service.UserService, assertionAttributes map[string][]string, providerId string) (*view.User, error) {
 	samlUser := view.User{}
 	if len(assertionAttributes[samlAttributeUserId]) != 0 {
 		userLogin := assertionAttributes[samlAttributeUserId][0]
@@ -350,7 +353,7 @@ func getOrCreateUser(userService service.UserService, assertionAttributes map[st
 		}
 	}
 
-	user, err := userService.GetOrCreateUserForIntegration(samlUser, view.ExternalSamlIntegration)
+	user, err := userService.GetOrCreateUserForIntegration(samlUser, view.ExternalIdpIntegration, providerId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user for SSO integration: %w", err)
 	}

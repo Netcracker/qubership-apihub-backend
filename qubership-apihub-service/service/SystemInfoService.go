@@ -79,14 +79,15 @@ const (
 	APIHUB_SYSTEM_API_KEY                  = "APIHUB_ACCESS_TOKEN"
 	EDITOR_DISABLED                        = "EDITOR_DISABLED"
 	FAIL_BUILDS_ON_BROKEN_REFS             = "FAIL_BUILDS_ON_BROKEN_REFS"
-	APIHUB_ACCESS_TOKEN_DURATION_SEC       = "APIHUB_ACCESS_TOKEN_DURATION_SEC"
-	APIHUB_REFRESH_TOKEN_DURATION_SEC      = "APIHUB_REFRESH_TOKEN_DURATION_SEC"
+	APIHUB_ACCESS_TOKEN_DURATION_SEC       = "APIHUB_ACCESS_TOKEN_DURATION_SEC"  //TODO: rename
+	APIHUB_REFRESH_TOKEN_DURATION_SEC      = "APIHUB_REFRESH_TOKEN_DURATION_SEC" //TODO: rename
 	EXTERNAL_IDP_DISPLAY_NAME              = "EXTERNAL_IDP_DISPLAY_NAME"
 	EXTERNAL_IDP_IMAGE_SVG                 = "EXTERNAL_IDP_IMAGE_SVG"
 	AUTH_CONFIG                            = "AUTH_CONFIG"
+	//TODO: add env var for default idp id
 
-	LocalIDPId    = "58ea1d9b-5a0e-4bc7-bd18-651445aba382"
-	ExternalIDPId = "ac24e662-1952-4a2e-8405-bfa7b02a0ded"
+	LocalIDPId    = "local-idp"
+	ExternalIDPId = "external-idp"
 )
 
 type SystemInfoService interface {
@@ -868,16 +869,17 @@ func (g systemInfoServiceImpl) GetRefreshTokenDurationSec() int {
 	return g.systemInfoMap[APIHUB_REFRESH_TOKEN_DURATION_SEC].(int)
 }
 
+// TODO: add a check that at least one provider exists
 // all IDP initialization should be done in this method only
 func (g systemInfoServiceImpl) setAuthConfig() error {
 	var authConfig idp.AuthConfig
 	if !g.IsProductionMode() {
 		localIDP := idp.IDP{
-			Id:          LocalIDPId,
-			IdpType:     idp.IDPTypeInternal,
-			DisplayName: "Local",
-			ImageSvg:    "",
-			Url:         "/api/v3/auth/local",
+			Id:                 LocalIDPId,
+			IdpType:            idp.IDPTypeInternal,
+			DisplayName:        "Local",
+			ImageSvg:           "",
+			LoginStartEndpoint: "/api/v3/auth/local",
 		}
 		authConfig.Providers = append(authConfig.Providers, localIDP)
 		authConfig.DefaultProviderId = localIDP.Id
@@ -888,11 +890,11 @@ func (g systemInfoServiceImpl) setAuthConfig() error {
 	}
 	if samlConfig != nil {
 		externalIDP := idp.IDP{
-			Id:          ExternalIDPId,
-			IdpType:     idp.IDPTypeExternal,
-			DisplayName: os.Getenv(EXTERNAL_IDP_DISPLAY_NAME),
-			ImageSvg:    os.Getenv(EXTERNAL_IDP_IMAGE_SVG),
-			Url:         "/login/sso",
+			Id:                 ExternalIDPId,
+			IdpType:            idp.IDPTypeExternal,
+			DisplayName:        os.Getenv(EXTERNAL_IDP_DISPLAY_NAME),
+			ImageSvg:           os.Getenv(EXTERNAL_IDP_IMAGE_SVG),
+			LoginStartEndpoint: "/api/v1/login/sso/" + ExternalIDPId,
 
 			Protocol:          idp.AuthProtocolSAML,
 			SAMLConfiguration: samlConfig,

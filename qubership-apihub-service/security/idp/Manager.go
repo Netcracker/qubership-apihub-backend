@@ -190,8 +190,8 @@ func CreateSAMLInstance(idpId string, samlConfig *SAMLConfiguration) (*samlsp.Mi
 	samlSP.ServiceProvider.AuthnNameIDFormat = saml.TransientNameIDFormat
 	samlSP.ServiceProvider.AllowIDPInitiated = true
 	if idpId != "" {
-		samlSP.ServiceProvider.AcsURL = *rootURL.ResolveReference(&url.URL{Path: "saml/" + idpId + "/acs"})
-		samlSP.ServiceProvider.MetadataURL = *rootURL.ResolveReference(&url.URL{Path: "saml/" + idpId + "/metadata"})
+		samlSP.ServiceProvider.AcsURL = *rootURL.ResolveReference(&url.URL{Path: "api/v1/saml/" + idpId + "/acs"})
+		samlSP.ServiceProvider.MetadataURL = *rootURL.ResolveReference(&url.URL{Path: "api/v1/saml/" + idpId + "/metadata"})
 	}
 	log.Infof("SAML instance initialized")
 	return samlSP, nil

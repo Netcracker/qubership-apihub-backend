@@ -84,7 +84,6 @@ func (a apihubSessionCookieStrategyImpl) Authenticate(ctx goctx.Context, r *http
 	return info, nil
 }
 
-// TODO: should we support other ways to transfer refresh token other than session cookie ?
 func (a apihubSessionCookieStrategyImpl) refreshToken(sessionCookie *cookie.SessionCookie) (auth.Info, error) {
 	var info auth.Info
 	if v, ok := a.cache.Load(sessionCookie.RefreshToken); ok {
