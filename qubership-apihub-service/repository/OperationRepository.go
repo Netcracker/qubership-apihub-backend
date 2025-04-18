@@ -502,12 +502,10 @@ func (o operationRepositoryImpl) GetAllOperations(packageId string, version stri
 
 func (o operationRepositoryImpl) GetOperationChanges(comparisonId string, operationId string, severities []string) (*entity.OperationComparisonEntity, error) {
 	result := new(entity.OperationComparisonEntity)
-
-	query := o.cp.GetConnection().Model(result).Where("comparison_id = ?", comparisonId)
-	if operationId != "" {
-		query = query.Where("operation_id = ?", operationId)
-	}
-	err := query.OrderExpr("data_hash, previous_data_hash").
+	err := o.cp.GetConnection().Model(result).
+		Where("comparison_id = ?", comparisonId).
+		Where("operation_id = ?", operationId).
+		OrderExpr("data_hash, previous_data_hash").
 		Limit(1).
 		Select()
 	if err != nil {
@@ -677,7 +675,7 @@ func (o operationRepositoryImpl) GetChangelog(searchQuery entity.ChangelogSearch
 		JoinOn("prev_op.package_id = operation_comparison.previous_package_id").
 		JoinOn("prev_op.version = operation_comparison.previous_version").
 		JoinOn("prev_op.revision = operation_comparison.previous_revision").
-		JoinOn("prev_op.operation_id = operation_comparison.operation_id")
+		JoinOn("prev_op.operation_id = operation_comparison.previous_operation_id")
 	query.Join("inner join operation o").
 		JoinOn("o.package_id = operation_comparison.operation_package_id").
 		JoinOn("o.version = operation_comparison.operation_version").
