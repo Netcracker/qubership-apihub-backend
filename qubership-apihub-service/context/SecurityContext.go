@@ -15,7 +15,6 @@
 package context
 
 import (
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/cookie"
 	"net/http"
 	"strconv"
 	"strings"
@@ -125,7 +124,7 @@ func getAccessToken(r *http.Request) string {
 	if token := getTokenFromAuthHeader(r); token != "" {
 		return token
 	}
-	return getTokenFromSessionCookie(r)
+	return getTokenFromCookie(r)
 }
 
 func getTokenFromAuthHeader(r *http.Request) string {
@@ -136,13 +135,13 @@ func getTokenFromAuthHeader(r *http.Request) string {
 	return strings.TrimSpace(authHeader[7:])
 }
 
-func getTokenFromSessionCookie(r *http.Request) string {
-	sessionCookie, err := cookie.ExtractSessionCookie(r)
+func getTokenFromCookie(r *http.Request) string {
+	accessTokenCookie, err := r.Cookie("apihub-access-token")
 	if err != nil {
 		return ""
 	}
 
-	return sessionCookie.AccessToken
+	return accessTokenCookie.Value
 }
 
 func getApihubApiKey(r *http.Request) string {

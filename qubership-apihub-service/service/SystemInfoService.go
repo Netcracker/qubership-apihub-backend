@@ -79,12 +79,12 @@ const (
 	APIHUB_SYSTEM_API_KEY                  = "APIHUB_ACCESS_TOKEN"
 	EDITOR_DISABLED                        = "EDITOR_DISABLED"
 	FAIL_BUILDS_ON_BROKEN_REFS             = "FAIL_BUILDS_ON_BROKEN_REFS"
-	APIHUB_ACCESS_TOKEN_DURATION_SEC       = "APIHUB_ACCESS_TOKEN_DURATION_SEC"  //TODO: rename
-	APIHUB_REFRESH_TOKEN_DURATION_SEC      = "APIHUB_REFRESH_TOKEN_DURATION_SEC" //TODO: rename
+	ACCESS_TOKEN_DURATION_SEC              = "JWT_ACCESS_TOKEN_DURATION_SEC"
+	REFRESH_TOKEN_DURATION_SEC             = "JWT_REFRESH_TOKEN_DURATION_SEC"
 	EXTERNAL_IDP_DISPLAY_NAME              = "EXTERNAL_IDP_DISPLAY_NAME"
 	EXTERNAL_IDP_IMAGE_SVG                 = "EXTERNAL_IDP_IMAGE_SVG"
+	DEFAULT_IDP_ID                         = "DEFAULT_IDP_ID"
 	AUTH_CONFIG                            = "AUTH_CONFIG"
-	//TODO: add env var for default idp id
 
 	LocalIDPId    = "local-idp"
 	ExternalIDPId = "external-idp"
@@ -820,59 +820,59 @@ func (g systemInfoServiceImpl) FailBuildOnBrokenRefs() bool {
 }
 
 func (g systemInfoServiceImpl) setAccessTokenDurationSec() {
-	envVal := os.Getenv(APIHUB_ACCESS_TOKEN_DURATION_SEC)
+	envVal := os.Getenv(ACCESS_TOKEN_DURATION_SEC)
 	if envVal == "" {
-		g.systemInfoMap[APIHUB_ACCESS_TOKEN_DURATION_SEC] = 3600 //1 hour
+		g.systemInfoMap[ACCESS_TOKEN_DURATION_SEC] = 3600 //1 hour
 		return
 	}
 	val, err := strconv.Atoi(envVal)
 	if err != nil {
-		log.Errorf("failed to parse %v env value: %v. Value by default - 3600", APIHUB_ACCESS_TOKEN_DURATION_SEC, err.Error())
-		g.systemInfoMap[APIHUB_ACCESS_TOKEN_DURATION_SEC] = 3600
+		log.Errorf("failed to parse %v env value: %v. Value by default - 3600", ACCESS_TOKEN_DURATION_SEC, err.Error())
+		g.systemInfoMap[ACCESS_TOKEN_DURATION_SEC] = 3600
 		return
 	}
 
 	if val < 600 {
-		err = fmt.Errorf("env %v has incorrect value, value must be greater than 600. Value by default - 3600", APIHUB_ACCESS_TOKEN_DURATION_SEC)
-		g.systemInfoMap[APIHUB_ACCESS_TOKEN_DURATION_SEC] = 3600
+		err = fmt.Errorf("env %v has incorrect value, value must be greater than 600. Value by default - 3600", ACCESS_TOKEN_DURATION_SEC)
+		g.systemInfoMap[ACCESS_TOKEN_DURATION_SEC] = 3600
 		return
 	}
-	g.systemInfoMap[APIHUB_ACCESS_TOKEN_DURATION_SEC] = val
+	g.systemInfoMap[ACCESS_TOKEN_DURATION_SEC] = val
 }
 
 func (g systemInfoServiceImpl) GetAccessTokenDurationSec() int {
-	return g.systemInfoMap[APIHUB_ACCESS_TOKEN_DURATION_SEC].(int)
+	return g.systemInfoMap[ACCESS_TOKEN_DURATION_SEC].(int)
 }
 
 func (g systemInfoServiceImpl) setRefreshTokenDurationSec() {
-	envVal := os.Getenv(APIHUB_REFRESH_TOKEN_DURATION_SEC)
+	envVal := os.Getenv(REFRESH_TOKEN_DURATION_SEC)
 	if envVal == "" {
-		g.systemInfoMap[APIHUB_REFRESH_TOKEN_DURATION_SEC] = 43200 //12 hours
+		g.systemInfoMap[REFRESH_TOKEN_DURATION_SEC] = 43200 //12 hours
 		return
 	}
 	val, err := strconv.Atoi(envVal)
 	if err != nil {
-		log.Errorf("failed to parse %v env value: %v. Value by default - 43200", APIHUB_REFRESH_TOKEN_DURATION_SEC, err.Error())
-		g.systemInfoMap[APIHUB_REFRESH_TOKEN_DURATION_SEC] = 43200
+		log.Errorf("failed to parse %v env value: %v. Value by default - 43200", REFRESH_TOKEN_DURATION_SEC, err.Error())
+		g.systemInfoMap[REFRESH_TOKEN_DURATION_SEC] = 43200
 		return
 	}
 	if val < g.GetAccessTokenDurationSec() {
-		err = fmt.Errorf("env %v has incorrect value, value must be equal or greater than %v. Value by default - 43200", APIHUB_REFRESH_TOKEN_DURATION_SEC, APIHUB_ACCESS_TOKEN_DURATION_SEC)
-		g.systemInfoMap[APIHUB_REFRESH_TOKEN_DURATION_SEC] = 43200
+		err = fmt.Errorf("env %v has incorrect value, value must be equal or greater than %v. Value by default - 43200", REFRESH_TOKEN_DURATION_SEC, ACCESS_TOKEN_DURATION_SEC)
+		g.systemInfoMap[REFRESH_TOKEN_DURATION_SEC] = 43200
 		return
 	}
 
-	g.systemInfoMap[APIHUB_REFRESH_TOKEN_DURATION_SEC] = val
+	g.systemInfoMap[REFRESH_TOKEN_DURATION_SEC] = val
 }
 
 func (g systemInfoServiceImpl) GetRefreshTokenDurationSec() int {
-	return g.systemInfoMap[APIHUB_REFRESH_TOKEN_DURATION_SEC].(int)
+	return g.systemInfoMap[REFRESH_TOKEN_DURATION_SEC].(int)
 }
 
-// TODO: add a check that at least one provider exists
 // all IDP initialization should be done in this method only
 func (g systemInfoServiceImpl) setAuthConfig() error {
 	var authConfig idp.AuthConfig
+
 	if !g.IsProductionMode() {
 		localIDP := idp.IDP{
 			Id:                 LocalIDPId,
@@ -882,8 +882,8 @@ func (g systemInfoServiceImpl) setAuthConfig() error {
 			LoginStartEndpoint: "/api/v3/auth/local",
 		}
 		authConfig.Providers = append(authConfig.Providers, localIDP)
-		authConfig.DefaultProviderId = localIDP.Id
 	}
+
 	samlConfig, err := g.createSAMLConfig()
 	if err != nil {
 		return err
@@ -900,8 +900,14 @@ func (g systemInfoServiceImpl) setAuthConfig() error {
 			SAMLConfiguration: samlConfig,
 		}
 		authConfig.Providers = append(authConfig.Providers, externalIDP)
-		authConfig.DefaultProviderId = externalIDP.Id
 	}
+
+	authConfig.DefaultProviderId = os.Getenv(DEFAULT_IDP_ID)
+
+	if len(authConfig.Providers) == 0 {
+		return fmt.Errorf("no identity providers configured, at least one provider must exist")
+	}
+
 	g.systemInfoMap[AUTH_CONFIG] = authConfig
 
 	return nil

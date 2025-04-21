@@ -16,12 +16,10 @@ package controller
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/cookie"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
@@ -161,7 +159,7 @@ func (a *authControllerImpl) AssertionConsumerHandler(w http.ResponseWriter, r *
 	}
 }
 
-func handleAssertion(w http.ResponseWriter, r *http.Request, userService service.UserService, samlInstance *samlsp.Middleware, providerId string, setAuthCookie func(w http.ResponseWriter, user *view.User) error) {
+func handleAssertion(w http.ResponseWriter, r *http.Request, userService service.UserService, samlInstance *samlsp.Middleware, providerId string, setAuthCookie func(w http.ResponseWriter, user *view.User, idpId string) error) {
 	if samlInstance == nil {
 		log.Errorf("Cannot run AssertionConsumerHandler with nill samlInstanse")
 		utils.RespondWithCustomError(w, &exception.CustomError{
@@ -220,7 +218,7 @@ func handleAssertion(w http.ResponseWriter, r *http.Request, userService service
 	}
 
 	// Add Apihub auth info cookie
-	if err = setAuthCookie(w, user); err != nil {
+	if err = setAuthCookie(w, user, providerId); err != nil {
 		utils.RespondWithError(w, "Failed to set auth cookie", err)
 		return
 	}
@@ -253,8 +251,8 @@ func handleAssertion(w http.ResponseWriter, r *http.Request, userService service
 	http.Redirect(w, r, redirectURI, http.StatusFound)
 }
 
-func (a *authControllerImpl) setApihubSessionCookie(w http.ResponseWriter, user *view.User) error {
-	authCookie, err := security.CreateTokenForUser(*user)
+func (a *authControllerImpl) setApihubSessionCookie(w http.ResponseWriter, user *view.User, idpId string) error {
+	accessToken, refreshToken, err := security.IssueTokenPair(*user)
 	if err != nil {
 		return &exception.CustomError{
 			Status:  http.StatusInternalServerError,
@@ -263,18 +261,22 @@ func (a *authControllerImpl) setApihubSessionCookie(w http.ResponseWriter, user 
 		}
 	}
 
-	response, _ := json.Marshal(authCookie)
-	cookieValue := base64.StdEncoding.EncodeToString(response)
-
 	http.SetCookie(w, &http.Cookie{
-		Name:     cookie.SessionCookieName,
-		Value:    cookieValue,
-		MaxAge:   a.systemInfoService.GetRefreshTokenDurationSec(),
-		Secure:   false, //TODO: set to true
+		Name:     security.AccessTokenCookieName,
+		Value:    accessToken,
+		MaxAge:   a.systemInfoService.GetAccessTokenDurationSec(),
+		Secure:   true,
 		HttpOnly: true,
 		Path:     "/",
 	})
-	log.Debugf("Auth user result object: %+v", authCookie)
+	http.SetCookie(w, &http.Cookie{
+		Name:     security.RefreshTokenCookieName,
+		Value:    refreshToken,
+		MaxAge:   a.systemInfoService.GetRefreshTokenDurationSec(),
+		Secure:   true,
+		HttpOnly: true,
+		Path:     "/api/v1/login/sso/" + idpId,
+	})
 	return nil
 }
 

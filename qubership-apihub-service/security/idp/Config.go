@@ -31,11 +31,11 @@ type AuthConfig struct {
 }
 
 type IDP struct {
-	Id                 string             `json:"id"` //TODO: should we use uuid ? ->
+	Id                 string             `json:"id"`
 	IdpType            IDPType            `json:"type"`
 	DisplayName        string             `json:"displayName"`
 	ImageSvg           string             `json:"imageSvg"`
-	LoginStartEndpoint string             `json:"loginStartEndpoint"` //TODO: display changes in API spec
+	LoginStartEndpoint string             `json:"loginStartEndpoint"`
 	Protocol           AuthProtocol       `json:"-"`
 	SAMLConfiguration  *SAMLConfiguration `json:"-"`
 }

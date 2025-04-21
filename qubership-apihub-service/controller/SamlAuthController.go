@@ -70,7 +70,7 @@ func (a *authenticationControllerImpl) AssertionConsumerHandler_deprecated(w htt
 	handleAssertion(w, r, a.userService, a.samlInstance, "", a.setUserViewCookie)
 }
 
-func (a *authenticationControllerImpl) setUserViewCookie(w http.ResponseWriter, user *view.User) error {
+func (a *authenticationControllerImpl) setUserViewCookie(w http.ResponseWriter, user *view.User, idpId string) error {
 	userView, err := security.CreateTokenForUser_deprecated(*user)
 	if err != nil {
 		return &exception.CustomError{
@@ -87,7 +87,7 @@ func (a *authenticationControllerImpl) setUserViewCookie(w http.ResponseWriter, 
 		Name:     "userView",
 		Value:    cookieValue,
 		MaxAge:   a.systemInfoService.GetRefreshTokenDurationSec(),
-		Secure:   false, //TODO: set to true
+		Secure:   true,
 		HttpOnly: false,
 		Path:     "/",
 	})

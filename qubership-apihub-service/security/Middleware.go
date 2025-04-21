@@ -17,14 +17,12 @@ package security
 import (
 	"fmt"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/cookie"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/shaj13/go-guardian/v2/auth"
 	"github.com/shaj13/go-guardian/v2/auth/strategies/union"
 	log "github.com/sirupsen/logrus"
 	"net/http"
 	"runtime/debug"
-	"strconv"
 )
 
 func Secure(next http.HandlerFunc) http.HandlerFunc {
@@ -57,9 +55,6 @@ func Secure(next http.HandlerFunc) http.HandlerFunc {
 			respondWithAuthFailedError(w, err)
 			return
 		}
-		if user.GetExtensions().Get(SetCookieExt) != "" {
-			setSessionCookie(w, user)
-		}
 
 		r = auth.RequestWithUser(user, r)
 		next.ServeHTTP(w, r)
@@ -86,9 +81,6 @@ func SecureUser(next http.HandlerFunc) http.HandlerFunc {
 			respondWithAuthFailedError(w, err)
 			return
 		}
-		if user.GetExtensions().Get(SetCookieExt) != "" {
-			setSessionCookie(w, user)
-		}
 
 		r = auth.RequestWithUser(user, r)
 		next.ServeHTTP(w, r)
@@ -114,9 +106,6 @@ func SecureJWT(next http.HandlerFunc) http.HandlerFunc {
 		if err != nil {
 			respondWithAuthFailedError(w, err)
 			return
-		}
-		if user.GetExtensions().Get(SetCookieExt) != "" {
-			setSessionCookie(w, user)
 		}
 
 		r = auth.RequestWithUser(user, r)
@@ -193,9 +182,6 @@ func SecureAgentProxy(next http.HandlerFunc) http.HandlerFunc {
 			respondWithAuthFailedError(w, err)
 			return
 		}
-		if user.GetExtensions().Get(SetCookieExt) != "" {
-			setSessionCookie(w, user)
-		}
 		//TODO: add custom header to the request
 		r = auth.RequestWithUser(user, r)
 		next.ServeHTTP(w, r)
@@ -222,16 +208,13 @@ func SecureProxy(next http.HandlerFunc) http.HandlerFunc {
 			respondWithAuthFailedError(w, err)
 			return
 		}
-		if user.GetExtensions().Get(SetCookieExt) != "" {
-			setSessionCookie(w, user)
-		}
 		r = auth.RequestWithUser(user, r)
 		//TODO: remove after frontend testing
 		r.Header.Del(CustomJwtAuthHeader)
 		cookies := r.Cookies()
 		r.Header.Del("Cookie")
 		for _, cookieValue := range cookies {
-			if cookieValue.Name != cookie.SessionCookieName {
+			if cookieValue.Name != AccessTokenCookieName && cookieValue.Name != RefreshTokenCookieName {
 				r.AddCookie(cookieValue)
 			}
 		}
@@ -239,19 +222,39 @@ func SecureProxy(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func setSessionCookie(w http.ResponseWriter, user auth.Info) {
-	tokenExpTimestamp, _ := strconv.ParseInt(user.GetExtensions().Get(RefreshTokenExpiresAtExt), 0, 64)
-	maxAge := utils.GetRemainingSeconds(tokenExpTimestamp)
-	http.SetCookie(w, &http.Cookie{
-		Name:     cookie.SessionCookieName,
-		Value:    user.GetExtensions().Get(SetCookieExt),
-		MaxAge:   int(maxAge),
-		Secure:   true,
-		HttpOnly: true,
-		Path:     "/",
-	})
-	user.GetExtensions().Del(SetCookieExt)
-	user.GetExtensions().Del(RefreshTokenExpiresAtExt)
+func RefreshToken(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Errorf("Request failed with panic: %v", err)
+				log.Tracef("Stacktrace: %v", string(debug.Stack()))
+				debug.PrintStack()
+				utils.RespondWithCustomError(w, &exception.CustomError{
+					Status:  http.StatusInternalServerError,
+					Message: http.StatusText(http.StatusInternalServerError),
+					Debug:   fmt.Sprintf("%v", err),
+				})
+				return
+			}
+		}()
+		user, err := refreshTokenStrategy.Authenticate(r.Context(), r)
+		if user != nil && user.GetExtensions().Get(SetAccessTokenCookieExt) != "" {
+			http.SetCookie(w, &http.Cookie{
+				Name:     AccessTokenCookieName,
+				Value:    user.GetExtensions().Get(SetAccessTokenCookieExt),
+				MaxAge:   int(accessTokenDuration.Seconds()),
+				Secure:   true,
+				HttpOnly: true,
+				Path:     "/",
+			})
+			w.WriteHeader(http.StatusOK)
+		} else {
+			if err != nil {
+				log.Debugf("Failed to refresh access token: %v", err)
+			}
+			next.ServeHTTP(w, r)
+		}
+	}
 }
 
 func respondWithAuthFailedError(w http.ResponseWriter, err error) {

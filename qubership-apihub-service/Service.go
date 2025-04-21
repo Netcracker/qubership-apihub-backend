@@ -510,8 +510,7 @@ func main() {
 	r.HandleFunc("/saml/acs", security.NoSecure(samlAuthController.AssertionConsumerHandler_deprecated)).Methods(http.MethodPost)
 	r.HandleFunc("/saml/metadata", security.NoSecure(samlAuthController.ServeMetadata_deprecated)).Methods(http.MethodGet)
 
-	//TODO: add access token refresh
-	r.HandleFunc("/api/v1/login/sso/{idpId}", security.NoSecure(authController.StartAuthentication)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/login/sso/{idpId}", security.RefreshToken(authController.StartAuthentication)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/saml/{idpId}/acs", security.NoSecure(authController.AssertionConsumerHandler)).Methods(http.MethodPost)
 	r.HandleFunc("/api/v1/saml/{idpId}/metadata", security.NoSecure(authController.ServeMetadata)).Methods(http.MethodGet)
 
@@ -653,8 +652,7 @@ func main() {
 		r.HandleFunc("/api/internal/users/{userId}/systemRole", security.Secure(roleController.TestSetUserSystemRole)).Methods(http.MethodPost)
 		r.HandleFunc("/api/internal/users", security.NoSecure(userController.CreateInternalUser)).Methods("POST")
 		r.HandleFunc("/api/v2/auth/local", security.NoSecure(security.CreateLocalUserToken_deprecated)).Methods("POST") //deprecated
-		//TODO: add access token refresh
-		r.HandleFunc("/api/v3/auth/local", security.NoSecure(security.CreateLocalUserToken)).Methods("POST")
+		r.HandleFunc("/api/v3/auth/local", security.RefreshToken(security.CreateLocalUserToken)).Methods("POST")
 
 		r.HandleFunc("/api/internal/clear/{testId}", security.Secure(cleanupController.ClearTestData)).Methods(http.MethodDelete)
 

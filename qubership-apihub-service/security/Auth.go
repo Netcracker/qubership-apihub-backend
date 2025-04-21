@@ -17,12 +17,10 @@ package security
 import (
 	"crypto/rsa"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/cookie"
 	"net/http"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
@@ -42,6 +40,7 @@ var fullAuthStrategy union.Union
 var userAuthStrategy union.Union
 var proxyAuthStrategy union.Union
 var jwtAuthStrategy union.Union
+var refreshTokenStrategy auth.Strategy
 
 var keeper jwt.SecretsKeeper
 var userService service.UserService
@@ -86,6 +85,7 @@ func SetupGoGuardian(userServiceLocal service.UserService, roleServiceLocal serv
 	jwtValidator := NewJWTValidator(keeper, tokenRevocationService)
 	bearerTokenStrategy := NewBearerTokenStrategy(cache, jwtValidator)
 	sessionCookieStrategy := NewApihubSessionCookieStrategy(cache, jwtValidator)
+	refreshTokenStrategy = NewRefreshTokenStrategy(cache, jwtValidator)
 	fullAuthStrategy = union.New(bearerTokenStrategy, sessionCookieStrategy, apihubApiKeyStrategy, personalAccessTokenStrategy)
 	userAuthStrategy = union.New(bearerTokenStrategy, sessionCookieStrategy, personalAccessTokenStrategy)
 	jwtAuthStrategy = union.New(bearerTokenStrategy, sessionCookieStrategy)
@@ -120,7 +120,7 @@ func CreateLocalUserToken_deprecated(w http.ResponseWriter, r *http.Request) {
 }
 
 func CreateTokenForUser_deprecated(dbUser view.User) (*UserView, error) {
-	accessToken, refreshToken, err := issueTokenPair(dbUser)
+	accessToken, refreshToken, err := IssueTokenPair(dbUser)
 	if err != nil {
 		return nil, err
 	}
@@ -135,22 +135,27 @@ func CreateLocalUserToken(w http.ResponseWriter, r *http.Request) {
 		respondWithAuthFailedError(w, err)
 		return
 	}
-	authCookie, err := CreateTokenForUser(*user)
+	accessToken, refreshToken, err := IssueTokenPair(*user)
 	if err != nil {
 		respondWithAuthFailedError(w, err)
 		return
 	}
 
-	response, _ := json.Marshal(authCookie)
-	cookieValue := base64.StdEncoding.EncodeToString(response)
-
 	http.SetCookie(w, &http.Cookie{
-		Name:     cookie.SessionCookieName,
-		Value:    cookieValue,
-		MaxAge:   int(refreshTokenDuration.Seconds()),
+		Name:     AccessTokenCookieName,
+		Value:    accessToken,
+		MaxAge:   int(accessTokenDuration.Seconds()),
 		Secure:   true,
 		HttpOnly: true,
 		Path:     "/",
+	})
+	http.SetCookie(w, &http.Cookie{
+		Name:     RefreshTokenCookieName,
+		Value:    refreshToken,
+		MaxAge:   int(refreshTokenDuration.Seconds()),
+		Secure:   true,
+		HttpOnly: true,
+		Path:     "/api/v3/auth/local",
 	})
 	w.WriteHeader(http.StatusOK)
 }
@@ -168,17 +173,7 @@ func authenticateUser(r *http.Request) (*view.User, error) {
 	return user, nil
 }
 
-func CreateTokenForUser(dbUser view.User) (*cookie.SessionCookie, error) {
-	accessToken, refreshToken, err := issueTokenPair(dbUser)
-	if err != nil {
-		return nil, err
-	}
-
-	authCookie := cookie.SessionCookie{AccessToken: accessToken, RefreshToken: refreshToken}
-	return &authCookie, nil
-}
-
-func issueTokenPair(dbUser view.User) (accessToken string, refreshToken string, err error) {
+func IssueTokenPair(dbUser view.User) (accessToken string, refreshToken string, err error) {
 	user := auth.NewUserInfo(dbUser.Name, dbUser.Id, []string{}, auth.Extensions{})
 	accessDuration := jwt.SetExpDuration(accessTokenDuration) // should be more than one minute!
 
