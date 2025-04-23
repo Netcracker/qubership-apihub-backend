@@ -642,11 +642,13 @@ func (o operationRepositoryImpl) GetChangelog_deprecated(searchQuery entity.Chan
 func (o operationRepositoryImpl) GetChangelog(searchQuery entity.ChangelogSearchQueryEntity) ([]entity.OperationComparisonChangelogEntity, error) {
 	var result []entity.OperationComparisonChangelogEntity
 
+	// select current or previous operation(based on operation_id presence) as a main source for filtration and data like 'type'
 	comparisonsQuery := o.cp.GetConnection().Model(&entity.OperationComparisonChangelogEntity{}).
 		TableExpr("operation_comparison").
-		ColumnExpr("case when data_hash is null then previous_package_id else package_id end operation_package_id").
-		ColumnExpr("case when data_hash is null then previous_version else version end operation_version").
-		ColumnExpr("case when data_hash is null then previous_revision else revision end operation_revision").
+		ColumnExpr("case when operation_id is null then previous_package_id else package_id end selected_package_id").
+		ColumnExpr("case when operation_id is null then previous_version else version end selected_version").
+		ColumnExpr("case when operation_id is null then previous_revision else revision end selected_revision").
+		ColumnExpr("case when operation_id is null then previous_operation_id else operation_id end selected_operation_id").
 		ColumnExpr("operation_comparison.*").
 		Where(`comparison_id in (
 			select unnest(array_append(refs, ?)) id from version_comparison where (comparison_id = ?)
@@ -656,15 +658,15 @@ func (o operationRepositoryImpl) GetChangelog(searchQuery entity.ChangelogSearch
 	query := o.cp.GetConnection().Model(&result).With("comparisons", comparisonsQuery).
 		TableExpr("comparisons").
 		ColumnExpr("operation_comparison.*").
-		ColumnExpr("o.metadata").
+		ColumnExpr("curr_op.metadata").
+		ColumnExpr("prev_op.metadata previous_metadata").
 		ColumnExpr("curr_op.title title").
 		ColumnExpr("prev_op.title previous_title").
 		ColumnExpr("o.type").
 		ColumnExpr("curr_op.kind kind").
 		ColumnExpr("prev_op.kind previous_kind").
 		ColumnExpr("curr_op.api_audience api_audience").
-		ColumnExpr("prev_op.api_audience previous_api_audience").
-		ColumnExpr("prev_op.metadata previous_metadata")
+		ColumnExpr("prev_op.api_audience previous_api_audience")
 
 	query.Join("left join operation curr_op").
 		JoinOn("curr_op.package_id = operation_comparison.package_id").
@@ -676,11 +678,12 @@ func (o operationRepositoryImpl) GetChangelog(searchQuery entity.ChangelogSearch
 		JoinOn("prev_op.version = operation_comparison.previous_version").
 		JoinOn("prev_op.revision = operation_comparison.previous_revision").
 		JoinOn("prev_op.operation_id = operation_comparison.previous_operation_id")
+	// current operation or previous if operation_id is null
 	query.Join("inner join operation o").
-		JoinOn("o.package_id = operation_comparison.operation_package_id").
-		JoinOn("o.version = operation_comparison.operation_version").
-		JoinOn("o.revision = operation_comparison.operation_revision").
-		JoinOn("o.operation_id = operation_comparison.operation_id")
+		JoinOn("o.package_id = operation_comparison.selected_package_id").
+		JoinOn("o.version = operation_comparison.selected_version").
+		JoinOn("o.revision = operation_comparison.selected_revision").
+		JoinOn("o.operation_id = operation_comparison.selected_operation_id")
 	if searchQuery.TextFilter != "" {
 		searchQuery.TextFilter = "%" + utils.LikeEscaped(searchQuery.TextFilter) + "%"
 		query.JoinOn("o.title ilike ? or o.metadata->>? ilike ? or o.metadata->>? ilike ?", searchQuery.TextFilter, "path", searchQuery.TextFilter, "method", searchQuery.TextFilter)
