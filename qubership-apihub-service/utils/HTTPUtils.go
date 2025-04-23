@@ -17,12 +17,22 @@ package utils
 import (
 	"encoding/json"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"net/http"
 )
 
+func RedirectHandler(w http.ResponseWriter, r *http.Request) {
+	redirectURI := r.URL.Query().Get("redirectUri")
+	if redirectURI == "" {
+		redirectURI = "/"
+	}
+	log.Debugf("redirect url - %s", redirectURI)
+
+	http.Redirect(w, r, redirectURI, http.StatusFound)
+}
+
 func RespondWithError(w http.ResponseWriter, msg string, err error) {
-	logrus.Errorf("%s: %s", msg, err.Error())
+	log.Errorf("%s: %s", msg, err.Error())
 	if customError, ok := err.(*exception.CustomError); ok {
 		RespondWithCustomError(w, customError)
 	} else {
@@ -34,7 +44,7 @@ func RespondWithError(w http.ResponseWriter, msg string, err error) {
 }
 
 func RespondWithCustomError(w http.ResponseWriter, err *exception.CustomError) {
-	logrus.Debugf("Request failed. Code = %d. Message = %s. Params: %v. Debug: %s", err.Status, err.Message, err.Params, err.Debug)
+	log.Debugf("Request failed. Code = %d. Message = %s. Params: %v. Debug: %s", err.Status, err.Message, err.Params, err.Debug)
 	RespondWithJson(w, err.Status, err)
 }
 

@@ -128,7 +128,7 @@ func SecureWebsocket(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 		}()
-		//TODO: should be removed
+		//TODO: remove after frontend testing
 		token := r.URL.Query().Get("token")
 		r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 		_, user, err := fullAuthStrategy.AuthenticateRequest(r)
@@ -182,7 +182,11 @@ func SecureAgentProxy(next http.HandlerFunc) http.HandlerFunc {
 			respondWithAuthFailedError(w, err)
 			return
 		}
-		//TODO: add custom header to the request
+		//TODO: remove after the agent has migrated to using 'apihub-access-token' in authentication
+		if r.Header.Get(CustomJwtAuthHeader) == "" {
+			accessTokenCookie, _ := r.Cookie(AccessTokenCookieName)
+			r.Header.Set(CustomJwtAuthHeader, accessTokenCookie.Value)
+		}
 		r = auth.RequestWithUser(user, r)
 		next.ServeHTTP(w, r)
 	}
@@ -203,6 +207,7 @@ func SecureProxy(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 		}()
+		//TODO: need to remove customJwtStrategy and use sessionCookie strategy only
 		user, err := proxyAuthStrategy.Authenticate(r.Context(), r)
 		if err != nil {
 			respondWithAuthFailedError(w, err)
@@ -211,6 +216,7 @@ func SecureProxy(next http.HandlerFunc) http.HandlerFunc {
 		r = auth.RequestWithUser(user, r)
 		//TODO: remove after frontend testing
 		r.Header.Del(CustomJwtAuthHeader)
+
 		cookies := r.Cookies()
 		r.Header.Del("Cookie")
 		for _, cookieValue := range cookies {

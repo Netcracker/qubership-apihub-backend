@@ -652,7 +652,8 @@ func main() {
 		r.HandleFunc("/api/internal/users/{userId}/systemRole", security.Secure(roleController.TestSetUserSystemRole)).Methods(http.MethodPost)
 		r.HandleFunc("/api/internal/users", security.NoSecure(userController.CreateInternalUser)).Methods("POST")
 		r.HandleFunc("/api/v2/auth/local", security.NoSecure(security.CreateLocalUserToken_deprecated)).Methods("POST") //deprecated
-		r.HandleFunc("/api/v3/auth/local", security.RefreshToken(security.CreateLocalUserToken)).Methods("POST")
+		r.HandleFunc("/api/v3/auth/local", security.CreateLocalUserToken).Methods("POST")
+		r.HandleFunc("/api/v3/auth/local/refresh", security.RefreshToken(utils.RedirectHandler)).Methods("GET")
 
 		r.HandleFunc("/api/internal/clear/{testId}", security.Secure(cleanupController.ClearTestData)).Methods(http.MethodDelete)
 

@@ -875,11 +875,12 @@ func (g systemInfoServiceImpl) setAuthConfig() error {
 
 	if !g.IsProductionMode() {
 		localIDP := idp.IDP{
-			Id:                 LocalIDPId,
-			IdpType:            idp.IDPTypeInternal,
-			DisplayName:        "Local",
-			ImageSvg:           "",
-			LoginStartEndpoint: "/api/v3/auth/local",
+			Id:                   LocalIDPId,
+			IdpType:              idp.IDPTypeInternal,
+			DisplayName:          "Local",
+			ImageSvg:             "",
+			LoginStartEndpoint:   "/api/v3/auth/local",
+			RefreshTokenEndpoint: "/api/v3/auth/local/refresh",
 		}
 		authConfig.Providers = append(authConfig.Providers, localIDP)
 	}

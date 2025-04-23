@@ -117,6 +117,8 @@ paths:
                               type: string
                             loginStartEndpoint:
                               type: string
+                            refreshTokenEndpoint:
+                              type: string
                       defaultProviderId:
                         type: string
         "500":
@@ -154,7 +156,7 @@ paths:
             example: "https://apihub.qubership.org/portal"
       responses:
         "302":
-          description: Status Found
+          description: Found
           headers:
             Set-Cookie:
               description: A base64 encoded userView cookie, containing the user data and access token.
@@ -180,21 +182,21 @@ paths:
                 InternalServerError:
                   $ref: "#/components/examples/InternalServerError"
   "/api/v1/login/sso/{idpId}":
-    post:
+    get:
       x-nc-api-audience: noBWC
       tags:
         - Auth
-      summary: Authentication via an external Identity Provider
+      summary: Authentication via an external identity provider
       description: |
-        Starts the authentication process in APIHUB via an external Identity Provider.
+        Starts the authentication process in APIHUB via an external identity provider.
 
         In case of successful authentication, the request will be redirected to the **redirectUri** and
         the response will contain an access token cookie and a refresh token cookie for future API calls.
         All subsequent APIHUB calls must use the access token cookie in **CookieAuth**.
 
         If the request contained a valid refresh token, the authentication process will not be started and a new access token will be issued.
-      operationId: postAuth
-      security: [ { } ]
+      operationId: ssoLogin
+      security: [{}]
       parameters:
         - name: redirectUri
           in: query
@@ -211,6 +213,12 @@ paths:
           schema:
             type: string
             example: external-idp
+        - name: apihub-refresh-token
+          in: cookie
+          description: Refresh token that will be used to issue a new access token.
+          schema:
+            type: string
+            example: "apihub-refresh-token=eyJhbGciOiJSUzI1NiIsImtpZCI6InNlY3JldC1pZCIsInR5cCI6IkpXVCJ9.eyJFeHRlbnNpb25zIjp7InN5c3RlbVJvbGUiOlsiU3lzdGVtIGFkbWluaXN0cmF0b3IiXX0sIkdyb3VwcyI6W10sIklEIjoiYXBpaHViIiwiTmFtZSI6ImFwaWh1YiIsImF1ZCI6WyIiXSwiZXhwIjoxNzQ1MzI1MjkxLCJpYXQiOjE3NDUzMjE2OTEsIm5iZiI6MTc0NTMyMTY5MSwic3ViIjoiYXBpaHViIn0.SN-XnFPWUy6FlzjJcKsZIFsCMSFSRR7W7NHBpBAlbyEJFjXDEpBR9zHHlf2z8Voa2Rzzs6agcb16QS-5TkBOq5FN1GaOZO5okXkJBia1JE8ukFBFsWLYsRNFGD_0WzOp1sSq_9xtnBAYrIikM93sZJ_woxFYwfWg-CBA1OAwhNvJk3HUI_Ql2tRyGgtgB6WYncVpWgYyzu6upXUuxz5TocJfFEqIEqpbTvtE7AOUpACO8r4uY0lTySzk0d6B_XngLZEwZdD4gb5Mm40QPWwexE5hBxof1ZLZGz-09oSQjKgrlIpA9x7v7-Iy7BouQoLBNHx1Dff48BPlok4eQrJqmg"
       responses:
         "200":
           description: Successful access token refresh
@@ -221,7 +229,7 @@ paths:
                 type: string
                 example: "apihub-access-token=eyJhbGciOiJSUzI1NiIsImtpZCI6InNlY3JldC1pZCIsInR5cCI6IkpXVCJ9.eyJFeHRlbnNpb25zIjp7InN5c3RlbVJvbGUiOlsiU3lzdGVtIGFkbWluaXN0cmF0b3IiXX0sIkdyb3VwcyI6W10sIklEIjoiYXBpaHViIiwiTmFtZSI6ImFwaWh1YiIsImF1ZCI6WyIiXSwiZXhwIjoxNzQ0OTcxNzI5LCJpYXQiOjE3NDQ5NjgxMjksIm5iZiI6MTc0NDk2ODEyOSwic3ViIjoiYXBpaHViIn0.JjoK6w2XqjSBfiKxFm-SIPREHDxygfSjkh-Y41ESAVA68zjZMGs_sl8pECWB41jUL9lSy63WRw9aAHMCyWsM5kMdYi43kVFm1dWAv9R0PR31TBkHLjWoRjb4T-9TdHaCJ7O6ZWVFc8fR3e5YmEtWSvXXWCx67ipYbCJYC_9zPclNdONTP8cZiTM8g6AGGVuxrwNR1gGHFFTyb29jEsd9Ucu22a8lm0iJ1_a33jch3x9LGB95zumFL8WsQ4HmhLO_6PYbSsZojAe20DLoiX41SvQsQLWfmQAURih-9iRLXVTaxs3XjkupCqfnIQcEDM9ANhaUrrme1_hJwqT4VoqOjw"
         "302":
-          description: Status Found
+          description: Found
           headers:
             Set-Cookie:
               description: |
@@ -253,29 +261,26 @@ paths:
       x-nc-api-audience: noBWC
       tags:
         - Auth
-      summary: Authentication via the local Identity Provider
+      summary: Authentication via the local identity provider
       description: |
-        Performs authentication in APIHUB via the local Identity Provider.
+        Performs authentication in APIHUB via the local identity provider.
 
         **Note: This endpoint is not available in production mode.**
 
         In case of successful authentication, the response will contain an access token cookie and a refresh token cookie for future API calls.
         All subsequent APIHUB calls must use the access token cookie in **CookieAuth**.
-
-        If the request contained a valid refresh token, the authentication process will not be started and a new access token will be issued.
-      operationId: postAuth
-      security: [{}]
+      operationId: localLogin
+      security:
+        - BasicAuth: []
       responses:
         "200":
           description: Success
           headers:
             Set-Cookie:
               description: |
-                One or more Set-Cookie headers may be returned, depending on the operation:
-                  - For initial login, multiple Set-Cookie headers are present:
-                    - apihub-access-token containing the access token with a short expiration time
-                    - apihub-refresh-token containing the refresh token with a longer expiration time
-                  - For token refresh, apihub-access-token cookie, containing a refreshed access token.
+                Multiple Set-Cookie headers are returned:
+                - apihub-access-token containing the access token with a short expiration time
+                - apihub-refresh-token containing the refresh token with a longer expiration time
               schema:
                 type: string
         "401":
@@ -285,6 +290,44 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
               examples: {}
+  "/api/v3/auth/local/refresh":
+    get:
+      x-nc-api-audience: noBWC
+      tags:
+        - Auth
+      summary: Refreshing the local user token
+      description: |
+        Performs access token refresh, in case of failure performs redirection to the **redirectUri**.
+
+        **Note: This endpoint is not available in production mode.**
+      operationId: refreshToken
+      security: [{}]
+      parameters:
+        - name: redirectUri
+          in: query
+          description: URI, where user must be redirected in case of unsuccessful token refresh.
+          required: true
+          schema:
+            type: string
+            format: uri
+            example: "https://apihub.qubership.org/login"
+        - name: apihub-refresh-token
+          in: cookie
+          description: Refresh token that will be used to issue a new access token.
+          schema:
+            type: string
+            example: "apihub-refresh-token=eyJhbGciOiJSUzI1NiIsImtpZCI6InNlY3JldC1pZCIsInR5cCI6IkpXVCJ9.eyJFeHRlbnNpb25zIjp7InN5c3RlbVJvbGUiOlsiU3lzdGVtIGFkbWluaXN0cmF0b3IiXX0sIkdyb3VwcyI6W10sIklEIjoiYXBpaHViIiwiTmFtZSI6ImFwaWh1YiIsImF1ZCI6WyIiXSwiZXhwIjoxNzQ1MzI1MjkxLCJpYXQiOjE3NDUzMjE2OTEsIm5iZiI6MTc0NTMyMTY5MSwic3ViIjoiYXBpaHViIn0.SN-XnFPWUy6FlzjJcKsZIFsCMSFSRR7W7NHBpBAlbyEJFjXDEpBR9zHHlf2z8Voa2Rzzs6agcb16QS-5TkBOq5FN1GaOZO5okXkJBia1JE8ukFBFsWLYsRNFGD_0WzOp1sSq_9xtnBAYrIikM93sZJ_woxFYwfWg-CBA1OAwhNvJk3HUI_Ql2tRyGgtgB6WYncVpWgYyzu6upXUuxz5TocJfFEqIEqpbTvtE7AOUpACO8r4uY0lTySzk0d6B_XngLZEwZdD4gb5Mm40QPWwexE5hBxof1ZLZGz-09oSQjKgrlIpA9x7v7-Iy7BouQoLBNHx1Dff48BPlok4eQrJqmg"
+      responses:
+        "200":
+          description: Successful access token refresh
+          headers:
+            Set-Cookie:
+              description: apihub-access-token cookie, containing a refreshed access token.
+              schema:
+                type: string
+                example: "apihub-access-token=eyJhbGciOiJSUzI1NiIsImtpZCI6InNlY3JldC1pZCIsInR5cCI6IkpXVCJ9.eyJFeHRlbnNpb25zIjp7InN5c3RlbVJvbGUiOlsiU3lzdGVtIGFkbWluaXN0cmF0b3IiXX0sIkdyb3VwcyI6W10sIklEIjoiYXBpaHViIiwiTmFtZSI6ImFwaWh1YiIsImF1ZCI6WyIiXSwiZXhwIjoxNzQ0OTcxNzI5LCJpYXQiOjE3NDQ5NjgxMjksIm5iZiI6MTc0NDk2ODEyOSwic3ViIjoiYXBpaHViIn0.JjoK6w2XqjSBfiKxFm-SIPREHDxygfSjkh-Y41ESAVA68zjZMGs_sl8pECWB41jUL9lSy63WRw9aAHMCyWsM5kMdYi43kVFm1dWAv9R0PR31TBkHLjWoRjb4T-9TdHaCJ7O6ZWVFc8fR3e5YmEtWSvXXWCx67ipYbCJYC_9zPclNdONTP8cZiTM8g6AGGVuxrwNR1gGHFFTyb29jEsd9Ucu22a8lm0iJ1_a33jch3x9LGB95zumFL8WsQ4HmhLO_6PYbSsZojAe20DLoiX41SvQsQLWfmQAURih-9iRLXVTaxs3XjkupCqfnIQcEDM9ANhaUrrme1_hJwqT4VoqOjw"
+        "302":
+          description: Found
   /api/v1/logout:
     post:
       tags:
@@ -293,7 +336,8 @@ paths:
       description: Logs out the authenticated user and invalidates all active sessions.
       operationId: logoutUser
       security:
-        - CookieAuth: []
+        - BearerAuth: [ ]
+        - CookieAuth: [ ]
       responses:
         "204":
           description: No content

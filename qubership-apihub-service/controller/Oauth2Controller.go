@@ -16,8 +16,10 @@ package controller
 
 import (
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"net/http"
 	"net/url"
@@ -161,6 +163,29 @@ func (o oauth20ControllerImpl) GitlabOauthCallback(w http.ResponseWriter, r *htt
 		return
 	}
 
+	//TODO: Remove after the frontend switches to using the /api/v1/user endpoint
+	userView, err := security.CreateTokenForUser_deprecated(*user)
+	if err != nil {
+		log.Errorf("Create token for saml process has error -%s", err.Error())
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusInternalServerError,
+			Message: "Create token for saml process has error - $error",
+			Params:  map[string]interface{}{"error": err.Error()},
+		})
+		return
+	}
+
+	response, _ := json.Marshal(userView)
+	cookieValue := base64.StdEncoding.EncodeToString(response)
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "userView",
+		Value:    cookieValue,
+		MaxAge:   int((time.Hour * 12).Seconds()),
+		Secure:   true,
+		HttpOnly: false,
+		Path:     "/",
+	})
 	http.Redirect(w, r, redirectUri, http.StatusFound)
 }
 

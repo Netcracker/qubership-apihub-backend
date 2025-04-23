@@ -27,7 +27,6 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	"github.com/shaj13/go-guardian/v2/auth"
 	"github.com/shaj13/go-guardian/v2/auth/strategies/jwt"
-	"github.com/shaj13/go-guardian/v2/auth/strategies/token"
 	"github.com/shaj13/go-guardian/v2/auth/strategies/union"
 	"github.com/shaj13/libcache"
 	_ "github.com/shaj13/libcache/fifo"
@@ -48,8 +47,6 @@ var roleService service.RoleService
 
 var accessTokenDuration time.Duration
 var refreshTokenDuration time.Duration
-
-const CustomJwtAuthHeader = "X-Apihub-Authorization"
 
 var publicKey []byte
 
@@ -84,13 +81,13 @@ func SetupGoGuardian(userServiceLocal service.UserService, roleServiceLocal serv
 	})
 	jwtValidator := NewJWTValidator(keeper, tokenRevocationService)
 	bearerTokenStrategy := NewBearerTokenStrategy(cache, jwtValidator)
-	sessionCookieStrategy := NewApihubSessionCookieStrategy(cache, jwtValidator)
+	accessTokenCookieStrategy := NewAccessTokenCookieStrategy(cache, jwtValidator)
 	refreshTokenStrategy = NewRefreshTokenStrategy(cache, jwtValidator)
-	fullAuthStrategy = union.New(bearerTokenStrategy, sessionCookieStrategy, apihubApiKeyStrategy, personalAccessTokenStrategy)
-	userAuthStrategy = union.New(bearerTokenStrategy, sessionCookieStrategy, personalAccessTokenStrategy)
-	jwtAuthStrategy = union.New(bearerTokenStrategy, sessionCookieStrategy)
-	customJwtStrategy := jwt.New(cache, keeper, token.SetParser(token.XHeaderParser(CustomJwtAuthHeader)))
-	proxyAuthStrategy = union.New(customJwtStrategy, sessionCookieStrategy)
+	fullAuthStrategy = union.New(bearerTokenStrategy, accessTokenCookieStrategy, apihubApiKeyStrategy, personalAccessTokenStrategy)
+	userAuthStrategy = union.New(bearerTokenStrategy, accessTokenCookieStrategy, personalAccessTokenStrategy)
+	jwtAuthStrategy = union.New(bearerTokenStrategy, accessTokenCookieStrategy)
+	customJwtStrategy := NewCustomJWTStrategy(cache, jwtValidator)
+	proxyAuthStrategy = union.New(customJwtStrategy, accessTokenCookieStrategy)
 
 	return nil
 }
@@ -155,7 +152,7 @@ func CreateLocalUserToken(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   int(refreshTokenDuration.Seconds()),
 		Secure:   true,
 		HttpOnly: true,
-		Path:     "/api/v3/auth/local",
+		Path:     "/api/v3/auth/local/refresh",
 	})
 	w.WriteHeader(http.StatusOK)
 }
