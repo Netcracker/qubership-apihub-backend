@@ -509,22 +509,31 @@ func MakeOperationComparisonChangelogView(entity OperationComparisonChangelogEnt
 
 	switch entity.ApiType {
 	case string(view.RestApiType):
-		current := &view.RestOperationComparisonChangelogView{
-			GenericComparisonOperationView: currentGenericView,
-			RestOperationMetadata: view.RestOperationMetadata{
-				Tags:   entity.Metadata.GetTags(),
-				Path:   entity.Metadata.GetPath(),
-				Method: entity.Metadata.GetMethod(),
-			},
+		var current *view.RestOperationComparisonChangelogView
+		var previous *view.RestOperationComparisonChangelogView
+
+		if entity.OperationId != "" {
+			current = &view.RestOperationComparisonChangelogView{
+				GenericComparisonOperationView: currentGenericView,
+				RestOperationMetadata: view.RestOperationMetadata{
+					Tags:   entity.Metadata.GetTags(),
+					Path:   entity.Metadata.GetPath(),
+					Method: entity.Metadata.GetMethod(),
+				},
+			}
 		}
-		previous := &view.RestOperationComparisonChangelogView{
-			GenericComparisonOperationView: previousGenericView,
-			RestOperationMetadata: view.RestOperationMetadata{
-				Tags:   entity.PreviousMetadata.GetTags(),
-				Path:   entity.PreviousMetadata.GetPath(),
-				Method: entity.PreviousMetadata.GetMethod(),
-			},
+
+		if entity.PreviousOperationId != "" {
+			previous = &view.RestOperationComparisonChangelogView{
+				GenericComparisonOperationView: previousGenericView,
+				RestOperationMetadata: view.RestOperationMetadata{
+					Tags:   entity.PreviousMetadata.GetTags(),
+					Path:   entity.PreviousMetadata.GetPath(),
+					Method: entity.PreviousMetadata.GetMethod(),
+				},
+			}
 		}
+
 		res := &view.RestOperationPairChangesView{
 			CurrentOperation:  current,
 			PreviousOperation: previous,
