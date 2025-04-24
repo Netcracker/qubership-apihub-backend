@@ -514,13 +514,13 @@ func main() {
 	r.HandleFunc("/api/v1/saml/{idpId}/acs", security.NoSecure(authController.AssertionConsumerHandler)).Methods(http.MethodPost)
 	r.HandleFunc("/api/v1/saml/{idpId}/metadata", security.NoSecure(authController.ServeMetadata)).Methods(http.MethodGet)
 
+	r.HandleFunc("/api/v1/logout", security.SecureJWT(logoutController.Logout)).Methods(http.MethodPost)
+
 	// Required for agent to verify apihub tokens
 	r.HandleFunc("/api/v2/auth/publicKey", security.NoSecure(jwtPubKeyController.GetRsaPublicKey)).Methods(http.MethodGet)
 	// Required to verify api key for external authorization
 	r.HandleFunc("/api/v2/auth/apiKey", security.NoSecure(apihubApiKeyController.GetApiKeyByKey)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/auth/apiKey/{apiKeyId}", security.Secure(apihubApiKeyController.GetApiKeyById)).Methods(http.MethodGet)
-
-	r.HandleFunc("/api/v1/logout", security.SecureJWT(logoutController.Logout)).Methods(http.MethodPost)
 
 	r.HandleFunc("/api/v2/users/{userId}/profile/avatar", security.NoSecure(userController.GetUserAvatar)).Methods(http.MethodGet) // Should not be secured! FE renders avatar as <img src='avatarUrl' and it couldn't include auth header
 	r.HandleFunc("/api/v2/users", security.Secure(userController.GetUsers)).Methods(http.MethodGet)
@@ -652,7 +652,7 @@ func main() {
 		r.HandleFunc("/api/internal/users/{userId}/systemRole", security.Secure(roleController.TestSetUserSystemRole)).Methods(http.MethodPost)
 		r.HandleFunc("/api/internal/users", security.NoSecure(userController.CreateInternalUser)).Methods("POST")
 		r.HandleFunc("/api/v2/auth/local", security.NoSecure(security.CreateLocalUserToken_deprecated)).Methods("POST") //deprecated
-		r.HandleFunc("/api/v3/auth/local", security.CreateLocalUserToken).Methods("POST")
+		r.HandleFunc("/api/v3/auth/local", security.NoSecure(security.CreateLocalUserToken)).Methods("POST")
 		r.HandleFunc("/api/v3/auth/local/refresh", security.RefreshToken(utils.RedirectHandler)).Methods("GET")
 
 		r.HandleFunc("/api/internal/clear/{testId}", security.Secure(cleanupController.ClearTestData)).Methods(http.MethodDelete)

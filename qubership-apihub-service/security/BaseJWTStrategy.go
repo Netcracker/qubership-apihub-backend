@@ -24,8 +24,6 @@ import (
 	"time"
 )
 
-const TokenIssuedAtExt = "issuedAt"
-
 type tokenExtractorFunc func(r *http.Request) (string, error)
 
 type baseJWTStrategyImpl struct {
@@ -60,12 +58,12 @@ func (b baseJWTStrategyImpl) Authenticate(ctx goctx.Context, r *http.Request) (a
 		return info, nil
 	}
 
-	info, t, err := b.jwtValidator.ValidateToken(token)
+	info, expirationTime, err := b.jwtValidator.ValidateToken(token)
 	if err != nil {
 		return nil, fmt.Errorf("authentication failed: %w", err)
 	}
 
-	b.cache.StoreWithTTL(token, info, time.Until(t))
+	b.cache.StoreWithTTL(token, info, time.Until(expirationTime))
 
 	return info, nil
 }

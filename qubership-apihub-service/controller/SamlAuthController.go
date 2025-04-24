@@ -32,7 +32,7 @@ type SamlAuthController interface {
 	AssertionConsumerHandler_deprecated(w http.ResponseWriter, r *http.Request)
 	StartSamlAuthentication_deprecated(w http.ResponseWriter, r *http.Request)
 	ServeMetadata_deprecated(w http.ResponseWriter, r *http.Request)
-	GetSystemSSOInfo(w http.ResponseWriter, r *http.Request)
+	GetSystemSSOInfo(w http.ResponseWriter, r *http.Request) //TODO: move to AuthController when the frontend migrates to the new SSO login API
 }
 
 func NewSamlAuthController(userService service.UserService, systemInfoService service.SystemInfoService, idpManager idp.IDPManager) SamlAuthController {

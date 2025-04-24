@@ -564,12 +564,12 @@ func (u usersServiceImpl) GetExtendedUser(ctx context.SecurityContext) (*view.Ex
 		return nil, fmt.Errorf("failed to get user from DB: %v", err)
 	}
 	if userEntity != nil {
-		status, err := u.integrationService.GetUserApiKeyStatus(view.GitlabIntegration, userId)
+		apiKeyStatus, err := u.integrationService.GetUserApiKeyStatus(view.GitlabIntegration, userId)
 		if err != nil {
 			return nil, fmt.Errorf("failed to check gitlab integration status: %v", err)
 		}
 		gitIntegrationStatus := false
-		if status.Status == ApiKeyStatusPresent {
+		if apiKeyStatus.Status == ApiKeyStatusPresent {
 			gitIntegrationStatus = true
 		}
 		var ttlSeconds *int

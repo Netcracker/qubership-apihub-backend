@@ -877,7 +877,7 @@ func (g systemInfoServiceImpl) setAuthConfig() error {
 		localIDP := idp.IDP{
 			Id:                   LocalIDPId,
 			IdpType:              idp.IDPTypeInternal,
-			DisplayName:          "Local",
+			DisplayName:          "Local IDP",
 			ImageSvg:             "",
 			LoginStartEndpoint:   "/api/v3/auth/local",
 			RefreshTokenEndpoint: "/api/v3/auth/local/refresh",
@@ -896,9 +896,8 @@ func (g systemInfoServiceImpl) setAuthConfig() error {
 			DisplayName:        os.Getenv(EXTERNAL_IDP_DISPLAY_NAME),
 			ImageSvg:           os.Getenv(EXTERNAL_IDP_IMAGE_SVG),
 			LoginStartEndpoint: "/api/v1/login/sso/" + ExternalIDPId,
-
-			Protocol:          idp.AuthProtocolSAML,
-			SAMLConfiguration: samlConfig,
+			Protocol:           idp.AuthProtocolSAML,
+			SAMLConfiguration:  samlConfig,
 		}
 		authConfig.Providers = append(authConfig.Providers, externalIDP)
 	}

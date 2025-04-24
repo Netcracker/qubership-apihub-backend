@@ -23,13 +23,13 @@ import (
 
 const AccessTokenCookieName = "apihub-access-token"
 
-func NewAccessTokenCookieStrategy(cache libcache.Cache, jwtValidator JWTValidator) auth.Strategy {
-	extractCookieToken := func(r *http.Request) (string, error) {
+func NewCookieTokenStrategy(cache libcache.Cache, jwtValidator JWTValidator) auth.Strategy {
+	extractAccessTokenFromCookie := func(r *http.Request) (string, error) {
 		cookie, err := r.Cookie(AccessTokenCookieName)
 		if err != nil {
 			return "", fmt.Errorf("access token cookie not found")
 		}
 		return cookie.Value, nil
 	}
-	return NewBaseJWTStrategy(cache, jwtValidator, extractCookieToken)
+	return NewBaseJWTStrategy(cache, jwtValidator, extractAccessTokenFromCookie)
 }

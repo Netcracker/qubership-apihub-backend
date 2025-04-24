@@ -59,8 +59,8 @@ func NewIDPManager(authConfig AuthConfig) (IDPManager, error) {
 
 // TODO:define an interface type for a provider after OIDC support is implemented
 type SAMLProvider struct {
-	Saml   *samlsp.Middleware
-	Config IDP
+	SAMLInstance *samlsp.Middleware
+	Config       IDP
 }
 
 type idpManagerImpl struct {
@@ -83,8 +83,8 @@ func (i *idpManagerImpl) createSAMLProvider(idpConfig IDP) (SAMLProvider, error)
 		return SAMLProvider{}, err
 	}
 	return SAMLProvider{
-		Saml:   instance,
-		Config: idpConfig,
+		SAMLInstance: instance,
+		Config:       idpConfig,
 	}, nil
 }
 

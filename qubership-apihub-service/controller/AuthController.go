@@ -64,7 +64,7 @@ func (a *authControllerImpl) ServeMetadata(w http.ResponseWriter, r *http.Reques
 	idpId := getStringParam(r, "idpId")
 	provider, exists := a.idpManager.GetProvider(idpId)
 	if exists {
-		serveMetadata(w, r, provider.Saml)
+		serveMetadata(w, r, provider.SAMLInstance)
 	} else {
 		serveMetadata(w, r, nil)
 	}
@@ -89,7 +89,7 @@ func (a *authControllerImpl) StartAuthentication(w http.ResponseWriter, r *http.
 	idpId := getStringParam(r, "idpId")
 	provider, exists := a.idpManager.GetProvider(idpId)
 	if exists {
-		startSAMLAuthentication(w, r, provider.Saml, a.systemInfoService.GetAllowedHosts())
+		startSAMLAuthentication(w, r, provider.SAMLInstance, a.systemInfoService.GetAllowedHosts())
 	} else {
 		startSAMLAuthentication(w, r, nil, nil)
 	}
@@ -153,7 +153,7 @@ func (a *authControllerImpl) AssertionConsumerHandler(w http.ResponseWriter, r *
 	idpId := getStringParam(r, "idpId")
 	provider, exists := a.idpManager.GetProvider(idpId)
 	if exists {
-		handleAssertion(w, r, a.userService, provider.Saml, idpId, a.setApihubSessionCookie)
+		handleAssertion(w, r, a.userService, provider.SAMLInstance, idpId, a.setAuthTokenCookies)
 	} else {
 		handleAssertion(w, r, nil, nil, "", nil)
 	}
@@ -251,7 +251,7 @@ func handleAssertion(w http.ResponseWriter, r *http.Request, userService service
 	http.Redirect(w, r, redirectURI, http.StatusFound)
 }
 
-func (a *authControllerImpl) setApihubSessionCookie(w http.ResponseWriter, user *view.User, idpId string) error {
+func (a *authControllerImpl) setAuthTokenCookies(w http.ResponseWriter, user *view.User, idpId string) error {
 	accessToken, refreshToken, err := security.IssueTokenPair(*user)
 	if err != nil {
 		return &exception.CustomError{

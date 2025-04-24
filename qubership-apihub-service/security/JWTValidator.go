@@ -23,10 +23,12 @@ import (
 	"github.com/shaj13/go-guardian/v2/auth"
 	"github.com/shaj13/go-guardian/v2/auth/claims"
 	"github.com/shaj13/go-guardian/v2/auth/strategies/jwt"
-	jwt2 "gopkg.in/square/go-jose.v2/jwt"
+	josejwt "gopkg.in/square/go-jose.v2/jwt"
 	"strconv"
 	"time"
 )
+
+const TokenIssuedAtExt = "issuedAt"
 
 type JWTValidator interface {
 	ValidateToken(token string) (auth.Info, time.Time, error)
@@ -50,15 +52,15 @@ func (j jwtValidatorImpl) IsTokenRevoked(userId string, tokenCreationTimestamp i
 }
 
 func (j jwtValidatorImpl) ValidateToken(token string) (auth.Info, time.Time, error) {
-	c, info, err := j.parseAndValidate(token)
+	claims, info, err := j.parseAndValidate(token)
 	if err != nil {
 		return nil, time.Time{}, err
 	}
 
-	return info, time.Time(*c.ExpiresAt), nil
+	return info, time.Time(*claims.ExpiresAt), nil
 }
 
-func (j jwtValidatorImpl) parseAndValidate(tstr string) (claims.Standard, auth.Info, error) {
+func (j jwtValidatorImpl) parseAndValidate(token string) (claims.Standard, auth.Info, error) {
 	info := auth.NewUserInfo("", "", nil, make(auth.Extensions))
 	c := claims.Standard{}
 	opts := claims.VerifyOptions{
@@ -70,7 +72,7 @@ func (j jwtValidatorImpl) parseAndValidate(tstr string) (claims.Standard, auth.I
 		},
 	}
 
-	if err := j.parseToken(tstr, &c, info); err != nil {
+	if err := j.parseToken(token, &c, info); err != nil {
 		return claims.Standard{}, nil, err
 	}
 
@@ -89,7 +91,7 @@ func (j jwtValidatorImpl) parseAndValidate(tstr string) (claims.Standard, auth.I
 }
 
 func (j jwtValidatorImpl) parseToken(token string, dest ...interface{}) error {
-	jt, err := jwt2.ParseSigned(token)
+	jt, err := josejwt.ParseSigned(token)
 	if err != nil {
 		return err
 	}

@@ -50,15 +50,15 @@ var refreshTokenDuration time.Duration
 
 var publicKey []byte
 
-func SetupGoGuardian(userServiceLocal service.UserService, roleServiceLocal service.RoleService, apiKeyService service.ApihubApiKeyService, patService service.PersonalAccessTokenService, systemService service.SystemInfoService, tokenRevocationService service.TokenRevocationService) error {
+func SetupGoGuardian(userServiceLocal service.UserService, roleServiceLocal service.RoleService, apiKeyService service.ApihubApiKeyService, patService service.PersonalAccessTokenService, systemInfoService service.SystemInfoService, tokenRevocationService service.TokenRevocationService) error {
 	userService = userServiceLocal
 	roleService = roleServiceLocal
 	apihubApiKeyStrategy := NewApihubApiKeyStrategy(apiKeyService)
 	personalAccessTokenStrategy := NewApihubPATStrategy(patService)
-	accessTokenDuration = time.Second * time.Duration(systemService.GetAccessTokenDurationSec())
-	refreshTokenDuration = time.Second * time.Duration(systemService.GetRefreshTokenDurationSec())
+	accessTokenDuration = time.Second * time.Duration(systemInfoService.GetAccessTokenDurationSec())
+	refreshTokenDuration = time.Second * time.Duration(systemInfoService.GetRefreshTokenDurationSec())
 
-	block, _ := pem.Decode(systemService.GetJwtPrivateKey())
+	block, _ := pem.Decode(systemInfoService.GetJwtPrivateKey())
 	pkcs8PrivateKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	if err != nil {
 		return fmt.Errorf("can't parse pkcs1 private key. Error - %s", err.Error())
@@ -81,13 +81,13 @@ func SetupGoGuardian(userServiceLocal service.UserService, roleServiceLocal serv
 	})
 	jwtValidator := NewJWTValidator(keeper, tokenRevocationService)
 	bearerTokenStrategy := NewBearerTokenStrategy(cache, jwtValidator)
-	accessTokenCookieStrategy := NewAccessTokenCookieStrategy(cache, jwtValidator)
+	cookieTokenStrategy := NewCookieTokenStrategy(cache, jwtValidator)
 	refreshTokenStrategy = NewRefreshTokenStrategy(cache, jwtValidator)
-	fullAuthStrategy = union.New(bearerTokenStrategy, accessTokenCookieStrategy, apihubApiKeyStrategy, personalAccessTokenStrategy)
-	userAuthStrategy = union.New(bearerTokenStrategy, accessTokenCookieStrategy, personalAccessTokenStrategy)
-	jwtAuthStrategy = union.New(bearerTokenStrategy, accessTokenCookieStrategy)
+	fullAuthStrategy = union.New(bearerTokenStrategy, cookieTokenStrategy, apihubApiKeyStrategy, personalAccessTokenStrategy)
+	userAuthStrategy = union.New(bearerTokenStrategy, cookieTokenStrategy, personalAccessTokenStrategy)
+	jwtAuthStrategy = union.New(bearerTokenStrategy, cookieTokenStrategy)
 	customJwtStrategy := NewCustomJWTStrategy(cache, jwtValidator)
-	proxyAuthStrategy = union.New(customJwtStrategy, accessTokenCookieStrategy)
+	proxyAuthStrategy = union.New(customJwtStrategy, cookieTokenStrategy)
 
 	return nil
 }

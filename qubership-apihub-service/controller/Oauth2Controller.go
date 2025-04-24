@@ -163,7 +163,7 @@ func (o oauth20ControllerImpl) GitlabOauthCallback(w http.ResponseWriter, r *htt
 		return
 	}
 
-	//TODO: Remove after the frontend switches to using the /api/v1/user endpoint
+	//TODO: Remove after the frontend has switched to using the /api/v1/user endpoint
 	userView, err := security.CreateTokenForUser_deprecated(*user)
 	if err != nil {
 		log.Errorf("Create token for saml process has error -%s", err.Error())
