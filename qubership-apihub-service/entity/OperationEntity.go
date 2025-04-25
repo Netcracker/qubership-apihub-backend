@@ -541,22 +541,30 @@ func MakeOperationComparisonChangelogView(entity OperationComparisonChangelogEnt
 		}
 		return res
 	case string(view.GraphqlApiType):
-		current := &view.GraphqlOperationComparisonChangelogView{
-			GenericComparisonOperationView: currentGenericView,
-			GraphQLOperationMetadata: view.GraphQLOperationMetadata{
-				Type:   entity.Metadata.GetType(),
-				Method: entity.Metadata.GetMethod(),
-				Tags:   entity.Metadata.GetTags(),
-			},
+		var current *view.GraphqlOperationComparisonChangelogView
+		var previous *view.GraphqlOperationComparisonChangelogView
+
+		if entity.OperationId != "" {
+			current = &view.GraphqlOperationComparisonChangelogView{
+				GenericComparisonOperationView: currentGenericView,
+				GraphQLOperationMetadata: view.GraphQLOperationMetadata{
+					Type:   entity.Metadata.GetType(),
+					Method: entity.Metadata.GetMethod(),
+					Tags:   entity.Metadata.GetTags(),
+				},
+			}
 		}
-		previous := &view.GraphqlOperationComparisonChangelogView{
-			GenericComparisonOperationView: previousGenericView,
-			GraphQLOperationMetadata: view.GraphQLOperationMetadata{
-				Type:   entity.PreviousMetadata.GetType(),
-				Method: entity.PreviousMetadata.GetMethod(),
-				Tags:   entity.PreviousMetadata.GetTags(),
-			},
+		if entity.PreviousOperationId != "" {
+			previous = &view.GraphqlOperationComparisonChangelogView{
+				GenericComparisonOperationView: previousGenericView,
+				GraphQLOperationMetadata: view.GraphQLOperationMetadata{
+					Type:   entity.PreviousMetadata.GetType(),
+					Method: entity.PreviousMetadata.GetMethod(),
+					Tags:   entity.PreviousMetadata.GetTags(),
+				},
+			}
 		}
+
 		result := &view.GraphqlOperationPairChangesView{
 			CurrentOperation:  current,
 			PreviousOperation: previous,
@@ -564,20 +572,28 @@ func MakeOperationComparisonChangelogView(entity OperationComparisonChangelogEnt
 		}
 		return result
 	case string(view.ProtobufApiType):
-		current := &view.ProtobufOperationComparisonChangelogView{
-			GenericComparisonOperationView: currentGenericView,
-			ProtobufOperationMetadata: view.ProtobufOperationMetadata{
-				Type:   entity.Metadata.GetType(),
-				Method: entity.Metadata.GetMethod(),
-			},
+		var current *view.ProtobufOperationComparisonChangelogView
+		var previous *view.ProtobufOperationComparisonChangelogView
+
+		if entity.OperationId != "" {
+			current = &view.ProtobufOperationComparisonChangelogView{
+				GenericComparisonOperationView: currentGenericView,
+				ProtobufOperationMetadata: view.ProtobufOperationMetadata{
+					Type:   entity.Metadata.GetType(),
+					Method: entity.Metadata.GetMethod(),
+				},
+			}
 		}
-		previous := &view.ProtobufOperationComparisonChangelogView{
-			GenericComparisonOperationView: previousGenericView,
-			ProtobufOperationMetadata: view.ProtobufOperationMetadata{
-				Type:   entity.PreviousMetadata.GetType(),
-				Method: entity.PreviousMetadata.GetMethod(),
-			},
+		if entity.PreviousOperationId != "" {
+			previous = &view.ProtobufOperationComparisonChangelogView{
+				GenericComparisonOperationView: previousGenericView,
+				ProtobufOperationMetadata: view.ProtobufOperationMetadata{
+					Type:   entity.PreviousMetadata.GetType(),
+					Method: entity.PreviousMetadata.GetMethod(),
+				},
+			}
 		}
+
 		result := &view.ProtobufOperationPairChangesView{
 			CurrentOperation:  current,
 			PreviousOperation: previous,
