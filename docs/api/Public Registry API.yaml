@@ -3784,6 +3784,17 @@ paths:
           * **running** - build in progress, data object is not transmitted.
           * **error** - build process will send a the list of errors.
           * **complete** - build process will send a result in a ZIP archive.
+
+          ZIP archive with build result can contain folders with sources, builded documents and JSON operation files. In addition, several config files are provided. The structure of these files is described in buildResult schema.
+          There are following build types:
+            - build - build process for version publication. It consist of contract and operations build and validation, calculation of the changelog, creation of the final version of the published contracts.
+            - changelog - only the changelog calculation, no API contracts version will be created. Both version and previousVersion fields *must* contain @<revision> suffix when using changelog buildType.
+            - reducedSourceSpecifications - proccess that finds source specifications for all operations from operation group and removes from these specifications operations other than those that are included into operation group.
+            - mergedSpecification - process the merges all operations from an operation group into one specification.
+            - exportVersion - process of exporting all documents from the package version.
+            - exportRestDocument - process of exporting one OpenAPI document form the version.
+            - exportRestOperationsGroup - process of exporting one operations group with apiType = rest.
+          There are no any config files in buid result archive for exportVersion/exportRestDocument/exportRestOperationsGroup build types, i.e. only the resulting build files will be in the archive.
         content:
           multipart/form-data:
             schema:
@@ -15861,380 +15872,711 @@ components:
     BuildResult:
       description: |
         Result of build operation in ZIP archive.
-        * The archive contains folders with sources, builded JSON documents and JSON operation files. 
-        * In addition, several config files are provided. he structure of these files is described below.
-      title: BuildResult
-      type: object
-      required:
-        - info.json
-        - documents.json
-      properties:
-        info.json:
-          description: |
-            Build configuration, published version details.
+          - The archive can contain folders with sources, builded documents and JSON operation files. 
+          - In addition, several config files are provided. The structure of these files is described in buildResult schema.
+        There are following build types:
+          - build - build process for version publication. It consist of contract and operations build and validation, calculation of the changelog, creation of the final version of the published contracts.
+          - changelog - only the changelog calculation, no API contracts version will be created. Both version and previousVersion fields *must* contain @<revision> suffix when using changelog buildType.
+          - reducedSourceSpecifications - proccess that finds source specifications for all operations from operation group and removes from these specifications operations other than those that are included into operation group.
+          - mergedSpecification - process the merges all operations from an operation group into one specification.
+          - exportVersion - process of exporting all documents from the package version.
+          - exportRestDocument - process of exporting one OpenAPI document form the version.
+          - exportRestOperationsGroup - process of exporting one operations group with apiType = rest.
+        There are no any config files in buid result archive for exportVersion/exportRestDocument/exportRestOperationsGroup build types, i.e. only the resulting build files will be in the archive.
+      title: Build result
+      oneOf:
+        - title: Build result for build
+          description: Build result for buildType = build
           type: object
-          required:
-            - packageId
-            - version
-            - buildType
+          required: 
+            - info.json
+            - documents.json
           properties:
-            packageId:
-              description: Package unique string identifier (full alias).
-              type: string
-              example: "QS.CloudQSS.CPQ.Q-TMF"
-            version:
-              description: Version name for publication.
-              type: string
-              example: "2022.3"
-            previousVersion:
+            info.json:
               description: |
-                Name of the previous published version.
-                The mask <version>@<revision> may be used to return the revision number.
-              type: string
-              example: "2022.2@4"
-              default: ""
-            previousVersionPackageId:
-              description: Previous release version package id.
-              type: string
-              example: "QS.CloudQSS.CPQ.Q-TMF"
-            buildType:
-              description: |
-                Type of the build process. Available options are:
-                - **build** - Standard build process.Consist of contract and operations build and validation, calculation of the changelog, creation of the final version of the published contracts.
-                - **changelog** - Only the changelog calculation, no API contracts version will be created. Both version and previousVersion fields *must* contain @<revision> suffix when using changelog buildType
-                - **reducedSourceSpecifications** - proccess that finds source specifications for all operations from operation group and removes from these specifications operations other than those that are included into operation group.
-                - **mergedSpecification** - process the merges all operations from an operation group into one specification.
-              type: string
-              enum:
-                - build
-                - changelog
-                - mergedSpecification
-                - reducedSourceSpecifications
-            format:
-              description: Should be specified if buildType equal to mergedSpecification or reducedSourceSpecifications
-              type: string
-              enum:
-                - yaml
-                - json
-                - html
-              default: json
-            metadata:
-              description: Common publish metadata.
+                Build configuration, published version details.
               type: object
+              required:
+                - packageId
+                - version
+                - buildType
               properties:
-                commitId:
-                  description: Last Git commit ID of the version.
+                packageId:
+                  description: Package unique string identifier (full alias).
                   type: string
-                  example: a5d45af7
-                repositoryUrl:
-                  description: Url of the Git repository.
+                  example: "QS.CloudQSS.CPQ.Q-TMF"
+                version:
+                  description: Version name for publication.
                   type: string
-                  format: URI
-                  example: 'https://<git_group_link>/apihub-registry'
-                labels:
-                  description: List of version labels.
+                  example: "2022.3"
+                previousVersion:
+                  description: |
+                    Name of the previous published version.
+                    The mask <version>@<revision> may be used to return the revision number.
+                  type: string
+                  example: "2022.2@4"
+                  default: ""
+                previousVersionPackageId:
+                  description: Previous release version package id.
+                  type: string
+                  example: "QS.CloudQSS.CPQ.Q-TMF"
+                buildType:
+                  description: |
+                    Type of the build process.
+                    - **build** - Standard build process.Consist of contract and operations build and validation, calculation of the changelog, creation of the final version of the published contracts.
+                  type: string
+                  enum:
+                    - build
+                buildId:
+                  description: Id of the build.
+                  type: string
+                validationRulesSeverity:
+                  type: object
+                  description: Configuration for validation rules severity levels          
+                  readOnly: true
+                  properties:
+                    brokenRefs:
+                      type: string
+                      enum:
+                        - "error"
+                        - "warning"
+                      default: "warning"
+                      description: Severity level for broken references validation
+                builderVersion:
+                  type: string
+                  description: Version of the builder with which build was made.
+                createdBy:
+                  type: string
+                  description: The user who started the build process.
+                metadata:
+                  description: Common publish metadata.
+                  type: object
+                  properties:
+                    commitId:
+                      description: Last Git commit ID of the version.
+                      type: string
+                      example: a5d45af7
+                    repositoryUrl:
+                      description: Url of the Git repository.
+                      type: string
+                      format: URI
+                      example: 'https://<git_group_link>/apihub-registry'
+                    labels:
+                      description: List of version labels.
+                      type: array
+                      items:
+                        type: string
+                      example: ["TMF"]
+                    cloudName:
+                      description: Name of the cloud for publication from Agent.
+                      type: string
+                      example: 'k8s-apps2'
+                    cloudUrl:
+                      description: Full address of the cloud from Agent.
+                      type: string
+                      format: URI
+                      example: "https://k8s-apps2.k8s.sdntest.qubership.org"
+                    namespace:
+                      description: Namespace of Agent's publication.
+                      type: string
+                      example: "cloudQSS-release2"
+                refs:
+                  description:  |
+                    Detailed data about referenced versions for current package version.
                   type: array
                   items:
-                    type: string
-                  example: ["TMF"]
-                cloudName:
-                  description: Name of the cloud for publication from Agent.
-                  type: string
-                  example: 'k8s-apps2'
-                cloudUrl:
-                  description: Full address of the cloud from Agent.
-                  type: string
-                  format: URI
-                  example: "https://k8s-apps2.k8s.sdntest.qubership.org"
-                namespace:
-                  description: Namespace of Agent's publication.
-                  type: string
-                  example: "cloudQSS-release2"
-            refs:
-              description:  |
-                Detailed data about referenced versions for current package version.
-              type: array
-              items:
-                type: object
-                required:
-                  - refId
-                  - version
-                  - type
-                properties:
-                  refId:
-                    description: Referenced package Id.
-                    type: string
-                    example: "QS.CloudQSS.CPQ.CORE"
-                  version:
-                    description: Referenced package version number.
-                    type: string
-                    example: "2022.3@5"
-                  parentRefId:
-                    description: Referenced parent package Id.
-                    type: string
-                    example: "QS.CloudQSS.CPQ.CORE"
-                  parentVersion:
-                    description:  |
-                      Referenced parent version.
-                      The mask <version>@<revision> may be used to link with a specific revision.
-                      If the @revision is not provided, the latest version's revision will be used.
-                    type: string
-                    example: "2022.2@4"
-                  excluded:
-                    description: All excluded refs will be ignored (but will still be visible for package version).
-                    type: boolean
-        documents.json:
-          type: object
-          description: List of documents data.
-          properties:
-            documents:
-              type: array
-              items:
-                description: List of builded files.
-                type: object
-                required:
-                  - fileId
-                  - slug
-                  - title
-                  - format
-                  - type
-                  - operations
-                properties:
-                  fileId:
-                    type: string
-                    description: File name with folders.
-                    example: "docs/qitmf-v5.11.json"
-                  fileName:
-                    type: string
-                    description: File name (slug+extension).
-                    example: "qitmf-v5.11.json"
-                  slug:
-                    description: Published file slug.
-                    type: string
-                    pattern: "^[a-z0-9-]"
-                    example: "qitmf-v5-11-json"
-                  type:
-                    $ref: "#/components/schemas/SpecificationType"
-                  format:
-                    $ref: "#/components/schemas/DocumentFormat"
-                  title:
-                    description: Document title and summary.
-                    type: string
-                  description:
-                    description: Document description.
-                    type: string
-                  version:
-                    description: Document version. For openapi document, version is taken from info object.
-                    type: string
-                    example: "1.0.1"
-                  operationIds:
-                    description: List of operation IDs.
-                    type: array
-                    items:
-                      type: string
-                    example: ["get-quoteManagement-v5-quote"]
-                  metadata:
-                    description: Meta parameters from config file.
                     type: object
+                    required:
+                      - refId
+                      - version
+                      - type
                     properties:
-                      info:
-                        description: Info object from openapi document
-                        type: object
-                      externalDocs:
-                        description: External documentation object from openapi document
-                        type: object
-                      labels:
-                        description: List of file labels.
+                      refId:
+                        description: Referenced package Id.
+                        type: string
+                        example: "QS.CloudQSS.CPQ.CORE"
+                      version:
+                        description: Referenced package version number.
+                        type: string
+                        example: "2022.3@5"
+                      parentRefId:
+                        description: Referenced parent package Id.
+                        type: string
+                        example: "QS.CloudQSS.CPQ.CORE"
+                      parentVersion:
+                        description:  |
+                          Referenced parent version.
+                          The mask <version>@<revision> may be used to link with a specific revision.
+                          If the @revision is not provided, the latest version's revision will be used.
+                        type: string
+                        example: "2022.2@4"
+                      excluded:
+                        description: All excluded refs will be ignored (but will still be visible for package version).
+                        type: boolean
+            documents.json:
+              type: object
+              description: List of documents data.
+              properties:
+                documents:
+                  type: array
+                  items:
+                    description: List of builded files.
+                    type: object
+                    required:
+                      - fileId
+                      - slug
+                      - title
+                      - format
+                      - type
+                      - operations
+                    properties:
+                      fileId:
+                        type: string
+                        description: File name with folders.
+                        example: "docs/qitmf-v5.11.json"
+                      fileName:
+                        type: string
+                        description: File name (slug+extension).
+                        example: "qitmf-v5.11.json"
+                      slug:
+                        description: Published file slug.
+                        type: string
+                        pattern: "^[a-z0-9-]"
+                        example: "qitmf-v5-11-json"
+                      type:
+                        $ref: "#/components/schemas/SpecificationType"
+                      format:
+                        $ref: "#/components/schemas/DocumentFormat"
+                      title:
+                        description: Document title and summary.
+                        type: string
+                      description:
+                        description: Document description.
+                        type: string
+                      version:
+                        description: Document version. For openapi document, version is taken from info object.
+                        type: string
+                        example: "1.0.1"
+                      operationIds:
+                        description: List of operation IDs.
                         type: array
                         items:
                           type: string
-                        example: ["TMF"]
-                      blobId:
-                        description: Git blob ID of the file.
-                        type: string
-                        example: a5d84af7
-                      tags:
+                        example: ["get-quoteManagement-v5-quote"]
+                      metadata:
+                        description: Meta parameters from config file.
                         type: object
                         properties:
-                          name:
-                            type: string
-                          description:
-                            type: string
+                          info:
+                            description: Info object from openapi document
+                            type: object
                           externalDocs:
+                            description: External documentation object from openapi document
+                            type: object
+                          labels:
+                            description: List of file labels.
+                            type: array
+                            items:
+                              type: string
+                            example: ["TMF"]
+                          blobId:
+                            description: Git blob ID of the file.
+                            type: string
+                            example: a5d84af7
+                          tags:
                             type: object
                             properties:
+                              name:
+                                type: string
                               description:
                                 type: string
-                              url:
-                                type: string
-        comparisons.json:
-          type: object
-          properties:
-            comparisons:
-              type: array
-              items:
-                type: object
-                required:
-                  - operationTypes
-                properties:
-                  comparisonFileId:
-                    type: string
-                    description: Pointer to the file with changes. Optional, required only if package contains documents. Not required in case of refs only (dashboard).
-                    example: "comparisonFile1.json"
-                  packageId:
-                    description: Package unique string identifier (full alias).
-                    type: string
-                    example: "QS.CloudQSS.CPQ.Q-TMF"
-                  version:
-                    description: Version name for publication.
-                    type: string
-                    example: "2022.3"
-                  revision:
-                    type: number
-                  previousVersion:
-                    description: |
-                      Name of the previous published version.
-                    type: string
-                    example: "2022.2"
-                    default: ""
-                  previousVersionPackageId:
-                    description: Previous release version package id.
-                    type: string
-                    example: "QS.CloudQSS.CPQ.Q-TMF"
-                  previousVersionRevision:
-                    type: number
-                  operationTypes:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        apiType:
-                          type: string
-                        changesSummary:
-                          $ref: "#/components/schemas/ChangeSummary"
-                        numberOfImpactedOperations:
-                          allOf:
-                            - $ref: '#/components/schemas/ChangeSummary'
-                            - type: object
-                              description: Number of operations impacted by each severety type.
-                        apiAudienceTransitions:
-                              type: array
-                              description: Shows transitions of operations' apiAudience value (compared to the previous release version) and number of operations in which this transition occurred. The array contains only records of transitions that actually occurred in operations.
-                              items:
+                              externalDocs:
                                 type: object
                                 properties:
-                                  currentAudience:
+                                  description:
                                     type: string
-                                    description: Current apiAudience value (currentAudience must not be equal to previousAudience) 
-                                    enum:
-                                      - internal
-                                      - external
-                                      - unknown
-                                  previousAudience:
+                                  url:
                                     type: string
-                                    description: Previous apiAudience value
-                                    enum:
-                                      - internal
-                                      - external
-                                      - unknown
-                                  operationsCount:
-                                    type: number
-                                    description: Number of operations in which the apiAudience was changed from previousAudience to currentAudience
-                        tags:
-                          type: array
-                          items:
-                            type: string
-                          example:
-                            ["a", "b"]
-                  fromCache:
-                    description: True if the changes were retrieved from BE (not calculated)
-                    type: boolean
-        comparisons/{comparisonFileId}:
-          type: object
-          description: List of changes data.
-          properties:
-            operations:
-              description: Collection of changes depend on apiType.
-              type: array
-              items:
-                type: object
-                required:
-                  - operationId
-                  - changes
-                  - changesSummary
-                properties:
-                  operationId:
-                    description: >-
-                      Operation unique identifier (slug). Not the same as
-                      operationId tag from the OpenAPI file.
-                    type: string
-                    example: get-quoteManagement-v5-quote
-                  dataHash:
-                    description: Operation hash.
-                    type: string
-                    example: sdfsdfsf242
-                  previousDataHash:
-                    description: Hash of the previous published version operation.
-                    type: string
-                    example: sdfsdfsf24dds2
-                  changeSummary:
-                    $ref: "#/components/schemas/ChangeSummary"
-                  changes:
-                    description: Collection of changes for each operation.
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/SingleOperationChange"
-        operations.json:
-          description: List of operations for publish.
-          type: object
-          properties:
-            operations:
-              type: array
-              items:
-                allOf:
-                  - $ref: "#/components/schemas/Operation"
-                  - type: object
+            comparisons.json:
+              type: object
+              properties:
+                comparisons:
+                  type: array
+                  items:
+                    type: object
                     required:
-                      - data
-                      - metadata
-                      - searchScopes
+                      - operationTypes
                     properties:
-                      models:
-                        description: Map<name:string, hash:string> of operation models
-                        type: object
-                        additionalProperties:
-                          type: string
-                          example:
-                            Template: a6b1596abe745a4a0cd3de25a411dbe671a3ba7c
-                            ErrorResponse: cf1d87cf3895af106a3ad29f2098dcc2cc477e71
-                            CreateItemDto: 72bfdc14758213e5c09620b29054da86b75d4868
-                      deprecatedInfo:
-                        description: |
-                          Additional information about deprecated operation:
-                          * for REST API it is value of 'x-deprecated-meta' extension (value of extension must be string), which is defined for deprecated operation. 
-                          * for GraphQL API it is value of 'reason' argument of @deprecated directive, which is defined for deprecated operation.
+                      comparisonFileId:
                         type: string
-                      deprecatedInPreviousVersions:
-                        description: List of previous release versions where operation was also deprecated
+                        description: Pointer to the file with changes. Optional, required only if package contains documents. Not required in case of refs only (dashboard).
+                        example: "comparisonFile1.json"
+                      packageId:
+                        description: Package unique string identifier (full alias).
+                        type: string
+                        example: "QS.CloudQSS.CPQ.Q-TMF"
+                      version:
+                        description: Version name for publication.
+                        type: string
+                        example: "2022.3"
+                      revision:
+                        type: number
+                      previousVersion:
+                        description: |
+                          Name of the previous published version.
+                        type: string
+                        example: "2022.2"
+                        default: ""
+                      previousVersionPackageId:
+                        description: Previous release version package id.
+                        type: string
+                        example: "QS.CloudQSS.CPQ.Q-TMF"
+                      previousVersionRevision:
+                        type: number
+                      operationTypes:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            apiType:
+                              type: string
+                            changesSummary:
+                              $ref: "#/components/schemas/ChangeSummary"
+                            numberOfImpactedOperations:
+                              allOf:
+                                - $ref: '#/components/schemas/ChangeSummary'
+                                - type: object
+                                  description: Number of operations impacted by each severety type.
+                            apiAudienceTransitions:
+                                  type: array
+                                  description: Shows transitions of operations' apiAudience value (compared to the previous release version) and number of operations in which this transition occurred. The array contains only records of transitions that actually occurred in operations.
+                                  items:
+                                    type: object
+                                    properties:
+                                      currentAudience:
+                                        type: string
+                                        description: Current apiAudience value (currentAudience must not be equal to previousAudience) 
+                                        enum:
+                                          - internal
+                                          - external
+                                          - unknown
+                                      previousAudience:
+                                        type: string
+                                        description: Previous apiAudience value
+                                        enum:
+                                          - internal
+                                          - external
+                                          - unknown
+                                      operationsCount:
+                                        type: number
+                                        description: Number of operations in which the apiAudience was changed from previousAudience to currentAudience
+                            tags:
+                              type: array
+                              items:
+                                type: string
+                              example:
+                                ["a", "b"]
+                      fromCache:
+                        description: True if the changes were retrieved from BE (not calculated)
+                        type: boolean
+            comparisons/{comparisonFileId}:
+              type: object
+              description: List of changes data.
+              properties:
+                operations:
+                  description: Collection of changes depend on apiType.
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - operationId
+                      - changes
+                      - changesSummary
+                    properties:
+                      operationId:
+                        description: >-
+                          Operation unique identifier (slug). Not the same as
+                          operationId tag from the OpenAPI file.
+                        type: string
+                        example: get-quoteManagement-v5-quote
+                      dataHash:
+                        description: Operation hash.
+                        type: string
+                        example: sdfsdfsf242
+                      previousDataHash:
+                        description: Hash of the previous published version operation.
+                        type: string
+                        example: sdfsdfsf24dds2
+                      changeSummary:
+                        $ref: "#/components/schemas/ChangeSummary"
+                      changes:
+                        description: Collection of changes for each operation.
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/SingleOperationChange"
+            operations.json:
+              description: List of operations for publish.
+              type: object
+              properties:
+                operations:
+                  type: array
+                  items:
+                    allOf:
+                      - $ref: "#/components/schemas/Operation"
+                      - type: object
+                        required:
+                          - data
+                          - metadata
+                          - searchScopes
+                        properties:
+                          models:
+                            description: Map<name:string, hash:string> of operation models
+                            type: object
+                            additionalProperties:
+                              type: string
+                              example:
+                                Template: a6b1596abe745a4a0cd3de25a411dbe671a3ba7c
+                                ErrorResponse: cf1d87cf3895af106a3ad29f2098dcc2cc477e71
+                                CreateItemDto: 72bfdc14758213e5c09620b29054da86b75d4868
+                          deprecatedInfo:
+                            description: |
+                              Additional information about deprecated operation:
+                              * for REST API it is value of 'x-deprecated-meta' extension (value of extension must be string), which is defined for deprecated operation. 
+                              * for GraphQL API it is value of 'reason' argument of @deprecated directive, which is defined for deprecated operation.
+                            type: string
+                          deprecatedInPreviousVersions:
+                            description: List of previous release versions where operation was also deprecated
+                            type: array
+                            items:
+                              type: string
+                            example: ["2022.2", "2022,1", "2021.4"]
+                          deprecatedItems:
+                            $ref: "#/components/schemas/DeprecatedItems"
+                          metadata:
+                            description: Metadata content depend on apiType.
+                            oneOf:
+                              - $ref: "#/components/schemas/RestOperationMeta"
+                              - $ref: "#/components/schemas/GraphQLOperationMeta"
+                              - $ref: "#/components/schemas/ProtobufOperationMeta"
+                          searchScopes:
+                            description: Scopes for search indexes.
+                            type: object
+                            additionalProperties:
+                              type: string
+                            example:
+                              all: "Quote Snapshot V6 Performs full text search ofQuotes Statistics By Phrase fullTextSearchStatistics searchPhrase offset int32 limit int32 fields 200 OK application/json quote anonymousCustomerData assignTo The name of the user/team to whom the Quote is assigned cancellationReason The entity that represents common information about a customer's request cancellationReasonDescription The reason (from the free text field) why the Quote has been cancelled contactMedium A list of contact mediums (ContactMedium [*]). Indicates the contact medium that could be used to contact the party deliveryMethod Id of the Delivery Method (from the Delivery Method list) for Quote description Description of the Quote extendedParameters additionalProperties The attribute contains additional parameters of the Quote The attribute contains additional parameters of the Quote Map<String,List<String>> The attribute contains additional parameters of the Quote externalRefs Represents a reference to an external object id Unique identifier of the Quote name Quote name quoteDate Date and time when the Quote was created date-time quoteTotalPrice Represents Quote total price relatedParty A list of related party references (RelatedPartyRef [*]).A related party defines party or party role linked to a specific entity relatedQuote A list of related quotes (RelatedQuote [*]). It represents another revision of the in-flight Quote from the same chain, i.e. in-flight Quote with the same initialBaselineQuoteId value. This class is returned in the API response only in case of enhancedListQuotes API operation is called. It can be empty if there are no other in-flight Quotes in this chain revision Attribute is used to mark in-flight Quote. Increased in case changes are done to the Quote after submission int32 state State of the Quote updatedWhen Date and time when the Quote was updated date-time validFor Quote with reduced scope of attributes quoteItemStatistic Shows the number of Quote's root Quote Items grouped by some criteria(e.g. by Product Offering, Action) action Numbers of root Quote Items grouped by Action count Number of Quote Items for the specific value int32 name Action name Shows the number of Customer's Product Instances for specified criteria (e.g. Product Family, Billing Account and so on) productFamilyId Unique identifier of Product Family productFamilyName Product family name. Name is returned in the default locale. If alternative locale is passed in Accept-language header in the API request the system returns corresponding localized name in the response. productOfferingId Unique identifier of Product Offering productOfferingName Product offering name. Attribute is returned in the response for catalog entities only (product offering). Name is returned in the default locale. If alternative locale is passed in Accept-language header in the API request the system returns corresponding localized name in the response Shows the number of Quote's root Quote Items grouped by some criteria(e.g. by Product Offering, Action) Shows the Quote with a number of root Quote Items 4XX default response application/json;charset=UTF-8;model=errorResponse;version=1 5XX default response application/json;charset=UTF-8;model=errorResponse;version=1 "    
+        - title: Build result for changelog
+          description: Build result for buildType = changelog
+          type: object
+          required: 
+            - info.json
+          properties:
+            info.json:
+              description: |
+                Build configuration, published version details.
+              type: object
+              required:
+                - packageId
+                - version
+                - buildType
+              properties:
+                packageId:
+                  description: Package unique string identifier (full alias).
+                  type: string
+                  example: "QS.CloudQSS.CPQ.Q-TMF"
+                version:
+                  description: Version name for publication.
+                  type: string
+                  example: "2022.3"
+                previousVersion:
+                  description: |
+                    Name of the previous published version.
+                    The mask <version>@<revision> may be used to return the revision number.
+                  type: string
+                  example: "2022.2@4"
+                  default: ""
+                previousVersionPackageId:
+                  description: Previous release version package id.
+                  type: string
+                  example: "QS.CloudQSS.CPQ.Q-TMF"
+                buildType:
+                  description: |
+                    Type of the build process.
+                    - **changelog** - only the changelog calculation, no API contracts version will be created. Both version and previousVersion fields *must* contain @<revision> suffix when using changelog buildType.
+                  type: string
+                  enum:
+                    - changelog
+                buildId:
+                  description: Id of the build.
+                  type: string
+                builderVersion:
+                  type: string
+                  description: Version of the builder with which build was made.
+                createdBy:
+                  type: string
+                  description: The user who started the build process.
+                metadata:
+                  description: Common publish metadata.
+                  type: object
+                  properties:
+                    commitId:
+                      description: Last Git commit ID of the version.
+                      type: string
+                      example: a5d45af7
+                    repositoryUrl:
+                      description: Url of the Git repository.
+                      type: string
+                      format: URI
+                      example: 'https://<git_group_link>/apihub-registry'
+                    labels:
+                      description: List of version labels.
+                      type: array
+                      items:
+                        type: string
+                      example: ["TMF"]
+                    cloudName:
+                      description: Name of the cloud for publication from Agent.
+                      type: string
+                      example: 'k8s-apps2'
+                    cloudUrl:
+                      description: Full address of the cloud from Agent.
+                      type: string
+                      format: URI
+                      example: "https://k8s-apps2.k8s.sdntest.qubership.org"
+                    namespace:
+                      description: Namespace of Agent's publication.
+                      type: string
+                      example: "cloudQSS-release2"
+            comparisons.json:
+              type: object
+              properties:
+                comparisons:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - operationTypes
+                    properties:
+                      comparisonFileId:
+                        type: string
+                        description: Pointer to the file with changes. Optional, required only if package contains documents. Not required in case of refs only (dashboard).
+                        example: "comparisonFile1.json"
+                      packageId:
+                        description: Package unique string identifier (full alias).
+                        type: string
+                        example: "QS.CloudQSS.CPQ.Q-TMF"
+                      version:
+                        description: Version name for publication.
+                        type: string
+                        example: "2022.3"
+                      revision:
+                        type: number
+                      previousVersion:
+                        description: |
+                          Name of the previous published version.
+                        type: string
+                        example: "2022.2"
+                        default: ""
+                      previousVersionPackageId:
+                        description: Previous release version package id.
+                        type: string
+                        example: "QS.CloudQSS.CPQ.Q-TMF"
+                      previousVersionRevision:
+                        type: number
+                      operationTypes:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            apiType:
+                              type: string
+                            changesSummary:
+                              $ref: "#/components/schemas/ChangeSummary"
+                            numberOfImpactedOperations:
+                              allOf:
+                                - $ref: '#/components/schemas/ChangeSummary'
+                                - type: object
+                                  description: Number of operations impacted by each severety type.
+                            apiAudienceTransitions:
+                                  type: array
+                                  description: Shows transitions of operations' apiAudience value (compared to the previous release version) and number of operations in which this transition occurred. The array contains only records of transitions that actually occurred in operations.
+                                  items:
+                                    type: object
+                                    properties:
+                                      currentAudience:
+                                        type: string
+                                        description: Current apiAudience value (currentAudience must not be equal to previousAudience) 
+                                        enum:
+                                          - internal
+                                          - external
+                                          - unknown
+                                      previousAudience:
+                                        type: string
+                                        description: Previous apiAudience value
+                                        enum:
+                                          - internal
+                                          - external
+                                          - unknown
+                                      operationsCount:
+                                        type: number
+                                        description: Number of operations in which the apiAudience was changed from previousAudience to currentAudience
+                            tags:
+                              type: array
+                              items:
+                                type: string
+                              example:
+                                ["a", "b"]
+                      fromCache:
+                        description: True if the changes were retrieved from BE (not calculated)
+                        type: boolean
+            comparisons/{comparisonFileId}:
+              type: object
+              description: List of changed data.
+              properties:
+                operations:
+                  description: Collection of changes depend on apiType.
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - operationId
+                      - changes
+                      - changesSummary
+                    properties:
+                      operationId:
+                        description: >-
+                          Operation unique identifier (slug). Not the same as
+                          operationId tag from the OpenAPI file.
+                        type: string
+                        example: get-quoteManagement-v5-quote
+                      dataHash:
+                        description: Operation hash.
+                        type: string
+                        example: sdfsdfsf242
+                      previousDataHash:
+                        description: Hash of the previous published version operation.
+                        type: string
+                        example: sdfsdfsf24dds2
+                      changeSummary:
+                        $ref: "#/components/schemas/ChangeSummary"
+                      changes:
+                        description: Collection of changes for each operation.
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/SingleOperationChange"
+        - title: Build result for mergedSpecification and reducedSourceSpecifications
+          description: |
+            Build result for the following buildType:
+              - mergedSpecification
+              - reducedSourceSpecifications
+          type: object
+          required: 
+            - info.json
+          properties:
+            info.json:
+              description: |
+                Build configuration, published version details.
+              type: object
+              required:
+                - packageId
+                - version
+                - buildType
+              properties:
+                packageId:
+                  description: Package unique string identifier (full alias).
+                  type: string
+                  example: "QS.CloudQSS.CPQ.Q-TMF"
+                version:
+                  description: Version name for publication.
+                  type: string
+                  example: "2022.3"
+                buildId:
+                  description: Id of the build.
+                  type: string
+                builderVersion:
+                  type: string
+                  description: Version of the builder with which build was made.
+                format:
+                  description: Should be specified if buildType equal to mergedSpecification or reducedSourceSpecifications
+                  type: string
+                  enum:
+                    - yaml
+                    - json
+                    - html
+                  default: json
+                apiType:
+                  description: Document transformation is available only for apiType = REST
+                  type: string
+                  enum:
+                    - rest
+                groupName:
+                  description: Name of the group
+                  type: string
+                  example: v1
+                buildType:
+                  description: |
+                    Type of the build process for OpeanAPI specification tranformation. Available options are:
+                    - **reducedSourceSpecifications** - proccess that finds source specifications for all operations from operation group and removes from these specifications operations other than those that are included into operation group.
+                    - **mergedSpecification** - process the merges all operations from an operation group into one specification.
+                  type: string
+                  enum:
+                    - reducedSourceSpecifications
+                    - mergedSpecification
+                createdBy:
+                  description: The user who started the build process.
+                  type: string
+            documents.json:
+              type: object
+              description: List of documents data.
+              properties:
+                documents:
+                  type: array
+                  items:
+                    description: List of builded files.
+                    type: object
+                    required:
+                      - fileId
+                      - slug
+                      - title
+                      - format
+                      - type
+                      - operations
+                    properties:
+                      fileId:
+                        type: string
+                        description: File name with folders.
+                        example: "docs/qitmf-v5.11.json"
+                      fileName:
+                        type: string
+                        description: File name (slug+extension).
+                        example: "qitmf-v5.11.json"
+                      slug:
+                        description: Published file slug.
+                        type: string
+                        pattern: "^[a-z0-9-]"
+                        example: "qitmf-v5-11-json"
+                      type:
+                        $ref: "#/components/schemas/SpecificationType"
+                      format:
+                        $ref: "#/components/schemas/DocumentFormat"
+                      title:
+                        description: Document title and summary.
+                        type: string
+                      description:
+                        description: Document description.
+                        type: string
+                      version:
+                        description: Document version. For openapi document, version is taken from info object.
+                        type: string
+                        example: "1.0.1"
+                      operationIds:
+                        description: List of operation IDs.
                         type: array
                         items:
                           type: string
-                        example: ["2022.2", "2022,1", "2021.4"]
-                      deprecatedItems:
-                        $ref: "#/components/schemas/DeprecatedItems"
-                      metadata:
-                        description: Metadata content depend on apiType.
-                        oneOf:
-                          - $ref: "#/components/schemas/RestOperationMeta"
-                          - $ref: "#/components/schemas/GraphQLOperationMeta"
-                          - $ref: "#/components/schemas/ProtobufOperationMeta"
-                      searchScopes:
-                        description: Scopes for search indexes.
-                        type: object
-                        additionalProperties:
-                          type: string
-                        example:
-                          all: "Quote Snapshot V6 Performs full text search ofQuotes Statistics By Phrase fullTextSearchStatistics searchPhrase offset int32 limit int32 fields 200 OK application/json quote anonymousCustomerData assignTo The name of the user/team to whom the Quote is assigned cancellationReason The entity that represents common information about a customer's request cancellationReasonDescription The reason (from the free text field) why the Quote has been cancelled contactMedium A list of contact mediums (ContactMedium [*]). Indicates the contact medium that could be used to contact the party deliveryMethod Id of the Delivery Method (from the Delivery Method list) for Quote description Description of the Quote extendedParameters additionalProperties The attribute contains additional parameters of the Quote The attribute contains additional parameters of the Quote Map<String,List<String>> The attribute contains additional parameters of the Quote externalRefs Represents a reference to an external object id Unique identifier of the Quote name Quote name quoteDate Date and time when the Quote was created date-time quoteTotalPrice Represents Quote total price relatedParty A list of related party references (RelatedPartyRef [*]).A related party defines party or party role linked to a specific entity relatedQuote A list of related quotes (RelatedQuote [*]). It represents another revision of the in-flight Quote from the same chain, i.e. in-flight Quote with the same initialBaselineQuoteId value. This class is returned in the API response only in case of enhancedListQuotes API operation is called. It can be empty if there are no other in-flight Quotes in this chain revision Attribute is used to mark in-flight Quote. Increased in case changes are done to the Quote after submission int32 state State of the Quote updatedWhen Date and time when the Quote was updated date-time validFor Quote with reduced scope of attributes quoteItemStatistic Shows the number of Quote's root Quote Items grouped by some criteria(e.g. by Product Offering, Action) action Numbers of root Quote Items grouped by Action count Number of Quote Items for the specific value int32 name Action name Shows the number of Customer's Product Instances for specified criteria (e.g. Product Family, Billing Account and so on) productFamilyId Unique identifier of Product Family productFamilyName Product family name. Name is returned in the default locale. If alternative locale is passed in Accept-language header in the API request the system returns corresponding localized name in the response. productOfferingId Unique identifier of Product Offering productOfferingName Product offering name. Attribute is returned in the response for catalog entities only (product offering). Name is returned in the default locale. If alternative locale is passed in Accept-language header in the API request the system returns corresponding localized name in the response Shows the number of Quote's root Quote Items grouped by some criteria(e.g. by Product Offering, Action) Shows the Quote with a number of root Quote Items 4XX default response application/json;charset=UTF-8;model=errorResponse;version=1 5XX default response application/json;charset=UTF-8;model=errorResponse;version=1 "   
+                        example: ["get-quoteManagement-v5-quote"]
+      discriminator:
+        propertyName: buildType
     SingleOperationChange:
       allOf:
         - type: object
