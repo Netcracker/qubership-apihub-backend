@@ -110,30 +110,9 @@ func startSAMLAuthentication(w http.ResponseWriter, r *http.Request, samlInstanc
 
 	log.Debugf("redirect url - %s", redirectUrlStr)
 
-	redirectUrl, err := url.Parse(redirectUrlStr)
+	redirectUrl, err := parseAndValidateRedirectURL(redirectUrlStr, allowedHosts)
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.IncorrectRedirectUrlError,
-			Message: exception.IncorrectRedirectUrlErrorMsg,
-			Params:  map[string]interface{}{"error": err.Error()},
-		})
-		return
-	}
-	var validHost bool
-	for _, host := range allowedHosts {
-		if strings.Contains(redirectUrl.Host, host) {
-			validHost = true
-			break
-		}
-	}
-	if !validHost {
-		utils.RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.HostNotAllowed,
-			Message: exception.HostNotAllowedMsg,
-			Params:  map[string]interface{}{"host": redirectUrlStr},
-		})
+		utils.RespondWithCustomError(w, err)
 		return
 	}
 
@@ -148,18 +127,46 @@ func startSAMLAuthentication(w http.ResponseWriter, r *http.Request, samlInstanc
 	samlInstance.HandleStartAuthFlow(w, r)
 }
 
+func parseAndValidateRedirectURL(urlStr string, allowedHosts []string) (*url.URL, *exception.CustomError) {
+	redirectUrl, err := url.Parse(urlStr)
+	if err != nil {
+		return nil, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.IncorrectRedirectUrlError,
+			Message: exception.IncorrectRedirectUrlErrorMsg,
+			Params:  map[string]interface{}{"error": err.Error()},
+		}
+	}
+	var validHost bool
+	for _, host := range allowedHosts {
+		if strings.Contains(redirectUrl.Host, host) {
+			validHost = true
+			break
+		}
+	}
+	if !validHost {
+		return nil, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.HostNotAllowed,
+			Message: exception.HostNotAllowedMsg,
+			Params:  map[string]interface{}{"host": urlStr},
+		}
+	}
+	return redirectUrl, nil
+}
+
 // AssertionConsumerHandler This endpoint is called by ADFS when auth procedure is complete on it's side. ADFS posts the response here.
 func (a *authControllerImpl) AssertionConsumerHandler(w http.ResponseWriter, r *http.Request) {
 	idpId := getStringParam(r, "idpId")
 	provider, exists := a.idpManager.GetProvider(idpId)
 	if exists {
-		handleAssertion(w, r, a.userService, provider.SAMLInstance, idpId, a.setAuthTokenCookies)
+		handleAssertion(w, r, a.userService, a.systemInfoService.GetAllowedHosts(), provider.SAMLInstance, idpId, a.setAuthTokenCookies)
 	} else {
-		handleAssertion(w, r, nil, nil, "", nil)
+		handleAssertion(w, r, nil, nil, nil, "", nil)
 	}
 }
 
-func handleAssertion(w http.ResponseWriter, r *http.Request, userService service.UserService, samlInstance *samlsp.Middleware, providerId string, setAuthCookie func(w http.ResponseWriter, user *view.User, idpId string) error) {
+func handleAssertion(w http.ResponseWriter, r *http.Request, userService service.UserService, allowedHosts []string, samlInstance *samlsp.Middleware, providerId string, setAuthCookie func(w http.ResponseWriter, user *view.User, idpId string) error) {
 	if samlInstance == nil {
 		log.Errorf("Cannot run AssertionConsumerHandler with nill samlInstanse")
 		utils.RespondWithCustomError(w, &exception.CustomError{
@@ -230,13 +237,19 @@ func handleAssertion(w http.ResponseWriter, r *http.Request, userService service
 		trackedRequest, err := samlInstance.RequestTracker.GetTrackedRequest(r, trackedRequestIndex)
 		if err != nil {
 			if errors.Is(err, http.ErrNoCookie) && samlInstance.ServiceProvider.AllowIDPInitiated {
-				if uri := r.Form.Get("RelayState"); uri != "" {
-					redirectURI = uri
-					log.Debugf("redirectURI is found in RelayState and updated to %s", redirectURI)
+				// For IDP-initiated flows, RelayState might contain a URI directly from an external identity provider.
+				uri := trackedRequestIndex
+				_, err := parseAndValidateRedirectURL(uri, allowedHosts)
+				if err != nil {
+					utils.RespondWithCustomError(w, err)
+					return
 				}
+				redirectURI = uri
+				log.Debugf("IDP-initiated flow: redirectURI is set from RelayState to: %s", redirectURI)
+			} else {
+				utils.RespondWithError(w, "Unable to retrieve redirect URL: failed to get tracked request", err)
+				return
 			}
-			utils.RespondWithError(w, "Unable to retrieve redirect URL: failed to get tracked request", err)
-			return
 		} else {
 			err = samlInstance.RequestTracker.StopTrackingRequest(w, r, trackedRequestIndex)
 			if err != nil {

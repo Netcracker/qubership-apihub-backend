@@ -67,7 +67,7 @@ func (a *authenticationControllerImpl) StartSamlAuthentication_deprecated(w http
 
 // AssertionConsumerHandler_deprecated This endpoint is called by ADFS when auth procedure is complete on it's side. ADFS posts the response here. (legacy auth)
 func (a *authenticationControllerImpl) AssertionConsumerHandler_deprecated(w http.ResponseWriter, r *http.Request) {
-	handleAssertion(w, r, a.userService, a.samlInstance, "", a.setUserViewCookie)
+	handleAssertion(w, r, a.userService, a.systemInfoService.GetAllowedHosts(), a.samlInstance, "", a.setUserViewCookie)
 }
 
 func (a *authenticationControllerImpl) setUserViewCookie(w http.ResponseWriter, user *view.User, idpId string) error {
