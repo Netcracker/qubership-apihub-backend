@@ -81,8 +81,8 @@ const (
 	FAIL_BUILDS_ON_BROKEN_REFS             = "FAIL_BUILDS_ON_BROKEN_REFS"
 	ACCESS_TOKEN_DURATION_SEC              = "JWT_ACCESS_TOKEN_DURATION_SEC"
 	REFRESH_TOKEN_DURATION_SEC             = "JWT_REFRESH_TOKEN_DURATION_SEC"
-	EXTERNAL_IDP_DISPLAY_NAME              = "EXTERNAL_IDP_DISPLAY_NAME"
-	EXTERNAL_IDP_IMAGE_SVG                 = "EXTERNAL_IDP_IMAGE_SVG"
+	EXTERNAL_SAML_IDP_DISPLAY_NAME         = "EXTERNAL_SAML_IDP_DISPLAY_NAME"
+	EXTERNAL_SAML_IDP_IMAGE_SVG            = "EXTERNAL_SAML_IDP_IMAGE_SVG"
 	DEFAULT_IDP_ID                         = "DEFAULT_IDP_ID"
 	AUTH_CONFIG                            = "AUTH_CONFIG"
 
@@ -893,8 +893,8 @@ func (g systemInfoServiceImpl) setAuthConfig() error {
 		externalIDP := idp.IDP{
 			Id:                 ExternalIDPId,
 			IdpType:            idp.IDPTypeExternal,
-			DisplayName:        os.Getenv(EXTERNAL_IDP_DISPLAY_NAME),
-			ImageSvg:           os.Getenv(EXTERNAL_IDP_IMAGE_SVG),
+			DisplayName:        os.Getenv(EXTERNAL_SAML_IDP_DISPLAY_NAME),
+			ImageSvg:           os.Getenv(EXTERNAL_SAML_IDP_IMAGE_SVG),
 			LoginStartEndpoint: "/api/v1/login/sso/" + ExternalIDPId,
 			Protocol:           idp.AuthProtocolSAML,
 			SAMLConfiguration:  samlConfig,
