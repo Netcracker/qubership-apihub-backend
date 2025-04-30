@@ -314,7 +314,8 @@ func main() {
 
 	tokenRevocationService := service.NewTokenRevocationService(olricProvider, systemInfoService.GetRefreshTokenDurationSec())
 
-	idpManager, err := idp.NewIDPManager(systemInfoService.GetAuthConfig())
+	factory := security.NewProviderFactory()
+	idpManager, err := idp.NewIDPManager(systemInfoService.GetAuthConfig(), factory)
 	if err != nil {
 		log.Error("Failed to initialize external IDP: " + err.Error())
 		panic("Failed to initialize external IDP: " + err.Error())
@@ -346,7 +347,7 @@ func main() {
 	packageController := controller.NewPackageController(packageService, publishedService, portalService, searchService, roleService, monitoringService, ptHandler)
 	versionController := controller.NewVersionController(versionService, roleService, monitoringService, ptHandler, roleService.IsSysadm)
 	roleController := controller.NewRoleController(roleService)
-	samlAuthController := controller.NewSamlAuthController(userService, systemInfoService, idpManager) //deprecated
+	samlAuthController := controller.NewSamlAuthController(systemInfoService, idpManager) //deprecated
 	authController := controller.NewAuthController(userService, systemInfoService, idpManager)
 	userController := controller.NewUserController(userService, privateUserPackageService, roleService.IsSysadm)
 	jwtPubKeyController := controller.NewJwtPubKeyController()
@@ -511,8 +512,10 @@ func main() {
 	r.HandleFunc("/saml/metadata", security.NoSecure(samlAuthController.ServeMetadata_deprecated)).Methods(http.MethodGet)
 
 	r.HandleFunc("/api/v1/login/sso/{idpId}", security.RefreshToken(authController.StartAuthentication)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v1/saml/{idpId}/acs", security.NoSecure(authController.AssertionConsumerHandler)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v1/saml/{idpId}/acs", security.NoSecure(authController.SAMLAssertionConsumerHandler)).Methods(http.MethodPost)
 	r.HandleFunc("/api/v1/saml/{idpId}/metadata", security.NoSecure(authController.ServeMetadata)).Methods(http.MethodGet)
+	//TODO: should we support POST as well ?
+	r.HandleFunc("/api/v1/oidc/{idpId}/callback", authController.OIDCCallbackHandler).Methods("GET")
 
 	r.HandleFunc("/api/v1/logout", security.SecureJWT(logoutController.Logout)).Methods(http.MethodPost)
 

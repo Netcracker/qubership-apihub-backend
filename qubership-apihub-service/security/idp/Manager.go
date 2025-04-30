@@ -21,10 +21,12 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/crewjam/saml"
 	"github.com/crewjam/saml/samlsp"
 	dsig "github.com/russellhaering/goxmldsig"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/oauth2"
 	"net/http"
 	"net/url"
 	"os"
@@ -33,17 +35,23 @@ import (
 
 type IDPManager interface {
 	GetAuthConfig() AuthConfig
-	GetProvider(id string) (SAMLProvider, bool)
+	GetProvider(id string) (Provider, bool)
 }
 
-func NewIDPManager(authConfig AuthConfig) (IDPManager, error) {
+type ProviderFactory interface {
+	NewSAMLProvider(samlInstance *samlsp.Middleware, config IDP) Provider
+	NewOIDCProvider(config IDP, provider *oidc.Provider, verifier *oidc.IDTokenVerifier, oAuth2Config oauth2.Config) Provider
+}
+
+func NewIDPManager(authConfig AuthConfig, factory ProviderFactory) (IDPManager, error) {
 	idpManager := idpManagerImpl{
-		config:        authConfig,
-		samlProviders: make(map[string]SAMLProvider),
+		config:    authConfig,
+		providers: make(map[string]Provider),
+		factory:   factory,
 	}
 	for _, idp := range idpManager.config.Providers {
 		if idp.Protocol == AuthProtocolSAML {
-			if _, exists := idpManager.samlProviders[idp.Id]; exists {
+			if _, exists := idpManager.providers[idp.Id]; exists {
 				log.Debugf("SAML provider with id %s already exists", idp.Id)
 				continue
 			}
@@ -51,41 +59,70 @@ func NewIDPManager(authConfig AuthConfig) (IDPManager, error) {
 			if err != nil {
 				return nil, err
 			}
-			idpManager.samlProviders[idp.Id] = provider
+			idpManager.providers[idp.Id] = provider
+		} else if idp.Protocol == AuthProtocolOIDC {
+			if _, exists := idpManager.providers[idp.Id]; exists {
+				log.Debugf("OIDC provider with id %s already exists", idp.Id)
+				continue
+			}
+			provider, err := idpManager.createOIDCProvider(idp)
+			if err != nil {
+				return nil, err
+			}
+			idpManager.providers[idp.Id] = provider
 		}
+
 	}
 	return &idpManager, nil
 }
 
-// TODO:define an interface type for a provider after OIDC support is implemented
-type SAMLProvider struct {
-	SAMLInstance *samlsp.Middleware
-	Config       IDP
-}
-
 type idpManagerImpl struct {
-	config        AuthConfig
-	samlProviders map[string]SAMLProvider
+	config    AuthConfig
+	providers map[string]Provider
+	factory   ProviderFactory
 }
 
 func (i *idpManagerImpl) GetAuthConfig() AuthConfig {
 	return i.config
 }
 
-func (i *idpManagerImpl) GetProvider(id string) (SAMLProvider, bool) {
-	instance, exists := i.samlProviders[id]
+func (i *idpManagerImpl) GetProvider(id string) (Provider, bool) {
+	instance, exists := i.providers[id]
 	return instance, exists
 }
 
-func (i *idpManagerImpl) createSAMLProvider(idpConfig IDP) (SAMLProvider, error) {
-	instance, err := CreateSAMLInstance(idpConfig.Id, idpConfig.SAMLConfiguration)
+func (i *idpManagerImpl) createSAMLProvider(idpConfig IDP) (Provider, error) {
+	samlInstance, err := CreateSAMLInstance(idpConfig.Id, idpConfig.SAMLConfiguration)
 	if err != nil {
-		return SAMLProvider{}, err
+		return nil, err
 	}
-	return SAMLProvider{
-		SAMLInstance: instance,
-		Config:       idpConfig,
-	}, nil
+	return i.factory.NewSAMLProvider(samlInstance, idpConfig), nil
+}
+
+func (i *idpManagerImpl) createOIDCProvider(idpConfig IDP) (Provider, error) {
+	if idpConfig.OIDCConfiguration == nil {
+		log.Error("OIDC configuration is invalid")
+		return nil, fmt.Errorf("OIDC configuration is invalid")
+	}
+
+	ctx := context.Background()
+	provider, err := oidc.NewProvider(ctx, idpConfig.OIDCConfiguration.ProviderURL)
+	if err != nil {
+		log.Errorf("Failed to create OIDC provider: %v", err)
+		return nil, err
+	}
+
+	oidcConfig := oauth2.Config{
+		ClientID:     idpConfig.OIDCConfiguration.ClientID,
+		ClientSecret: idpConfig.OIDCConfiguration.ClientSecret,
+		RedirectURL:  idpConfig.OIDCConfiguration.RootURL + idpConfig.OIDCConfiguration.RedirectPath,
+		Endpoint:     provider.Endpoint(),
+		Scopes:       idpConfig.OIDCConfiguration.Scopes,
+	}
+
+	verifier := provider.Verifier(&oidc.Config{ClientID: idpConfig.OIDCConfiguration.ClientID})
+
+	return i.factory.NewOIDCProvider(idpConfig, provider, verifier, oidcConfig), nil
 }
 
 func CreateSAMLInstance(idpId string, samlConfig *SAMLConfiguration) (*samlsp.Middleware, error) {

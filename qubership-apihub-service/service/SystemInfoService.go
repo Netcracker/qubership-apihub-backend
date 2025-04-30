@@ -18,6 +18,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
+	"github.com/coreos/go-oidc/v3/oidc"
 	"os"
 	"strconv"
 	"strings"
@@ -85,9 +86,15 @@ const (
 	EXTERNAL_IDP_IMAGE_SVG                 = "EXTERNAL_IDP_IMAGE_SVG"
 	DEFAULT_IDP_ID                         = "DEFAULT_IDP_ID"
 	AUTH_CONFIG                            = "AUTH_CONFIG"
+	OIDC_PROVIDER_URL                      = "OIDC_PROVIDER_URL"
+	OIDC_CLIENT_ID                         = "OIDC_CLIENT_ID"
+	OIDC_CLIENT_SECRET                     = "OIDC_CLIENT_SECRET"
+	EXTERNAL_OIDC_IDP_DISPLAY_NAME         = "EXTERNAL_OIDC_IDP_DISPLAY_NAME"
+	EXTERNAL_OIDC_IDP_IMAGE_SVG            = "EXTERNAL_OIDC_IDP_IMAGE_SVG"
 
-	LocalIDPId    = "local-idp"
-	ExternalIDPId = "external-idp"
+	LocalIDPId             = "local-idp"
+	ExternalSAMLProviderId = "external-saml-idp"
+	ExternalOIDCProviderId = "external-oidc-idp"
 )
 
 type SystemInfoService interface {
@@ -891,13 +898,30 @@ func (g systemInfoServiceImpl) setAuthConfig() error {
 	}
 	if samlConfig != nil {
 		externalIDP := idp.IDP{
-			Id:                 ExternalIDPId,
+			Id:                 ExternalSAMLProviderId,
 			IdpType:            idp.IDPTypeExternal,
 			DisplayName:        os.Getenv(EXTERNAL_IDP_DISPLAY_NAME),
 			ImageSvg:           os.Getenv(EXTERNAL_IDP_IMAGE_SVG),
-			LoginStartEndpoint: "/api/v1/login/sso/" + ExternalIDPId,
+			LoginStartEndpoint: "/api/v1/login/sso/" + ExternalSAMLProviderId,
 			Protocol:           idp.AuthProtocolSAML,
 			SAMLConfiguration:  samlConfig,
+		}
+		authConfig.Providers = append(authConfig.Providers, externalIDP)
+	}
+
+	oidcConfig, err := g.createOIDCConfig()
+	if err != nil {
+		return err
+	}
+	if oidcConfig != nil {
+		externalIDP := idp.IDP{
+			Id:                 ExternalOIDCProviderId,
+			IdpType:            idp.IDPTypeExternal,
+			DisplayName:        os.Getenv(EXTERNAL_OIDC_IDP_DISPLAY_NAME),
+			ImageSvg:           os.Getenv(EXTERNAL_OIDC_IDP_IMAGE_SVG),
+			LoginStartEndpoint: "/api/v1/login/sso/" + ExternalOIDCProviderId,
+			Protocol:           idp.AuthProtocolOIDC,
+			OIDCConfiguration:  oidcConfig,
 		}
 		authConfig.Providers = append(authConfig.Providers, externalIDP)
 	}
@@ -917,20 +941,45 @@ func (g systemInfoServiceImpl) createSAMLConfig() (*idp.SAMLConfiguration, error
 	samlCrt := os.Getenv(SAML_CRT)
 	samlKey := os.Getenv(SAML_KEY)
 	metadataURL := os.Getenv(ADFS_METADATA_URL)
+	rootURL := os.Getenv(APIHUB_URL)
 	if samlCrt == "" && samlKey == "" && metadataURL == "" {
 		log.Warn("SAML configuration environment variables are not provided. External IDP will not be available")
 		return nil, nil
 	}
 
-	if samlCrt == "" || samlKey == "" || metadataURL == "" {
-		return nil, fmt.Errorf("incomplete SAML configuration, all environment variables SAML_CRT, SAML_KEY, and ADFS_METADATA_URL must be set")
+	if samlCrt == "" || samlKey == "" || metadataURL == "" || rootURL == "" {
+		return nil, fmt.Errorf("incomplete SAML configuration, all environment variables SAML_CRT, SAML_KEY, ADFS_METADATA_URL and APIHUB_URL must be set")
 	}
 
 	return &idp.SAMLConfiguration{
 		Certificate:    samlCrt,
 		PrivateKey:     samlKey,
 		IDPMetadataURL: metadataURL,
-		RootURL:        os.Getenv(APIHUB_URL),
+		RootURL:        rootURL,
+	}, nil
+}
+
+func (g systemInfoServiceImpl) createOIDCConfig() (*idp.OIDCConfiguration, error) {
+	clientId := os.Getenv(OIDC_CLIENT_ID)
+	clientSecret := os.Getenv(OIDC_CLIENT_SECRET)
+	providerURL := os.Getenv(OIDC_PROVIDER_URL)
+	rootURL := os.Getenv(APIHUB_URL)
+	if clientId == "" && clientSecret == "" && providerURL == "" {
+		log.Warn("OIDC configuration environment variables are not provided. External IDP will not be available")
+		return nil, nil
+	}
+
+	if clientId == "" || clientSecret == "" || providerURL == "" || rootURL == "" {
+		return nil, fmt.Errorf("incomplete OIDC configuration, all environment variables OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, OIDC_PROVIDER_URL and APIHUB_URL must be set")
+	}
+
+	return &idp.OIDCConfiguration{
+		ClientID:     clientId,
+		ClientSecret: clientSecret,
+		RootURL:      rootURL,
+		RedirectPath: "/api/v1/oidc/" + ExternalOIDCProviderId + "/callback",
+		ProviderURL:  providerURL,
+		Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
 	}, nil
 }
 

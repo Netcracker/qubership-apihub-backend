@@ -35,7 +35,7 @@ type SamlAuthController interface {
 	GetSystemSSOInfo(w http.ResponseWriter, r *http.Request) //TODO: move to AuthController when the frontend migrates to the new SSO login API
 }
 
-func NewSamlAuthController(userService service.UserService, systemInfoService service.SystemInfoService, idpManager idp.IDPManager) SamlAuthController {
+func NewSamlAuthController(systemInfoService service.SystemInfoService, idpManager idp.IDPManager) SamlAuthController {
 	var samlInstance *samlsp.Middleware
 	for _, provider := range idpManager.GetAuthConfig().Providers {
 		if provider.IdpType == idp.IDPTypeExternal && provider.Protocol == idp.AuthProtocolSAML {
@@ -45,29 +45,27 @@ func NewSamlAuthController(userService service.UserService, systemInfoService se
 	}
 	return &authenticationControllerImpl{
 		samlInstance:      samlInstance,
-		userService:       userService,
 		systemInfoService: systemInfoService,
 	}
 }
 
 type authenticationControllerImpl struct {
 	samlInstance      *samlsp.Middleware
-	userService       service.UserService
 	systemInfoService service.SystemInfoService
 }
 
 func (a *authenticationControllerImpl) ServeMetadata_deprecated(w http.ResponseWriter, r *http.Request) {
-	serveMetadata(w, r, a.samlInstance)
+	security.ServeMetadata(w, r, a.samlInstance)
 }
 
 // StartSamlAuthentication_deprecated Frontend calls this endpoint to SSO login user via SAML (legacy auth)
 func (a *authenticationControllerImpl) StartSamlAuthentication_deprecated(w http.ResponseWriter, r *http.Request) {
-	startSAMLAuthentication(w, r, a.samlInstance, a.systemInfoService.GetAllowedHosts())
+	security.StartSAMLAuthentication(w, r, a.samlInstance, a.systemInfoService.GetAllowedHosts())
 }
 
 // AssertionConsumerHandler_deprecated This endpoint is called by ADFS when auth procedure is complete on it's side. ADFS posts the response here. (legacy auth)
 func (a *authenticationControllerImpl) AssertionConsumerHandler_deprecated(w http.ResponseWriter, r *http.Request) {
-	handleAssertion(w, r, a.userService, a.samlInstance, "", a.setUserViewCookie)
+	security.HandleAssertion(w, r, a.samlInstance, "", a.setUserViewCookie)
 }
 
 func (a *authenticationControllerImpl) setUserViewCookie(w http.ResponseWriter, user *view.User, idpId string) error {
@@ -87,7 +85,7 @@ func (a *authenticationControllerImpl) setUserViewCookie(w http.ResponseWriter, 
 		Name:     "userView",
 		Value:    cookieValue,
 		MaxAge:   a.systemInfoService.GetRefreshTokenDurationSec(),
-		Secure:   true,
+		Secure:   false, //TODO: should be true
 		HttpOnly: false,
 		Path:     "/",
 	})
