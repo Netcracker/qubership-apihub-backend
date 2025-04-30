@@ -603,7 +603,7 @@ func (o operationControllerImpl) GetOperationChanges_deprecated_2(w http.Respons
 		return
 	}
 	if !sufficientPrivileges {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -612,7 +612,7 @@ func (o operationControllerImpl) GetOperationChanges_deprecated_2(w http.Respons
 	}
 	versionName, err := getUnescapedStringParam(r, "version")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -623,7 +623,7 @@ func (o operationControllerImpl) GetOperationChanges_deprecated_2(w http.Respons
 	}
 	operationId, err := getUnescapedStringParam(r, "operationId")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -637,7 +637,7 @@ func (o operationControllerImpl) GetOperationChanges_deprecated_2(w http.Respons
 	previousVersionPackageId := r.URL.Query().Get("previousVersionPackageId")
 	severities, err := getListFromParam(r, "severity")
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -648,7 +648,7 @@ func (o operationControllerImpl) GetOperationChanges_deprecated_2(w http.Respons
 	}
 	for _, severity := range severities {
 		if !view.ValidSeverity(severity) {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.InvalidParameterValue,
 				Message: exception.InvalidParameterValueMsg,
@@ -662,7 +662,7 @@ func (o operationControllerImpl) GetOperationChanges_deprecated_2(w http.Respons
 		handlePkgRedirectOrRespondWithError(w, r, o.ptHandler, packageId, "Failed to get operation changes", err)
 		return
 	}
-	RespondWithJson(w, http.StatusOK, changes)
+	utils.RespondWithJson(w, http.StatusOK, changes)
 }
 
 func (o operationControllerImpl) GetOperationsChanges_deprecated(w http.ResponseWriter, r *http.Request) {
