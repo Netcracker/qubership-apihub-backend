@@ -22,14 +22,16 @@ type oidcProvider struct {
 	provider     *oidc.Provider
 	verifier     *oidc.IDTokenVerifier
 	oAuth2Config oauth2.Config
+	allowedHosts []string
 }
 
-func newOIDCProvider(config idp.IDP, provider *oidc.Provider, verifier *oidc.IDTokenVerifier, oAuth2Config oauth2.Config) idp.Provider {
+func newOIDCProvider(config idp.IDP, provider *oidc.Provider, verifier *oidc.IDTokenVerifier, oAuth2Config oauth2.Config, allowedHosts []string) idp.Provider {
 	return &oidcProvider{
 		config:       config,
 		provider:     provider,
 		verifier:     verifier,
 		oAuth2Config: oAuth2Config,
+		allowedHosts: allowedHosts,
 	}
 }
 
@@ -37,7 +39,7 @@ func (o oidcProvider) GetId() string {
 	return o.config.Id
 }
 
-func (o oidcProvider) StartAuthentication(w http.ResponseWriter, r *http.Request, allowedHosts []string) {
+func (o oidcProvider) StartAuthentication(w http.ResponseWriter, r *http.Request) {
 	redirectUrlStr := r.URL.Query().Get("redirectUri")
 
 	log.Debugf("redirect url - %s", redirectUrlStr)
@@ -54,7 +56,7 @@ func (o oidcProvider) StartAuthentication(w http.ResponseWriter, r *http.Request
 	}
 
 	var validHost bool
-	for _, host := range allowedHosts {
+	for _, host := range o.allowedHosts {
 		if strings.Contains(redirectUrl.Host, host) {
 			validHost = true
 			break

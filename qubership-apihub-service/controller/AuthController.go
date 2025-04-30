@@ -56,7 +56,7 @@ func (a *authControllerImpl) StartAuthentication(w http.ResponseWriter, r *http.
 	idpId := getStringParam(r, "idpId")
 	provider, exists := a.idpManager.GetProvider(idpId)
 	if exists {
-		provider.StartAuthentication(w, r, a.systemInfoService.GetAllowedHosts())
+		provider.StartAuthentication(w, r)
 	} else {
 		//TODO: throw custom error
 	}

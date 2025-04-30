@@ -315,7 +315,7 @@ func main() {
 	tokenRevocationService := service.NewTokenRevocationService(olricProvider, systemInfoService.GetRefreshTokenDurationSec())
 
 	factory := security.NewProviderFactory()
-	idpManager, err := idp.NewIDPManager(systemInfoService.GetAuthConfig(), factory)
+	idpManager, err := idp.NewIDPManager(systemInfoService.GetAuthConfig(), systemInfoService.GetAllowedHosts(), factory)
 	if err != nil {
 		log.Error("Failed to initialize external IDP: " + err.Error())
 		panic("Failed to initialize external IDP: " + err.Error())
@@ -352,7 +352,7 @@ func main() {
 	userController := controller.NewUserController(userService, privateUserPackageService, roleService.IsSysadm)
 	jwtPubKeyController := controller.NewJwtPubKeyController()
 	oauthController := controller.NewOauth20Controller(integrationsService, userService, systemInfoService)
-	logoutController := controller.NewLogoutController(tokenRevocationService)
+	logoutController := controller.NewLogoutController(tokenRevocationService, systemInfoService)
 	operationController := controller.NewOperationController(roleService, operationService, buildService, monitoringService, ptHandler)
 	operationGroupController := controller.NewOperationGroupController(roleService, operationGroupService, versionService)
 	searchController := controller.NewSearchController(operationService, versionService, monitoringService)
@@ -538,8 +538,9 @@ func main() {
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/operations/{operationId}", security.Secure(operationController.GetOperation)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/operations/{operationId}/changes", security.Secure(operationController.GetOperationChanges)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/operations/{operationId}/models/{modelName}/usages", security.Secure(operationController.GetOperationModelUsages)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/changes", security.Secure(operationController.GetOperationsChanges_deprecated)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/changes", security.Secure(operationController.GetOperationsChanges)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/changes", security.Secure(operationController.GetOperationsChanges_deprecated)).Methods(http.MethodGet)  // deprecated
+	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/changes", security.Secure(operationController.GetOperationChanges_deprecated_2)).Methods(http.MethodGet) // deprecated
+	r.HandleFunc("/api/v4/packages/{packageId}/versions/{version}/{apiType}/changes", security.Secure(operationController.GetOperationsChanges)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/tags", security.Secure(operationController.GetOperationsTags)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/deprecated", security.Secure(operationController.GetDeprecatedOperationsList)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/operations/{operationId}/deprecatedItems", security.Secure(operationController.GetOperationDeprecatedItems)).Methods(http.MethodGet)
