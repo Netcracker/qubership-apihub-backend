@@ -23,6 +23,7 @@ import (
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	log "github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 )
 
 const (
@@ -78,6 +79,7 @@ const (
 	APIHUB_SYSTEM_API_KEY                  = "APIHUB_ACCESS_TOKEN"
 	EDITOR_DISABLED                        = "EDITOR_DISABLED"
 	FAIL_BUILDS_ON_BROKEN_REFS             = "FAIL_BUILDS_ON_BROKEN_REFS"
+	APIHUB_YAML_CONFIG_FILE_PATH           = "APIHUB_YAML_CONFIG_FILE_PATH"
 )
 
 type SystemInfoService interface {
@@ -135,6 +137,7 @@ type SystemInfoService interface {
 	GetSystemApiKey() (string, error)
 	GetEditorDisabled() bool
 	FailBuildOnBrokenRefs() bool
+	GetYamlConfigFilePath() string
 }
 
 func (g systemInfoServiceImpl) GetCredsFromEnv() *view.DbCredentials {
@@ -240,6 +243,43 @@ func (g systemInfoServiceImpl) Init() error {
 	g.setAllowedHosts()
 	g.setEditorDisabled()
 	g.setFailBuildOnBrokenRefs()
+	g.setYamlConfigFilePath()
+
+	viper.SetConfigName("config")
+	viper.SetConfigType("yaml")
+	viper.AddConfigPath(g.GetYamlConfigFilePath())
+	viper.AddConfigPath(".")
+
+	if err := viper.ReadInConfig(); err != nil {
+		panic(fmt.Errorf("fatal error config file: %w", err))
+	}
+
+	allSettings := viper.AllSettings()
+	log.Infof("All settings:")
+	for key, value := range allSettings {
+		log.Infof("%s: %v\n", key, value)
+	}
+
+	apihubUrl := viper.GetString("qubershipApihub.apihubUrl")
+	log.Infof("YAML key qubershipApihub.apihubUrl is %s", apihubUrl)
+
+	dbHost := viper.GetString("qubershipApihub.backend.database.dbHost")
+	log.Infof("YAML key qubershipApihub.backend.dbHost is %s", dbHost)
+
+	dbPort := viper.GetInt("qubershipApihub.backend.database.dbPort")
+	log.Infof("YAML key qubershipApihub.backend.dbHost is %d", dbPort)
+
+	var auths []map[string]interface{}
+	if err := viper.UnmarshalKey("qubershipApihub.backend.auth", &auths); err != nil {
+		log.Errorf("Unable to decode auth: %v", err)
+	}
+
+	for _, auth := range auths {
+		authType, _ := auth["type"].(string)
+		URL, _ := auth["url"].(string)
+
+		log.Infof("Auth: %s, %s", authType, URL)
+	}
 
 	return nil
 }
@@ -829,4 +869,12 @@ func (g systemInfoServiceImpl) setFailBuildOnBrokenRefs() {
 
 func (g systemInfoServiceImpl) FailBuildOnBrokenRefs() bool {
 	return g.systemInfoMap[FAIL_BUILDS_ON_BROKEN_REFS].(bool)
+}
+
+func (g systemInfoServiceImpl) GetYamlConfigFilePath() string {
+	return g.systemInfoMap[APIHUB_YAML_CONFIG_FILE_PATH].(string)
+}
+
+func (g systemInfoServiceImpl) setYamlConfigFilePath() {
+	g.systemInfoMap[APIHUB_YAML_CONFIG_FILE_PATH] = os.Getenv(APIHUB_YAML_CONFIG_FILE_PATH)
 }
