@@ -117,7 +117,7 @@ func CreateLocalUserToken_deprecated(w http.ResponseWriter, r *http.Request) {
 }
 
 func CreateTokenForUser_deprecated(dbUser view.User) (*UserView, error) {
-	accessToken, refreshToken, err := IssueTokenPair(dbUser)
+	accessToken, refreshToken, err := issueTokenPair(dbUser)
 	if err != nil {
 		return nil, err
 	}
@@ -132,28 +132,12 @@ func CreateLocalUserToken(w http.ResponseWriter, r *http.Request) {
 		respondWithAuthFailedError(w, err)
 		return
 	}
-	accessToken, refreshToken, err := IssueTokenPair(*user)
-	if err != nil {
+
+	if err = setAuthTokenCookies(w, user, "/api/v3/auth/local/refresh"); err != nil {
 		respondWithAuthFailedError(w, err)
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     AccessTokenCookieName,
-		Value:    accessToken,
-		MaxAge:   int(accessTokenDuration.Seconds()),
-		Secure:   true,
-		HttpOnly: true,
-		Path:     "/",
-	})
-	http.SetCookie(w, &http.Cookie{
-		Name:     RefreshTokenCookieName,
-		Value:    refreshToken,
-		MaxAge:   int(refreshTokenDuration.Seconds()),
-		Secure:   true,
-		HttpOnly: true,
-		Path:     "/api/v3/auth/local/refresh",
-	})
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -170,7 +154,32 @@ func authenticateUser(r *http.Request) (*view.User, error) {
 	return user, nil
 }
 
-func IssueTokenPair(dbUser view.User) (accessToken string, refreshToken string, err error) {
+func setAuthTokenCookies(w http.ResponseWriter, user *view.User, refreshTokenPath string) error {
+	accessToken, refreshToken, err := issueTokenPair(*user)
+	if err != nil {
+		return fmt.Errorf("failed to create token pair for user: %v", err.Error())
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     AccessTokenCookieName,
+		Value:    accessToken,
+		MaxAge:   int(accessTokenDuration.Seconds()),
+		Secure:   true,
+		HttpOnly: true,
+		Path:     "/",
+	})
+	http.SetCookie(w, &http.Cookie{
+		Name:     RefreshTokenCookieName,
+		Value:    refreshToken,
+		MaxAge:   int(refreshTokenDuration.Seconds()),
+		Secure:   true,
+		HttpOnly: true,
+		Path:     refreshTokenPath,
+	})
+	return nil
+}
+
+func issueTokenPair(dbUser view.User) (accessToken string, refreshToken string, err error) {
 	user := auth.NewUserInfo(dbUser.Name, dbUser.Id, []string{}, auth.Extensions{})
 	accessDuration := jwt.SetExpDuration(accessTokenDuration) // should be more than one minute!
 

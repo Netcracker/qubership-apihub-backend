@@ -21,7 +21,6 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	"github.com/crewjam/saml/samlsp"
 	log "github.com/sirupsen/logrus"
@@ -32,7 +31,6 @@ type SamlAuthController interface {
 	AssertionConsumerHandler_deprecated(w http.ResponseWriter, r *http.Request)
 	StartSamlAuthentication_deprecated(w http.ResponseWriter, r *http.Request)
 	ServeMetadata_deprecated(w http.ResponseWriter, r *http.Request)
-	GetSystemSSOInfo(w http.ResponseWriter, r *http.Request) //TODO: move to AuthController when the frontend migrates to the new SSO login API
 }
 
 func NewSamlAuthController(systemInfoService service.SystemInfoService, idpManager idp.IDPManager) SamlAuthController {
@@ -85,21 +83,11 @@ func (a *authenticationControllerImpl) setUserViewCookie(w http.ResponseWriter, 
 		Name:     "userView",
 		Value:    cookieValue,
 		MaxAge:   a.systemInfoService.GetRefreshTokenDurationSec(),
-		Secure:   false, //TODO: should be true
+		Secure:   true,
 		HttpOnly: false,
 		Path:     "/",
 	})
 	log.Debugf("Auth user result object: %+v", userView)
 
 	return nil
-}
-
-func (a *authenticationControllerImpl) GetSystemSSOInfo(w http.ResponseWriter, r *http.Request) {
-	utils.RespondWithJson(w, http.StatusOK,
-		view.SystemConfigurationInfo{
-			SSOIntegrationEnabled: a.samlInstance != nil,
-			AutoRedirect:          a.samlInstance != nil,
-			DefaultWorkspaceId:    a.systemInfoService.GetDefaultWorkspaceId(),
-			AuthConfig:            a.systemInfoService.GetAuthConfig(),
-		})
 }

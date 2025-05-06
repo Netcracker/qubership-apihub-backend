@@ -36,6 +36,7 @@ import (
 type IDPManager interface {
 	GetAuthConfig() AuthConfig
 	GetProvider(id string) (Provider, bool)
+	IsSSOIntegrationEnabled() bool
 }
 
 type ProviderFactory interface {
@@ -71,7 +72,6 @@ func NewIDPManager(authConfig AuthConfig, allowedHosts []string, factory Provide
 			}
 			idpManager.providers[idp.Id] = provider
 		}
-
 	}
 	return &idpManager, nil
 }
@@ -89,6 +89,10 @@ func (i *idpManagerImpl) GetAuthConfig() AuthConfig {
 func (i *idpManagerImpl) GetProvider(id string) (Provider, bool) {
 	instance, exists := i.providers[id]
 	return instance, exists
+}
+
+func (i *idpManagerImpl) IsSSOIntegrationEnabled() bool {
+	return len(i.config.Providers) > 0
 }
 
 func (i *idpManagerImpl) createSAMLProvider(idpConfig IDP, allowedHosts []string) (Provider, error) {

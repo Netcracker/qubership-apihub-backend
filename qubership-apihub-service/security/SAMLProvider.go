@@ -13,7 +13,6 @@ import (
 	"github.com/crewjam/saml/samlsp"
 	log "github.com/sirupsen/logrus"
 	"net/http"
-	"net/url"
 	"strings"
 )
 
@@ -70,7 +69,7 @@ func StartSAMLAuthentication(w http.ResponseWriter, r *http.Request, samlInstanc
 
 	log.Debugf("redirect url - %s", redirectUrlStr)
 
-	redirectUrl, err := parseAndValidateRedirectURL(redirectUrlStr, allowedHosts)
+	redirectUrl, err := utils.ParseAndValidateRedirectURL(redirectUrlStr, allowedHosts)
 	if err != nil {
 		utils.RespondWithCustomError(w, err)
 		return
@@ -87,7 +86,7 @@ func StartSAMLAuthentication(w http.ResponseWriter, r *http.Request, samlInstanc
 	samlInstance.HandleStartAuthFlow(w, r)
 }
 
-func HandleAssertion(w http.ResponseWriter, r *http.Request, samlInstance *samlsp.Middleware, providerId string, allowedHosts []string, setAuthCookie func(w http.ResponseWriter, user *view.User, idpId string) error) {
+func HandleAssertion(w http.ResponseWriter, r *http.Request, samlInstance *samlsp.Middleware, providerId string, allowedHosts []string, setAuthCookie func(w http.ResponseWriter, user *view.User, refreshTokenPath string) error) {
 	if samlInstance == nil {
 		log.Errorf("Cannot run AssertionConsumerHandler with nill samlInstanse")
 		utils.RespondWithCustomError(w, &exception.CustomError{
@@ -146,7 +145,7 @@ func HandleAssertion(w http.ResponseWriter, r *http.Request, samlInstance *samls
 	}
 
 	// Add Apihub auth info cookie
-	if err = setAuthCookie(w, user, providerId); err != nil {
+	if err = setAuthCookie(w, user, "/api/v1/login/sso/"+providerId); err != nil {
 		utils.RespondWithError(w, "Failed to set auth cookie", err)
 		return
 	}
@@ -160,7 +159,7 @@ func HandleAssertion(w http.ResponseWriter, r *http.Request, samlInstance *samls
 			if errors.Is(err, http.ErrNoCookie) && samlInstance.ServiceProvider.AllowIDPInitiated {
 				// For IDP-initiated flows, RelayState might contain a URI directly from an external identity provider.
 				uri := trackedRequestIndex
-				_, err := parseAndValidateRedirectURL(uri, allowedHosts)
+				_, err := utils.ParseAndValidateRedirectURL(uri, allowedHosts)
 				if err != nil {
 					utils.RespondWithCustomError(w, err)
 					return
@@ -183,63 +182,6 @@ func HandleAssertion(w http.ResponseWriter, r *http.Request, samlInstance *samls
 	}
 
 	http.Redirect(w, r, redirectURI, http.StatusFound)
-}
-
-func parseAndValidateRedirectURL(urlStr string, allowedHosts []string) (*url.URL, *exception.CustomError) {
-	redirectUrl, err := url.Parse(urlStr)
-	if err != nil {
-		return nil, &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.IncorrectRedirectUrlError,
-			Message: exception.IncorrectRedirectUrlErrorMsg,
-			Params:  map[string]interface{}{"error": err.Error()},
-		}
-	}
-	var validHost bool
-	for _, host := range allowedHosts {
-		if strings.Contains(redirectUrl.Host, host) {
-			validHost = true
-			break
-		}
-	}
-	if !validHost {
-		return nil, &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.HostNotAllowed,
-			Message: exception.HostNotAllowedMsg,
-			Params:  map[string]interface{}{"host": urlStr},
-		}
-	}
-	return redirectUrl, nil
-}
-
-func setAuthTokenCookies(w http.ResponseWriter, user *view.User, idpId string) error {
-	accessToken, refreshToken, err := IssueTokenPair(*user)
-	if err != nil {
-		return &exception.CustomError{
-			Status:  http.StatusInternalServerError,
-			Message: "Failed to create token for SSO user",
-			Debug:   err.Error(),
-		}
-	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     AccessTokenCookieName,
-		Value:    accessToken,
-		MaxAge:   int(accessTokenDuration.Seconds()),
-		Secure:   false, //TODO: should be true
-		HttpOnly: true,
-		Path:     "/",
-	})
-	http.SetCookie(w, &http.Cookie{
-		Name:     RefreshTokenCookieName,
-		Value:    refreshToken,
-		MaxAge:   int(refreshTokenDuration.Seconds()),
-		Secure:   false, //TODO: should be true
-		HttpOnly: true,
-		Path:     "/api/v1/login/sso/" + idpId,
-	})
-	return nil
 }
 
 func getAssertionAttributes(assertion *saml.Assertion) map[string][]string {

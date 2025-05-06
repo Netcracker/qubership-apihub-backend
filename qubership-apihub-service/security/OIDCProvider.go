@@ -2,9 +2,9 @@ package security
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"errors"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -12,8 +12,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"
 	"net/http"
-	"net/url"
-	"strings"
 	"time"
 )
 
@@ -44,31 +42,8 @@ func (o oidcProvider) StartAuthentication(w http.ResponseWriter, r *http.Request
 
 	log.Debugf("redirect url - %s", redirectUrlStr)
 
-	redirectUrl, err := url.Parse(redirectUrlStr)
-	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.IncorrectRedirectUrlError,
-			Message: exception.IncorrectRedirectUrlErrorMsg,
-			Params:  map[string]interface{}{"error": err.Error()},
-		})
-		return
-	}
-
-	var validHost bool
-	for _, host := range o.allowedHosts {
-		if strings.Contains(redirectUrl.Host, host) {
-			validHost = true
-			break
-		}
-	}
-	if !validHost {
-		utils.RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.HostNotAllowed,
-			Message: exception.HostNotAllowedMsg,
-			Params:  map[string]interface{}{"host": redirectUrlStr},
-		})
+	if _, err := utils.ParseAndValidateRedirectURL(redirectUrlStr, o.allowedHosts); err != nil {
+		utils.RespondWithCustomError(w, err)
 		return
 	}
 
@@ -82,14 +57,23 @@ func (o oidcProvider) StartAuthentication(w http.ResponseWriter, r *http.Request
 		utils.RespondWithError(w, "Failed to generate nonce", err)
 		return
 	}
+	codeVerifier, err := o.generateCodeVerifier()
+	if err != nil {
+		utils.RespondWithError(w, "Failed to generate code verifier", err)
+		return
+	}
+	codeChallenge := o.generateCodeChallenge(codeVerifier)
 
 	o.setCallbackCookie(w, "oidc_state_"+o.config.Id, state)
 	o.setCallbackCookie(w, "oidc_nonce_"+o.config.Id, nonce)
+	o.setCallbackCookie(w, "oidc_code_verifier_"+o.config.Id, codeVerifier)
 	o.setCallbackCookie(w, "oidc_redirect_"+o.config.Id, redirectUrlStr)
 
 	authURL := o.oAuth2Config.AuthCodeURL(
 		state,
 		oidc.Nonce(nonce),
+		oauth2.SetAuthURLParam("code_challenge", codeChallenge),
+		oauth2.SetAuthURLParam("code_challenge_method", "S256"),
 	)
 	http.Redirect(w, r, authURL, http.StatusFound)
 }
@@ -111,6 +95,13 @@ func (o oidcProvider) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	codeVerifierCookie, err := r.Cookie("oidc_code_verifier_" + o.config.Id)
+	if err != nil {
+		utils.RespondWithError(w, "Code verifier cookie not found", err)
+		return
+	}
+	codeVerifier := codeVerifierCookie.Value
+
 	redirectURI := "/"
 	if redirectCookie, err := r.Cookie("oidc_redirect_" + o.config.Id); err == nil {
 		redirectURI = redirectCookie.Value
@@ -118,11 +109,12 @@ func (o oidcProvider) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		log.Warnf("Redirect cookie not found, using default: %v", err)
 	}
 
-	o.deleteCookie(w, "oidc_state_"+o.config.Id)
-	o.deleteCookie(w, "oidc_nonce_"+o.config.Id)
-	o.deleteCookie(w, "oidc_redirect_"+o.config.Id)
+	utils.DeleteCookie(w, "oidc_state_"+o.config.Id, o.config.OIDCConfiguration.RedirectPath)
+	utils.DeleteCookie(w, "oidc_nonce_"+o.config.Id, o.config.OIDCConfiguration.RedirectPath)
+	utils.DeleteCookie(w, "oidc_code_verifier_"+o.config.Id, o.config.OIDCConfiguration.RedirectPath)
+	utils.DeleteCookie(w, "oidc_redirect_"+o.config.Id, o.config.OIDCConfiguration.RedirectPath)
 
-	oauth2Token, err := o.oAuth2Config.Exchange(r.Context(), r.URL.Query().Get("code"))
+	oauth2Token, err := o.oAuth2Config.Exchange(r.Context(), r.URL.Query().Get("code"), oauth2.VerifierOption(codeVerifier))
 	if err != nil {
 		utils.RespondWithError(w, "Failed to exchange token", err)
 		return
@@ -179,7 +171,7 @@ func (o oidcProvider) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add authentication cookies
-	if err = setAuthTokenCookies(w, user, o.config.Id); err != nil {
+	if err = setAuthTokenCookies(w, user, "/api/v1/login/sso/"+o.config.Id); err != nil {
 		utils.RespondWithError(w, "Failed to set auth cookie", err)
 		return
 	}
@@ -208,26 +200,28 @@ func (o oidcProvider) generateNonce() (string, error) {
 	return base64.StdEncoding.EncodeToString(b), nil
 }
 
+func (o oidcProvider) generateCodeVerifier() (string, error) {
+	b := make([]byte, 64)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+func (o oidcProvider) generateCodeChallenge(verifier string) string {
+	h := sha256.New()
+	h.Write([]byte(verifier))
+	return base64.RawURLEncoding.EncodeToString(h.Sum(nil))
+}
+
 func (o oidcProvider) setCallbackCookie(w http.ResponseWriter, name, value string) {
 	c := &http.Cookie{
 		Name:     name,
 		Value:    value,
 		MaxAge:   int(time.Hour.Seconds()),
-		Secure:   false, //TODO: should be true
+		Secure:   true,
 		HttpOnly: true,
 		Path:     o.config.OIDCConfiguration.RedirectPath,
 	}
 	http.SetCookie(w, c)
-}
-
-// TODO: check that it works correctly
-func (o oidcProvider) deleteCookie(w http.ResponseWriter, name string) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     name,
-		Value:    "",
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   true,
-		Path:     o.config.OIDCConfiguration.RedirectPath,
-	})
 }
