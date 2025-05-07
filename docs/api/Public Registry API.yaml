@@ -80,7 +80,6 @@ paths:
                 type: object
                 required:
                   - autoRedirect
-                  - authConfig
                 properties:
                   ssoIntegrationEnabled:
                     type: boolean
