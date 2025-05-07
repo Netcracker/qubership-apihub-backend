@@ -32,7 +32,7 @@ type SamlAuthController interface {
 	AssertionConsumerHandler_deprecated(w http.ResponseWriter, r *http.Request)
 	StartSamlAuthentication_deprecated(w http.ResponseWriter, r *http.Request)
 	ServeMetadata_deprecated(w http.ResponseWriter, r *http.Request)
-	GetSystemSSOInfo(w http.ResponseWriter, r *http.Request) //TODO: move to AuthController when the frontend migrates to the new SSO login API
+	GetSystemSSOInfo_deprecated(w http.ResponseWriter, r *http.Request)
 }
 
 func NewSamlAuthController(userService service.UserService, systemInfoService service.SystemInfoService, idpManager idp.IDPManager) SamlAuthController {
@@ -96,12 +96,11 @@ func (a *authenticationControllerImpl) setUserViewCookie(w http.ResponseWriter, 
 	return nil
 }
 
-func (a *authenticationControllerImpl) GetSystemSSOInfo(w http.ResponseWriter, r *http.Request) {
+func (a *authenticationControllerImpl) GetSystemSSOInfo_deprecated(w http.ResponseWriter, r *http.Request) {
 	utils.RespondWithJson(w, http.StatusOK,
-		view.SystemConfigurationInfo{
+		view.SystemConfigurationInfo_deprecated{
 			SSOIntegrationEnabled: a.samlInstance != nil,
 			AutoRedirect:          a.samlInstance != nil,
 			DefaultWorkspaceId:    a.systemInfoService.GetDefaultWorkspaceId(),
-			AuthConfig:            a.systemInfoService.GetAuthConfig(),
 		})
 }

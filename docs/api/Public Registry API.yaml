@@ -66,6 +66,7 @@ paths:
       tags:
         - Auth
       summary: System configuration
+      deprecated: true
       description: Global parameters of system configuration.
       operationId: getSystemConfiguration
       security:
@@ -85,6 +86,38 @@ paths:
                     type: boolean
                   autoRedirect:
                     type: boolean
+                  defaultWorkspaceId:
+                    description: Id of the workspace, which is used by default while working with the system.
+                    type: string
+                    example: WSPACE1
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v2/system/configuration":
+    get:
+      tags:
+        - Auth
+      summary: System configuration
+      description: Global parameters of system configuration.
+      operationId: getSystemConfigurationV2
+      security:
+        - {}
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - authConfig
+                properties:
                   defaultWorkspaceId:
                     description: Id of the workspace, which is used by default while working with the system.
                     type: string
@@ -247,6 +280,12 @@ paths:
               examples:
                 IncorrectInputParams:
                   $ref: "#/components/examples/IncorrectInputParameters"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "500":
           description: Internal Server Error
           content:
@@ -5695,7 +5734,7 @@ paths:
         - name: version
           in: path
           description: |
-            Package version. 
+            Package version.
             The mask <version>@<revision> may be used for search in a specific revision.
           required: true
           schema:
@@ -5836,7 +5875,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -15649,7 +15688,7 @@ components:
                 - trace
     GqlOperationInfoFromDifferentVersions:
       description: Operation info from previous/current version.
-      allOf:  
+      allOf:
         - $ref: "#/components/schemas/OperationInfoFromDifferentVersionsV2"
         - type: object
           required:

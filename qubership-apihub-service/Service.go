@@ -438,7 +438,8 @@ func main() {
 	}
 
 	r.HandleFunc("/api/v1/system/info", security.Secure(systemInfoController.GetSystemInfo)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v1/system/configuration", samlAuthController.GetSystemSSOInfo).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/system/configuration", samlAuthController.GetSystemSSOInfo_deprecated).Methods(http.MethodGet) //deprecated
+	r.HandleFunc("/api/v2/system/configuration", security.NoSecure(authController.GetSystemConfigurationInfo)).Methods(http.MethodGet)
 
 	r.HandleFunc("/api/v1/debug/logs", security.Secure(logsController.StoreLogs)).Methods(http.MethodPut)
 	r.HandleFunc("/api/v1/debug/logs/setLevel", security.Secure(logsController.SetLogLevel)).Methods(http.MethodPost)

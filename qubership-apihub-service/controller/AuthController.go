@@ -44,6 +44,7 @@ type AuthController interface {
 	AssertionConsumerHandler(w http.ResponseWriter, r *http.Request)
 	StartAuthentication(w http.ResponseWriter, r *http.Request)
 	ServeMetadata(w http.ResponseWriter, r *http.Request)
+	GetSystemConfigurationInfo(w http.ResponseWriter, r *http.Request)
 }
 
 func NewAuthController(userService service.UserService, systemInfoService service.SystemInfoService, idpManager idp.IDPManager) AuthController {
@@ -66,7 +67,13 @@ func (a *authControllerImpl) ServeMetadata(w http.ResponseWriter, r *http.Reques
 	if exists {
 		serveMetadata(w, r, provider.SAMLInstance)
 	} else {
-		serveMetadata(w, r, nil)
+		log.Debugf("Cannot find IDP with id: %s", idpId)
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusNotFound,
+			Code:    exception.ExternalIDPNotFound,
+			Message: exception.ExternalIDPNotFoundMsg,
+			Params:  map[string]interface{}{"id": idpId},
+		})
 	}
 }
 
@@ -91,7 +98,13 @@ func (a *authControllerImpl) StartAuthentication(w http.ResponseWriter, r *http.
 	if exists {
 		startSAMLAuthentication(w, r, provider.SAMLInstance, a.systemInfoService.GetAllowedHosts())
 	} else {
-		startSAMLAuthentication(w, r, nil, nil)
+		log.Debugf("Cannot find IDP with id: %s", idpId)
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusNotFound,
+			Code:    exception.ExternalIDPNotFound,
+			Message: exception.ExternalIDPNotFoundMsg,
+			Params:  map[string]interface{}{"id": idpId},
+		})
 	}
 }
 
@@ -162,8 +175,22 @@ func (a *authControllerImpl) AssertionConsumerHandler(w http.ResponseWriter, r *
 	if exists {
 		handleAssertion(w, r, a.userService, a.systemInfoService.GetAllowedHosts(), provider.SAMLInstance, idpId, a.setAuthTokenCookies)
 	} else {
-		handleAssertion(w, r, nil, nil, nil, "", nil)
+		log.Debugf("Cannot find IDP with id: %s", idpId)
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusNotFound,
+			Code:    exception.ExternalIDPNotFound,
+			Message: exception.ExternalIDPNotFoundMsg,
+			Params:  map[string]interface{}{"id": idpId},
+		})
 	}
+}
+
+func (a *authControllerImpl) GetSystemConfigurationInfo(w http.ResponseWriter, r *http.Request) {
+	utils.RespondWithJson(w, http.StatusOK,
+		view.SystemConfigurationInfo{
+			DefaultWorkspaceId: a.systemInfoService.GetDefaultWorkspaceId(),
+			AuthConfig:         a.systemInfoService.GetAuthConfig(),
+		})
 }
 
 func handleAssertion(w http.ResponseWriter, r *http.Request, userService service.UserService, allowedHosts []string, samlInstance *samlsp.Middleware, providerId string, setAuthCookie func(w http.ResponseWriter, user *view.User, idpId string) error) {
