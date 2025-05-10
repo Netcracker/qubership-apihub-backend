@@ -1788,7 +1788,7 @@ func (v versionServiceImpl) GetTransformedDocuments(packageId string, version st
 		}
 	}
 	groupId := view.MakeOperationGroupId(packageId, versionEnt.Version, versionEnt.Revision, apiType, groupName)
-	ent, err := v.publishedRepo.GetTransformedDocuments(packageId, version, apiType, groupId, buildType, format)
+	ent, err := v.publishedRepo.GetTransformedDocuments(packageId, version, apiType, groupId, view.BuildType(buildType), format)
 	if err != nil {
 		return nil, err
 	}
@@ -1961,7 +1961,7 @@ func (v versionServiceImpl) CopyVersion(ctx context.SecurityContext, packageId s
 		Refs:                     buildConfig.Refs,
 		Files:                    buildConfig.Files,
 		Metadata:                 buildConfig.Metadata,
-		BuildType:                view.BuildType,
+		BuildType:                view.PublishType,
 		CreatedBy:                ctx.GetUserId(),
 		ComparisonRevision:       buildConfig.ComparisonRevision,
 		ComparisonPrevRevision:   buildConfig.ComparisonPrevRevision,
@@ -2264,7 +2264,7 @@ func (v versionServiceImpl) publishFromCSV(ctx context.SecurityContext, dashboar
 	dashboardPublishBuildConfig := view.BuildConfig{
 		PackageId:                req.PackageId,
 		Version:                  req.Version,
-		BuildType:                view.BuildType,
+		BuildType:                view.PublishType,
 		PreviousVersion:          req.PreviousVersion,
 		PreviousVersionPackageId: req.PreviousVersionPackageId,
 		Status:                   req.Status,

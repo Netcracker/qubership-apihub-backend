@@ -249,7 +249,7 @@ func (p publishV2ControllerImpl) Publish(w http.ResponseWriter, r *http.Request)
 	}
 
 	config.CreatedBy = ctx.GetUserId()
-	config.BuildType = view.BuildType
+	config.BuildType = view.PublishType
 
 	for i, file := range config.Files {
 		if file.Publish == nil {

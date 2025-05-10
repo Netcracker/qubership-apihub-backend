@@ -1,7 +1,7 @@
 version: "3.9"
 services:
-  qubership-apihub-ui:
-    image: ghcr.io/netcracker/qubership-apihub-ui:main
+  qubership-apihub-ui-2:
+    image: ghcr.io/netcracker/qubership-apihub-ui:feature-ignore-param-name-while-matching
     environment:
       APIHUB_BACKEND_ADDRESS: "host.docker.internal:8090"
       APIHUB_NC_SERVICE_ADDRESS: "host.docker.internal:8091"

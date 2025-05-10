@@ -311,7 +311,7 @@ func main() {
 	personalAccessTokenService := service.NewPersonalAccessTokenService(personalAccessTokenRepository, userService, roleService)
 	packageExportConfigService := service.NewPackageExportConfigService(packageExportConfigRepository)
 
-	exportService := service.NewExportService(portalService, buildService)
+	exportService := service.NewExportService(portalService, buildService, packageExportConfigService)
 
 	integrationsController := controller.NewIntegrationsController(integrationsService)
 	projectController := controller.NewProjectController(projectService, groupService, searchService)

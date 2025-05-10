@@ -270,12 +270,12 @@ func (e exportControllerImpl) ExportOperationGroupAsOpenAPIDocuments(w http.Resp
 		})
 		return
 	}
-	switch buildType {
-	case view.ReducedSourceSpecificationsType:
+	switch view.BuildType(buildType) {
+	case view.ReducedSourceSpecificationsType_deprecated:
 		w.Header().Set("Content-Type", "application/zip")
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s_%s_%s.zip", groupName, packageId, version))
 		w.Header().Set("Content-Transfer-Encoding", "binary")
-	case view.MergedSpecificationType:
+	case view.MergedSpecificationType_deprecated:
 		switch format {
 		// html format for mergedSpecification not supported yet
 		// case string(view.HtmlDocumentFormat):
@@ -1172,13 +1172,9 @@ func (e exportControllerImpl) StartAsyncExport(w http.ResponseWriter, r *http.Re
 	case view.ExportEntityRestOperationsGroup:
 		exportID, err = e.startRESTOpGroupExport(ctx, exportRequest.(*view.ExportRestOperationsGroupReq))
 	}
-
 	if err != nil {
-		var customError *exception.CustomError
-		if errors.As(err, &customError) {
-			RespondWithCustomError(w, customError)
-			return
-		}
+		RespondWithError(w, "Failed to start export process", err)
+		return
 	}
 	RespondWithJson(w, http.StatusAccepted, view.ExportResponse{
 		ExportID: exportID,

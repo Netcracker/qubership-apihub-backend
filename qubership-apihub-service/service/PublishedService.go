@@ -1276,7 +1276,7 @@ func (p publishedServiceImpl) SaveBuildResult_deprecated(packageId string, archi
 	//todo zip check for unknown files
 
 	switch buildArc.PackageInfo.BuildType {
-	case view.BuildType:
+	case view.PublishType:
 		sufficientPrivileges := utils.SliceContains(availableVersionStatuses, buildArc.PackageInfo.Status)
 		if !sufficientPrivileges && !buildArc.PackageInfo.MigrationBuild {
 			return &exception.CustomError{
@@ -1286,9 +1286,9 @@ func (p publishedServiceImpl) SaveBuildResult_deprecated(packageId string, archi
 			}
 		}
 		return p.publishPackage(buildArc, buildSrcEnt, buildConfig, existingPackage)
-		//support view.ReducedSourceSpecificationsType type because of node-service that is not yet ready for v3 publish
-		//we need view.ReducedSourceSpecificationsType build on node-service for operation group publication
-	case view.DocumentGroupType_deprecated, view.ReducedSourceSpecificationsType:
+		//support view.ReducedSourceSpecificationsType_deprecated type because of node-service that is not yet ready for v3 publish
+		//we need view.ReducedSourceSpecificationsType_deprecated build on node-service for operation group publication
+	case view.DocumentGroupType_deprecated, view.ReducedSourceSpecificationsType_deprecated:
 		return p.publishTransformedDocuments(buildArc, publishId)
 	case view.ChangelogType:
 		return p.publishChanges(buildArc, publishId)
@@ -1384,7 +1384,7 @@ func (p publishedServiceImpl) SaveBuildResult(packageId string, archiveData []by
 	//todo zip check for unknown files
 
 	switch buildArc.PackageInfo.BuildType {
-	case view.BuildType:
+	case view.PublishType:
 		sufficientPrivileges := utils.SliceContains(availableVersionStatuses, buildArc.PackageInfo.Status)
 		if !sufficientPrivileges && !buildArc.PackageInfo.MigrationBuild {
 			return &exception.CustomError{
@@ -1396,7 +1396,7 @@ func (p publishedServiceImpl) SaveBuildResult(packageId string, archiveData []by
 		return p.publishPackage(buildArc, buildSrcEnt, buildConfig, existingPackage)
 	case view.ChangelogType:
 		return p.publishChanges(buildArc, publishId)
-	case view.ReducedSourceSpecificationsType, view.MergedSpecificationType:
+	case view.ReducedSourceSpecificationsType_deprecated, view.MergedSpecificationType_deprecated:
 		return p.publishTransformedDocuments(buildArc, publishId)
 	default:
 		return &exception.CustomError{

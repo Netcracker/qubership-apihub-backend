@@ -103,7 +103,7 @@ type PublishedRepository interface {
 	GetLatestRevision(packageId, version string) (int, error)
 
 	SaveTransformedDocument(data *entity.TransformedContentDataEntity, publishId string) error
-	GetTransformedDocuments(packageId string, version string, apiType string, groupId string, buildType string, format string) (*entity.TransformedContentDataEntity, error)
+	GetTransformedDocuments(packageId string, version string, apiType string, groupId string, buildType view.BuildType, format string) (*entity.TransformedContentDataEntity, error)
 	DeleteTransformedDocuments(packageId string, version string, revision int, apiType string, groupId string) error
 	GetVersionRevisionContentForDocumentsTransformation(packageId string, version string, revision int, searchQuery entity.ContentForDocumentsTransformationSearchQueryEntity) ([]entity.PublishedContentWithDataEntity, error)
 	GetPublishedSourcesArchives(offset int) (*entity.PublishedSrcArchiveEntity, error)
