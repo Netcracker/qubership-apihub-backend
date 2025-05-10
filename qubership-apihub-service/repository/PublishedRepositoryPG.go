@@ -921,15 +921,16 @@ func (p publishedRepositoryImpl) getOperationComparisonsChanges(tx *pg.Tx, packa
 		if err != nil {
 			return nil, fmt.Errorf("failed to get operation comparisons from db: %v", err.Error())
 		}
-		for _, s := range oldOperationComparisons {
-			key := fmt.Sprintf(`ComparisonId:%s;OperationId:%s`, s.ComparisonId, s.OperationId)
+		for _, oldComp := range oldOperationComparisons {
+			key := fmt.Sprintf(`ComparisonId:%s;OperationId:%s;PreviousOperationId:%s`, oldComp.ComparisonId, oldComp.OperationId, oldComp.PreviousOperationId)
 			found := false
-			for _, t := range operationComparisonEntities {
-				if s.ComparisonId == t.ComparisonId &&
-					s.OperationId == t.OperationId {
+			for _, newComp := range operationComparisonEntities {
+				if oldComp.ComparisonId == newComp.ComparisonId &&
+					oldComp.OperationId == newComp.OperationId &&
+					oldComp.PreviousOperationId == newComp.PreviousOperationId {
 					found = true
 					matchedOperationComparisons[key] = struct{}{}
-					if operationComparisonChanges := s.GetChanges(*t); len(operationComparisonChanges) > 0 {
+					if operationComparisonChanges := oldComp.GetChanges(*newComp); len(operationComparisonChanges) > 0 {
 						operationComparisonsChanges[key] = operationComparisonChanges
 						changesOverview.setTableChanges(currentTable, operationComparisonChanges)
 					}
@@ -941,8 +942,8 @@ func (p publishedRepositoryImpl) getOperationComparisonsChanges(tx *pg.Tx, packa
 			}
 		}
 	}
-	for _, t := range operationComparisonEntities {
-		key := fmt.Sprintf(`ComparisonId:%s;OperationId:%s`, t.ComparisonId, t.OperationId)
+	for _, newComp := range operationComparisonEntities {
+		key := fmt.Sprintf(`ComparisonId:%s;OperationId:%s;PreviousOperationId:%s`, newComp.ComparisonId, newComp.OperationId, newComp.PreviousOperationId)
 		if _, matched := matchedOperationComparisons[key]; !matched {
 			operationComparisonsChanges[key] = "unexpected operation comparison (not found in database)"
 			changesOverview.setUnexpectedEntry(currentTable)
@@ -1619,7 +1620,7 @@ func (p publishedRepositoryImpl) GetContentData(packageId string, checksum strin
 	return result, nil
 }
 
-func (p *publishedRepositoryImpl) GetLatestContentByVersion(packageId string, versionName string) ([]entity.PublishedContentEntity, error) {
+func (p publishedRepositoryImpl) GetLatestContentByVersion(packageId string, versionName string) ([]entity.PublishedContentEntity, error) {
 	var latestVersionRev entity.PublishedVersionEntity
 	version, _, err := SplitVersionRevision(versionName)
 	if err != nil {
@@ -2372,7 +2373,7 @@ func (p publishedRepositoryImpl) GetDefaultVersion(packageId string, status stri
 	return result, nil
 }
 
-func (p *publishedRepositoryImpl) CleanupDeleted() error {
+func (p publishedRepositoryImpl) CleanupDeleted() error {
 	var ents []entity.PublishedVersionEntity
 	_, err := p.cp.GetConnection().Model(&ents).
 		Where("deleted_at is not ?", nil).
