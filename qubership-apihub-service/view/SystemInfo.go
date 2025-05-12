@@ -26,9 +26,13 @@ type SystemInfo struct {
 	ExternalLinks   []string `json:"externalLinks"`
 }
 
+type SystemConfigurationInfo_deprecated struct {
+	SSOIntegrationEnabled bool   `json:"ssoIntegrationEnabled"`
+	AutoRedirect          bool   `json:"autoRedirect"`
+	DefaultWorkspaceId    string `json:"defaultWorkspaceId"`
+}
+
 type SystemConfigurationInfo struct {
-	SSOIntegrationEnabled bool           `json:"ssoIntegrationEnabled"`
-	AutoRedirect          bool           `json:"autoRedirect"`
-	DefaultWorkspaceId    string         `json:"defaultWorkspaceId"`
-	AuthConfig            idp.AuthConfig `json:"authConfig"`
+	DefaultWorkspaceId string         `json:"defaultWorkspaceId"`
+	AuthConfig         idp.AuthConfig `json:"authConfig"`
 }

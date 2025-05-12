@@ -15,10 +15,12 @@
 package controller
 
 import (
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
+	log "github.com/sirupsen/logrus"
 	"net/http"
 )
 
@@ -27,7 +29,7 @@ type AuthController interface {
 	StartAuthentication(w http.ResponseWriter, r *http.Request)
 	ServeMetadata(w http.ResponseWriter, r *http.Request)
 	OIDCCallbackHandler(w http.ResponseWriter, r *http.Request)
-	GetSystemInfo(w http.ResponseWriter, r *http.Request)
+	GetSystemConfigurationInfo(w http.ResponseWriter, r *http.Request)
 }
 
 func NewAuthController(userService service.UserService, systemInfoService service.SystemInfoService, idpManager idp.Manager) AuthController {
@@ -50,7 +52,13 @@ func (a *authControllerImpl) ServeMetadata(w http.ResponseWriter, r *http.Reques
 	if exists {
 		provider.ServeMetadata(w, r)
 	} else {
-		//TODO: throw custom error
+		log.Debugf("Cannot find IDP with id: %s", idpId)
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusNotFound,
+			Code:    exception.ExternalIDPNotFound,
+			Message: exception.ExternalIDPNotFoundMsg,
+			Params:  map[string]interface{}{"id": idpId},
+		})
 	}
 }
 
@@ -61,7 +69,13 @@ func (a *authControllerImpl) StartAuthentication(w http.ResponseWriter, r *http.
 	if exists {
 		provider.StartAuthentication(w, r)
 	} else {
-		//TODO: throw custom error
+		log.Debugf("Cannot find IDP with id: %s", idpId)
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusNotFound,
+			Code:    exception.ExternalIDPNotFound,
+			Message: exception.ExternalIDPNotFoundMsg,
+			Params:  map[string]interface{}{"id": idpId},
+		})
 	}
 }
 
@@ -72,7 +86,13 @@ func (a *authControllerImpl) SAMLAssertionConsumerHandler(w http.ResponseWriter,
 	if exists {
 		provider.CallbackHandler(w, r)
 	} else {
-		//TODO: throw custom error
+		log.Debugf("Cannot find IDP with id: %s", idpId)
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusNotFound,
+			Code:    exception.ExternalIDPNotFound,
+			Message: exception.ExternalIDPNotFoundMsg,
+			Params:  map[string]interface{}{"id": idpId},
+		})
 	}
 }
 
@@ -82,17 +102,20 @@ func (a *authControllerImpl) OIDCCallbackHandler(w http.ResponseWriter, r *http.
 	if exists {
 		provider.CallbackHandler(w, r)
 	} else {
-		//TODO: throw custom error
+		log.Debugf("Cannot find IDP with id: %s", idpId)
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusNotFound,
+			Code:    exception.ExternalIDPNotFound,
+			Message: exception.ExternalIDPNotFoundMsg,
+			Params:  map[string]interface{}{"id": idpId},
+		})
 	}
 }
 
-func (a *authControllerImpl) GetSystemInfo(w http.ResponseWriter, r *http.Request) {
-	ssoIntegrationEnabled := a.idpManager.IsSSOIntegrationEnabled()
+func (a *authControllerImpl) GetSystemConfigurationInfo(w http.ResponseWriter, r *http.Request) {
 	utils.RespondWithJson(w, http.StatusOK,
 		view.SystemConfigurationInfo{
-			SSOIntegrationEnabled: ssoIntegrationEnabled,
-			AutoRedirect:          ssoIntegrationEnabled,
-			DefaultWorkspaceId:    a.systemInfoService.GetDefaultWorkspaceId(),
-			AuthConfig:            a.systemInfoService.GetAuthConfig(),
+			DefaultWorkspaceId: a.systemInfoService.GetDefaultWorkspaceId(),
+			AuthConfig:         a.systemInfoService.GetAuthConfig(),
 		})
 }

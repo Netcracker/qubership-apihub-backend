@@ -747,6 +747,9 @@ const IncorrectOASExtensionsMsg = "OAS extension is required to be have 'x-' pre
 const DuplicateOASExtensionsNotAllowed = "7102"
 const DuplicateOASExtensionsNotAllowedMsg = "Duplicate OAS extension not allowed: $duplicates"
 
+const ExternalIDPNotFound = "7201"
+const ExternalIDPNotFoundMsg = "External IDP with id '$id' not found"
+
 const OIDCAuthenticationFailed = "7301"
 const OIDCAuthenticationFailedMsg = "Failed to start OIDC authentication flow: $error"
 
