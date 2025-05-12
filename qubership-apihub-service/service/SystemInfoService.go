@@ -770,7 +770,13 @@ func (g systemInfoServiceImpl) setAllowedHosts() {
 	hosts := make([]string, 0)
 	hostsStr := os.Getenv(ALLOWED_HOSTS)
 	if hostsStr != "" {
-		hosts = strings.Split(hostsStr, ",")
+		rawHosts := strings.Split(hostsStr, ",")
+		for _, host := range rawHosts {
+			trimmedHost := strings.TrimSpace(host)
+			if trimmedHost != "" {
+				hosts = append(hosts, strings.ToLower(trimmedHost))
+			}
+		}
 	}
 	g.systemInfoMap[ALLOWED_HOSTS] = hosts
 }

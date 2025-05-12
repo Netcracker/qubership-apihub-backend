@@ -30,7 +30,7 @@ type AuthController interface {
 	GetSystemInfo(w http.ResponseWriter, r *http.Request)
 }
 
-func NewAuthController(userService service.UserService, systemInfoService service.SystemInfoService, idpManager idp.IDPManager) AuthController {
+func NewAuthController(userService service.UserService, systemInfoService service.SystemInfoService, idpManager idp.Manager) AuthController {
 	return &authControllerImpl{
 		idpManager:        idpManager,
 		userService:       userService,
@@ -39,7 +39,7 @@ func NewAuthController(userService service.UserService, systemInfoService servic
 }
 
 type authControllerImpl struct {
-	idpManager        idp.IDPManager
+	idpManager        idp.Manager
 	userService       service.UserService
 	systemInfoService service.SystemInfoService
 }
@@ -90,7 +90,6 @@ func (a *authControllerImpl) GetSystemInfo(w http.ResponseWriter, r *http.Reques
 	ssoIntegrationEnabled := a.idpManager.IsSSOIntegrationEnabled()
 	utils.RespondWithJson(w, http.StatusOK,
 		view.SystemConfigurationInfo{
-			//TODO: discuss it
 			SSOIntegrationEnabled: ssoIntegrationEnabled,
 			AutoRedirect:          ssoIntegrationEnabled,
 			DefaultWorkspaceId:    a.systemInfoService.GetDefaultWorkspaceId(),

@@ -36,33 +36,38 @@ func DeleteCookie(w http.ResponseWriter, name string, path string) {
 	})
 }
 
-// TODO: discuss security vulnerability
-func ParseAndValidateRedirectURL(urlStr string, allowedHosts []string) (*url.URL, *exception.CustomError) {
-	redirectUrl, err := url.Parse(urlStr)
-	if err != nil {
-		return nil, &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.IncorrectRedirectUrlError,
-			Message: exception.IncorrectRedirectUrlErrorMsg,
-			Params:  map[string]interface{}{"error": err.Error()},
-		}
-	}
-	var validHost bool
-	for _, host := range allowedHosts {
-		if strings.Contains(redirectUrl.Host, host) {
-			validHost = true
-			break
-		}
-	}
-	if !validHost {
-		return nil, &exception.CustomError{
+func IsHostValid(url *url.URL, allowedHosts []string) *exception.CustomError {
+	host := url.Hostname()
+	if host == "" {
+		return &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.HostNotAllowed,
 			Message: exception.HostNotAllowedMsg,
-			Params:  map[string]interface{}{"host": redirectUrl.Host},
+			Params:  map[string]interface{}{"host": "empty host"},
 		}
 	}
-	return redirectUrl, nil
+	host = strings.ToLower(host)
+	var validHost bool
+	for _, allowedHost := range allowedHosts {
+		if allowedHost == host {
+			validHost = true
+			break
+		}
+		if strings.HasSuffix(host, "."+allowedHost) {
+			validHost = true
+			break
+		}
+
+	}
+	if !validHost {
+		return &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.HostNotAllowed,
+			Message: exception.HostNotAllowedMsg,
+			Params:  map[string]interface{}{"host": host},
+		}
+	}
+	return nil
 }
 
 func RedirectHandler(w http.ResponseWriter, r *http.Request) {

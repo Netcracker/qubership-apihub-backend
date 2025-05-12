@@ -23,7 +23,6 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
@@ -84,20 +83,8 @@ func (o oauth20ControllerImpl) GitlabOauthCallback(w http.ResponseWriter, r *htt
 		redirectUri = "/"
 	} else {
 		url, _ := url.Parse(redirectUri)
-		var validHost bool
-		for _, host := range o.systemInfoService.GetAllowedHosts() {
-			if strings.Contains(url.Host, host) {
-				validHost = true
-				break
-			}
-		}
-		if !validHost {
-			utils.RespondWithCustomError(w, &exception.CustomError{
-				Status:  http.StatusBadRequest,
-				Code:    exception.HostNotAllowed,
-				Message: exception.HostNotAllowedMsg,
-				Params:  map[string]interface{}{"host": redirectUri},
-			})
+		if err := utils.IsHostValid(url, o.systemInfoService.GetAllowedHosts()); err != nil {
+			utils.RespondWithCustomError(w, err)
 			return
 		}
 	}
@@ -195,20 +182,8 @@ func (o oauth20ControllerImpl) StartOauthProcessWithGitlab(w http.ResponseWriter
 		redirectUri = "/"
 	} else {
 		url, _ := url.Parse(redirectUri)
-		var validHost bool
-		for _, host := range o.systemInfoService.GetAllowedHosts() {
-			if strings.Contains(url.Host, host) {
-				validHost = true
-				break
-			}
-		}
-		if !validHost {
-			utils.RespondWithCustomError(w, &exception.CustomError{
-				Status:  http.StatusBadRequest,
-				Code:    exception.HostNotAllowed,
-				Message: exception.HostNotAllowedMsg,
-				Params:  map[string]interface{}{"host": redirectUri},
-			})
+		if err := utils.IsHostValid(url, o.systemInfoService.GetAllowedHosts()); err != nil {
+			utils.RespondWithCustomError(w, err)
 			return
 		}
 	}

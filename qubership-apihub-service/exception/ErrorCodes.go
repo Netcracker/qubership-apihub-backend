@@ -367,7 +367,7 @@ const PackageRedirectExists = "1710"
 const PackageRedirectExistsMsg = "Package id '$id' is reserved for redirect(old package id)"
 
 const IncorrectRedirectUrlError = "1711"
-const IncorrectRedirectUrlErrorMsg = "Incorrect redirect URL $url"
+const IncorrectRedirectUrlErrorMsg = "Incorrect redirect URL $url. Error: $error"
 
 const UsersNotFound = "1800"
 const UsersNotFoundMsg = "Users ($users) do not exist"
@@ -746,3 +746,15 @@ const IncorrectOASExtensionsMsg = "OAS extension is required to be have 'x-' pre
 
 const DuplicateOASExtensionsNotAllowed = "7102"
 const DuplicateOASExtensionsNotAllowedMsg = "Duplicate OAS extension not allowed: $duplicates"
+
+const OIDCAuthenticationFailed = "7301"
+const OIDCAuthenticationFailedMsg = "Failed to start OIDC authentication flow: $error"
+
+const OIDCCallbackFailed = "7302"
+const OIDCCallbackFailedMsg = "OIDC callback processing failed: $error"
+
+const OIDCTokenProcessingFailed = "7303"
+const OIDCTokenProcessingFailedMsg = "OIDC token processing failed: $error"
+
+const OIDCUserProcessingFailed = "7304"
+const OIDCUserProcessingFailedMsg = "OIDC user processing failed: $error"

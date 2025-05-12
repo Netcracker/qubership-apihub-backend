@@ -28,7 +28,6 @@ type LogoutController interface {
 
 func NewLogoutController(tokenRevocationService service.TokenRevocationService, systemInfoService service.SystemInfoService) LogoutController {
 	authConfig := systemInfoService.GetAuthConfig()
-	//TODO: perhaps it is better to add refresh token path to the access token extensions
 	var refreshTokenPaths []string
 	for _, idp := range authConfig.Providers {
 		if idp.RefreshTokenEndpoint != "" {

@@ -20,6 +20,7 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp/providers"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	"github.com/crewjam/saml/samlsp"
@@ -33,37 +34,39 @@ type SamlAuthController interface {
 	ServeMetadata_deprecated(w http.ResponseWriter, r *http.Request)
 }
 
-func NewSamlAuthController(systemInfoService service.SystemInfoService, idpManager idp.IDPManager) SamlAuthController {
+func NewSamlAuthController(userService service.UserService, systemInfoService service.SystemInfoService, idpManager idp.Manager) SamlAuthController {
 	var samlInstance *samlsp.Middleware
 	for _, provider := range idpManager.GetAuthConfig().Providers {
 		if provider.IdpType == idp.IDPTypeExternal && provider.Protocol == idp.AuthProtocolSAML {
-			samlInstance, _ = idp.CreateSAMLInstance("", provider.SAMLConfiguration)
+			samlInstance, _ = providers.CreateSAMLInstance("", provider.SAMLConfiguration)
 			break
 		}
 	}
 	return &authenticationControllerImpl{
 		samlInstance:      samlInstance,
+		userService:       userService,
 		systemInfoService: systemInfoService,
 	}
 }
 
 type authenticationControllerImpl struct {
 	samlInstance      *samlsp.Middleware
+	userService       service.UserService
 	systemInfoService service.SystemInfoService
 }
 
 func (a *authenticationControllerImpl) ServeMetadata_deprecated(w http.ResponseWriter, r *http.Request) {
-	security.ServeMetadata(w, r, a.samlInstance)
+	providers.ServeMetadata(w, r, a.samlInstance)
 }
 
 // StartSamlAuthentication_deprecated Frontend calls this endpoint to SSO login user via SAML (legacy auth)
 func (a *authenticationControllerImpl) StartSamlAuthentication_deprecated(w http.ResponseWriter, r *http.Request) {
-	security.StartSAMLAuthentication(w, r, a.samlInstance, a.systemInfoService.GetAllowedHosts())
+	providers.StartSAMLAuthentication(w, r, a.samlInstance, a.systemInfoService.GetAllowedHosts())
 }
 
 // AssertionConsumerHandler_deprecated This endpoint is called by ADFS when auth procedure is complete on it's side. ADFS posts the response here. (legacy auth)
 func (a *authenticationControllerImpl) AssertionConsumerHandler_deprecated(w http.ResponseWriter, r *http.Request) {
-	security.HandleAssertion(w, r, a.samlInstance, "", a.systemInfoService.GetAllowedHosts(), a.setUserViewCookie)
+	providers.HandleAssertion(w, r, a.userService, a.samlInstance, "", a.systemInfoService.GetAllowedHosts(), a.setUserViewCookie)
 }
 
 func (a *authenticationControllerImpl) setUserViewCookie(w http.ResponseWriter, user *view.User, idpId string) error {

@@ -133,7 +133,7 @@ func CreateLocalUserToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = setAuthTokenCookies(w, user, "/api/v3/auth/local/refresh"); err != nil {
+	if err = SetAuthTokenCookies(w, user, "/api/v3/auth/local/refresh"); err != nil {
 		respondWithAuthFailedError(w, err)
 		return
 	}
@@ -154,7 +154,7 @@ func authenticateUser(r *http.Request) (*view.User, error) {
 	return user, nil
 }
 
-func setAuthTokenCookies(w http.ResponseWriter, user *view.User, refreshTokenPath string) error {
+func SetAuthTokenCookies(w http.ResponseWriter, user *view.User, refreshTokenPath string) error {
 	accessToken, refreshToken, err := issueTokenPair(*user)
 	if err != nil {
 		return fmt.Errorf("failed to create token pair for user: %v", err.Error())

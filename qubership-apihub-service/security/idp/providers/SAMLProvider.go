@@ -1,10 +1,25 @@
-package security
+// Copyright 2024-2025 NetCracker Technology Corporation
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package providers
 
 import (
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
@@ -13,6 +28,7 @@ import (
 	"github.com/crewjam/saml/samlsp"
 	log "github.com/sirupsen/logrus"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -27,19 +43,17 @@ const (
 type samlProvider struct {
 	samlInstance *samlsp.Middleware
 	config       idp.IDP
+	userService  service.UserService
 	allowedHosts []string
 }
 
-func newSAMLProvider(samlInstance *samlsp.Middleware, config idp.IDP, allowedHosts []string) idp.Provider {
+func newSAMLProvider(samlInstance *samlsp.Middleware, config idp.IDP, userService service.UserService, allowedHosts []string) idp.Provider {
 	return &samlProvider{
 		samlInstance: samlInstance,
 		config:       config,
+		userService:  userService,
 		allowedHosts: allowedHosts,
 	}
-}
-
-func (s samlProvider) GetId() string {
-	return s.config.Id
 }
 
 func (s samlProvider) StartAuthentication(w http.ResponseWriter, r *http.Request) {
@@ -47,7 +61,7 @@ func (s samlProvider) StartAuthentication(w http.ResponseWriter, r *http.Request
 }
 
 func (s samlProvider) CallbackHandler(w http.ResponseWriter, r *http.Request) {
-	HandleAssertion(w, r, s.samlInstance, s.config.Id, s.allowedHosts, setAuthTokenCookies)
+	HandleAssertion(w, r, s.userService, s.samlInstance, s.config.Id, s.allowedHosts, security.SetAuthTokenCookies)
 }
 
 func (s samlProvider) ServeMetadata(w http.ResponseWriter, r *http.Request) {
@@ -69,8 +83,18 @@ func StartSAMLAuthentication(w http.ResponseWriter, r *http.Request, samlInstanc
 
 	log.Debugf("redirect url - %s", redirectUrlStr)
 
-	redirectUrl, err := utils.ParseAndValidateRedirectURL(redirectUrlStr, allowedHosts)
+	redirectUrl, err := url.Parse(redirectUrlStr)
 	if err != nil {
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.IncorrectRedirectUrlError,
+			Message: exception.IncorrectRedirectUrlErrorMsg,
+			Params:  map[string]interface{}{"url": redirectUrl, "error": err.Error()},
+		})
+		return
+	}
+
+	if err := utils.IsHostValid(redirectUrl, allowedHosts); err != nil {
 		utils.RespondWithCustomError(w, err)
 		return
 	}
@@ -86,7 +110,7 @@ func StartSAMLAuthentication(w http.ResponseWriter, r *http.Request, samlInstanc
 	samlInstance.HandleStartAuthFlow(w, r)
 }
 
-func HandleAssertion(w http.ResponseWriter, r *http.Request, samlInstance *samlsp.Middleware, providerId string, allowedHosts []string, setAuthCookie func(w http.ResponseWriter, user *view.User, refreshTokenPath string) error) {
+func HandleAssertion(w http.ResponseWriter, r *http.Request, userService service.UserService, samlInstance *samlsp.Middleware, providerId string, allowedHosts []string, setAuthCookie func(w http.ResponseWriter, user *view.User, refreshTokenPath string) error) {
 	if samlInstance == nil {
 		log.Errorf("Cannot run AssertionConsumerHandler with nill samlInstanse")
 		utils.RespondWithCustomError(w, &exception.CustomError{
@@ -159,8 +183,18 @@ func HandleAssertion(w http.ResponseWriter, r *http.Request, samlInstance *samls
 			if errors.Is(err, http.ErrNoCookie) && samlInstance.ServiceProvider.AllowIDPInitiated {
 				// For IDP-initiated flows, RelayState might contain a URI directly from an external identity provider.
 				uri := trackedRequestIndex
-				_, err := utils.ParseAndValidateRedirectURL(uri, allowedHosts)
+				redirectUrl, err := url.Parse(uri)
 				if err != nil {
+					utils.RespondWithCustomError(w, &exception.CustomError{
+						Status:  http.StatusBadRequest,
+						Code:    exception.IncorrectRedirectUrlError,
+						Message: exception.IncorrectRedirectUrlErrorMsg,
+						Params:  map[string]interface{}{"url": redirectUrl, "error": err.Error()},
+					})
+					return
+				}
+
+				if err := utils.IsHostValid(redirectUrl, allowedHosts); err != nil {
 					utils.RespondWithCustomError(w, err)
 					return
 				}

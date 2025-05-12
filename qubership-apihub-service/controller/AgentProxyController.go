@@ -17,12 +17,10 @@ package controller
 import (
 	"crypto/tls"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
+	log "github.com/sirupsen/logrus"
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
-
-	log "github.com/sirupsen/logrus"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
@@ -97,20 +95,8 @@ func (a *agentProxyControllerImpl) Proxy(w http.ResponseWriter, r *http.Request)
 		})
 		return
 	}
-	var validHost bool
-	for _, host := range a.systemInfoService.GetAllowedHosts() {
-		if strings.Contains(agentUrl.Host, host) {
-			validHost = true
-			break
-		}
-	}
-	if !validHost {
-		utils.RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.HostNotAllowed,
-			Message: exception.HostNotAllowedMsg,
-			Params:  map[string]interface{}{"host": agentUrl.String()},
-		})
+	if err := utils.IsHostValid(agentUrl, a.systemInfoService.GetAllowedHosts()); err != nil {
+		utils.RespondWithCustomError(w, err)
 		return
 	}
 
