@@ -14,8 +14,12 @@
 
 package idp
 
-type Manager interface {
-	GetAuthConfig() AuthConfig
-	GetProvider(id string) (Provider, bool)
-	IsSSOIntegrationEnabled() bool
+import (
+	"net/http"
+)
+
+type Provider interface {
+	StartAuthentication(w http.ResponseWriter, r *http.Request)
+	CallbackHandler(w http.ResponseWriter, r *http.Request)
+	ServeMetadata(w http.ResponseWriter, r *http.Request)
 }

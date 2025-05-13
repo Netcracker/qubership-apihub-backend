@@ -19,7 +19,56 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	log "github.com/sirupsen/logrus"
 	"net/http"
+	"net/url"
+	"strings"
+	"time"
 )
+
+func DeleteCookie(w http.ResponseWriter, name string, path string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     name,
+		Value:    "",
+		MaxAge:   -1,
+		Expires:  time.Unix(0, 0),
+		HttpOnly: true,
+		Secure:   true,
+		Path:     path,
+	})
+}
+
+func IsHostValid(url *url.URL, allowedHosts []string) *exception.CustomError {
+	host := url.Hostname()
+	if host == "" {
+		return &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.HostNotAllowed,
+			Message: exception.HostNotAllowedMsg,
+			Params:  map[string]interface{}{"host": "empty host"},
+		}
+	}
+	host = strings.ToLower(host)
+	var validHost bool
+	for _, allowedHost := range allowedHosts {
+		if allowedHost == host {
+			validHost = true
+			break
+		}
+		if strings.HasSuffix(host, "."+allowedHost) {
+			validHost = true
+			break
+		}
+
+	}
+	if !validHost {
+		return &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.HostNotAllowed,
+			Message: exception.HostNotAllowedMsg,
+			Params:  map[string]interface{}{"host": host},
+		}
+	}
+	return nil
+}
 
 func RedirectHandler(w http.ResponseWriter, r *http.Request) {
 	redirectURI := r.URL.Query().Get("redirectUri")
