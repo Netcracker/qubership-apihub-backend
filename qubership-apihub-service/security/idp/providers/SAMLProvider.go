@@ -169,7 +169,7 @@ func HandleAssertion(w http.ResponseWriter, r *http.Request, userService service
 	}
 
 	// Add Apihub auth info cookie
-	if err = setAuthCookie(w, user, "/api/v1/login/sso/"+providerId); err != nil {
+	if err = setAuthCookie(w, user, fmt.Sprintf(SSOLoginRefreshPathTemplate, providerId)); err != nil {
 		utils.RespondWithError(w, "Failed to set auth cookie", err)
 		return
 	}

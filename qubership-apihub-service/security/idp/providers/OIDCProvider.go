@@ -37,6 +37,8 @@ import (
 	"time"
 )
 
+const SSOLoginRefreshPathTemplate = "/api/v1/login/sso/%s"
+
 type oidcProvider struct {
 	config       idp.IDP
 	provider     *oidc.Provider
@@ -110,8 +112,11 @@ func (o oidcProvider) StartAuthentication(w http.ResponseWriter, r *http.Request
 	}
 	codeChallenge := o.generateCodeChallenge(codeVerifier)
 
+	//state parameter is required to prevent CSRF attacks during the authentication flow.
 	o.setCallbackCookie(w, "oidc_state_"+o.config.Id, state)
+	//nonce parameter is required to prevent replay attacks.
 	o.setCallbackCookie(w, "oidc_nonce_"+o.config.Id, nonce)
+	//PKCE (Proof Key for Code Exchange) code verifier is used with the code challenge to secure the authorization code exchange process.
 	o.setCallbackCookie(w, "oidc_code_verifier_"+o.config.Id, codeVerifier)
 	o.setCallbackCookie(w, "oidc_redirect_"+o.config.Id, redirectUrlStr)
 
@@ -261,11 +266,11 @@ func (o oidcProvider) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	avatarData := []byte(nil)
-	// first try to get avatar from ID token picture claim
+	// first try to get avatar using the URL from ID token picture claim
 	if claims.Picture != "" {
 		avatarData = o.downloadAvatar(r.Context(), claims.Picture, oauth2Token)
 	}
-	// if that fails, try to get it from UserInfo endpoint
+	// if that fails, try to get it using the URL from UserInfo endpoint response
 	if avatarData == nil && o.provider.UserInfoEndpoint() != "" {
 		userInfo, err := o.provider.UserInfo(r.Context(), oauth2.StaticTokenSource(oauth2Token))
 		if err != nil {
@@ -296,7 +301,7 @@ func (o oidcProvider) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add authentication cookies
-	if err = security.SetAuthTokenCookies(w, user, "/api/v1/login/sso/"+o.config.Id); err != nil {
+	if err = security.SetAuthTokenCookies(w, user, fmt.Sprintf(SSOLoginRefreshPathTemplate, o.config.Id)); err != nil {
 		utils.RespondWithError(w, "Failed to set auth cookie", err)
 		return
 	}

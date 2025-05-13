@@ -35,6 +35,8 @@ import (
 	"time"
 )
 
+const LocalRefreshPath = "/api/v3/auth/local/refresh"
+
 var fullAuthStrategy union.Union
 var userAuthStrategy union.Union
 var proxyAuthStrategy union.Union
@@ -133,7 +135,7 @@ func CreateLocalUserToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = SetAuthTokenCookies(w, user, "/api/v3/auth/local/refresh"); err != nil {
+	if err = SetAuthTokenCookies(w, user, LocalRefreshPath); err != nil {
 		respondWithAuthFailedError(w, err)
 		return
 	}

@@ -32,17 +32,15 @@ type AuthController interface {
 	GetSystemConfigurationInfo(w http.ResponseWriter, r *http.Request)
 }
 
-func NewAuthController(userService service.UserService, systemInfoService service.SystemInfoService, idpManager idp.Manager) AuthController {
+func NewAuthController(systemInfoService service.SystemInfoService, idpManager idp.Manager) AuthController {
 	return &authControllerImpl{
 		idpManager:        idpManager,
-		userService:       userService,
 		systemInfoService: systemInfoService,
 	}
 }
 
 type authControllerImpl struct {
 	idpManager        idp.Manager
-	userService       service.UserService
 	systemInfoService service.SystemInfoService
 }
 

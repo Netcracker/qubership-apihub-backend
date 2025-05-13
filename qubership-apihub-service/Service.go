@@ -347,7 +347,7 @@ func main() {
 	versionController := controller.NewVersionController(versionService, roleService, monitoringService, ptHandler, roleService.IsSysadm)
 	roleController := controller.NewRoleController(roleService)
 	samlAuthController := controller.NewSamlAuthController(userService, systemInfoService, idpManager) //deprecated
-	authController := controller.NewAuthController(userService, systemInfoService, idpManager)
+	authController := controller.NewAuthController(systemInfoService, idpManager)
 	userController := controller.NewUserController(userService, privateUserPackageService, roleService.IsSysadm)
 	jwtPubKeyController := controller.NewJwtPubKeyController()
 	oauthController := controller.NewOauth20Controller(integrationsService, userService, systemInfoService)
