@@ -13,7 +13,7 @@ on:
 
 jobs:
   build-docker-image:
-    uses: netcracker/qubership-apihub-ci/.github/workflows/docker-ci.yml@main
+    uses: netcracker/qubership-apihub-ci/.github/workflows/docker-ci.yml@feature/git_hash
     with:
         name: qubership-apihub-backend
         file: Dockerfile

@@ -245,6 +245,9 @@ func (g systemInfoServiceImpl) Init() error {
 	g.setFailBuildOnBrokenRefs()
 	g.setYamlConfigFilePath()
 
+	log.Infof("GIT_HASH is %s", os.Getenv("GIT_HASH"))
+	log.Infof("GIT_BRANCH is %s", os.Getenv("GIT_BRANCH"))
+
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath(g.GetYamlConfigFilePath())
