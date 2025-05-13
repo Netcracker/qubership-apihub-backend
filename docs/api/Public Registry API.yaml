@@ -16509,16 +16509,16 @@ components:
                     properties:
                       operationId:
                         description: >-
-                      Operation unique identifier (not the same as operationId tag from the OpenAPI file).\
-                      Parameter is required if operation was added or modified.
+                          Operation unique identifier (not the same as operationId tag from the OpenAPI file).\
+                          Parameter is required if operation was added or modified.
                         type: string
-                    example: get-quoteManagement-v5-quote-quoteId
-                  previousOperationId:
-                    description: >-
-                      Operation unique identifier from previous version (not the same as operationId tag from the OpenAPI file).\
-                      Parameter is required if operation was deleted or modified.
-                    type: string
-                    example: get-quoteManagement-v5-quote-id
+                        example: get-quoteManagement-v5-quote-quoteId
+                      previousOperationId:
+                        description: >-
+                          Operation unique identifier from previous version (not the same as operationId tag from the OpenAPI file).\
+                          Parameter is required if operation was deleted or modified.
+                        type: string
+                        example: get-quoteManagement-v5-quote-id
                       dataHash:
                         description: Operation hash.
                         type: string
