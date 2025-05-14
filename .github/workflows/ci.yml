@@ -21,10 +21,23 @@ jobs:
         platforms: linux/amd64,linux/arm64
         labels: |
             maintainer=qubership
-
+  calculate-ui-tag:
+    if: github.event_name == 'pull_request'
+    needs: build-docker-image
+    uses: netcracker/qubership-apihub-ci/.github/workflows/calculate-effective-tag.yaml@main
+    with:
+      branch-name: ${{ github.head_ref }} # pass PR source branch
+      repo-name: qubership-apihub-ui
+  calculate-build-task-consumer-tag:
+    if: github.event_name == 'pull_request'
+    needs: build-docker-image
+    uses: netcracker/qubership-apihub-ci/.github/workflows/calculate-effective-tag.yaml@main
+    with:
+      branch-name: ${{ github.head_ref }} # pass PR source branch
+      repo-name: qubership-apihub-build-task-consumer
   run-e2e-tests:
     uses: netcracker/qubership-apihub-ci/.github/workflows/run-e2e-tests.yml@main
-    needs: build-docker-image
+    needs: [build-docker-image, calculate-ui-tag, calculate-build-task-consumer-tag]
     if: github.event_name == 'pull_request'
     with:
       postman-collections-list: './e2e/1_1_Smoke_Portal.postman_collection.json,./e2e/2_1_Negative_Portal.postman_collection.json,./e2e/3_1_Stories_Bugs.postman_collection.json,./e2e/4_Access_control.postman_collection.json'
