@@ -2767,7 +2767,7 @@ components:
           description: Production environment flag
           type: boolean
         linterEnabled:
-          description: Linter service availability flag
+          description: qubership-api-linter-service availability flag
           type: boolean
         externalLinks:
           description: List of links to the external resource, for example URL to the documentation or URL pointing to the contact information of support group.
