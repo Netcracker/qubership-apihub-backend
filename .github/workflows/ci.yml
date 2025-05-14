@@ -42,9 +42,12 @@ jobs:
     with:
       postman-collections-list: './e2e/1_1_Smoke_Portal.postman_collection.json,./e2e/2_1_Negative_Portal.postman_collection.json,./e2e/3_1_Stories_Bugs.postman_collection.json,./e2e/4_Access_control.postman_collection.json'
       apihub-backend-image-tag: ${{ needs.build-docker-image.outputs.image_tag }}
-      postman-repository-branch: ${{ github.head_ref }} # will default to develop if corresponding branch for playwright tests is not found
-      # apihub-ui-image-tag: dev
-      # apihub-build-task-consumer-image-tag: dev
+      apihub-ui-image-tag: ${{ needs.calculate-ui-tag.outputs.tag }}
+      apihub-build-task-consumer-image-tag: ${{ needs.calculate-build-task-consumer-tag.outputs.tag }}
+      # pass PR source branch, will default to develop if corresponding branch for Newman tests is not found
+      postman-repository-branch: ${{ github.head_ref }}
+      # pass PR source branch, will default to develop if corresponding branch for Playwright tests is not found
+      playwright-repository-branch: ${{ github.head_ref }}
     secrets:
       APIHUB_ACCESS_TOKEN: ${{ secrets.APIHUB_ACCESS_TOKEN }}
       APIHUB_ADMIN_EMAIL: ${{ secrets.APIHUB_ADMIN_EMAIL }}
