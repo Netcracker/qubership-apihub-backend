@@ -292,7 +292,7 @@ func handleAssertion(w http.ResponseWriter, r *http.Request, userService service
 }
 
 func (a *authControllerImpl) setAuthTokenCookies(w http.ResponseWriter, user *view.User, idpId string) error {
-	accessToken, refreshToken, err := security.IssueTokenPair(*user)
+	accessToken, refreshToken, err := security.IssueTokenPair(*user, false)
 	if err != nil {
 		return &exception.CustomError{
 			Status:  http.StatusInternalServerError,

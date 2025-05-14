@@ -87,7 +87,7 @@ func (a *authenticationControllerImpl) setUserViewCookie(w http.ResponseWriter, 
 		Name:     "userView",
 		Value:    cookieValue,
 		MaxAge:   a.systemInfoService.GetRefreshTokenDurationSec(),
-		Secure:   true,
+		Secure:   false,
 		HttpOnly: false,
 		Path:     "/",
 	})

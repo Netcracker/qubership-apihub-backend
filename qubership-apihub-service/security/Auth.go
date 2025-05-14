@@ -42,6 +42,7 @@ var jwtAuthStrategy union.Union
 var refreshTokenStrategy auth.Strategy
 
 var keeper jwt.SecretsKeeper
+var integrationService service.IntegrationsService
 var userService service.UserService
 var roleService service.RoleService
 
@@ -50,7 +51,10 @@ var refreshTokenDuration time.Duration
 
 var publicKey []byte
 
-func SetupGoGuardian(userServiceLocal service.UserService, roleServiceLocal service.RoleService, apiKeyService service.ApihubApiKeyService, patService service.PersonalAccessTokenService, systemInfoService service.SystemInfoService, tokenRevocationService service.TokenRevocationService) error {
+const gitIntegrationExt = "gitIntegration"
+
+func SetupGoGuardian(intService service.IntegrationsService, userServiceLocal service.UserService, roleServiceLocal service.RoleService, apiKeyService service.ApihubApiKeyService, patService service.PersonalAccessTokenService, systemInfoService service.SystemInfoService, tokenRevocationService service.TokenRevocationService) error {
+	integrationService = intService
 	userService = userServiceLocal
 	roleService = roleServiceLocal
 	apihubApiKeyStrategy := NewApihubApiKeyStrategy(apiKeyService)
@@ -117,7 +121,7 @@ func CreateLocalUserToken_deprecated(w http.ResponseWriter, r *http.Request) {
 }
 
 func CreateTokenForUser_deprecated(dbUser view.User) (*UserView, error) {
-	accessToken, refreshToken, err := IssueTokenPair(dbUser)
+	accessToken, refreshToken, err := IssueTokenPair(dbUser, true)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +136,7 @@ func CreateLocalUserToken(w http.ResponseWriter, r *http.Request) {
 		respondWithAuthFailedError(w, err)
 		return
 	}
-	accessToken, refreshToken, err := IssueTokenPair(*user)
+	accessToken, refreshToken, err := IssueTokenPair(*user, false)
 	if err != nil {
 		respondWithAuthFailedError(w, err)
 		return
@@ -170,7 +174,7 @@ func authenticateUser(r *http.Request) (*view.User, error) {
 	return user, nil
 }
 
-func IssueTokenPair(dbUser view.User) (accessToken string, refreshToken string, err error) {
+func IssueTokenPair(dbUser view.User, withGitIntegration bool) (accessToken string, refreshToken string, err error) {
 	user := auth.NewUserInfo(dbUser.Name, dbUser.Id, []string{}, auth.Extensions{})
 	accessDuration := jwt.SetExpDuration(accessTokenDuration) // should be more than one minute!
 
@@ -181,6 +185,17 @@ func IssueTokenPair(dbUser view.User) (accessToken string, refreshToken string, 
 	}
 	if systemRole != "" {
 		extensions.Set(context.SystemRoleExt, systemRole)
+	}
+	if withGitIntegration {
+		status, err := integrationService.GetUserApiKeyStatus(view.GitlabIntegration, dbUser.Id)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to check gitlab integration status: %v", err)
+		}
+		gitIntegrationExtensionValue := "false"
+		if status.Status == service.ApiKeyStatusPresent {
+			gitIntegrationExtensionValue = "true"
+		}
+		extensions.Set(gitIntegrationExt, gitIntegrationExtensionValue)
 	}
 	user.SetExtensions(extensions)
 
