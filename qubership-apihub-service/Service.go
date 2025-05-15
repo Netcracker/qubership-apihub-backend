@@ -229,6 +229,8 @@ func main() {
 
 	packageExportConfigRepository := repository.NewPackageExportConfigRepository(cp)
 
+	exportRepository := repository.NewExportRepository(cp)
+
 	olricProvider, err := cache.NewOlricProvider()
 	if err != nil {
 		log.Error("Failed to create olricProvider: " + err.Error())
@@ -274,8 +276,9 @@ func main() {
 	refService := service.NewRefService(draftRepository, projectService, branchService, publishedRepository, wsBranchService)
 	wsFileEditService := service.NewWsFileEditService(userService, contentService, branchEditorsService, wsLoadBalancer)
 	portalService := service.NewPortalService(basePath, publishedService, publishedRepository, projectRepository)
-	operationGroupService := service.NewOperationGroupService(operationRepository, publishedRepository, packageVersionEnrichmentService, activityTrackingService)
-	versionService := service.NewVersionService(gitClientProvider, projectRepository, favoritesRepository, publishedRepository, publishedService, operationRepository, operationService, activityTrackingService, systemInfoService, packageVersionEnrichmentService, portalService, versionCleanupRepository, operationGroupService)
+
+	operationGroupService := service.NewOperationGroupService(operationRepository, publishedRepository, exportRepository, packageVersionEnrichmentService, activityTrackingService)
+	versionService := service.NewVersionService(gitClientProvider, projectRepository, favoritesRepository, publishedRepository, publishedService, operationRepository, exportRepository, operationService, activityTrackingService, systemInfoService, packageVersionEnrichmentService, portalService, versionCleanupRepository, operationGroupService)
 	packageService := service.NewPackageService(gitClientProvider, projectRepository, favoritesRepository, publishedRepository, versionService, roleService, activityTrackingService, operationGroupService, usersRepository, ptHandler, systemInfoService)
 
 	logsService := service.NewLogsService()
@@ -287,7 +290,12 @@ func main() {
 	refResolverService := service.NewRefResolverService(publishedRepository)
 	buildProcessorService := service.NewBuildProcessorService(buildRepository, refResolverService)
 	buildService := service.NewBuildService(buildRepository, buildProcessorService, publishedService, systemInfoService, packageService, refResolverService)
-	buildResultService := service.NewBuildResultService(buildResultRepository, systemInfoService, minioStorageService)
+
+	packageExportConfigService := service.NewPackageExportConfigService(packageExportConfigRepository, packageService)
+
+	exportService := service.NewExportService(exportRepository, portalService, buildService, packageExportConfigService)
+
+	buildResultService := service.NewBuildResultService(buildResultRepository, buildRepository, publishedRepository, systemInfoService, minioStorageService, publishedService, exportService)
 	versionService.SetBuildService(buildService)
 	operationGroupService.SetBuildService(buildService)
 
@@ -309,9 +317,6 @@ func main() {
 	zeroDayAdminService := service.NewZeroDayAdminService(userService, roleService, usersRepository, systemInfoService)
 
 	personalAccessTokenService := service.NewPersonalAccessTokenService(personalAccessTokenRepository, userService, roleService)
-	packageExportConfigService := service.NewPackageExportConfigService(packageExportConfigRepository, packageService)
-
-	exportService := service.NewExportService(portalService, buildService, packageExportConfigService)
 
 	integrationsController := controller.NewIntegrationsController(integrationsService)
 	projectController := controller.NewProjectController(projectService, groupService, searchService)
@@ -733,6 +738,11 @@ func main() {
 			}
 		})
 	}
+
+	utils.SafeAsync(func() {
+		exportService.StartCleanupOldResultsJob()
+	})
+
 	log.Fatalf("Http server returned error: %v", srv.ListenAndServe())
 }
 

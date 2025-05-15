@@ -1261,18 +1261,21 @@ func (e exportControllerImpl) GetAsyncExportStatus(w http.ResponseWriter, r *htt
 	if status == nil && result == nil {
 		RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusNotFound,
-			Message: "build not found",
+			Code:    exception.ExportProcessNotFound,
+			Message: exception.ExportProcessNotFoundMsg,
+			Params:  map[string]interface{}{"exportId": exportId},
 		})
 		return
 	}
 
 	if status != nil {
 		RespondWithJson(w, http.StatusOK, status)
+		return
 	}
-	if result != nil {
-		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%v", result.FileName))
-		w.WriteHeader(http.StatusOK)
-		w.Write(result.Data)
-	}
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%v", result.FileName))
+	w.WriteHeader(http.StatusOK)
+	w.Write(result.Data)
+
 }

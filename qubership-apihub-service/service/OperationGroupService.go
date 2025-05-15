@@ -47,10 +47,12 @@ type OperationGroupService interface {
 	GetOperationGroupPublishStatus(publishId string) (*view.OperationGroupPublishStatusResponse, error)
 }
 
-func NewOperationGroupService(operationRepository repository.OperationRepository, publishedRepo repository.PublishedRepository, packageVersionEnrichmentService PackageVersionEnrichmentService, activityTrackingService ActivityTrackingService) OperationGroupService {
+func NewOperationGroupService(operationRepository repository.OperationRepository, publishedRepo repository.PublishedRepository, exportRepository repository.ExportResultRepository,
+	packageVersionEnrichmentService PackageVersionEnrichmentService, activityTrackingService ActivityTrackingService) OperationGroupService {
 	return &operationGroupServiceImpl{
 		operationRepo:                   operationRepository,
 		publishedRepo:                   publishedRepo,
+		exportRepository:                exportRepository,
 		packageVersionEnrichmentService: packageVersionEnrichmentService,
 		atService:                       activityTrackingService,
 	}
@@ -59,6 +61,7 @@ func NewOperationGroupService(operationRepository repository.OperationRepository
 type operationGroupServiceImpl struct {
 	operationRepo                   repository.OperationRepository
 	publishedRepo                   repository.PublishedRepository
+	exportRepository                repository.ExportResultRepository
 	packageVersionEnrichmentService PackageVersionEnrichmentService
 	atService                       ActivityTrackingService
 	buildService                    BuildService
@@ -900,7 +903,7 @@ func (o operationGroupServiceImpl) GetGroupedOperations(packageId string, versio
 }
 
 func (o operationGroupServiceImpl) clearOperationGroupCache(packageId string, version string, revision int, apiType string, groupId string) error {
-	return o.publishedRepo.DeleteTransformedDocuments(packageId, version, revision, apiType, groupId)
+	return o.exportRepository.DeleteTransformedDocuments(packageId, version, revision, apiType, groupId)
 }
 
 func (o operationGroupServiceImpl) GetOperationGroupExportTemplate(packageId string, version string, apiType string, groupName string) ([]byte, string, error) {
@@ -974,7 +977,7 @@ func (o operationGroupServiceImpl) StartOperationGroupPublish(ctx context.Securi
 
 func (o operationGroupServiceImpl) publishOperationGroup(ctx context.SecurityContext, version *entity.PublishedVersionEntity, apiType string, groupName string, req view.OperationGroupPublishReq, publishEnt *entity.OperationGroupPublishEntity) {
 	groupId := view.MakeOperationGroupId(version.PackageId, version.Version, version.Revision, apiType, groupName)
-	transformedDocuments, err := o.publishedRepo.GetTransformedDocuments(version.PackageId, view.MakeVersionRefKey(version.Version, version.Revision), apiType, groupId, view.ReducedSourceSpecificationsType_deprecated, string(view.JsonDocumentFormat))
+	transformedDocuments, err := o.exportRepository.GetTransformedDocuments(version.PackageId, view.MakeVersionRefKey(version.Version, version.Revision), apiType, groupId, view.ReducedSourceSpecificationsType_deprecated, string(view.JsonDocumentFormat))
 	if err != nil {
 		o.updatePublishProcess(publishEnt, string(view.StatusError), fmt.Sprintf("faield to get existing transformed documents: %v", err.Error()))
 		return
@@ -985,7 +988,7 @@ func (o operationGroupServiceImpl) publishOperationGroup(ctx context.SecurityCon
 			o.updatePublishProcess(publishEnt, string(view.StatusError), fmt.Sprintf("faield to tranform group operations into documents: %v", err.Error()))
 			return
 		}
-		transformedDocuments, err = o.publishedRepo.GetTransformedDocuments(version.PackageId, view.MakeVersionRefKey(version.Version, version.Revision), apiType, groupId, view.ReducedSourceSpecificationsType_deprecated, string(view.JsonDocumentFormat))
+		transformedDocuments, err = o.exportRepository.GetTransformedDocuments(version.PackageId, view.MakeVersionRefKey(version.Version, version.Revision), apiType, groupId, view.ReducedSourceSpecificationsType_deprecated, string(view.JsonDocumentFormat))
 		if err != nil {
 			o.updatePublishProcess(publishEnt, string(view.StatusError), fmt.Sprintf("faield to get transformed documents: %v", err.Error()))
 			return

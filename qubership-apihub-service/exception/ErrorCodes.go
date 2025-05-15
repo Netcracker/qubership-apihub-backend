@@ -746,3 +746,6 @@ const IncorrectOASExtensionsMsg = "OAS extension is required to be have 'x-' pre
 
 const DuplicateOASExtensionsNotAllowed = "7102"
 const DuplicateOASExtensionsNotAllowedMsg = "Duplicate OAS extension not allowed: $duplicates"
+
+const ExportProcessNotFound = "7201"
+const ExportProcessNotFoundMsg = "Export process with exportId=$exportId not found"

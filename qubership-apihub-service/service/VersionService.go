@@ -81,6 +81,7 @@ func NewVersionService(gitClientProvider GitClientProvider,
 	publishedRepo repository.PublishedRepository,
 	publishedService PublishedService,
 	operationRepo repository.OperationRepository,
+	exportRepository repository.ExportResultRepository,
 	operationService OperationService,
 	atService ActivityTrackingService,
 	systemInfoService SystemInfoService,
@@ -93,6 +94,7 @@ func NewVersionService(gitClientProvider GitClientProvider,
 		pRepo:                           repo,
 		favoritesRepo:                   favoritesRepo,
 		publishedRepo:                   publishedRepo,
+		exportRepository:                exportRepository,
 		publishedService:                publishedService,
 		operationRepo:                   operationRepo,
 		operationService:                operationService,
@@ -112,6 +114,7 @@ type versionServiceImpl struct {
 	publishedRepo                   repository.PublishedRepository
 	publishedService                PublishedService
 	operationRepo                   repository.OperationRepository
+	exportRepository                repository.ExportResultRepository
 	operationService                OperationService
 	atService                       ActivityTrackingService
 	systemInfoService               SystemInfoService
@@ -1756,7 +1759,7 @@ func (v versionServiceImpl) GetTransformedDocuments_deprecated(packageId, versio
 		}
 	}
 	groupId := view.MakeOperationGroupId(packageId, versionEnt.Version, versionEnt.Revision, apiType, groupName)
-	ent, err := v.publishedRepo.GetTransformedDocuments(packageId, version, apiType, groupId, view.DocumentGroupType_deprecated, string(view.JsonDocumentFormat))
+	ent, err := v.exportRepository.GetTransformedDocuments(packageId, version, apiType, groupId, view.DocumentGroupType_deprecated, string(view.JsonDocumentFormat))
 	if err != nil {
 		return nil, err
 	}
@@ -1788,7 +1791,7 @@ func (v versionServiceImpl) GetTransformedDocuments(packageId string, version st
 		}
 	}
 	groupId := view.MakeOperationGroupId(packageId, versionEnt.Version, versionEnt.Revision, apiType, groupName)
-	ent, err := v.publishedRepo.GetTransformedDocuments(packageId, version, apiType, groupId, view.BuildType(buildType), format)
+	ent, err := v.exportRepository.GetTransformedDocuments(packageId, version, apiType, groupId, view.BuildType(buildType), format)
 	if err != nil {
 		return nil, err
 	}

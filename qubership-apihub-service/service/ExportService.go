@@ -2,8 +2,16 @@ package service
 
 import (
 	"fmt"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/archive"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/repository"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service/validation"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
+	log "github.com/sirupsen/logrus"
+	"net/http"
+	"time"
 )
 
 type ExportService interface {
@@ -13,11 +21,15 @@ type ExportService interface {
 
 	GetAsyncExportStatus(exportId string) (*view.ExportStatus, *view.ExportResult, error)
 
-	CleanupOldResults() error
+	StartCleanupOldResultsJob()
+
+	PublishTransformedDocuments(buildArc *archive.BuildResultArchive, publishId string) error // deprecated
+	StoreExportResult(userId string, exportId string, buildResult []byte, fileName string, buildConfig view.BuildConfig) error
 }
 
-func NewExportService(portalService PortalService, buildService BuildService, packageExportConfigService PackageExportConfigService) ExportService {
+func NewExportService(exportRepository repository.ExportResultRepository, portalService PortalService, buildService BuildService, packageExportConfigService PackageExportConfigService) ExportService {
 	return &exportServiceImpl{
+		exportRepository:           exportRepository,
 		packageExportConfigService: packageExportConfigService,
 		portalService:              portalService,
 		buildService:               buildService,
@@ -28,6 +40,8 @@ func NewExportService(portalService PortalService, buildService BuildService, pa
 }
 
 type exportServiceImpl struct {
+	exportRepository repository.ExportResultRepository
+
 	packageExportConfigService PackageExportConfigService
 	// FIXME: to be removed!!!
 	portalService      PortalService
@@ -37,12 +51,17 @@ type exportServiceImpl struct {
 	tempErrCache       map[string]error
 }
 
-// TODO: use in job
-func (e exportServiceImpl) CleanupOldResults() error {
-	// TODO: how to configure TTL? via config?
-
-	//TODO implement me
-	panic("implement me")
+func (e exportServiceImpl) StoreExportResult(userId string, exportId string, buildResult []byte, fileName string, buildConfig view.BuildConfig) error {
+	ent := entity.ExportResultEntity{
+		ExportId:  exportId,
+		Config:    buildConfig,
+		CreatedAt: time.Now(),
+		CreatedBy: userId,
+		Data:      buildResult,
+		Filename:  fileName,
+	}
+	err := e.exportRepository.SaveExportResult(ent)
+	return err
 }
 
 func (e exportServiceImpl) StartVersionExport(ctx context.SecurityContext, req view.ExportVersionReq) (string, error) {
@@ -79,41 +98,11 @@ func (e exportServiceImpl) StartVersionExport(ctx context.SecurityContext, req v
 		return "", fmt.Errorf("failed to create build %s: %w", req.PackageID, err)
 	}
 	return buildId, nil
-
-	// FIXME: temporary implementation!!!
-	/*buildId := uuid.NewString()
-	e.tempHtmlFNameCache[buildId] = "running"
-	utils.SafeAsync(func() {
-		time.Sleep(time.Second * 10)
-		data, filename, err := e.portalService.GenerateInteractivePageForPublishedVersion(req.PackageID, req.Version)
-		if err != nil {
-			e.tempErrCache[buildId] = err
-			return
-		}
-		e.tempHtmlCache[buildId] = data
-		e.tempHtmlFNameCache[buildId] = filename
-	})
-	return buildId, nil*/
 }
 
 func (e exportServiceImpl) StartOASDocExport(ctx context.SecurityContext, req view.ExportOASDocumentReq) (string, error) {
 	// TODO: check package and version exists
 	// TODO: validate 	req.Format
-
-	// FIXME: temporary implementation!!!
-	/*buildId := uuid.NewString()
-	e.tempHtmlFNameCache[buildId] = "running"
-	utils.SafeAsync(func() {
-		time.Sleep(time.Second * 10)
-		data, filename, err := e.portalService.GenerateInteractivePageForPublishedFile(req.PackageID, req.Version, req.DocumentID)
-		if err != nil {
-			e.tempErrCache[buildId] = err
-			return
-		}
-		e.tempHtmlCache[buildId] = data
-		e.tempHtmlFNameCache[buildId] = filename
-	})
-	return buildId, nil*/
 
 	var allowedOasExtensions *[]string
 	var err error
@@ -206,37 +195,13 @@ func (e exportServiceImpl) GetAsyncExportStatus(exportId string) (*view.ExportSt
 	if err != nil {
 		return nil, nil, err
 	}
-
 	if build == nil {
-		// FIXME: temp code!
-		// check maps
-		eerr := e.tempErrCache[exportId]
-		if eerr != nil {
-			str := eerr.Error()
-			return &view.ExportStatus{
-				Status:  string(view.StatusError),
-				Message: &str,
-			}, nil, nil
+		return nil, nil, &exception.CustomError{
+			Status:  http.StatusNotFound,
+			Code:    exception.ExportProcessNotFound,
+			Message: exception.ExportProcessNotFoundMsg,
+			Params:  map[string]interface{}{"exportId": exportId},
 		}
-		/////
-		isRunning := e.tempHtmlFNameCache[exportId]
-		if isRunning == "running" {
-			return &view.ExportStatus{
-				Status:  string(view.StatusRunning),
-				Message: nil,
-			}, nil, nil
-		}
-
-		//////
-
-		if res, ok := e.tempHtmlCache[exportId]; ok {
-			fName := e.tempHtmlFNameCache[exportId]
-			if fName == "" {
-				fName = "file"
-			}
-			return nil, &view.ExportResult{Data: res, FileName: fName}, nil
-		}
-		return nil, nil, nil
 	}
 
 	switch view.BuildStatusEnum(build.Status) {
@@ -254,9 +219,52 @@ func (e exportServiceImpl) GetAsyncExportStatus(exportId string) (*view.ExportSt
 	default:
 		return nil, nil, fmt.Errorf("unknown export status %s", build.Status)
 	}
+
 	// processing complete status
+	resultEnt, err := e.exportRepository.GetExportResult(exportId)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get export result %s: %w", exportId, err)
+	}
+	if resultEnt == nil {
+		// most probably export result was already cleaned up
+		return nil, nil, nil
+	}
 
-	data := "stub data here"
-	return nil, &view.ExportResult{Data: []byte(data), FileName: "success.file"}, nil
+	return nil, &view.ExportResult{Data: resultEnt.Data, FileName: resultEnt.Filename}, nil
+}
 
+func (e exportServiceImpl) StartCleanupOldResultsJob() {
+	cleanupTime := time.Minute * 10 // TODO: configure TTL?
+
+	ticker := time.NewTicker(cleanupTime)
+	for range ticker.C {
+		err := e.exportRepository.CleanupExportResults(cleanupTime)
+		if err != nil {
+			log.Warnf("Failed to run export result cleanup job: %s", err.Error())
+		} else {
+			log.Tracef("Export result cleanup job finished successfully")
+		}
+	}
+}
+
+// deprecated
+func (e exportServiceImpl) PublishTransformedDocuments(buildArc *archive.BuildResultArchive, publishId string) error {
+	var err error
+	if err = buildArc.ReadPackageDocuments(true); err != nil {
+		return err
+	}
+	if err = validation.ValidatePublishBuildResult(buildArc); err != nil {
+		return err
+	}
+	buildArc.PackageInfo.Version, buildArc.PackageInfo.Revision, err = SplitVersionRevision(buildArc.PackageInfo.Version)
+	if err != nil {
+		return err
+	}
+
+	buildArcEntitiesReader := archive.NewBuildResultToEntitiesReader(buildArc)
+	transformedDocumentsEntity, err := buildArcEntitiesReader.ReadTransformedDocumentsToEntity()
+	if err != nil {
+		return err
+	}
+	return e.exportRepository.SaveTransformedDocument(transformedDocumentsEntity, publishId)
 }
