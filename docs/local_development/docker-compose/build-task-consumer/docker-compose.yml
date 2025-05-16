@@ -1,10 +1,10 @@
 version: "3.9"
 services:
-  qubership-apihub-build-task-consumer-2:
-    image: ghcr.io/netcracker/qubership-apihub-build-task-consumer:feature-ignore-param-name-while-matching
+  qubership-apihub-build-task-consumer:
+    image: ghcr.io/netcracker/qubership-apihub-build-task-consumer:main
     environment:
       APIHUB_BACKEND_ADDRESS: "host.docker.internal:8090"
-      APIHUB_API_KEY: "8231f12d-054a-4a4b-be50-fda715694f3b"
+      APIHUB_API_KEY: "123123"
     ports:
       - "3000:3000"
     restart: unless-stopped 
