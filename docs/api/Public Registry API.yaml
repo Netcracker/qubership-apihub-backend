@@ -7033,6 +7033,12 @@ paths:
                 description: Binary content for unsupported file types (doc, xls, jpg, png, etc.).
                 type: string
                 format: binary
+          headers: 
+            Content-Disposition:
+              schema:
+                type: string
+                description: Indicates inline content and file name
+                example: inline; filename="petstore.yaml"
         "301":
           description: Moved Permanently
           headers:
