@@ -1,6 +1,6 @@
 version: "3.9"
 services:
-  qubership-apihub-ui-2:
+  qubership-apihub-ui:
     image: ghcr.io/netcracker/qubership-apihub-ui:main
     environment:
       APIHUB_BACKEND_ADDRESS: "host.docker.internal:8090"
