@@ -229,6 +229,8 @@ func main() {
 
 	packageExportConfigRepository := repository.NewPackageExportConfigRepository(cp)
 
+	exportRepository := repository.NewExportRepository(cp)
+
 	olricProvider, err := cache.NewOlricProvider()
 	if err != nil {
 		log.Error("Failed to create olricProvider: " + err.Error())
@@ -274,8 +276,9 @@ func main() {
 	refService := service.NewRefService(draftRepository, projectService, branchService, publishedRepository, wsBranchService)
 	wsFileEditService := service.NewWsFileEditService(userService, contentService, branchEditorsService, wsLoadBalancer)
 	portalService := service.NewPortalService(basePath, publishedService, publishedRepository, projectRepository)
-	operationGroupService := service.NewOperationGroupService(operationRepository, publishedRepository, packageVersionEnrichmentService, activityTrackingService)
-	versionService := service.NewVersionService(gitClientProvider, projectRepository, favoritesRepository, publishedRepository, publishedService, operationRepository, operationService, activityTrackingService, systemInfoService, packageVersionEnrichmentService, portalService, versionCleanupRepository, operationGroupService)
+
+	operationGroupService := service.NewOperationGroupService(operationRepository, publishedRepository, exportRepository, packageVersionEnrichmentService, activityTrackingService)
+	versionService := service.NewVersionService(gitClientProvider, projectRepository, favoritesRepository, publishedRepository, publishedService, operationRepository, exportRepository, operationService, activityTrackingService, systemInfoService, packageVersionEnrichmentService, portalService, versionCleanupRepository, operationGroupService)
 	packageService := service.NewPackageService(gitClientProvider, projectRepository, favoritesRepository, publishedRepository, versionService, roleService, activityTrackingService, operationGroupService, usersRepository, ptHandler, systemInfoService)
 
 	logsService := service.NewLogsService()
@@ -287,7 +290,12 @@ func main() {
 	refResolverService := service.NewRefResolverService(publishedRepository)
 	buildProcessorService := service.NewBuildProcessorService(buildRepository, refResolverService)
 	buildService := service.NewBuildService(buildRepository, buildProcessorService, publishedService, systemInfoService, packageService, refResolverService)
-	buildResultService := service.NewBuildResultService(buildResultRepository, systemInfoService, minioStorageService)
+
+	packageExportConfigService := service.NewPackageExportConfigService(packageExportConfigRepository, packageService)
+
+	exportService := service.NewExportService(exportRepository, portalService, buildService, packageExportConfigService)
+
+	buildResultService := service.NewBuildResultService(buildResultRepository, buildRepository, publishedRepository, systemInfoService, minioStorageService, publishedService, exportService)
 	versionService.SetBuildService(buildService)
 	operationGroupService.SetBuildService(buildService)
 
@@ -309,7 +317,6 @@ func main() {
 	zeroDayAdminService := service.NewZeroDayAdminService(userService, roleService, usersRepository, systemInfoService)
 
 	personalAccessTokenService := service.NewPersonalAccessTokenService(personalAccessTokenRepository, userService, roleService)
-	packageExportConfigService := service.NewPackageExportConfigService(packageExportConfigRepository, packageService)
 
 	integrationsController := controller.NewIntegrationsController(integrationsService)
 	projectController := controller.NewProjectController(projectService, groupService, searchService)
@@ -332,7 +339,7 @@ func main() {
 	agentProxyController := controller.NewAgentProxyController(agentService, systemInfoService)
 	playgroundProxyController := controller.NewPlaygroundProxyController(systemInfoService)
 	publishV2Controller := controller.NewPublishV2Controller(buildService, publishedService, buildResultService, roleService, systemInfoService)
-	exportController := controller.NewExportController(publishedService, portalService, searchService, roleService, excelService, versionService, monitoringService)
+	exportController := controller.NewExportController(publishedService, portalService, searchService, roleService, excelService, versionService, monitoringService, exportService)
 
 	packageController := controller.NewPackageController(packageService, publishedService, portalService, searchService, roleService, monitoringService, ptHandler)
 	versionController := controller.NewVersionController(versionService, roleService, monitoringService, ptHandler, roleService.IsSysadm)
@@ -491,8 +498,8 @@ func main() {
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/problems", security.Secure(versionController.GetVersionProblems)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/sharedFiles", security.Secure(versionController.SharePublishedFile)).Methods(http.MethodPost)
 
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/doc", security.Secure(exportController.GenerateVersionDoc)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/files/{slug}/doc", security.Secure(exportController.GenerateFileDoc)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/doc", security.Secure(exportController.GenerateVersionDoc)).Methods(http.MethodGet)           // TODO: deprecated
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/files/{slug}/doc", security.Secure(exportController.GenerateFileDoc)).Methods(http.MethodGet) // TODO: deprecated
 
 	r.HandleFunc("/api/v2/auth/saml", security.NoSecure(samlAuthController.StartSamlAuthentication)).Methods(http.MethodGet) // deprecated.
 	r.HandleFunc("/login/sso/saml", security.NoSecure(samlAuthController.StartSamlAuthentication)).Methods(http.MethodGet)
@@ -622,6 +629,9 @@ func main() {
 	r.HandleFunc("/api/v1/packages/{packageId}/exportConfig", security.Secure(packageExportConfigController.GetConfig)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/packages/{packageId}/exportConfig", security.Secure(packageExportConfigController.SetConfig)).Methods(http.MethodPatch)
 
+	r.HandleFunc("/api/v1/export", security.Secure(exportController.StartAsyncExport)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v1/export/{exportId}/status", security.Secure(exportController.GetAsyncExportStatus)).Methods(http.MethodGet)
+
 	//debug + cleanup
 	if !systemInfoService.GetSystemInfo().ProductionMode {
 		if !systemInfoService.GetEditorDisabled() {
@@ -728,6 +738,11 @@ func main() {
 			}
 		})
 	}
+
+	utils.SafeAsync(func() {
+		exportService.StartCleanupOldResultsJob()
+	})
+
 	log.Fatalf("Http server returned error: %v", srv.ListenAndServe())
 }
 
