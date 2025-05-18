@@ -19,7 +19,7 @@ type ExportService interface {
 	StartOASDocExport(ctx context.SecurityContext, req view.ExportOASDocumentReq) (string, error)
 	StartRESTOpGroupExport(ctx context.SecurityContext, req view.ExportRestOperationsGroupReq) (string, error)
 
-	GetAsyncExportStatus(exportId string) (*view.ExportStatus, *view.ExportResult, error)
+	GetAsyncExportStatus(exportId string) (*view.ExportStatus, *view.ExportResult, string, error)
 
 	StartCleanupOldResultsJob()
 
@@ -27,15 +27,11 @@ type ExportService interface {
 	StoreExportResult(userId string, exportId string, buildResult []byte, fileName string, buildConfig view.BuildConfig) error
 }
 
-func NewExportService(exportRepository repository.ExportResultRepository, portalService PortalService, buildService BuildService, packageExportConfigService PackageExportConfigService) ExportService {
+func NewExportService(exportRepository repository.ExportResultRepository, buildService BuildService, packageExportConfigService PackageExportConfigService) ExportService {
 	return &exportServiceImpl{
 		exportRepository:           exportRepository,
 		packageExportConfigService: packageExportConfigService,
-		portalService:              portalService,
 		buildService:               buildService,
-		tempHtmlCache:              make(map[string][]byte),
-		tempHtmlFNameCache:         make(map[string]string),
-		tempErrCache:               make(map[string]error),
 	}
 }
 
@@ -43,12 +39,7 @@ type exportServiceImpl struct {
 	exportRepository repository.ExportResultRepository
 
 	packageExportConfigService PackageExportConfigService
-	// FIXME: to be removed!!!
-	portalService      PortalService
-	buildService       BuildService
-	tempHtmlCache      map[string][]byte
-	tempHtmlFNameCache map[string]string
-	tempErrCache       map[string]error
+	buildService               BuildService
 }
 
 func (e exportServiceImpl) StoreExportResult(userId string, exportId string, buildResult []byte, fileName string, buildConfig view.BuildConfig) error {
@@ -65,14 +56,14 @@ func (e exportServiceImpl) StoreExportResult(userId string, exportId string, bui
 }
 
 func (e exportServiceImpl) StartVersionExport(ctx context.SecurityContext, req view.ExportVersionReq) (string, error) {
-	// TODO: check package and version exists
-	// TODO: validate 	req.Format
+	err := validateFormat(req.Format)
+	if err != nil {
+		return "", err
+	}
 
 	var allowedOasExtensions *[]string
-	var err error
-
 	if req.RemoveOasExtensions {
-		allowedOasExtensions, err = e.makeAllowedOasExtensions(req.PackageID)
+		allowedOasExtensions, err = e.makeAllowedOasExtensions(req.PackageId)
 		if err != nil {
 			return "", fmt.Errorf("failed to make allowed oas extensions: %w", err)
 		}
@@ -84,7 +75,7 @@ func (e exportServiceImpl) StartVersionExport(ctx context.SecurityContext, req v
 	}
 
 	config := view.BuildConfig{
-		PackageId: req.PackageID,
+		PackageId: req.PackageId,
 		Version:   req.Version,
 		BuildType: view.ExportVersion,
 		Format:    req.Format,
@@ -95,18 +86,20 @@ func (e exportServiceImpl) StartVersionExport(ctx context.SecurityContext, req v
 
 	buildId, config, err := e.buildService.CreateBuildWithoutDependencies(config, false, "")
 	if err != nil {
-		return "", fmt.Errorf("failed to create build %s: %w", req.PackageID, err)
+		return "", fmt.Errorf("failed to create build %s: %w", req.PackageId, err)
 	}
 	return buildId, nil
 }
 
 func (e exportServiceImpl) StartOASDocExport(ctx context.SecurityContext, req view.ExportOASDocumentReq) (string, error) {
-	// TODO: check package and version exists
-	// TODO: validate 	req.Format
+	err := validateFormat(req.Format)
+	if err != nil {
+		return "", err
+	}
+
+	// TODO: validate doc id?
 
 	var allowedOasExtensions *[]string
-	var err error
-
 	if req.RemoveOasExtensions {
 		allowedOasExtensions, err = e.makeAllowedOasExtensions(req.PackageID)
 		if err != nil {
@@ -120,13 +113,12 @@ func (e exportServiceImpl) StartOASDocExport(ctx context.SecurityContext, req vi
 	}
 
 	config := view.BuildConfig{
-		PackageId:  req.PackageID,
-		Version:    req.Version,
-		DocumentId: req.DocumentID,
-		BuildType:  view.ExportRestDocument,
-		Format:     req.Format,
-		CreatedBy:  user,
-		//ValidationRulesSeverity: view.ValidationRulesSeverity{},
+		PackageId:            req.PackageID,
+		Version:              req.Version,
+		DocumentId:           req.DocumentID,
+		BuildType:            view.ExportRestDocument,
+		Format:               req.Format,
+		CreatedBy:            user,
 		AllowedOasExtensions: allowedOasExtensions,
 	}
 
@@ -138,13 +130,18 @@ func (e exportServiceImpl) StartOASDocExport(ctx context.SecurityContext, req vi
 }
 
 func (e exportServiceImpl) StartRESTOpGroupExport(ctx context.SecurityContext, req view.ExportRestOperationsGroupReq) (string, error) {
-	// TODO: check package and version exists
-	// TODO: validate enums,etc
+	err := validateFormat(req.Format)
+	if err != nil {
+		return "", err
+	}
+	err = validateTransformation(req.OperationsSpecTransformation)
+	if err != nil {
+		return "", err
+	}
 
-	// FIXME: temporary implementation!!!
+	// TODO: validate groupName?
 
 	var allowedOasExtensions *[]string
-	var err error
 
 	if req.RemoveOasExtensions {
 		allowedOasExtensions, err = e.makeAllowedOasExtensions(req.PackageID)
@@ -154,14 +151,12 @@ func (e exportServiceImpl) StartRESTOpGroupExport(ctx context.SecurityContext, r
 	}
 
 	buildConfig := view.BuildConfig{
-		PackageId: req.PackageID,
-		Version:   req.Version,
-		BuildType: view.ExportRestOperationsGroup,
-		CreatedBy: ctx.GetUserId(),
-		ApiType:   string(view.RestApiType),
-		GroupName: req.GroupName,
-
-		//ValidationRulesSeverity: view.ValidationRulesSeverity{},
+		PackageId:            req.PackageID,
+		Version:              req.Version,
+		BuildType:            view.ExportRestOperationsGroup,
+		CreatedBy:            ctx.GetUserId(),
+		ApiType:              string(view.RestApiType),
+		GroupName:            req.GroupName,
 		AllowedOasExtensions: allowedOasExtensions,
 	}
 
@@ -176,7 +171,6 @@ func (e exportServiceImpl) StartRESTOpGroupExport(ctx context.SecurityContext, r
 func (e exportServiceImpl) makeAllowedOasExtensions(packageId string) (*[]string, error) {
 	var allowedOasExtensions *[]string
 
-	// TODO: need to test output json!!
 	config, err := e.packageExportConfigService.GetConfig(packageId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get package %s config: %w", packageId, err)
@@ -190,13 +184,13 @@ func (e exportServiceImpl) makeAllowedOasExtensions(packageId string) (*[]string
 	return allowedOasExtensions, nil
 }
 
-func (e exportServiceImpl) GetAsyncExportStatus(exportId string) (*view.ExportStatus, *view.ExportResult, error) {
+func (e exportServiceImpl) GetAsyncExportStatus(exportId string) (*view.ExportStatus, *view.ExportResult, string, error) {
 	build, err := e.buildService.GetBuild(exportId)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", err
 	}
 	if build == nil {
-		return nil, nil, &exception.CustomError{
+		return nil, nil, "", &exception.CustomError{
 			Status:  http.StatusNotFound,
 			Code:    exception.ExportProcessNotFound,
 			Message: exception.ExportProcessNotFoundMsg,
@@ -208,33 +202,33 @@ func (e exportServiceImpl) GetAsyncExportStatus(exportId string) (*view.ExportSt
 	case view.StatusNotStarted, view.StatusRunning:
 		return &view.ExportStatus{
 			Status: build.Status,
-		}, nil, err
+		}, nil, build.PackageId, err
 	case view.StatusComplete:
 		break
 	case view.StatusError:
 		return &view.ExportStatus{
 			Status:  build.Status,
 			Message: &build.Details,
-		}, nil, nil
+		}, nil, build.PackageId, nil
 	default:
-		return nil, nil, fmt.Errorf("unknown export status %s", build.Status)
+		return nil, nil, "", fmt.Errorf("unknown export status %s", build.Status)
 	}
 
 	// processing complete status
 	resultEnt, err := e.exportRepository.GetExportResult(exportId)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get export result %s: %w", exportId, err)
+		return nil, nil, "", fmt.Errorf("failed to get export result %s: %w", exportId, err)
 	}
 	if resultEnt == nil {
 		// most probably export result was already cleaned up
-		return nil, nil, nil
+		return nil, nil, "", nil
 	}
 
-	return nil, &view.ExportResult{Data: resultEnt.Data, FileName: resultEnt.Filename}, nil
+	return nil, &view.ExportResult{Data: resultEnt.Data, FileName: resultEnt.Filename}, build.PackageId, nil
 }
 
 func (e exportServiceImpl) StartCleanupOldResultsJob() {
-	cleanupTime := time.Minute * 10 // TODO: configure TTL?
+	cleanupTime := time.Minute * 10
 
 	ticker := time.NewTicker(cleanupTime)
 	for range ticker.C {
@@ -267,4 +261,34 @@ func (e exportServiceImpl) PublishTransformedDocuments(buildArc *archive.BuildRe
 		return err
 	}
 	return e.exportRepository.SaveTransformedDocument(transformedDocumentsEntity, publishId)
+}
+
+func validateFormat(format string) error {
+	switch format {
+	case view.FormatYAML, view.FormatJSON, view.FormatHTML:
+		break
+	default:
+		return &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.ExportFormatUnknown,
+			Message: exception.ExportFormatUnknownMsg,
+			Params:  map[string]interface{}{"format": format},
+		}
+	}
+	return nil
+}
+
+func validateTransformation(transformation string) error {
+	switch transformation {
+	case view.TransformationReducedSource, view.TransformationMerged:
+		break
+	default:
+		return &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidDocumentTransformation,
+			Message: exception.InvalidDocumentTransformationMsg,
+			Params:  map[string]interface{}{"value": transformation},
+		}
+	}
+	return nil
 }

@@ -26,10 +26,11 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 )
 
+// deprecated
 type TransformationController interface {
-	TransformDocuments_deprecated(w http.ResponseWriter, r *http.Request)
-	TransformDocuments(w http.ResponseWriter, r *http.Request)
-	GetDataForDocumentsTransformation(w http.ResponseWriter, r *http.Request)
+	TransformDocuments_deprecated(w http.ResponseWriter, r *http.Request)     //deprecated
+	TransformDocuments(w http.ResponseWriter, r *http.Request)                //deprecated
+	GetDataForDocumentsTransformation(w http.ResponseWriter, r *http.Request) //deprecated
 }
 
 func NewTransformationController(roleService service.RoleService, buildService service.BuildService, versionService service.VersionService, transformationService service.TransformationService, operationGroupService service.OperationGroupService) TransformationController {

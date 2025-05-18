@@ -34,15 +34,14 @@ import (
 )
 
 type ExportController interface {
-	// TODO: need to check all exports and mark as deprecated
-	GenerateVersionDoc(w http.ResponseWriter, r *http.Request)
-	GenerateFileDoc(w http.ResponseWriter, r *http.Request)
+	GenerateVersionDoc(w http.ResponseWriter, r *http.Request) //deprecated
+	GenerateFileDoc(w http.ResponseWriter, r *http.Request)    //deprecated
 	GenerateApiChangesExcelReportV3(w http.ResponseWriter, r *http.Request)
 	GenerateApiChangesExcelReport(w http.ResponseWriter, r *http.Request) //deprecated
 	GenerateOperationsExcelReport(w http.ResponseWriter, r *http.Request)
 	GenerateDeprecatedOperationsExcelReport(w http.ResponseWriter, r *http.Request)
-	ExportOperationGroupAsOpenAPIDocuments_deprecated(w http.ResponseWriter, r *http.Request)
-	ExportOperationGroupAsOpenAPIDocuments(w http.ResponseWriter, r *http.Request)
+	ExportOperationGroupAsOpenAPIDocuments_deprecated(w http.ResponseWriter, r *http.Request)   //deprecated
+	ExportOperationGroupAsOpenAPIDocuments_deprecated_2(w http.ResponseWriter, r *http.Request) //deprecated
 
 	StartAsyncExport(w http.ResponseWriter, r *http.Request)
 	GetAsyncExportStatus(w http.ResponseWriter, r *http.Request)
@@ -55,7 +54,8 @@ func NewExportController(publishedService service.PublishedService,
 	excelService service.ExcelService,
 	versionService service.VersionService,
 	monitoringService service.MonitoringService,
-	exportService service.ExportService) ExportController {
+	exportService service.ExportService,
+	packageService service.PackageService) ExportController {
 	return &exportControllerImpl{
 		publishedService:  publishedService,
 		portalService:     portalService,
@@ -65,6 +65,7 @@ func NewExportController(publishedService service.PublishedService,
 		versionService:    versionService,
 		monitoringService: monitoringService,
 		exportService:     exportService,
+		packageService:    packageService,
 	}
 }
 
@@ -77,6 +78,7 @@ type exportControllerImpl struct {
 	versionService    service.VersionService
 	monitoringService service.MonitoringService
 	exportService     service.ExportService
+	packageService    service.PackageService
 }
 
 func (e exportControllerImpl) ExportOperationGroupAsOpenAPIDocuments_deprecated(w http.ResponseWriter, r *http.Request) {
@@ -176,7 +178,7 @@ func (e exportControllerImpl) ExportOperationGroupAsOpenAPIDocuments_deprecated(
 	w.Write(content)
 }
 
-func (e exportControllerImpl) ExportOperationGroupAsOpenAPIDocuments(w http.ResponseWriter, r *http.Request) {
+func (e exportControllerImpl) ExportOperationGroupAsOpenAPIDocuments_deprecated_2(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
 	ctx := context.Create(r)
 	sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
@@ -1159,18 +1161,35 @@ func (e exportControllerImpl) StartAsyncExport(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	// TODO: CHECK PERMISSIONS!!!!!!!!!!!!!!!!!!!!!!!!
+	err = e.validatePackageAndVersion(discriminator)
+	if err != nil {
+		RespondWithError(w, "request validation failed", err)
+	}
 
 	ctx := context.Create(r)
+
+	sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, discriminator.PackageId, view.ReadPermission)
+	if err != nil {
+		RespondWithError(w, "Failed to check user privileges", err)
+		return
+	}
+	if !sufficientPrivileges {
+		RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusForbidden,
+			Code:    exception.InsufficientPrivileges,
+			Message: exception.InsufficientPrivilegesMsg,
+		})
+		return
+	}
 
 	var exportID string
 	switch discriminator.ExportedEntity {
 	case view.ExportEntityVersion:
-		exportID, err = e.startAsyncVersionExport(ctx, exportRequest.(*view.ExportVersionReq))
+		exportID, err = e.exportService.StartVersionExport(ctx, *exportRequest.(*view.ExportVersionReq))
 	case view.ExportEntityRestDocument:
-		exportID, err = e.startAsyncOASDocExport(ctx, exportRequest.(*view.ExportOASDocumentReq))
+		exportID, err = e.exportService.StartOASDocExport(ctx, *exportRequest.(*view.ExportOASDocumentReq))
 	case view.ExportEntityRestOperationsGroup:
-		exportID, err = e.startRESTOpGroupExport(ctx, exportRequest.(*view.ExportRestOperationsGroupReq))
+		exportID, err = e.exportService.StartRESTOpGroupExport(ctx, *exportRequest.(*view.ExportRestOperationsGroupReq))
 	}
 	if err != nil {
 		RespondWithError(w, "Failed to start export process", err)
@@ -1181,78 +1200,38 @@ func (e exportControllerImpl) StartAsyncExport(w http.ResponseWriter, r *http.Re
 	})
 }
 
-func (e exportControllerImpl) startAsyncVersionExport(ctx context.SecurityContext, req *view.ExportVersionReq) (string, error) {
-	err := e.validateExportPermission(ctx, req.PackageID)
+func (e exportControllerImpl) validatePackageAndVersion(req view.ExportRequestDiscriminator) error {
+	pkgExists, err := e.packageService.PackageExists(req.PackageId)
 	if err != nil {
-		return "", err
+		return fmt.Errorf("failed to check if package %s exists: %s", req.PackageId, err)
 	}
-
-	// TODO: validate request!
-
-	return e.exportService.StartVersionExport(ctx, *req)
-}
-
-func (e exportControllerImpl) startAsyncOASDocExport(ctx context.SecurityContext, req *view.ExportOASDocumentReq) (string, error) {
-	err := e.validateExportPermission(ctx, req.PackageID)
+	if !pkgExists {
+		return &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.PackageNotFound,
+			Message: exception.PackageNotFoundMsg,
+			Params:  map[string]interface{}{"packageId": req.PackageId},
+		}
+	}
+	verExists, err := e.publishedService.VersionPublished(req.PackageId, req.Version)
 	if err != nil {
-		return "", err
+		return fmt.Errorf("failed to check if version %s exists for package %s: %s", req.Version, req.PackageId, err)
 	}
-
-	// TODO: validate request!
-
-	return e.exportService.StartOASDocExport(ctx, *req)
-}
-
-func (e exportControllerImpl) startRESTOpGroupExport(ctx context.SecurityContext, req *view.ExportRestOperationsGroupReq) (string, error) {
-	err := e.validateExportPermission(ctx, req.PackageID)
-	if err != nil {
-		return "", err
+	if !verExists {
+		return &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.PublishedPackageVersionNotFound,
+			Message: exception.PublishedPackageVersionNotFoundMsg,
+			Params:  map[string]interface{}{"version": req.Version, "packageId": req.PackageId},
+		}
 	}
-
-	// TODO: validate request!
-
-	return e.exportService.StartRESTOpGroupExport(ctx, *req)
-}
-
-func (e exportControllerImpl) validateExportPermission(ctx context.SecurityContext, packageId string) error {
-	//FIXME: IMPLEMENT!!!!!!
-	/*sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
-	if err != nil {
-		RespondWithError(w, "Failed to check user privileges", err)
-		return
-	}
-	if !sufficientPrivileges {
-		RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusForbidden,
-			Code:    exception.InsufficientPrivileges,
-			Message: exception.InsufficientPrivilegesMsg,
-		})
-		return
-	}*/
-
 	return nil
 }
 
 func (e exportControllerImpl) GetAsyncExportStatus(w http.ResponseWriter, r *http.Request) {
-
-	// TODO: check that the user_id matches created_by of the build instead
-	/*ctx := context.Create(r)
-	sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
-	if err != nil {
-		RespondWithError(w, "Failed to check user privileges", err)
-		return
-	}
-	if !sufficientPrivileges {
-		RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusForbidden,
-			Code:    exception.InsufficientPrivileges,
-			Message: exception.InsufficientPrivilegesMsg,
-		})
-		return
-	}*/
 	exportId := getStringParam(r, "exportId")
 
-	status, result, err := e.exportService.GetAsyncExportStatus(exportId)
+	status, result, packageId, err := e.exportService.GetAsyncExportStatus(exportId)
 	if err != nil {
 		RespondWithError(w, "Failed to get publish status", err)
 		return
@@ -1273,9 +1252,25 @@ func (e exportControllerImpl) GetAsyncExportStatus(w http.ResponseWriter, r *htt
 		return
 	}
 
+	if packageId != "" { // do permissions check for sensitive data like export content. Export status is considered as non-sensitive.
+		ctx := context.Create(r)
+		sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
+		if err != nil {
+			RespondWithError(w, "Failed to check user privileges", err)
+			return
+		}
+		if !sufficientPrivileges {
+			RespondWithCustomError(w, &exception.CustomError{
+				Status:  http.StatusForbidden,
+				Code:    exception.InsufficientPrivileges,
+				Message: exception.InsufficientPrivilegesMsg,
+			})
+			return
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%v", result.FileName))
 	w.WriteHeader(http.StatusOK)
 	w.Write(result.Data)
-
 }

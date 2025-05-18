@@ -63,11 +63,13 @@ const (
 
 type ExportRequestDiscriminator struct {
 	ExportedEntity ExportedEntity `json:"exportedEntity" validate:"required"`
+	PackageId      string         `json:"packageId" validate:"required"`
+	Version        string         `json:"version" validate:"required"`
 }
 
 type ExportVersionReq struct {
 	ExportedEntity      ExportedEntity `json:"exportedEntity" validate:"required"`
-	PackageID           string         `json:"packageId" validate:"required"`
+	PackageId           string         `json:"packageId" validate:"required"`
 	Version             string         `json:"version" validate:"required"`
 	Format              string         `json:"format" validate:"required"`
 	RemoveOasExtensions bool           `json:"removeOasExtensions"`
