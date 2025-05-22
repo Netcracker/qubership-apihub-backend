@@ -1481,7 +1481,7 @@ paths:
     get:
       tags:
         - Custom
-      summary: Get system info"
+      summary: Get system info.
       description: Get system info.
       operationId: getInfo
       parameters: []
@@ -2774,6 +2774,13 @@ components:
               Title for the link and corresponding URL. Value must written in the following format <linkTitle>|<URL>. If array item does not contain vertical bar (|), then this item will be skipped.
             type: string
           example: [User guide|https://www.example.com/guide, Support team|https://www.example.com/support]
+        migrationInProgress:
+          description: Identifies if migration is currently in progress.
+          type: boolean
+          default: false
+        apiProcessorVerson:
+          description: Current version of api-processor on backend.
+          type: string
     ValidationParams:
       description: qubership product release custom API validation parameters
       properties:
