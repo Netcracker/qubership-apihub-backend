@@ -239,19 +239,19 @@ func (o oidcProvider) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if claims.Username == "" {
+	if claims.UserId == "" {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusInternalServerError,
 			Code:    exception.OIDCUserProcessingFailed,
 			Message: exception.OIDCUserProcessingFailedMsg,
-			Params:  map[string]interface{}{"error": "username is missing in OIDC claims"},
+			Params:  map[string]interface{}{"error": "user ID is missing in OIDC claims"},
 		})
 
 		return
 	}
 	if claims.Email == "" {
 		utils.RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusBadRequest,
+			Status:  http.StatusInternalServerError,
 			Code:    exception.OIDCUserProcessingFailed,
 			Message: exception.OIDCUserProcessingFailedMsg,
 			Params:  map[string]interface{}{"error": "email is missing in OIDC claims"},
@@ -260,7 +260,7 @@ func (o oidcProvider) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	oidcUser := view.User{
-		Id:    claims.Username,
+		Id:    claims.UserId,
 		Name:  claims.Name,
 		Email: claims.Email,
 	}

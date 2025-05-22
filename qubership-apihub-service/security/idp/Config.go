@@ -59,8 +59,8 @@ type OIDCConfiguration struct {
 }
 
 type OIDCClaims struct {
-	Username string `json:"preferred_username"`
-	Name     string `json:"name"`
-	Email    string `json:"email"`
-	Picture  string `json:"picture,omitempty"`
+	UserId  string `json:"sub"`
+	Name    string `json:"name"`
+	Email   string `json:"email"`
+	Picture string `json:"picture,omitempty"`
 }
