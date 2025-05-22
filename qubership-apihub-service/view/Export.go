@@ -51,8 +51,6 @@ func ValidateApiChangesExportFormat(format string) bool {
 	}
 }
 
-///////////////////////////////////////////////
-
 type ExportedEntity string
 
 const (
@@ -77,7 +75,7 @@ type ExportVersionReq struct {
 
 type ExportOASDocumentReq struct {
 	ExportedEntity      ExportedEntity `json:"exportedEntity" validate:"required"`
-	PackageID           string         `json:"packageId" validate:"required"`
+	PackageId           string         `json:"packageId" validate:"required"`
 	Version             string         `json:"version" validate:"required"`
 	DocumentID          string         `json:"documentId"  validate:"required"`
 	Format              string         `json:"format"  validate:"required"`
@@ -86,7 +84,7 @@ type ExportOASDocumentReq struct {
 
 type ExportRestOperationsGroupReq struct {
 	ExportedEntity               ExportedEntity `json:"exportedEntity" validate:"required"`
-	PackageID                    string         `json:"packageId" validate:"required"`
+	PackageId                    string         `json:"packageId" validate:"required"`
 	Version                      string         `json:"version" validate:"required"`
 	GroupName                    string         `json:"groupName" validate:"required"`
 	OperationsSpecTransformation string         `json:"operationsSpecTransformation" validate:"required"`

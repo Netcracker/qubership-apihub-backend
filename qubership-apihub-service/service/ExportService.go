@@ -61,12 +61,9 @@ func (e exportServiceImpl) StartVersionExport(ctx context.SecurityContext, req v
 		return "", err
 	}
 
-	var allowedOasExtensions *[]string
-	if req.RemoveOasExtensions {
-		allowedOasExtensions, err = e.makeAllowedOasExtensions(req.PackageId)
-		if err != nil {
-			return "", fmt.Errorf("failed to make allowed oas extensions: %w", err)
-		}
+	allowedOasExtensions, err := e.makeAllowedOasExtensions(req.RemoveOasExtensions, req.PackageId)
+	if err != nil {
+		return "", fmt.Errorf("failed to make allowed oas extensions: %w", err)
 	}
 
 	user := ctx.GetUserId()
@@ -75,12 +72,11 @@ func (e exportServiceImpl) StartVersionExport(ctx context.SecurityContext, req v
 	}
 
 	config := view.BuildConfig{
-		PackageId: req.PackageId,
-		Version:   req.Version,
-		BuildType: view.ExportVersion,
-		Format:    req.Format,
-		CreatedBy: user,
-		//ValidationRulesSeverity: view.ValidationRulesSeverity{},
+		PackageId:            req.PackageId,
+		Version:              req.Version,
+		BuildType:            view.ExportVersion,
+		Format:               req.Format,
+		CreatedBy:            user,
 		AllowedOasExtensions: allowedOasExtensions,
 	}
 
@@ -99,12 +95,9 @@ func (e exportServiceImpl) StartOASDocExport(ctx context.SecurityContext, req vi
 
 	// TODO: validate doc id?
 
-	var allowedOasExtensions *[]string
-	if req.RemoveOasExtensions {
-		allowedOasExtensions, err = e.makeAllowedOasExtensions(req.PackageID)
-		if err != nil {
-			return "", fmt.Errorf("failed to make allowed oas extensions: %w", err)
-		}
+	allowedOasExtensions, err := e.makeAllowedOasExtensions(req.RemoveOasExtensions, req.PackageId)
+	if err != nil {
+		return "", fmt.Errorf("failed to make allowed oas extensions: %w", err)
 	}
 
 	user := ctx.GetUserId()
@@ -113,7 +106,7 @@ func (e exportServiceImpl) StartOASDocExport(ctx context.SecurityContext, req vi
 	}
 
 	config := view.BuildConfig{
-		PackageId:            req.PackageID,
+		PackageId:            req.PackageId,
 		Version:              req.Version,
 		DocumentId:           req.DocumentID,
 		BuildType:            view.ExportRestDocument,
@@ -124,7 +117,7 @@ func (e exportServiceImpl) StartOASDocExport(ctx context.SecurityContext, req vi
 
 	buildId, config, err := e.buildService.CreateBuildWithoutDependencies(config, false, "")
 	if err != nil {
-		return "", fmt.Errorf("failed to create build %s: %w", req.PackageID, err)
+		return "", fmt.Errorf("failed to create build %s: %w", req.PackageId, err)
 	}
 	return buildId, nil
 }
@@ -141,17 +134,13 @@ func (e exportServiceImpl) StartRESTOpGroupExport(ctx context.SecurityContext, r
 
 	// TODO: validate groupName?
 
-	var allowedOasExtensions *[]string
-
-	if req.RemoveOasExtensions {
-		allowedOasExtensions, err = e.makeAllowedOasExtensions(req.PackageID)
-		if err != nil {
-			return "", fmt.Errorf("failed to make allowed oas extensions: %w", err)
-		}
+	allowedOasExtensions, err := e.makeAllowedOasExtensions(req.RemoveOasExtensions, req.PackageId)
+	if err != nil {
+		return "", fmt.Errorf("failed to make allowed oas extensions: %w", err)
 	}
 
 	buildConfig := view.BuildConfig{
-		PackageId:            req.PackageID,
+		PackageId:            req.PackageId,
 		Version:              req.Version,
 		BuildType:            view.ExportRestOperationsGroup,
 		CreatedBy:            ctx.GetUserId(),
@@ -168,14 +157,18 @@ func (e exportServiceImpl) StartRESTOpGroupExport(ctx context.SecurityContext, r
 	return exportId, nil
 }
 
-func (e exportServiceImpl) makeAllowedOasExtensions(packageId string) (*[]string, error) {
+func (e exportServiceImpl) makeAllowedOasExtensions(removeOasExtensions bool, packageId string) (*[]string, error) {
 	var allowedOasExtensions *[]string
+
+	if !removeOasExtensions {
+		return allowedOasExtensions, nil
+	}
 
 	config, err := e.packageExportConfigService.GetConfig(packageId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get package %s config: %w", packageId, err)
 	}
-	var aos []string
+	aos := make([]string, 0, len(config.AllowedOasExtensions))
 	for _, entry := range config.AllowedOasExtensions {
 		aos = append(aos, entry.OasExtension)
 	}

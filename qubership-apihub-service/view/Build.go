@@ -50,7 +50,7 @@ type BuildConfig struct {
 	Format                       string                  `json:"format,omitempty"`    //for operation group
 	ExternalMetadata             map[string]interface{}  `json:"externalMetadata,omitempty"`
 	ValidationRulesSeverity      ValidationRulesSeverity `json:"validationRulesSeverity,omitempty"`
-	AllowedOasExtensions         *[]string               `json:"allowedOasExtensions"`                   // for export
+	AllowedOasExtensions         *[]string               `json:"allowedOasExtensions,omitempty"`         // for export
 	DocumentId                   string                  `json:"documentId,omitempty"`                   // for export
 	OperationsSpecTransformation string                  `json:"operationsSpecTransformation,omitempty"` // for export
 }
