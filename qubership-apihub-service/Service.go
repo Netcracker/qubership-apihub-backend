@@ -718,7 +718,7 @@ func main() {
 		}
 	})
 
-	err = security.SetupGoGuardian(userService, roleService, apihubApiKeyService, personalAccessTokenService, systemInfoService, tokenRevocationService)
+	err = security.SetupGoGuardian(integrationsService, userService, roleService, apihubApiKeyService, personalAccessTokenService, systemInfoService, tokenRevocationService)
 	if err != nil {
 		log.Fatalf("Can't setup go_guardian. Error - %s", err.Error())
 	}
