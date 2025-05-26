@@ -16,7 +16,7 @@ package main
 
 import (
 	"context"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp/providers"
 	"io"
 	"net/http"
 	_ "net/http/pprof"
@@ -314,7 +314,7 @@ func main() {
 
 	tokenRevocationService := service.NewTokenRevocationService(olricProvider, systemInfoService.GetRefreshTokenDurationSec())
 
-	idpManager, err := idp.NewIDPManager(systemInfoService.GetAuthConfig())
+	idpManager, err := providers.NewIDPManager(systemInfoService.GetAuthConfig(), systemInfoService.GetAllowedHosts(), userService)
 	if err != nil {
 		log.Error("Failed to initialize external IDP: " + err.Error())
 		panic("Failed to initialize external IDP: " + err.Error())
@@ -347,7 +347,7 @@ func main() {
 	versionController := controller.NewVersionController(versionService, roleService, monitoringService, ptHandler, roleService.IsSysadm)
 	roleController := controller.NewRoleController(roleService)
 	samlAuthController := controller.NewSamlAuthController(userService, systemInfoService, idpManager) //deprecated
-	authController := controller.NewAuthController(userService, systemInfoService, idpManager)
+	authController := controller.NewAuthController(systemInfoService, idpManager)
 	userController := controller.NewUserController(userService, privateUserPackageService, roleService.IsSysadm)
 	jwtPubKeyController := controller.NewJwtPubKeyController()
 	oauthController := controller.NewOauth20Controller(integrationsService, userService, systemInfoService)
@@ -512,8 +512,9 @@ func main() {
 	r.HandleFunc("/saml/metadata", security.NoSecure(samlAuthController.ServeMetadata_deprecated)).Methods(http.MethodGet)
 
 	r.HandleFunc("/api/v1/login/sso/{idpId}", security.RefreshToken(authController.StartAuthentication)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v1/saml/{idpId}/acs", security.NoSecure(authController.AssertionConsumerHandler)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v1/saml/{idpId}/acs", security.NoSecure(authController.SAMLAssertionConsumerHandler)).Methods(http.MethodPost)
 	r.HandleFunc("/api/v1/saml/{idpId}/metadata", security.NoSecure(authController.ServeMetadata)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/oidc/{idpId}/callback", authController.OIDCCallbackHandler).Methods(http.MethodGet)
 
 	r.HandleFunc("/api/v1/logout", security.SecureJWT(logoutController.Logout)).Methods(http.MethodPost)
 
@@ -652,10 +653,10 @@ func main() {
 			r.HandleFunc("/api/internal/websocket/loadbalancer", security.Secure(branchWSController.DebugSessionsLoadBalance)).Methods(http.MethodGet)
 		}
 		r.HandleFunc("/api/internal/users/{userId}/systemRole", security.Secure(roleController.TestSetUserSystemRole)).Methods(http.MethodPost)
-		r.HandleFunc("/api/internal/users", security.NoSecure(userController.CreateInternalUser)).Methods("POST")
-		r.HandleFunc("/api/v2/auth/local", security.NoSecure(security.CreateLocalUserToken_deprecated)).Methods("POST") //deprecated
-		r.HandleFunc("/api/v3/auth/local", security.NoSecure(security.CreateLocalUserToken)).Methods("POST")
-		r.HandleFunc("/api/v3/auth/local/refresh", security.RefreshToken(utils.RedirectHandler)).Methods("GET")
+		r.HandleFunc("/api/internal/users", security.NoSecure(userController.CreateInternalUser)).Methods(http.MethodPost)
+		r.HandleFunc("/api/v2/auth/local", security.NoSecure(security.CreateLocalUserToken_deprecated)).Methods(http.MethodPost) //deprecated
+		r.HandleFunc("/api/v3/auth/local", security.NoSecure(security.CreateLocalUserToken)).Methods(http.MethodPost)
+		r.HandleFunc("/api/v3/auth/local/refresh", security.RefreshToken(utils.RedirectHandler(systemInfoService.GetAPIHubUrl()))).Methods(http.MethodGet)
 
 		r.HandleFunc("/api/internal/clear/{testId}", security.Secure(cleanupController.ClearTestData)).Methods(http.MethodDelete)
 

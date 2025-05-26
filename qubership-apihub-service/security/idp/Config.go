@@ -22,7 +22,7 @@ const (
 	IDPTypeExternal IDPType = "external"
 
 	AuthProtocolSAML AuthProtocol = "SAML"
-	//AuthProtocolOIDC AuthProtocol = "OIDC"
+	AuthProtocolOIDC AuthProtocol = "OIDC"
 )
 
 type AuthConfig struct {
@@ -39,6 +39,7 @@ type IDP struct {
 	RefreshTokenEndpoint string             `json:"refreshTokenEndpoint,omitempty"`
 	Protocol             AuthProtocol       `json:"-"`
 	SAMLConfiguration    *SAMLConfiguration `json:"-"`
+	OIDCConfiguration    *OIDCConfiguration `json:"-"`
 }
 
 type SAMLConfiguration struct {
@@ -46,4 +47,20 @@ type SAMLConfiguration struct {
 	PrivateKey     string
 	IDPMetadataURL string
 	RootURL        string
+}
+
+type OIDCConfiguration struct {
+	ClientID     string
+	ClientSecret string
+	RootURL      string
+	RedirectPath string
+	ProviderURL  string
+	Scopes       []string
+}
+
+type OIDCClaims struct {
+	UserId  string `json:"sub"`
+	Name    string `json:"name"`
+	Email   string `json:"email"`
+	Picture string `json:"picture,omitempty"`
 }

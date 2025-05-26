@@ -23,7 +23,6 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
@@ -39,6 +38,7 @@ type Oauth20Controller interface {
 }
 
 func NewOauth20Controller(integrationService service.IntegrationsService, userService service.UserService, systemInfoService service.SystemInfoService) Oauth20Controller {
+	apihubURL, _ := url.Parse(systemInfoService.GetAPIHubUrl())
 	return &oauth20ControllerImpl{
 		integrationService: integrationService,
 		userService:        userService,
@@ -46,6 +46,7 @@ func NewOauth20Controller(integrationService service.IntegrationsService, userSe
 		clientId:           systemInfoService.GetClientID(),
 		clientSecret:       systemInfoService.GetClientSecret(),
 		gitlabUrl:          systemInfoService.GetGitlabUrl(),
+		apihubHost:         apihubURL.Hostname(),
 	}
 }
 
@@ -56,6 +57,7 @@ type oauth20ControllerImpl struct {
 	clientId           string
 	clientSecret       string
 	gitlabUrl          string
+	apihubHost         string
 }
 
 type GitlabUserInfo struct {
@@ -84,19 +86,12 @@ func (o oauth20ControllerImpl) GitlabOauthCallback(w http.ResponseWriter, r *htt
 		redirectUri = "/"
 	} else {
 		url, _ := url.Parse(redirectUri)
-		var validHost bool
-		for _, host := range o.systemInfoService.GetAllowedHosts() {
-			if strings.Contains(url.Host, host) {
-				validHost = true
-				break
-			}
-		}
-		if !validHost {
+		if url.Hostname() != o.apihubHost {
 			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.HostNotAllowed,
 				Message: exception.HostNotAllowedMsg,
-				Params:  map[string]interface{}{"host": redirectUri},
+				Params:  map[string]interface{}{"host": url.Hostname()},
 			})
 			return
 		}
@@ -195,19 +190,12 @@ func (o oauth20ControllerImpl) StartOauthProcessWithGitlab(w http.ResponseWriter
 		redirectUri = "/"
 	} else {
 		url, _ := url.Parse(redirectUri)
-		var validHost bool
-		for _, host := range o.systemInfoService.GetAllowedHosts() {
-			if strings.Contains(url.Host, host) {
-				validHost = true
-				break
-			}
-		}
-		if !validHost {
+		if url.Hostname() != o.apihubHost {
 			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.HostNotAllowed,
 				Message: exception.HostNotAllowedMsg,
-				Params:  map[string]interface{}{"host": redirectUri},
+				Params:  map[string]interface{}{"host": url.Hostname()},
 			})
 			return
 		}
