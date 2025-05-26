@@ -70,14 +70,37 @@ func IsHostValid(url *url.URL, allowedHosts []string) *exception.CustomError {
 	return nil
 }
 
-func RedirectHandler(w http.ResponseWriter, r *http.Request) {
-	redirectURI := r.URL.Query().Get("redirectUri")
-	if redirectURI == "" {
-		redirectURI = "/"
-	}
-	log.Debugf("redirect url - %s", redirectURI)
+func RedirectHandler(apihubURLStr string) http.HandlerFunc {
+	apihubURL, _ := url.Parse(apihubURLStr)
+	return func(w http.ResponseWriter, r *http.Request) {
+		redirectURI := r.URL.Query().Get("redirectUri")
+		if redirectURI == "" {
+			redirectURI = "/"
+		}
+		log.Debugf("redirect url - %s", redirectURI)
+		redirectUrl, err := url.Parse(redirectURI)
+		if err != nil {
+			RespondWithCustomError(w, &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.IncorrectRedirectUrlError,
+				Message: exception.IncorrectRedirectUrlErrorMsg,
+				Params:  map[string]interface{}{"url": redirectUrl, "error": err.Error()},
+			})
+			return
+		}
 
-	http.Redirect(w, r, redirectURI, http.StatusFound)
+		if redirectUrl.Hostname() != apihubURL.Hostname() {
+			RespondWithCustomError(w, &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.HostNotAllowed,
+				Message: exception.HostNotAllowedMsg,
+				Params:  map[string]interface{}{"host": redirectUrl.Hostname()},
+			})
+			return
+		}
+
+		http.Redirect(w, r, redirectURI, http.StatusFound)
+	}
 }
 
 func RespondWithError(w http.ResponseWriter, msg string, err error) {

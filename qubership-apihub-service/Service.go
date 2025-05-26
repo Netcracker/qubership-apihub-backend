@@ -656,7 +656,7 @@ func main() {
 		r.HandleFunc("/api/internal/users", security.NoSecure(userController.CreateInternalUser)).Methods(http.MethodPost)
 		r.HandleFunc("/api/v2/auth/local", security.NoSecure(security.CreateLocalUserToken_deprecated)).Methods(http.MethodPost) //deprecated
 		r.HandleFunc("/api/v3/auth/local", security.NoSecure(security.CreateLocalUserToken)).Methods(http.MethodPost)
-		r.HandleFunc("/api/v3/auth/local/refresh", security.RefreshToken(utils.RedirectHandler)).Methods(http.MethodGet)
+		r.HandleFunc("/api/v3/auth/local/refresh", security.RefreshToken(utils.RedirectHandler(systemInfoService.GetAPIHubUrl()))).Methods(http.MethodGet)
 
 		r.HandleFunc("/api/internal/clear/{testId}", security.Secure(cleanupController.ClearTestData)).Methods(http.MethodDelete)
 
