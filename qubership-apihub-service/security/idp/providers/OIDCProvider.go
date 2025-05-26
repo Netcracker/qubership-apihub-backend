@@ -46,9 +46,10 @@ type oidcProvider struct {
 	oAuth2Config oauth2.Config
 	userService  service.UserService
 	allowedHosts []string
+	apihubHost   string
 }
 
-func newOIDCProvider(config idp.IDP, provider *oidc.Provider, verifier *oidc.IDTokenVerifier, oAuth2Config oauth2.Config, userService service.UserService, allowedHosts []string) idp.Provider {
+func newOIDCProvider(config idp.IDP, provider *oidc.Provider, verifier *oidc.IDTokenVerifier, oAuth2Config oauth2.Config, userService service.UserService, allowedHosts []string, apihubHost string) idp.Provider {
 	return &oidcProvider{
 		config:       config,
 		provider:     provider,
@@ -56,6 +57,7 @@ func newOIDCProvider(config idp.IDP, provider *oidc.Provider, verifier *oidc.IDT
 		oAuth2Config: oAuth2Config,
 		userService:  userService,
 		allowedHosts: allowedHosts,
+		apihubHost:   apihubHost,
 	}
 }
 
@@ -75,8 +77,13 @@ func (o oidcProvider) StartAuthentication(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err := utils.IsHostValid(redirectUrl, o.allowedHosts); err != nil {
-		utils.RespondWithCustomError(w, err)
+	if redirectUrl.Hostname() != o.apihubHost {
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.HostNotAllowed,
+			Message: exception.HostNotAllowedMsg,
+			Params:  map[string]interface{}{"host": redirectUrl.Hostname()},
+		})
 		return
 	}
 

@@ -747,17 +747,17 @@ const IncorrectOASExtensionsMsg = "OAS extension is required to be have 'x-' pre
 const DuplicateOASExtensionsNotAllowed = "7102"
 const DuplicateOASExtensionsNotAllowedMsg = "Duplicate OAS extension not allowed: $duplicates"
 
-const ExternalIDPNotFound = "7201"
+const ExternalIDPNotFound = "7200"
 const ExternalIDPNotFoundMsg = "External IDP with id '$id' not found"
 
-const OIDCAuthenticationFailed = "7301"
+const OIDCAuthenticationFailed = "7300"
 const OIDCAuthenticationFailedMsg = "Failed to start OIDC authentication flow: $error"
 
-const OIDCCallbackFailed = "7302"
+const OIDCCallbackFailed = "7301"
 const OIDCCallbackFailedMsg = "OIDC callback processing failed: $error"
 
-const OIDCTokenProcessingFailed = "7303"
+const OIDCTokenProcessingFailed = "7302"
 const OIDCTokenProcessingFailedMsg = "OIDC token processing failed: $error"
 
-const OIDCUserProcessingFailed = "7304"
+const OIDCUserProcessingFailed = "7303"
 const OIDCUserProcessingFailedMsg = "OIDC user processing failed: $error"

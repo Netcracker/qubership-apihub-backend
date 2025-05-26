@@ -27,6 +27,7 @@ import (
 	"github.com/crewjam/saml/samlsp"
 	log "github.com/sirupsen/logrus"
 	"net/http"
+	"net/url"
 )
 
 type SamlAuthController interface {
@@ -44,10 +45,12 @@ func NewSamlAuthController(userService service.UserService, systemInfoService se
 			break
 		}
 	}
+	apihubURL, _ := url.Parse(systemInfoService.GetAPIHubUrl())
 	return &authenticationControllerImpl{
 		samlInstance:      samlInstance,
 		userService:       userService,
 		systemInfoService: systemInfoService,
+		apihubHost:        apihubURL.Hostname(),
 	}
 }
 
@@ -55,6 +58,7 @@ type authenticationControllerImpl struct {
 	samlInstance      *samlsp.Middleware
 	userService       service.UserService
 	systemInfoService service.SystemInfoService
+	apihubHost        string
 }
 
 func (a *authenticationControllerImpl) ServeMetadata_deprecated(w http.ResponseWriter, r *http.Request) {
@@ -63,12 +67,12 @@ func (a *authenticationControllerImpl) ServeMetadata_deprecated(w http.ResponseW
 
 // StartSamlAuthentication_deprecated Frontend calls this endpoint to SSO login user via SAML (legacy auth)
 func (a *authenticationControllerImpl) StartSamlAuthentication_deprecated(w http.ResponseWriter, r *http.Request) {
-	providers.StartSAMLAuthentication(w, r, a.samlInstance, a.systemInfoService.GetAllowedHosts())
+	providers.StartSAMLAuthentication(w, r, a.samlInstance, a.apihubHost)
 }
 
 // AssertionConsumerHandler_deprecated This endpoint is called by ADFS when auth procedure is complete on it's side. ADFS posts the response here. (legacy auth)
 func (a *authenticationControllerImpl) AssertionConsumerHandler_deprecated(w http.ResponseWriter, r *http.Request) {
-	providers.HandleAssertion(w, r, a.userService, a.samlInstance, "", a.systemInfoService.GetAllowedHosts(), a.setUserViewCookie)
+	providers.HandleAssertion(w, r, a.userService, a.samlInstance, "", a.apihubHost, a.setUserViewCookie)
 }
 
 func (a *authenticationControllerImpl) setUserViewCookie(w http.ResponseWriter, user *view.User, idpId string) error {

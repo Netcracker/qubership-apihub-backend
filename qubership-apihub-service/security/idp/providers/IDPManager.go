@@ -46,7 +46,7 @@ func NewIDPManager(authConfig idp.AuthConfig, allowedHosts []string, userService
 				log.Debugf("SAML provider with id %s already exists", provider.Id)
 				continue
 			}
-			samlProvider, err := idpManager.createSAMLProvider(provider, userService, allowedHosts)
+			samlProvider, err := idpManager.createSAMLProvider(provider, userService)
 			if err != nil {
 				return nil, err
 			}
@@ -84,12 +84,13 @@ func (i *idpManagerImpl) IsSSOIntegrationEnabled() bool {
 	return len(i.config.Providers) > 0
 }
 
-func (i *idpManagerImpl) createSAMLProvider(idpConfig idp.IDP, userService service.UserService, allowedHosts []string) (idp.Provider, error) {
+func (i *idpManagerImpl) createSAMLProvider(idpConfig idp.IDP, userService service.UserService) (idp.Provider, error) {
 	samlInstance, err := CreateSAMLInstance(idpConfig.Id, idpConfig.SAMLConfiguration)
 	if err != nil {
 		return nil, err
 	}
-	return newSAMLProvider(samlInstance, idpConfig, userService, allowedHosts), nil
+	rootURL, _ := url.Parse(idpConfig.SAMLConfiguration.RootURL)
+	return newSAMLProvider(samlInstance, idpConfig, userService, rootURL.Hostname()), nil
 }
 
 func (i *idpManagerImpl) createOIDCProvider(idpConfig idp.IDP, userService service.UserService, allowedHosts []string) (idp.Provider, error) {
@@ -105,6 +106,12 @@ func (i *idpManagerImpl) createOIDCProvider(idpConfig idp.IDP, userService servi
 		return nil, err
 	}
 
+	rootURL, err := url.Parse(idpConfig.OIDCConfiguration.RootURL)
+	if err != nil {
+		log.Errorf("rootURL error - %s", err)
+		return nil, err
+	}
+
 	oidcConfig := oauth2.Config{
 		ClientID:     idpConfig.OIDCConfiguration.ClientID,
 		ClientSecret: idpConfig.OIDCConfiguration.ClientSecret,
@@ -114,7 +121,7 @@ func (i *idpManagerImpl) createOIDCProvider(idpConfig idp.IDP, userService servi
 	}
 
 	verifier := provider.Verifier(&oidc.Config{ClientID: idpConfig.OIDCConfiguration.ClientID})
-	return newOIDCProvider(idpConfig, provider, verifier, oidcConfig, userService, allowedHosts), nil
+	return newOIDCProvider(idpConfig, provider, verifier, oidcConfig, userService, allowedHosts, rootURL.Hostname()), nil
 }
 
 func CreateSAMLInstance(idpId string, samlConfig *idp.SAMLConfiguration) (*samlsp.Middleware, error) {

@@ -44,31 +44,31 @@ type samlProvider struct {
 	samlInstance *samlsp.Middleware
 	config       idp.IDP
 	userService  service.UserService
-	allowedHosts []string
+	apihubHost   string
 }
 
-func newSAMLProvider(samlInstance *samlsp.Middleware, config idp.IDP, userService service.UserService, allowedHosts []string) idp.Provider {
+func newSAMLProvider(samlInstance *samlsp.Middleware, config idp.IDP, userService service.UserService, apihubHost string) idp.Provider {
 	return &samlProvider{
 		samlInstance: samlInstance,
 		config:       config,
 		userService:  userService,
-		allowedHosts: allowedHosts,
+		apihubHost:   apihubHost,
 	}
 }
 
 func (s samlProvider) StartAuthentication(w http.ResponseWriter, r *http.Request) {
-	StartSAMLAuthentication(w, r, s.samlInstance, s.allowedHosts)
+	StartSAMLAuthentication(w, r, s.samlInstance, s.apihubHost)
 }
 
 func (s samlProvider) CallbackHandler(w http.ResponseWriter, r *http.Request) {
-	HandleAssertion(w, r, s.userService, s.samlInstance, s.config.Id, s.allowedHosts, security.SetAuthTokenCookies)
+	HandleAssertion(w, r, s.userService, s.samlInstance, s.config.Id, s.apihubHost, security.SetAuthTokenCookies)
 }
 
 func (s samlProvider) ServeMetadata(w http.ResponseWriter, r *http.Request) {
 	ServeMetadata(w, r, s.samlInstance)
 }
 
-func StartSAMLAuthentication(w http.ResponseWriter, r *http.Request, samlInstance *samlsp.Middleware, allowedHosts []string) {
+func StartSAMLAuthentication(w http.ResponseWriter, r *http.Request, samlInstance *samlsp.Middleware, apihubHost string) {
 	if samlInstance == nil {
 		log.Errorf("Cannot StartSamlAuthentication with nil samlInstance")
 		utils.RespondWithCustomError(w, &exception.CustomError{
@@ -94,8 +94,13 @@ func StartSAMLAuthentication(w http.ResponseWriter, r *http.Request, samlInstanc
 		return
 	}
 
-	if err := utils.IsHostValid(redirectUrl, allowedHosts); err != nil {
-		utils.RespondWithCustomError(w, err)
+	if redirectUrl.Hostname() != apihubHost {
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.HostNotAllowed,
+			Message: exception.HostNotAllowedMsg,
+			Params:  map[string]interface{}{"host": redirectUrl.Hostname()},
+		})
 		return
 	}
 
@@ -110,7 +115,7 @@ func StartSAMLAuthentication(w http.ResponseWriter, r *http.Request, samlInstanc
 	samlInstance.HandleStartAuthFlow(w, r)
 }
 
-func HandleAssertion(w http.ResponseWriter, r *http.Request, userService service.UserService, samlInstance *samlsp.Middleware, providerId string, allowedHosts []string, setAuthCookie func(w http.ResponseWriter, user *view.User, refreshTokenPath string) error) {
+func HandleAssertion(w http.ResponseWriter, r *http.Request, userService service.UserService, samlInstance *samlsp.Middleware, providerId string, apihubHost string, setAuthCookie func(w http.ResponseWriter, user *view.User, refreshTokenPath string) error) {
 	if samlInstance == nil {
 		log.Errorf("Cannot run AssertionConsumerHandler with nill samlInstanse")
 		utils.RespondWithCustomError(w, &exception.CustomError{
@@ -194,8 +199,13 @@ func HandleAssertion(w http.ResponseWriter, r *http.Request, userService service
 					return
 				}
 
-				if err := utils.IsHostValid(redirectUrl, allowedHosts); err != nil {
-					utils.RespondWithCustomError(w, err)
+				if redirectUrl.Hostname() != apihubHost {
+					utils.RespondWithCustomError(w, &exception.CustomError{
+						Status:  http.StatusBadRequest,
+						Code:    exception.HostNotAllowed,
+						Message: exception.HostNotAllowedMsg,
+						Params:  map[string]interface{}{"host": redirectUrl.Hostname()},
+					})
 					return
 				}
 				redirectURI = uri
