@@ -337,9 +337,9 @@ func (b branchServiceImpl) getBranchContentFromRepositoyArchive(ctx goctx.Contex
 	//validation was added based on security scan results to avoid resource exhaustion
 	if len(zipReader.File) > maxZipArchiveFiles {
 		return nil, &exception.CustomError{
-			Status:  http.StatusUnprocessableEntity,
+			Status:  http.StatusBadRequest,
 			Code:    exception.FilesLimitExceeded,
-			Message: exception.ArchiveFilesLimitExceededMsg,
+			Message: exception.BranchFilesLimitExceededMsg,
 			Params:  map[string]interface{}{"maxFiles": maxZipArchiveFiles},
 		}
 	}

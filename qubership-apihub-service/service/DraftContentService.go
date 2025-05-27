@@ -114,9 +114,9 @@ func (c draftContentServiceImpl) CreateDraftContentWithData(ctx context.Security
 	//validation was added based on security scan results to avoid resource exhaustion
 	if len(branch.Files) > maxFilesLimit {
 		return nil, &exception.CustomError{
-			Status:  http.StatusUnprocessableEntity,
+			Status:  http.StatusBadRequest,
 			Code:    exception.FilesLimitExceeded,
-			Message: exception.FilesLimitExceededMsg,
+			Message: exception.BranchFilesLimitExceededMsg,
 			Params:  map[string]interface{}{"maxFiles": maxFilesLimit},
 		}
 	}

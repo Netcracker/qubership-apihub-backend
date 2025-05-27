@@ -750,8 +750,8 @@ const DuplicateOASExtensionsNotAllowed = "7102"
 const DuplicateOASExtensionsNotAllowedMsg = "Duplicate OAS extension not allowed: $duplicates"
 
 const FilesLimitExceeded = "7400"
-const ArchiveFilesLimitExceededMsg = "Archive contains too many files. Maximum allowed number of files is $maxFiles"
 const FilesLimitExceededMsg = "Files limit exceeded. Maximum allowed number of files is $maxFiles"
+const BranchFilesLimitExceededMsg = "Branch contains too many files. Maximum allowed number of files is $maxFiles"
 
 const HeadersLimitExceeded = "7401"
 const HeadersLimitExceededMsg = "HTTP headers limit exceeded. Maximum allowed number of headers is $maxHeaders"

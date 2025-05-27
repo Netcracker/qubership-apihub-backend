@@ -131,14 +131,20 @@ func IsAcceptableAlias(alias string) bool {
 	return alias == url.QueryEscape(alias) && !strings.Contains(alias, ".")
 }
 
-func getListFromParam(r *http.Request, param string) ([]string, error) {
+func getListFromParam(r *http.Request, param string) ([]string, *exception.CustomError) {
 	paramStr := r.URL.Query().Get(param)
 	if paramStr == "" {
 		return []string{}, nil
 	}
 	listStr, err := url.QueryUnescape(paramStr)
 	if err != nil {
-		return nil, err
+		return nil, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidURLEscape,
+			Message: exception.InvalidURLEscapeMsg,
+			Params:  map[string]interface{}{"param": param},
+			Debug:   err.Error(),
+		}
 	}
 	//validations were added based on security scan results to avoid resource exhaustion
 	if len(paramStr) > maxParamLen {
