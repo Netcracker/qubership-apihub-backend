@@ -91,6 +91,8 @@ const (
 	OIDC_CLIENT_SECRET                     = "OIDC_CLIENT_SECRET"
 	EXTERNAL_OIDC_IDP_DISPLAY_NAME         = "EXTERNAL_OIDC_IDP_DISPLAY_NAME"
 	EXTERNAL_OIDC_IDP_IMAGE_SVG            = "EXTERNAL_OIDC_IDP_IMAGE_SVG"
+	GIT_BRANCH                             = "GIT_BRANCH"
+	GIT_HASH                               = "GIT_HASH"
 
 	LocalIDPId             = "local-idp"
 	ExternalSAMLProviderId = "external-saml-idp"
@@ -298,7 +300,12 @@ func (g systemInfoServiceImpl) setProductionMode() error {
 func (g systemInfoServiceImpl) setBackendVersion() {
 	version := os.Getenv(ARTIFACT_DESCRIPTOR_VERSION)
 	if version == "" {
-		version = "unknown"
+		gitBranch := os.Getenv(GIT_BRANCH)
+		gitHash := os.Getenv(GIT_HASH)
+		version = gitBranch + "." + gitHash
+		if version == "" {
+			version = "unknown"
+		}
 	}
 	g.systemInfoMap[ARTIFACT_DESCRIPTOR_VERSION] = version
 }
