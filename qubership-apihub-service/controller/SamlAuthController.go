@@ -92,10 +92,14 @@ func (a *authenticationControllerImpl) setUserViewCookie(w http.ResponseWriter, 
 		Name:     "userView",
 		Value:    cookieValue,
 		MaxAge:   a.systemInfoService.GetRefreshTokenDurationSec(),
-		Secure:   true,
+		Secure:   a.systemInfoService.IsProductionMode(),
 		HttpOnly: false,
 		Path:     "/",
 	})
+	//TODO: remove after IDP reconfiguration
+	if a.systemInfoService.IsLegacySAML() {
+		security.SetAuthTokenCookies(w, user, "/login/sso/saml")
+	}
 	log.Debugf("Auth user result object: %+v", userView)
 
 	return nil

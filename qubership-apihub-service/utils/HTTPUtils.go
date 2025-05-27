@@ -24,14 +24,14 @@ import (
 	"time"
 )
 
-func DeleteCookie(w http.ResponseWriter, name string, path string) {
+func DeleteCookie(w http.ResponseWriter, name string, path string, productionMode bool) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     name,
 		Value:    "",
 		MaxAge:   -1,
 		Expires:  time.Unix(0, 0),
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   productionMode,
 		Path:     path,
 	})
 }

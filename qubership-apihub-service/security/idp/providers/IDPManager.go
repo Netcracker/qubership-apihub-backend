@@ -35,7 +35,7 @@ import (
 	"time"
 )
 
-func NewIDPManager(authConfig idp.AuthConfig, allowedHosts []string, userService service.UserService) (idp.Manager, error) {
+func NewIDPManager(authConfig idp.AuthConfig, allowedHosts []string, productionMode bool, userService service.UserService) (idp.Manager, error) {
 	idpManager := idpManagerImpl{
 		config:    authConfig,
 		providers: make(map[string]idp.Provider),
@@ -56,7 +56,7 @@ func NewIDPManager(authConfig idp.AuthConfig, allowedHosts []string, userService
 				log.Debugf("OIDC provider with id %s already exists", provider.Id)
 				continue
 			}
-			oidcProvider, err := idpManager.createOIDCProvider(provider, userService, allowedHosts)
+			oidcProvider, err := idpManager.createOIDCProvider(provider, userService, allowedHosts, productionMode)
 			if err != nil {
 				return nil, err
 			}
@@ -93,7 +93,7 @@ func (i *idpManagerImpl) createSAMLProvider(idpConfig idp.IDP, userService servi
 	return newSAMLProvider(samlInstance, idpConfig, userService, rootURL.Hostname()), nil
 }
 
-func (i *idpManagerImpl) createOIDCProvider(idpConfig idp.IDP, userService service.UserService, allowedHosts []string) (idp.Provider, error) {
+func (i *idpManagerImpl) createOIDCProvider(idpConfig idp.IDP, userService service.UserService, allowedHosts []string, productionMode bool) (idp.Provider, error) {
 	if idpConfig.OIDCConfiguration == nil {
 		log.Error("OIDC configuration is invalid")
 		return nil, fmt.Errorf("OIDC configuration is invalid")
@@ -121,7 +121,7 @@ func (i *idpManagerImpl) createOIDCProvider(idpConfig idp.IDP, userService servi
 	}
 
 	verifier := provider.Verifier(&oidc.Config{ClientID: idpConfig.OIDCConfiguration.ClientID})
-	return newOIDCProvider(idpConfig, provider, verifier, oidcConfig, userService, allowedHosts, rootURL.Hostname()), nil
+	return newOIDCProvider(idpConfig, provider, verifier, oidcConfig, userService, allowedHosts, rootURL.Hostname(), productionMode), nil
 }
 
 func CreateSAMLInstance(idpId string, samlConfig *idp.SAMLConfiguration) (*samlsp.Middleware, error) {

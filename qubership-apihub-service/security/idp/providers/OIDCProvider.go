@@ -40,24 +40,26 @@ import (
 const SSOLoginRefreshPathTemplate = "/api/v1/login/sso/%s"
 
 type oidcProvider struct {
-	config       idp.IDP
-	provider     *oidc.Provider
-	verifier     *oidc.IDTokenVerifier
-	oAuth2Config oauth2.Config
-	userService  service.UserService
-	allowedHosts []string
-	apihubHost   string
+	config         idp.IDP
+	provider       *oidc.Provider
+	verifier       *oidc.IDTokenVerifier
+	oAuth2Config   oauth2.Config
+	userService    service.UserService
+	allowedHosts   []string
+	apihubHost     string
+	productionMode bool
 }
 
-func newOIDCProvider(config idp.IDP, provider *oidc.Provider, verifier *oidc.IDTokenVerifier, oAuth2Config oauth2.Config, userService service.UserService, allowedHosts []string, apihubHost string) idp.Provider {
+func newOIDCProvider(config idp.IDP, provider *oidc.Provider, verifier *oidc.IDTokenVerifier, oAuth2Config oauth2.Config, userService service.UserService, allowedHosts []string, apihubHost string, productionMode bool) idp.Provider {
 	return &oidcProvider{
-		config:       config,
-		provider:     provider,
-		verifier:     verifier,
-		oAuth2Config: oAuth2Config,
-		userService:  userService,
-		allowedHosts: allowedHosts,
-		apihubHost:   apihubHost,
+		config:         config,
+		provider:       provider,
+		verifier:       verifier,
+		oAuth2Config:   oAuth2Config,
+		userService:    userService,
+		allowedHosts:   allowedHosts,
+		apihubHost:     apihubHost,
+		productionMode: productionMode,
 	}
 }
 
@@ -187,10 +189,10 @@ func (o oidcProvider) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		log.Warnf("Redirect cookie not found, using default: %v", err)
 	}
 
-	utils.DeleteCookie(w, "oidc_state_"+o.config.Id, o.config.OIDCConfiguration.RedirectPath)
-	utils.DeleteCookie(w, "oidc_nonce_"+o.config.Id, o.config.OIDCConfiguration.RedirectPath)
-	utils.DeleteCookie(w, "oidc_code_verifier_"+o.config.Id, o.config.OIDCConfiguration.RedirectPath)
-	utils.DeleteCookie(w, "oidc_redirect_"+o.config.Id, o.config.OIDCConfiguration.RedirectPath)
+	utils.DeleteCookie(w, "oidc_state_"+o.config.Id, o.config.OIDCConfiguration.RedirectPath, o.productionMode)
+	utils.DeleteCookie(w, "oidc_nonce_"+o.config.Id, o.config.OIDCConfiguration.RedirectPath, o.productionMode)
+	utils.DeleteCookie(w, "oidc_code_verifier_"+o.config.Id, o.config.OIDCConfiguration.RedirectPath, o.productionMode)
+	utils.DeleteCookie(w, "oidc_redirect_"+o.config.Id, o.config.OIDCConfiguration.RedirectPath, o.productionMode)
 
 	oauth2Token, err := o.oAuth2Config.Exchange(r.Context(), r.URL.Query().Get("code"), oauth2.VerifierOption(codeVerifier))
 	if err != nil {
@@ -356,7 +358,7 @@ func (o oidcProvider) setCallbackCookie(w http.ResponseWriter, name, value strin
 		Name:     name,
 		Value:    value,
 		MaxAge:   int(time.Hour.Seconds()),
-		Secure:   true,
+		Secure:   o.productionMode,
 		HttpOnly: true,
 		Path:     o.config.OIDCConfiguration.RedirectPath,
 	}

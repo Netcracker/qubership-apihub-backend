@@ -249,7 +249,7 @@ func RefreshToken(next http.HandlerFunc) http.HandlerFunc {
 				Name:     AccessTokenCookieName,
 				Value:    user.GetExtensions().Get(SetAccessTokenCookieExt),
 				MaxAge:   int(accessTokenDuration.Seconds()),
-				Secure:   true,
+				Secure:   productionMode,
 				HttpOnly: true,
 				Path:     "/",
 			})

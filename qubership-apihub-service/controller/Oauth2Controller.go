@@ -177,7 +177,7 @@ func (o oauth20ControllerImpl) GitlabOauthCallback(w http.ResponseWriter, r *htt
 		Name:     "userView",
 		Value:    cookieValue,
 		MaxAge:   int((time.Hour * 12).Seconds()),
-		Secure:   true,
+		Secure:   o.systemInfoService.IsProductionMode(),
 		HttpOnly: false,
 		Path:     "/",
 	})

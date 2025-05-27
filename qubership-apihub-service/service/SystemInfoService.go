@@ -93,6 +93,7 @@ const (
 	EXTERNAL_OIDC_IDP_IMAGE_SVG            = "EXTERNAL_OIDC_IDP_IMAGE_SVG"
 	GIT_BRANCH                             = "GIT_BRANCH"
 	GIT_HASH                               = "GIT_HASH"
+	LEGACY_SAML                            = "LEGACY_SAML"
 
 	LocalIDPId             = "local-idp"
 	ExternalSAMLProviderId = "external-saml-idp"
@@ -153,6 +154,7 @@ type SystemInfoService interface {
 	FailBuildOnBrokenRefs() bool
 	GetAccessTokenDurationSec() int
 	GetRefreshTokenDurationSec() int
+	IsLegacySAML() bool
 	GetAuthConfig() idp.AuthConfig
 }
 
@@ -258,6 +260,7 @@ func (g systemInfoServiceImpl) Init() error {
 	g.setFailBuildOnBrokenRefs()
 	g.setAccessTokenDurationSec()
 	g.setRefreshTokenDurationSec()
+	g.setLegacySAML()
 	if err = g.setAuthConfig(); err != nil {
 		return err
 	}
@@ -889,6 +892,20 @@ func (g systemInfoServiceImpl) GetRefreshTokenDurationSec() int {
 	return g.systemInfoMap[REFRESH_TOKEN_DURATION_SEC].(int)
 }
 
+func (g systemInfoServiceImpl) setLegacySAML() {
+	envVal := os.Getenv(LEGACY_SAML)
+	legacySAML, err := strconv.ParseBool(envVal)
+	if err != nil {
+		log.Infof("environment variable %v has invalid value, using true value instead", LEGACY_SAML)
+		legacySAML = true
+	}
+	g.systemInfoMap[LEGACY_SAML] = legacySAML
+}
+
+func (g systemInfoServiceImpl) IsLegacySAML() bool {
+	return g.systemInfoMap[LEGACY_SAML].(bool)
+}
+
 // all IDP initialization should be done in this method only
 func (g systemInfoServiceImpl) setAuthConfig() error {
 	var authConfig idp.AuthConfig
@@ -910,12 +927,17 @@ func (g systemInfoServiceImpl) setAuthConfig() error {
 		return err
 	}
 	if samlConfig != nil {
+		loginStartEndpoint := "/api/v1/login/sso/" + ExternalSAMLProviderId
+		//TODO: remove after IDP reconfiguration
+		if g.IsLegacySAML() {
+			loginStartEndpoint = "/login/sso/saml"
+		}
 		externalIDP := idp.IDP{
 			Id:                 ExternalSAMLProviderId,
 			IdpType:            idp.IDPTypeExternal,
 			DisplayName:        os.Getenv(EXTERNAL_SAML_IDP_DISPLAY_NAME),
 			ImageSvg:           os.Getenv(EXTERNAL_SAML_IDP_IMAGE_SVG),
-			LoginStartEndpoint: "/api/v1/login/sso/" + ExternalSAMLProviderId,
+			LoginStartEndpoint: loginStartEndpoint,
 			Protocol:           idp.AuthProtocolSAML,
 			SAMLConfiguration:  samlConfig,
 		}

@@ -50,6 +50,7 @@ var roleService service.RoleService
 
 var accessTokenDuration time.Duration
 var refreshTokenDuration time.Duration
+var productionMode bool
 
 var publicKey []byte
 
@@ -63,6 +64,7 @@ func SetupGoGuardian(intService service.IntegrationsService, userServiceLocal se
 	personalAccessTokenStrategy := NewApihubPATStrategy(patService)
 	accessTokenDuration = time.Second * time.Duration(systemInfoService.GetAccessTokenDurationSec())
 	refreshTokenDuration = time.Second * time.Duration(systemInfoService.GetRefreshTokenDurationSec())
+	productionMode = systemInfoService.IsProductionMode()
 
 	block, _ := pem.Decode(systemInfoService.GetJwtPrivateKey())
 	pkcs8PrivateKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
@@ -170,7 +172,7 @@ func SetAuthTokenCookies(w http.ResponseWriter, user *view.User, refreshTokenPat
 		Name:     AccessTokenCookieName,
 		Value:    accessToken,
 		MaxAge:   int(accessTokenDuration.Seconds()),
-		Secure:   true,
+		Secure:   productionMode,
 		HttpOnly: true,
 		Path:     "/",
 	})
@@ -178,7 +180,7 @@ func SetAuthTokenCookies(w http.ResponseWriter, user *view.User, refreshTokenPat
 		Name:     RefreshTokenCookieName,
 		Value:    refreshToken,
 		MaxAge:   int(refreshTokenDuration.Seconds()),
-		Secure:   true,
+		Secure:   productionMode,
 		HttpOnly: true,
 		Path:     refreshTokenPath,
 	})

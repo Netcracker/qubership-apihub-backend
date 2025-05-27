@@ -37,12 +37,13 @@ func NewLogoutController(tokenRevocationService service.TokenRevocationService, 
 		}
 	}
 
-	return &logoutControllerImpl{tokenRevocationService: tokenRevocationService, refreshTokenPaths: refreshTokenPaths}
+	return &logoutControllerImpl{tokenRevocationService: tokenRevocationService, refreshTokenPaths: refreshTokenPaths, productionMode: systemInfoService.IsProductionMode()}
 }
 
 type logoutControllerImpl struct {
 	tokenRevocationService service.TokenRevocationService
 	refreshTokenPaths      []string
+	productionMode         bool
 }
 
 func (l *logoutControllerImpl) Logout(w http.ResponseWriter, r *http.Request) {
@@ -53,11 +54,11 @@ func (l *logoutControllerImpl) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.DeleteCookie(w, security.AccessTokenCookieName, "/")
+	utils.DeleteCookie(w, security.AccessTokenCookieName, "/", l.productionMode)
 
 	// Clear refresh token cookie
 	for _, path := range l.refreshTokenPaths {
-		utils.DeleteCookie(w, security.RefreshTokenCookieName, path)
+		utils.DeleteCookie(w, security.RefreshTokenCookieName, path, l.productionMode)
 	}
 
 	w.WriteHeader(http.StatusNoContent)
