@@ -75,18 +75,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: 
-                  - autoRedirect
-                properties:
-                  ssoIntegrationEnabled:
-                    type: boolean
-                  autoRedirect:
-                    type: boolean
-                  defaultWorkspaceId:
-                    description: Id of the workspace, which is used by default while working with the system.
-                    type: string
-                    example: WSPACE1
+                $ref: "#/components/schemas/SystemConfiguration"
         "500":
           description: Internal Server Error
           content:
@@ -96,6 +85,64 @@ paths:
               examples:
                 InternalServerError:
                   $ref: "#/components/examples/InternalServerError"
+    patch:
+      tags:
+        - Auth
+        - Admin
+      summary: Update global system configuration parameters
+      description: >
+        Update global system configuration parameters.
+        * Only parameters included in the request body will be updated.
+        * If a parameter is omitted, its value remains unchanged.
+      operationId: patchSystemConfiguration
+      security:
+        - BearerAuth: []
+        - api-key: []
+      requestBody:
+        description: Parameters to update in system configuration
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                versionNamePattern:
+                  type: string
+                  description: >
+                    Regular expression pattern for validating version names.
+                    Must be a valid regex.
+                  example: "^[A-Za-z0-9_.~\\-]+$"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemConfiguration"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   "/api/v2/auth/saml":
     post:
       x-nc-api-audience: noBWC
@@ -14809,6 +14856,25 @@ components:
             String with search term occurrences in the document.
             If document content does not contain search term, then return N first characters.
             If document is empty, then this property will be empty.
+    SystemConfiguration:
+      type: object
+      required:
+        - autoRedirect
+      properties:
+        ssoIntegrationEnabled:
+          type: boolean
+        autoRedirect:
+          type: boolean
+        defaultWorkspaceId:
+          type: string
+          description: Id of the workspace, which is used by default while working with the system.
+          example: WSPACE1
+        versionNamePattern:
+          type: string
+          description: >
+            Regular expression pattern used for validating version names.
+            Used globally across the system.
+          example: "^[A-Za-z0-9_.~\\-]+$"
     ErrorResponse:
       description: An error description
       type: object
