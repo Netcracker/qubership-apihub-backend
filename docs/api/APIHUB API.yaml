@@ -2752,7 +2752,7 @@ components:
         - code
         - message
     SystemInfo:
-      description: Information about the API HUB product
+      description: Information about the APIHUB product
       type: object
       properties:
         backendVersion:
@@ -2778,9 +2778,6 @@ components:
           description: Identifies if migration is currently in progress.
           type: boolean
           default: false
-        apiProcessorVerson:
-          description: Current version of api-processor on backend.
-          type: string
     ValidationParams:
       description: qubership product release custom API validation parameters
       properties:
