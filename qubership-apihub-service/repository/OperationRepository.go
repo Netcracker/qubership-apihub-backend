@@ -1074,7 +1074,7 @@ func (o operationRepositoryImpl) SearchForOperations(searchQuery *entity.Operati
 							from
 							fts_operation_data ts,
 							filtered f,
-							plainto_tsquery(?original_text_input) search_query
+							phraseto_tsquery(?original_text_input) search_query
 							where ts.data_hash = f.data_hash
 							and search_query @@ data_vector
 					) ts
