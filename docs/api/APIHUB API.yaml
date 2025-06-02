@@ -2928,7 +2928,7 @@ components:
     SystemInfo:
       description: Example of the system description
       value:
-        backendVersion: 0.1.0
+        backendVersion: master-20250522.080756-379-RELEASE
         productionMode: true
         migrationInProgress: false
         externalLinks:
