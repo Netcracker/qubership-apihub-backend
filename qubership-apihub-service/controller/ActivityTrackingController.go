@@ -96,15 +96,9 @@ func (a activityTrackingControllerImpl) GetActivityHistory_deprecated(w http.Res
 		}
 	}
 
-	types, err := getListFromParam(r, "types")
-	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.InvalidURLEscape,
-			Message: exception.InvalidURLEscapeMsg,
-			Params:  map[string]interface{}{"param": "types"},
-			Debug:   err.Error(),
-		})
+	types, customErr := getListFromParam(r, "types")
+	if customErr != nil {
+		utils.RespondWithCustomError(w, customErr)
 		return
 	}
 
@@ -123,15 +117,9 @@ func (a activityTrackingControllerImpl) GetActivityHistory_deprecated(w http.Res
 		}
 	}
 
-	kind, err := getListFromParam(r, "kind")
-	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.InvalidURLEscape,
-			Message: exception.InvalidURLEscapeMsg,
-			Params:  map[string]interface{}{"param": "kind"},
-			Debug:   err.Error(),
-		})
+	kind, customErr := getListFromParam(r, "kind")
+	if customErr != nil {
+		utils.RespondWithCustomError(w, customErr)
 		return
 	}
 
@@ -212,15 +200,9 @@ func (a activityTrackingControllerImpl) GetActivityHistory(w http.ResponseWriter
 		}
 	}
 
-	types, err := getListFromParam(r, "types")
-	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.InvalidURLEscape,
-			Message: exception.InvalidURLEscapeMsg,
-			Params:  map[string]interface{}{"param": "types"},
-			Debug:   err.Error(),
-		})
+	types, customErr := getListFromParam(r, "types")
+	if customErr != nil {
+		utils.RespondWithCustomError(w, customErr)
 		return
 	}
 
@@ -239,15 +221,9 @@ func (a activityTrackingControllerImpl) GetActivityHistory(w http.ResponseWriter
 		}
 	}
 
-	kind, err := getListFromParam(r, "kind")
-	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.InvalidURLEscape,
-			Message: exception.InvalidURLEscapeMsg,
-			Params:  map[string]interface{}{"param": "kind"},
-			Debug:   err.Error(),
-		})
+	kind, customErr := getListFromParam(r, "kind")
+	if customErr != nil {
+		utils.RespondWithCustomError(w, customErr)
 		return
 	}
 
@@ -343,15 +319,9 @@ func (a activityTrackingControllerImpl) GetActivityHistoryForPackage_deprecated(
 		}
 	}
 
-	types, err := getListFromParam(r, "types")
-	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.InvalidURLEscape,
-			Message: exception.InvalidURLEscapeMsg,
-			Params:  map[string]interface{}{"param": "types"},
-			Debug:   err.Error(),
-		})
+	types, customErr := getListFromParam(r, "types")
+	if customErr != nil {
+		utils.RespondWithCustomError(w, customErr)
 		return
 	}
 
@@ -429,15 +399,9 @@ func (a activityTrackingControllerImpl) GetActivityHistoryForPackage(w http.Resp
 		}
 	}
 
-	types, err := getListFromParam(r, "types")
-	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.InvalidURLEscape,
-			Message: exception.InvalidURLEscapeMsg,
-			Params:  map[string]interface{}{"param": "types"},
-			Debug:   err.Error(),
-		})
+	types, customErr := getListFromParam(r, "types")
+	if customErr != nil {
+		utils.RespondWithCustomError(w, customErr)
 		return
 	}
 

@@ -78,7 +78,10 @@ func (p *playgroundProxyControllerImpl) Proxy(w http.ResponseWriter, r *http.Req
 		return
 	}
 	defer resp.Body.Close()
-	copyHeader(w.Header(), resp.Header)
+	if err := copyHeader(w.Header(), resp.Header); err != nil {
+		utils.RespondWithCustomError(w, err)
+		return
+	}
 	w.WriteHeader(resp.StatusCode)
 	io.Copy(w, resp.Body)
 }
