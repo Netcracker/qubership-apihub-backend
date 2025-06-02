@@ -17337,6 +17337,7 @@ components:
       required:
         - buildType
         - packageId
+        - packageName
         - version
         - format
       properties:
@@ -17398,6 +17399,7 @@ components:
       required:
         - buildType
         - packageId
+        - packageName
         - version
         - documentId
         - format
@@ -17411,6 +17413,10 @@ components:
           description: Package unique identifier (full alias).
           type: string
           example: NC.CBSS.CPQ.TMF
+        packageName:
+          description: Package name
+          type: string
+          example: Service Ordering
         version:
           description: |
             Package version.\
@@ -17457,6 +17463,7 @@ components:
       required:
         - buildType
         - packageId
+        - packageName
         - version
         - groupName
         - operationsSpecTransformation
@@ -17471,6 +17478,10 @@ components:
           description: Package unique identifier (full alias).
           type: string
           example: NC.CBSS.CPQ.TMF
+        packageName:
+          description: Package name
+          type: string
+          example: Service Ordering
         version:
           description: |
             Package version.\
