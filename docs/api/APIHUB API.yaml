@@ -677,7 +677,6 @@ paths:
                   $ref: "#/components/examples/BranchNotFound"
         "500":
           $ref: "#/components/responses/internalServerError500"
-
   /projects/{projectId}/branches/{branch}/conflicts:
     parameters:
       - $ref: "#/components/parameters/projectId"
@@ -836,7 +835,6 @@ paths:
                   $ref: "#/components/examples/BranchNotFound"
         "500":
           $ref: "#/components/responses/internalServerError500"
-
   /projects/{projectId}/branches/{branch}/save:
     parameters:
       - $ref: "#/components/parameters/projectId"
@@ -2759,10 +2757,6 @@ components:
           description: Current backend version
           type: string
           example: main-20220727.092034-53
-        frontendVersion:
-          description: Current frontend version
-          type: string
-          example: 0.2.2-20220725071210
         productionMode:
           description: Production environment flag
           type: boolean
@@ -2934,12 +2928,12 @@ components:
     SystemInfo:
       description: Example of the system description
       value:
-        version: 0.1.0
-        DOC: https://doc.qubership.org/pages/viewpage.action?pageId=1114318293
-        API: https://doc.qubership.org/display/SAAS/Admin+API+List
-        contacts:
-          - name: Admin
-            contact: admin@qubership.org
+        backendVersion: 0.1.0
+        productionMode: true
+        migrationInProgress: false
+        externalLinks:
+          - User guide|https://www.example.com/guide
+          - Support team|https://www.example.com/support]
     BranchNotFound:
       description: Branch not found by ID. Response for the 404 error
       value:
