@@ -845,19 +845,19 @@ func (g systemInfoServiceImpl) FailBuildOnBrokenRefs() bool {
 func (g systemInfoServiceImpl) setAccessTokenDurationSec() {
 	envVal := os.Getenv(ACCESS_TOKEN_DURATION_SEC)
 	if envVal == "" {
-		g.systemInfoMap[ACCESS_TOKEN_DURATION_SEC] = 3600 //1 hour
+		g.systemInfoMap[ACCESS_TOKEN_DURATION_SEC] = 1800 //30 minutes
 		return
 	}
 	val, err := strconv.Atoi(envVal)
 	if err != nil {
-		log.Errorf("failed to parse %v env value: %v. Value by default - 3600", ACCESS_TOKEN_DURATION_SEC, err.Error())
-		g.systemInfoMap[ACCESS_TOKEN_DURATION_SEC] = 3600
+		log.Errorf("failed to parse %v env value: %v. Value by default - 1800", ACCESS_TOKEN_DURATION_SEC, err.Error())
+		g.systemInfoMap[ACCESS_TOKEN_DURATION_SEC] = 1800
 		return
 	}
 
 	if val < 600 {
-		err = fmt.Errorf("env %v has incorrect value, value must be greater than 600. Value by default - 3600", ACCESS_TOKEN_DURATION_SEC)
-		g.systemInfoMap[ACCESS_TOKEN_DURATION_SEC] = 3600
+		err = fmt.Errorf("env %v has incorrect value, value must be greater than 600. Value by default - 1800", ACCESS_TOKEN_DURATION_SEC)
+		g.systemInfoMap[ACCESS_TOKEN_DURATION_SEC] = 1800
 		return
 	}
 	g.systemInfoMap[ACCESS_TOKEN_DURATION_SEC] = val
