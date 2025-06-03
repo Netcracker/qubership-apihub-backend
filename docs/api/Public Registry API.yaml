@@ -14861,6 +14861,7 @@ components:
       type: object
       required:
         - autoRedirect
+        - versionPattern
       properties:
         ssoIntegrationEnabled:
           type: boolean
