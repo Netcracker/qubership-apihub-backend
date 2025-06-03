@@ -67,7 +67,6 @@ paths:
       summary: System configuration
       description: >
         Global parameters of system configuration.
-        This operation is available only to users with the system administrator role.
       operationId: getSystemConfiguration
       security: 
         - {}
@@ -93,7 +92,6 @@ paths:
         - Admin
       summary: Update global system configuration parameters
       description: >
-        Update global system configuration parameters.
         Only parameters included in the request body will be updated.
         If a parameter is omitted, its value remains unchanged.
         This operation is available only to users with the system administrator role.
@@ -109,9 +107,9 @@ paths:
             schema:
               type: object
               properties:
-                versionNamePattern:
+                versionPattern:
                   description: >
-                    Regular expression pattern for validating version names.
+                    Regular expression pattern for validating versions.
                     Must be a valid regex.
                   type: string
                   example: "^[A-Za-z0-9_.~\\-]+$"
@@ -14872,9 +14870,9 @@ components:
           description: Id of the workspace, which is used by default while working with the system.
           type: string
           example: WSPACE1
-        versionNamePattern:
+        versionPattern:
           description: >
-            Regular expression pattern used for validating version names.
+            Regular expression pattern used for validating versions.
             Used globally across the system.
           type: string
           example: "^[A-Za-z0-9_.~\\-]+$"
