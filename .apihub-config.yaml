@@ -1,6 +1,4 @@
-packageId: NC.CP.AH.RS
+packageId: nish1122.4455.tyu
 files:
-  - docs/api/Admin API.yaml
-  - docs/api/APIHUB API.yaml
   - docs/api/Public Registry API.yaml
 version: 1
