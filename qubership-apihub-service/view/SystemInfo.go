@@ -16,7 +16,6 @@ package view
 
 type SystemInfo struct {
 	BackendVersion      string   `json:"backendVersion"`
-	FrontendVersion     string   `json:"frontendVersion"`
 	ProductionMode      bool     `json:"productionMode"`
 	Notification        string   `json:"notification,omitempty"`
 	ExternalLinks       []string `json:"externalLinks"`
