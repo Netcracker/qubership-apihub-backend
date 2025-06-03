@@ -14863,7 +14863,6 @@ components:
       type: object
       required:
         - autoRedirect
-        - versionNamePattern
       properties:
         ssoIntegrationEnabled:
           type: boolean
