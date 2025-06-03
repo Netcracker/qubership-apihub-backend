@@ -17,6 +17,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 
 	"sync"
 
@@ -60,12 +61,7 @@ func (t *publishNotificationServiceImpl) SendNotification(packageId string, vers
 		return fmt.Errorf("failed to publish message to %s DTopic since it's not initialized", VersionPublishedTopicName)
 	}
 
-	msg := struct {
-		PackageId string
-		Version   string
-		Revision  int
-		// TODO: version status??
-	}{
+	msg := view.PublishNotification{
 		PackageId: packageId,
 		Version:   version,
 		Revision:  revision,
