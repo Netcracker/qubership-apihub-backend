@@ -65,7 +65,9 @@ paths:
       tags: 
         - Auth
       summary: System configuration
-      description: Global parameters of system configuration.
+      description: >
+        Global parameters of system configuration.
+        This operation is available only to users with the system administrator role.
       operationId: getSystemConfiguration
       security: 
         - {}
@@ -92,8 +94,9 @@ paths:
       summary: Update global system configuration parameters
       description: >
         Update global system configuration parameters.
-        * Only parameters included in the request body will be updated.
-        * If a parameter is omitted, its value remains unchanged.
+        Only parameters included in the request body will be updated.
+        If a parameter is omitted, its value remains unchanged.
+        This operation is available only to users with the system administrator role.
       operationId: patchSystemConfiguration
       security:
         - BearerAuth: []
@@ -107,10 +110,10 @@ paths:
               type: object
               properties:
                 versionNamePattern:
-                  type: string
                   description: >
                     Regular expression pattern for validating version names.
                     Must be a valid regex.
+                  type: string
                   example: "^[A-Za-z0-9_.~\\-]+$"
       responses:
         "200":
@@ -14866,14 +14869,14 @@ components:
         autoRedirect:
           type: boolean
         defaultWorkspaceId:
-          type: string
           description: Id of the workspace, which is used by default while working with the system.
+          type: string
           example: WSPACE1
         versionNamePattern:
-          type: string
           description: >
             Regular expression pattern used for validating version names.
             Used globally across the system.
+          type: string
           example: "^[A-Za-z0-9_.~\\-]+$"
     ErrorResponse:
       description: An error description
