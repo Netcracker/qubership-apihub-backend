@@ -140,13 +140,14 @@ func (e exportServiceImpl) StartRESTOpGroupExport(ctx context.SecurityContext, r
 	}
 
 	buildConfig := view.BuildConfig{
-		PackageId:            req.PackageId,
-		Version:              req.Version,
-		BuildType:            view.ExportRestOperationsGroup,
-		CreatedBy:            ctx.GetUserId(),
-		ApiType:              string(view.RestApiType),
-		GroupName:            req.GroupName,
-		AllowedOasExtensions: allowedOasExtensions,
+		PackageId:                    req.PackageId,
+		Version:                      req.Version,
+		BuildType:                    view.ExportRestOperationsGroup,
+		CreatedBy:                    ctx.GetUserId(),
+		ApiType:                      string(view.RestApiType),
+		GroupName:                    req.GroupName,
+		AllowedOasExtensions:         allowedOasExtensions,
+		OperationsSpecTransformation: req.OperationsSpecTransformation,
 	}
 
 	exportId, _, err := e.buildService.CreateBuildWithoutDependencies(buildConfig, false, "")
