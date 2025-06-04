@@ -148,8 +148,9 @@ func (e exportServiceImpl) StartRESTOpGroupExport(ctx context.SecurityContext, r
 		GroupName:                    req.GroupName,
 		AllowedOasExtensions:         allowedOasExtensions,
 		OperationsSpecTransformation: req.OperationsSpecTransformation,
+		Format:                       req.Format,
 	}
-
+	
 	exportId, _, err := e.buildService.CreateBuildWithoutDependencies(buildConfig, false, "")
 	if err != nil {
 		return "", err
