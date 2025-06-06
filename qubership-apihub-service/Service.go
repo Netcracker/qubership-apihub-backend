@@ -768,8 +768,6 @@ func makeServer(systemInfoService service.SystemInfoService, r *mux.Router) *htt
 	}
 	corsOptions = append(corsOptions, handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "OPTIONS"}))
 
-	corsOptions = append(corsOptions, handlers.ExposedHeaders([]string{"Location"}))
-
 	return &http.Server{
 		Handler:      handlers.CompressHandler(handlers.CORS(corsOptions...)(r)),
 		Addr:         listenAddr,

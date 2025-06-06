@@ -26,8 +26,8 @@ const (
 )
 
 type AuthConfig struct {
-	Providers         []IDP  `json:"identityProviders"`
-	DefaultProviderId string `json:"defaultProviderId"`
+	Providers []IDP `json:"identityProviders"`
+	AutoLogin bool  `json:"autoLogin"`
 }
 
 type IDP struct {

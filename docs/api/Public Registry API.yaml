@@ -151,8 +151,8 @@ paths:
                               type: string
                             refreshTokenEndpoint:
                               type: string
-                      defaultProviderId:
-                        type: string
+                      autoLogin:
+                        type: boolean
         "500":
           description: Internal Server Error
           content:

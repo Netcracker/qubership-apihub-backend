@@ -84,7 +84,7 @@ const (
 	REFRESH_TOKEN_DURATION_SEC             = "JWT_REFRESH_TOKEN_DURATION_SEC"
 	EXTERNAL_SAML_IDP_DISPLAY_NAME         = "EXTERNAL_SAML_IDP_DISPLAY_NAME"
 	EXTERNAL_SAML_IDP_IMAGE_SVG            = "EXTERNAL_SAML_IDP_IMAGE_SVG"
-	DEFAULT_IDP_ID                         = "DEFAULT_IDP_ID"
+	AUTO_LOGIN                             = "AUTO_LOGIN"
 	AUTH_CONFIG                            = "AUTH_CONFIG"
 	OIDC_PROVIDER_URL                      = "OIDC_PROVIDER_URL"
 	OIDC_CLIENT_ID                         = "OIDC_CLIENT_ID"
@@ -976,10 +976,20 @@ func (g systemInfoServiceImpl) setAuthConfig() error {
 		authConfig.Providers = append(authConfig.Providers, externalIDP)
 	}
 
-	authConfig.DefaultProviderId = os.Getenv(DEFAULT_IDP_ID)
-
 	if len(authConfig.Providers) == 0 {
 		return fmt.Errorf("no identity providers configured, at least one provider must exist")
+	}
+
+	g.setAutoLogin(&authConfig)
+
+	if authConfig.AutoLogin {
+		if len(authConfig.Providers) > 1 {
+			return fmt.Errorf("auto-login cannot be enabled when multiple identity providers are configured")
+		}
+
+		if len(authConfig.Providers) == 1 && authConfig.Providers[0].IdpType == idp.IDPTypeInternal {
+			return fmt.Errorf("auto-login cannot be enabled when only internal identity provider is configured")
+		}
 	}
 
 	g.systemInfoMap[AUTH_CONFIG] = authConfig
@@ -1031,6 +1041,16 @@ func (g systemInfoServiceImpl) createOIDCConfig() (*idp.OIDCConfiguration, error
 		ProviderURL:  providerURL,
 		Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
 	}, nil
+}
+
+func (g systemInfoServiceImpl) setAutoLogin(authConfig *idp.AuthConfig) {
+	envVal := os.Getenv(AUTO_LOGIN)
+	autoLogin, err := strconv.ParseBool(envVal)
+	if err != nil {
+		log.Errorf("failed to parse %v env value: %v. Value by default - false", AUTO_LOGIN, err.Error())
+		autoLogin = false
+	}
+	authConfig.AutoLogin = autoLogin
 }
 
 func (g systemInfoServiceImpl) GetAuthConfig() idp.AuthConfig {
