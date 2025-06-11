@@ -369,7 +369,7 @@ const PackageRedirectExists = "1710"
 const PackageRedirectExistsMsg = "Package id '$id' is reserved for redirect(old package id)"
 
 const IncorrectRedirectUrlError = "1711"
-const IncorrectRedirectUrlErrorMsg = "Incorrect redirect URL $url"
+const IncorrectRedirectUrlErrorMsg = "Incorrect redirect URL $url. Error: $error"
 
 const UsersNotFound = "1800"
 const UsersNotFoundMsg = "Users ($users) do not exist"
@@ -748,6 +748,21 @@ const IncorrectOASExtensionsMsg = "OAS extension is required to be have 'x-' pre
 
 const DuplicateOASExtensionsNotAllowed = "7102"
 const DuplicateOASExtensionsNotAllowedMsg = "Duplicate OAS extension not allowed: $duplicates"
+
+const ExternalIDPNotFound = "7200"
+const ExternalIDPNotFoundMsg = "External IDP with id '$id' not found"
+
+const OIDCAuthenticationFailed = "7300"
+const OIDCAuthenticationFailedMsg = "Failed to start OIDC authentication flow: $error"
+
+const OIDCCallbackFailed = "7301"
+const OIDCCallbackFailedMsg = "OIDC callback processing failed: $error"
+
+const OIDCTokenProcessingFailed = "7302"
+const OIDCTokenProcessingFailedMsg = "OIDC token processing failed: $error"
+
+const OIDCUserProcessingFailed = "7303"
+const OIDCUserProcessingFailedMsg = "OIDC user processing failed: $error"
 
 const FilesLimitExceeded = "7400"
 const FilesLimitExceededMsg = "Files limit exceeded. Maximum allowed number of files is $maxFiles"
