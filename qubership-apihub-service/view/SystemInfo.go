@@ -19,11 +19,11 @@ import (
 )
 
 type SystemInfo struct {
-	BackendVersion  string   `json:"backendVersion"`
-	FrontendVersion string   `json:"frontendVersion"`
-	ProductionMode  bool     `json:"productionMode"`
-	Notification    string   `json:"notification,omitempty"`
-	ExternalLinks   []string `json:"externalLinks"`
+	BackendVersion      string   `json:"backendVersion"`
+	ProductionMode      bool     `json:"productionMode"`
+	Notification        string   `json:"notification,omitempty"`
+	ExternalLinks       []string `json:"externalLinks"`
+	MigrationInProgress bool     `json:"migrationInProgress"`
 }
 
 type SystemConfigurationInfo_deprecated struct {
