@@ -22,64 +22,70 @@ import (
 	"strings"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
+	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 )
 
 const (
-	JWT_PRIVATE_KEY                        = "JWT_PRIVATE_KEY"
-	ARTIFACT_DESCRIPTOR_VERSION            = "ARTIFACT_DESCRIPTOR_VERSION"
-	BASE_PATH                              = "BASE_PATH"
-	PRODUCTION_MODE                        = "PRODUCTION_MODE"
-	LOG_LEVEL                              = "LOG_LEVEL"
-	GITLAB_URL                             = "GITLAB_URL"
-	DIFF_SERVICE_URL                       = "DIFF_SERVICE_URL"
-	LISTEN_ADDRESS                         = "LISTEN_ADDRESS"
-	ORIGIN_ALLOWED                         = "ORIGIN_ALLOWED"
-	APIHUB_POSTGRESQL_HOST                 = "APIHUB_POSTGRESQL_HOST"
-	APIHUB_POSTGRESQL_PORT                 = "APIHUB_POSTGRESQL_PORT"
-	APIHUB_POSTGRESQL_DB_NAME              = "APIHUB_POSTGRESQL_DB_NAME"
-	APIHUB_POSTGRESQL_USERNAME             = "APIHUB_POSTGRESQL_USERNAME"
-	APIHUB_POSTGRESQL_PASSWORD             = "APIHUB_POSTGRESQL_PASSWORD"
-	PG_SSL_MODE                            = "PG_SSL_MODE"
-	CLIENT_ID                              = "CLIENT_ID"
-	CLIENT_SECRET                          = "CLIENT_SECRET"
-	APIHUB_URL                             = "APIHUB_URL"
-	PUBLISH_ARCHIVE_SIZE_LIMIT_MB          = "PUBLISH_ARCHIVE_SIZE_LIMIT_MB"
-	PUBLISH_FILE_SIZE_LIMIT_MB             = "PUBLISH_FILE_SIZE_LIMIT_MB"
-	BRANCH_CONTENT_SIZE_LIMIT_MB           = "BRANCH_CONTENT_SIZE_LIMIT_MB"
-	RELEASE_VERSION_PATTERN                = "RELEASE_VERSION_PATTERN"
-	SAML_CRT                               = "SAML_CRT"
-	SAML_KEY                               = "SAML_KEY"
-	ADFS_METADATA_URL                      = "ADFS_METADATA_URL"
-	LDAP_USER                              = "LDAP_USER"
-	LDAP_USER_PASSWORD                     = "LDAP_USER_PASSWORD"
-	LDAP_SERVER                            = "LDAP_SERVER"
-	LDAP_BASE_DN                           = "LDAP_BASE_DN"
-	LDAP_ORGANIZATION_UNIT                 = "LDAP_ORGANIZATION_UNIT"
-	LDAP_SEARCH_BASE                       = "LDAP_SEARCH_BASE"
-	SYSTEM_NOTIFICATION                    = "SYSTEM_NOTIFICATION" //TODO: replace with db impl
-	BUILDS_CLEANUP_SCHEDULE                = "BUILDS_CLEANUP_SCHEDULE"
-	INSECURE_PROXY                         = "INSECURE_PROXY"
-	METRICS_GETTER_SCHEDULE                = "METRICS_GETTER_SCHEDULE"
-	MONITORING_ENABLED                     = "MONITORING_ENABLED"
-	STORAGE_SERVER_USERNAME                = "STORAGE_SERVER_USERNAME"
-	STORAGE_SERVER_PASSWORD                = "STORAGE_SERVER_PASSWORD"
-	STORAGE_SERVER_CRT                     = "STORAGE_SERVER_CRT"
-	STORAGE_SERVER_URL                     = "STORAGE_SERVER_URL"
-	STORAGE_SERVER_BUCKET_NAME             = "STORAGE_SERVER_BUCKET_NAME"
-	STORAGE_SERVER_ACTIVE                  = "STORAGE_SERVER_ACTIVE"
-	STORAGE_SERVER_STORE_ONLY_BUILD_RESULT = "STORAGE_SERVER_STORE_ONLY_BUILD_RESULT"
-	EXTERNAL_LINKS                         = "EXTERNAL_LINKS"
-	DEFAULT_WORKSPACE_ID                   = "DEFAULT_WORKSPACE_ID"
-	CUSTOM_PATH_PREFIXES                   = "CUSTOM_PATH_PREFIXES"
-	ALLOWED_HOSTS                          = "ALLOWED_HOSTS"
-	APIHUB_ADMIN_EMAIL                     = "APIHUB_ADMIN_EMAIL"
-	APIHUB_ADMIN_PASSWORD                  = "APIHUB_ADMIN_PASSWORD"
-	APIHUB_SYSTEM_API_KEY                  = "APIHUB_ACCESS_TOKEN"
-	EDITOR_DISABLED                        = "EDITOR_DISABLED"
-	FAIL_BUILDS_ON_BROKEN_REFS             = "FAIL_BUILDS_ON_BROKEN_REFS"
-	GIT_BRANCH                             = "GIT_BRANCH"
-	GIT_HASH                               = "GIT_HASH"
+	JWT_PRIVATE_KEY                            = "JWT_PRIVATE_KEY"
+	ARTIFACT_DESCRIPTOR_VERSION                = "ARTIFACT_DESCRIPTOR_VERSION"
+	BASE_PATH                                  = "BASE_PATH"
+	PRODUCTION_MODE                            = "PRODUCTION_MODE"
+	LOG_LEVEL                                  = "LOG_LEVEL"
+	GITLAB_URL                                 = "GITLAB_URL"
+	DIFF_SERVICE_URL                           = "DIFF_SERVICE_URL"
+	LISTEN_ADDRESS                             = "LISTEN_ADDRESS"
+	ORIGIN_ALLOWED                             = "ORIGIN_ALLOWED"
+	APIHUB_POSTGRESQL_HOST                     = "APIHUB_POSTGRESQL_HOST"
+	APIHUB_POSTGRESQL_PORT                     = "APIHUB_POSTGRESQL_PORT"
+	APIHUB_POSTGRESQL_DB_NAME                  = "APIHUB_POSTGRESQL_DB_NAME"
+	APIHUB_POSTGRESQL_USERNAME                 = "APIHUB_POSTGRESQL_USERNAME"
+	APIHUB_POSTGRESQL_PASSWORD                 = "APIHUB_POSTGRESQL_PASSWORD"
+	PG_SSL_MODE                                = "PG_SSL_MODE"
+	CLIENT_ID                                  = "CLIENT_ID"
+	CLIENT_SECRET                              = "CLIENT_SECRET"
+	APIHUB_URL                                 = "APIHUB_URL"
+	PUBLISH_ARCHIVE_SIZE_LIMIT_MB              = "PUBLISH_ARCHIVE_SIZE_LIMIT_MB"
+	PUBLISH_FILE_SIZE_LIMIT_MB                 = "PUBLISH_FILE_SIZE_LIMIT_MB"
+	BRANCH_CONTENT_SIZE_LIMIT_MB               = "BRANCH_CONTENT_SIZE_LIMIT_MB"
+	RELEASE_VERSION_PATTERN                    = "RELEASE_VERSION_PATTERN"
+	SAML_CRT                                   = "SAML_CRT"
+	SAML_KEY                                   = "SAML_KEY"
+	ADFS_METADATA_URL                          = "ADFS_METADATA_URL"
+	LDAP_USER                                  = "LDAP_USER"
+	LDAP_USER_PASSWORD                         = "LDAP_USER_PASSWORD"
+	LDAP_SERVER                                = "LDAP_SERVER"
+	LDAP_BASE_DN                               = "LDAP_BASE_DN"
+	LDAP_ORGANIZATION_UNIT                     = "LDAP_ORGANIZATION_UNIT"
+	LDAP_SEARCH_BASE                           = "LDAP_SEARCH_BASE"
+	SYSTEM_NOTIFICATION                        = "SYSTEM_NOTIFICATION" //TODO: replace with db impl
+	BUILDS_CLEANUP_SCHEDULE                    = "BUILDS_CLEANUP_SCHEDULE"
+	INSECURE_PROXY                             = "INSECURE_PROXY"
+	METRICS_GETTER_SCHEDULE                    = "METRICS_GETTER_SCHEDULE"
+	MONITORING_ENABLED                         = "MONITORING_ENABLED"
+	STORAGE_SERVER_USERNAME                    = "STORAGE_SERVER_USERNAME"
+	STORAGE_SERVER_PASSWORD                    = "STORAGE_SERVER_PASSWORD"
+	STORAGE_SERVER_CRT                         = "STORAGE_SERVER_CRT"
+	STORAGE_SERVER_URL                         = "STORAGE_SERVER_URL"
+	STORAGE_SERVER_BUCKET_NAME                 = "STORAGE_SERVER_BUCKET_NAME"
+	STORAGE_SERVER_ACTIVE                      = "STORAGE_SERVER_ACTIVE"
+	STORAGE_SERVER_STORE_ONLY_BUILD_RESULT     = "STORAGE_SERVER_STORE_ONLY_BUILD_RESULT"
+	EXTERNAL_LINKS                             = "EXTERNAL_LINKS"
+	DEFAULT_WORKSPACE_ID                       = "DEFAULT_WORKSPACE_ID"
+	CUSTOM_PATH_PREFIXES                       = "CUSTOM_PATH_PREFIXES"
+	ALLOWED_HOSTS                              = "ALLOWED_HOSTS"
+	APIHUB_ADMIN_EMAIL                         = "APIHUB_ADMIN_EMAIL"
+	APIHUB_ADMIN_PASSWORD                      = "APIHUB_ADMIN_PASSWORD"
+	APIHUB_SYSTEM_API_KEY                      = "APIHUB_ACCESS_TOKEN"
+	EDITOR_DISABLED                            = "EDITOR_DISABLED"
+	FAIL_BUILDS_ON_BROKEN_REFS                 = "FAIL_BUILDS_ON_BROKEN_REFS"
+	GIT_BRANCH                                 = "GIT_BRANCH"
+	GIT_HASH                                   = "GIT_HASH"
+	REVISIONS_CLEANUP_SCHEDULE                 = "REVISIONS_CLEANUP_SCHEDULE"
+	REVISIONS_CLEANUP_DELETE_LAST_REVISION     = "REVISIONS_CLEANUP_DELETE_LAST_REVISION"
+	REVISIONS_CLEANUP_DELETE_RELEASE_REVISIONS = "REVISIONS_CLEANUP_DELETE_RELEASE_REVISIONS"
+	REVISIONS_TTL_DAYS                         = "REVISIONS_TTL_DAYS"
+	INSTANCE_ID                                = "INSTANCE_ID"
 )
 
 type SystemInfoService interface {
@@ -137,6 +143,11 @@ type SystemInfoService interface {
 	GetSystemApiKey() (string, error)
 	GetEditorDisabled() bool
 	FailBuildOnBrokenRefs() bool
+	GetInstanceId() string
+	GetRevisionsCleanupSchedule() string
+	GetRevisionsCleanupDeleteLastRevision() bool
+	GetRevisionsCleanupDeleteReleaseRevisions() bool
+	GetRevisionsTTLDays() int
 }
 
 func (g systemInfoServiceImpl) GetCredsFromEnv() *view.DbCredentials {
@@ -242,6 +253,11 @@ func (g systemInfoServiceImpl) Init() error {
 	g.setAllowedHosts()
 	g.setEditorDisabled()
 	g.setFailBuildOnBrokenRefs()
+	g.setRevisionsCleanupSchedule()
+	g.setRevisionsCleanupDeleteLastRevision()
+	g.setRevisionsCleanupDeleteReleaseRevisions()
+	g.setRevisionsTTLDays()
+	g.setInstanceId()
 
 	return nil
 }
@@ -836,4 +852,74 @@ func (g systemInfoServiceImpl) setFailBuildOnBrokenRefs() {
 
 func (g systemInfoServiceImpl) FailBuildOnBrokenRefs() bool {
 	return g.systemInfoMap[FAIL_BUILDS_ON_BROKEN_REFS].(bool)
+}
+
+func (g systemInfoServiceImpl) setRevisionsCleanupSchedule() {
+	// g.systemInfoMap[REVISIONS_CLEANUP_SCHEDULE] = "0 1 * * 6" // at 01:00 AM on Saturday
+	g.systemInfoMap[REVISIONS_CLEANUP_SCHEDULE] = "* * * * *" // at 01:00 AM on Saturday
+}
+
+func (g systemInfoServiceImpl) GetRevisionsCleanupSchedule() string {
+	return g.systemInfoMap[REVISIONS_CLEANUP_SCHEDULE].(string)
+}
+
+func (g systemInfoServiceImpl) setRevisionsCleanupDeleteLastRevision() {
+	envVal := os.Getenv(REVISIONS_CLEANUP_DELETE_LAST_REVISION)
+	if envVal == "" {
+		envVal = "false"
+	}
+	val, err := strconv.ParseBool(envVal)
+	if err != nil {
+		log.Errorf("failed to parse %v env value: %v. Value by default - false", REVISIONS_CLEANUP_DELETE_LAST_REVISION, err.Error())
+		val = false
+	}
+	g.systemInfoMap[REVISIONS_CLEANUP_DELETE_LAST_REVISION] = val
+}
+
+func (g systemInfoServiceImpl) GetRevisionsCleanupDeleteLastRevision() bool {
+	return g.systemInfoMap[REVISIONS_CLEANUP_DELETE_LAST_REVISION].(bool)
+}
+
+func (g systemInfoServiceImpl) setRevisionsCleanupDeleteReleaseRevisions() {
+	envVal := os.Getenv(REVISIONS_CLEANUP_DELETE_RELEASE_REVISIONS)
+	if envVal == "" {
+		envVal = "false"
+	}
+	val, err := strconv.ParseBool(envVal)
+	if err != nil {
+		log.Errorf("failed to parse %v env value: %v. Value by default - false", REVISIONS_CLEANUP_DELETE_RELEASE_REVISIONS, err.Error())
+		val = false
+	}
+	g.systemInfoMap[REVISIONS_CLEANUP_DELETE_RELEASE_REVISIONS] = val
+}
+
+func (g systemInfoServiceImpl) GetRevisionsCleanupDeleteReleaseRevisions() bool {
+	return g.systemInfoMap[REVISIONS_CLEANUP_DELETE_RELEASE_REVISIONS].(bool)
+}
+
+func (g systemInfoServiceImpl) setRevisionsTTLDays() {
+	envVal := os.Getenv(REVISIONS_TTL_DAYS)
+	if envVal == "" {
+		envVal = "360" //1 year
+	}
+	val, err := strconv.Atoi(envVal)
+	if err != nil {
+		log.Errorf("failed to parse %v env value: %v. Value by default - 30", REVISIONS_TTL_DAYS, err.Error())
+		val = 360
+	}
+	g.systemInfoMap[REVISIONS_TTL_DAYS] = val
+}
+
+func (g systemInfoServiceImpl) GetRevisionsTTLDays() int {
+	return g.systemInfoMap[REVISIONS_TTL_DAYS].(int)
+}
+
+func (g systemInfoServiceImpl) setInstanceId() {
+	instanceId := uuid.New().String()
+	log.Infof("Instance ID: %s", instanceId)
+	g.systemInfoMap[INSTANCE_ID] = instanceId
+}
+
+func (g systemInfoServiceImpl) GetInstanceId() string {
+	return g.systemInfoMap[INSTANCE_ID].(string)
 }

@@ -15,21 +15,34 @@
 package service
 
 import (
+	"fmt"
+	"math/rand"
+	"strings"
+	"time"
+
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/db"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
+	mRepository "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/migration/repository"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/repository"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
+	"github.com/google/uuid"
+	"github.com/robfig/cron/v3"
+	log "github.com/sirupsen/logrus"
 )
 
 type CleanupService interface {
 	ClearTestData(testId string) error
+	CreateRevisionsCleanupJob(publishedRepo repository.PublishedRepository, migrationRepository mRepository.MigrationRunRepository, versionCleanupRepo repository.VersionCleanupRepository, instanceId string, schedule string, deleteLastRevision bool, deleteReleaseRevision bool, ttl int) error
 }
 
 func NewCleanupService(cp db.ConnectionProvider) CleanupService {
-	return &cleanupServiceImpl{cp: cp}
+	return &cleanupServiceImpl{cp: cp, cron: cron.New()}
 }
 
 type cleanupServiceImpl struct {
-	cp db.ConnectionProvider
+	cp   db.ConnectionProvider
+	cron *cron.Cron
 }
 
 func (c cleanupServiceImpl) ClearTestData(testId string) error {
@@ -137,5 +150,142 @@ func (c cleanupServiceImpl) ClearTestData(testId string) error {
 
 	// TODO: need to clear business metrics as well
 
+	return nil
+}
+
+func (c cleanupServiceImpl) CreateRevisionsCleanupJob(publishedRepository repository.PublishedRepository, migrationRepository mRepository.MigrationRunRepository, versionCleanupRepository repository.VersionCleanupRepository, instanceId string, schedule string, deleteLastRevision bool, deleteReleaseRevision bool, ttl int) error {
+	job := &revisionsCleanupJob{
+		publishedRepository:      publishedRepository,
+		migrationRepository:      migrationRepository,
+		versionCleanupRepository: versionCleanupRepository,
+		instanceId:               instanceId,
+		deleteLastRevision:       deleteLastRevision,
+		deleteReleaseRevision:    deleteReleaseRevision,
+		ttl:                      ttl,
+	}
+	if len(c.cron.Entries()) == 0 {
+		location, err := time.LoadLocation("")
+		if err != nil {
+			return err
+		}
+		c.cron = cron.New(cron.WithLocation(location))
+		c.cron.Start()
+	}
+	wrappedJob := cron.NewChain(cron.SkipIfStillRunning(cron.DefaultLogger)).Then(job)
+	_, err := c.cron.AddJob(schedule, wrappedJob)
+	if err != nil {
+		log.Warnf("Revisions cleanup job wasn't added for schedule - %s. With error - %s", schedule, err)
+		return err
+	}
+	log.Infof("Revisions cleanup job was created with schedule - %s", schedule)
+
+	return nil
+}
+
+type revisionsCleanupJob struct {
+	publishedRepository      repository.PublishedRepository
+	migrationRepository      mRepository.MigrationRunRepository
+	versionCleanupRepository repository.VersionCleanupRepository
+	instanceId               string
+	deleteLastRevision       bool
+	deleteReleaseRevision    bool
+	ttl                      int
+}
+
+func (j *revisionsCleanupJob) Run() {
+	startTime := time.Now().Round(time.Second)
+	log.Infof("Starting revisions cleanup job at %s", startTime)
+	migrations, err := j.migrationRepository.GetRunningMigrations()
+	if err != nil {
+		log.Error("Failed to check for running migrations for build cleanup job")
+		return
+	}
+	if len(migrations) != 0 {
+		log.Infof("Revisions cleanup was skipped at %s due to migration run", startTime)
+		return
+	}
+
+	jobId := uuid.New().String()
+	log.Infof("Revisions cleanup job ID: %s", jobId)
+
+	deleteBefore := time.Now().AddDate(0, 0, -j.ttl)
+	log.Debugf("[revisions cleanup] Will delete revisions older than %s (TTL: %d days)", deleteBefore, j.ttl)
+
+	err = j.versionCleanupRepository.StoreVersionCleanupRun(entity.VersionCleanupEntity{
+		RunId:        jobId,
+		InstanceId:   j.instanceId,
+		Status:       string(view.StatusRunning),
+		PackageId:    nil,
+		DeleteBefore: deleteBefore,
+	})
+	if err != nil {
+		log.Errorf("Failed to store revisions cleanup run: %v", err)
+		return
+	}
+
+	page, limit, deletedItems, errors := 0, 100, 0, []string{}
+	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	for {
+		getPackageListReq := view.PackageListReq{
+			Kind:         []string{entity.KIND_PACKAGE, entity.KIND_DASHBOARD},
+			Limit:        limit,
+			OnlyFavorite: false,
+			OnlyShared:   false,
+			Offset:       page * limit,
+			ParentId:     "*",
+		}
+
+		packages, err := j.publishedRepository.GetFilteredPackagesWithOffset(getPackageListReq, "")
+		if err != nil {
+			log.Errorf("Failed to get packages for revisions cleanup %s: %s", jobId, err.Error())
+			_ = j.updateCleanupRun(jobId, string(view.StatusError), err.Error(), deletedItems)
+			return
+		}
+
+		if len(packages) == 0 {
+			break
+		}
+		log.Debugf("[revisions cleanup] Processing page %d", page+1)
+
+		// shuffle packages to randomize processing order
+		rnd.Shuffle(len(packages), func(i, j int) {
+			packages[i], packages[j] = packages[j], packages[i]
+		})
+
+		for idx, pkg := range packages {
+			log.Debugf("[revisions cleanup] Processing package %d/%d: %s", idx+1, len(packages), pkg.Id)
+			count, err := j.publishedRepository.DeletePackageRevisionsBeforeDate(pkg, deleteBefore, j.deleteLastRevision, j.deleteReleaseRevision, "revisions_cleanup_job_"+jobId)
+			if err != nil {
+				log.Errorf("Failed to delete revisions of package %s during revisions cleanup %s: %v", pkg.Id, jobId, err)
+				errors = append(errors, fmt.Sprintf("package %s: %s", pkg.Id, err.Error()))
+			}
+			deletedItems += count
+		}
+		log.Debugf("[revisions cleanup] Completed processing page %d, total deleted items so far: %d", page+1, deletedItems)
+		page++
+	}
+
+	status := string(view.StatusComplete)
+	errorMessage := ""
+	if len(errors) > 0 {
+		status = string(view.StatusError)
+		errorMessage = fmt.Sprintf("Failed packages: %s", strings.Join(errors, "; "))
+	}
+
+	if err := j.updateCleanupRun(jobId, status, errorMessage, deletedItems); err != nil {
+		log.Errorf("Failed to update cleanup run status: %v", err)
+		return
+	}
+
+	log.Infof("Revisions cleanup job %s finished with status '%s'. Deleted %d revisions.", jobId, status, deletedItems)
+}
+
+func (j *revisionsCleanupJob) updateCleanupRun(jobId string, status string, errorMessage string, deletedItems int) error {
+	err := j.versionCleanupRepository.UpdateVersionCleanupRun(jobId, status, errorMessage, deletedItems)
+	if err != nil {
+		log.Errorf("failed to set '%s' status for cleanup job id %s: %s", status, jobId, err.Error())
+		return err
+	}
 	return nil
 }
