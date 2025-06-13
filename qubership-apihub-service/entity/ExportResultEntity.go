@@ -12,18 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package view
+package entity
 
-type SystemInfo struct {
-	BackendVersion      string   `json:"backendVersion"`
-	ProductionMode      bool     `json:"productionMode"`
-	Notification        string   `json:"notification,omitempty"`
-	ExternalLinks       []string `json:"externalLinks"`
-	MigrationInProgress bool     `json:"migrationInProgress"`
-}
+import (
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
+	"time"
+)
 
-type SystemConfigurationInfo struct {
-	SSOIntegrationEnabled bool   `json:"ssoIntegrationEnabled"`
-	AutoRedirect          bool   `json:"autoRedirect"`
-	DefaultWorkspaceId    string `json:"defaultWorkspaceId"`
+type ExportResultEntity struct {
+	tableName struct{} `pg:"export_result"`
+
+	ExportId  string           `pg:"export_id, pk, type:varchar"`
+	Config    view.BuildConfig `pg:"config, type:json"`
+	CreatedAt time.Time        `pg:"created_at, type:timestamp without time zone"`
+	CreatedBy string           `pg:"created_by, type:varchar"`
+	Filename  string           `pg:"filename, type:varchar"`
+	Data      []byte           `pg:"data, type:bytea"`
 }
