@@ -81,6 +81,7 @@ func NewVersionService(gitClientProvider GitClientProvider,
 	publishedRepo repository.PublishedRepository,
 	publishedService PublishedService,
 	operationRepo repository.OperationRepository,
+	exportRepository repository.ExportResultRepository,
 	operationService OperationService,
 	atService ActivityTrackingService,
 	systemInfoService SystemInfoService,
@@ -93,6 +94,7 @@ func NewVersionService(gitClientProvider GitClientProvider,
 		pRepo:                           repo,
 		favoritesRepo:                   favoritesRepo,
 		publishedRepo:                   publishedRepo,
+		exportRepository:                exportRepository,
 		publishedService:                publishedService,
 		operationRepo:                   operationRepo,
 		operationService:                operationService,
@@ -112,6 +114,7 @@ type versionServiceImpl struct {
 	publishedRepo                   repository.PublishedRepository
 	publishedService                PublishedService
 	operationRepo                   repository.OperationRepository
+	exportRepository                repository.ExportResultRepository
 	operationService                OperationService
 	atService                       ActivityTrackingService
 	systemInfoService               SystemInfoService
@@ -825,6 +828,7 @@ func (v versionServiceImpl) GetPackageVersionContent(packageId string, version s
 		PackageId:                versionEnt.PackageId,
 		Version:                  view.MakeVersionRefKey(versionEnt.Version, versionEnt.Revision),
 		RevisionsCount:           latestRevision,
+		ApiProcessorVersion:      versionEnt.Metadata.GetBuilderVersion(),
 	}
 
 	versionOperationTypes, err := v.getVersionOperationTypes(versionEnt, includeSummary, includeOperations)
@@ -1756,7 +1760,7 @@ func (v versionServiceImpl) GetTransformedDocuments_deprecated(packageId, versio
 		}
 	}
 	groupId := view.MakeOperationGroupId(packageId, versionEnt.Version, versionEnt.Revision, apiType, groupName)
-	ent, err := v.publishedRepo.GetTransformedDocuments(packageId, version, apiType, groupId, view.DocumentGroupType_deprecated, string(view.JsonDocumentFormat))
+	ent, err := v.exportRepository.GetTransformedDocuments(packageId, version, apiType, groupId, view.DocumentGroupType_deprecated, string(view.JsonDocumentFormat))
 	if err != nil {
 		return nil, err
 	}
@@ -1788,7 +1792,7 @@ func (v versionServiceImpl) GetTransformedDocuments(packageId string, version st
 		}
 	}
 	groupId := view.MakeOperationGroupId(packageId, versionEnt.Version, versionEnt.Revision, apiType, groupName)
-	ent, err := v.publishedRepo.GetTransformedDocuments(packageId, version, apiType, groupId, buildType, format)
+	ent, err := v.exportRepository.GetTransformedDocuments(packageId, version, apiType, groupId, view.BuildType(buildType), format)
 	if err != nil {
 		return nil, err
 	}
@@ -1961,7 +1965,7 @@ func (v versionServiceImpl) CopyVersion(ctx context.SecurityContext, packageId s
 		Refs:                     buildConfig.Refs,
 		Files:                    buildConfig.Files,
 		Metadata:                 buildConfig.Metadata,
-		BuildType:                view.BuildType,
+		BuildType:                view.PublishType,
 		CreatedBy:                ctx.GetUserId(),
 		ComparisonRevision:       buildConfig.ComparisonRevision,
 		ComparisonPrevRevision:   buildConfig.ComparisonPrevRevision,
@@ -2264,7 +2268,7 @@ func (v versionServiceImpl) publishFromCSV(ctx context.SecurityContext, dashboar
 	dashboardPublishBuildConfig := view.BuildConfig{
 		PackageId:                req.PackageId,
 		Version:                  req.Version,
-		BuildType:                view.BuildType,
+		BuildType:                view.PublishType,
 		PreviousVersion:          req.PreviousVersion,
 		PreviousVersionPackageId: req.PreviousVersionPackageId,
 		Status:                   req.Status,
