@@ -65,7 +65,8 @@ paths:
       tags: 
         - Auth
       summary: System configuration
-      description: Global parameters of system configuration.
+      description: >
+        Global parameters of system configuration.
       operationId: getSystemConfiguration
       security: 
         - {}
@@ -75,18 +76,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: 
-                  - autoRedirect
-                properties:
-                  ssoIntegrationEnabled:
-                    type: boolean
-                  autoRedirect:
-                    type: boolean
-                  defaultWorkspaceId:
-                    description: Id of the workspace, which is used by default while working with the system.
-                    type: string
-                    example: WSPACE1
+                $ref: "#/components/schemas/SystemConfiguration"
         "500":
           description: Internal Server Error
           content:
@@ -96,6 +86,69 @@ paths:
               examples:
                 InternalServerError:
                   $ref: "#/components/examples/InternalServerError"
+    patch:
+      tags:
+        - Auth
+        - Admin
+      summary: Update global system configuration parameters
+      description: >
+        Only parameters included in the request body will be updated.
+        If a parameter is omitted, its value remains unchanged.
+        This operation is available only to users with the system administrator role.
+      operationId: patchSystemConfiguration
+      security:
+        - BearerAuth: []
+        - api-key: []
+      requestBody:
+        description: Parameters to update in system configuration
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                versionPattern:
+                  description: >
+                    Regular expression pattern for validating versions.
+                    Must be a valid regex.
+                  type: string
+                  example: "^[A-Za-z0-9_.~\\-]+$"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemConfiguration"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   "/api/v2/auth/saml":
     post:
       x-nc-api-audience: noBWC
@@ -15382,6 +15435,26 @@ components:
             String with search term occurrences in the document.
             If document content does not contain search term, then return N first characters.
             If document is empty, then this property will be empty.
+    SystemConfiguration:
+      type: object
+      required:
+        - autoRedirect
+        - versionPattern
+      properties:
+        ssoIntegrationEnabled:
+          type: boolean
+        autoRedirect:
+          type: boolean
+        defaultWorkspaceId:
+          description: Id of the workspace, which is used by default while working with the system.
+          type: string
+          example: WSPACE1
+        versionPattern:
+          description: >
+            Regular expression pattern used for validating versions.
+            Used globally across the system.
+          type: string
+          example: "^[A-Za-z0-9_.~\\-]+$"
     ErrorResponse:
       description: An error description
       type: object
