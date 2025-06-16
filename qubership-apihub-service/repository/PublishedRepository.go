@@ -64,7 +64,7 @@ type PublishedRepository interface {
 	GetLastVersion(id string) (*entity.PublishedVersionEntity, error)
 	GetDefaultVersion(packageId string, status string) (*entity.PublishedVersionEntity, error)
 	CleanupDeleted() error
-	DeletePackageRevisionsBeforeDate(pkg entity.PackageEntity, beforeDate time.Time, deleteLastRevision bool, deleteReleaseRevisions bool, deletedBy string) (int, error)
+	DeletePackageRevisionsBeforeDate(packageId string, beforeDate time.Time, deleteLastRevision bool, deleteReleaseRevisions bool, deletedBy string) (int, error)
 
 	GetFileSharedInfo(packageId string, fileId string, versionName string) (*entity.SharedUrlInfoEntity, error)
 	GetFileSharedInfoById(sharedId string) (*entity.SharedUrlInfoEntity, error)

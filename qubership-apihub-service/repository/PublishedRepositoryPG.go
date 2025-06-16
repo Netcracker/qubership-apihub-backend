@@ -82,10 +82,6 @@ func (p publishedRepositoryImpl) MarkVersionDeleted(packageId string, versionNam
 			return err
 		}
 
-		err = p.clearGroupedOperations(tx, packageId, versionName)
-		if err != nil {
-			return err
-		}
 		err = p.clearPreviousVersion(tx, packageId, versionName)
 		if err != nil {
 			return err
@@ -102,11 +98,6 @@ func (p publishedRepositoryImpl) clearDefaultReleaseVersion(tx *pg.Tx, packageId
 		UPDATE package_group
 		SET default_released_version = null
 		WHERE default_released_version = ? AND id = ?`, version, packageId)
-	return err
-}
-
-func (p publishedRepositoryImpl) clearGroupedOperations(tx *pg.Tx, packageId string, version string) error {
-	_, err := tx.Exec(`delete from grouped_operation where package_id = ? and version = ?`, packageId, version)
 	return err
 }
 
@@ -3796,14 +3787,14 @@ func (p publishedRepositoryImpl) GetCSVDashboardPublishReport(publishId string) 
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) DeletePackageRevisionsBeforeDate(pkg entity.PackageEntity, deleteBefore time.Time, deleteLastRevision bool, deleteReleaseRevisions bool, deletedBy string) (int, error) {
+func (p publishedRepositoryImpl) DeletePackageRevisionsBeforeDate(packageId string, deleteBefore time.Time, deleteLastRevision bool, deleteReleaseRevisions bool, deletedBy string) (int, error) {
 	var totalDeletedCount int
 	var processingErrors []error
 
 	var versions []string
 	err := p.cp.GetConnection().Model((*entity.PublishedVersionEntity)(nil)).
 		Column("version").
-		Where("package_id = ? AND deleted_at is null", pkg.Id).
+		Where("package_id = ? AND deleted_at is null", packageId).
 		Order("version ASC").
 		Distinct().
 		Select(&versions)
@@ -3813,7 +3804,7 @@ func (p publishedRepositoryImpl) DeletePackageRevisionsBeforeDate(pkg entity.Pac
 
 	for idx, version := range versions {
 		log.Tracef("[revisions cleanup] Processing version %d/%d: %s", idx+1, len(versions), version)
-		deletedCount, err := p.deleteVersionRevisions(pkg.Id, version, deleteBefore, deleteLastRevision, deleteReleaseRevisions, deletedBy)
+		deletedCount, err := p.deleteVersionRevisions(packageId, version, deleteBefore, deleteLastRevision, deleteReleaseRevisions, deletedBy)
 		if err != nil {
 			processingErrors = append(processingErrors, fmt.Errorf("failed to process version %s: %w", version, err))
 			continue
@@ -3830,11 +3821,11 @@ func (p publishedRepositoryImpl) DeletePackageRevisionsBeforeDate(pkg entity.Pac
 				combinedErr = fmt.Errorf("%v; %v", combinedErr, err)
 			}
 		}
-		log.Debugf("[revisions cleanup] Package %s revisions cleanup completed with %d errors. Total deleted: %d", pkg.Id, len(processingErrors), totalDeletedCount)
+		log.Debugf("[revisions cleanup] Package %s revisions cleanup completed with %d errors. Total deleted: %d", packageId, len(processingErrors), totalDeletedCount)
 		return totalDeletedCount, fmt.Errorf("cleanup completed with errors (deleted %d items): %w", totalDeletedCount, combinedErr)
 	}
 
-	log.Debugf("[revisions cleanup] Package %s revisions cleanup completed. Total deleted: %d", pkg.Id, totalDeletedCount)
+	log.Debugf("[revisions cleanup] Package %s revisions cleanup completed. Total deleted: %d", packageId, totalDeletedCount)
 	return totalDeletedCount, nil
 }
 

@@ -31,6 +31,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const maxErrorMessageLength = 1000
+
 type CleanupService interface {
 	ClearTestData(testId string) error
 	CreateRevisionsCleanupJob(publishedRepo repository.PublishedRepository, migrationRepository mRepository.MigrationRunRepository, versionCleanupRepo repository.VersionCleanupRepository, instanceId string, schedule string, deleteLastRevision bool, deleteReleaseRevision bool, ttl int) error
@@ -255,7 +257,7 @@ func (j *revisionsCleanupJob) Run() {
 
 		for idx, pkg := range packages {
 			log.Debugf("[revisions cleanup] Processing package %d/%d: %s", idx+1, len(packages), pkg.Id)
-			count, err := j.publishedRepository.DeletePackageRevisionsBeforeDate(pkg, deleteBefore, j.deleteLastRevision, j.deleteReleaseRevision, "revisions_cleanup_job_"+jobId)
+			count, err := j.publishedRepository.DeletePackageRevisionsBeforeDate(pkg.Id, deleteBefore, j.deleteLastRevision, j.deleteReleaseRevision, "revisions_cleanup_job_"+jobId)
 			if err != nil {
 				log.Errorf("Failed to delete revisions of package %s during revisions cleanup %s: %v", pkg.Id, jobId, err)
 				errors = append(errors, fmt.Sprintf("package %s: %s", pkg.Id, err.Error()))
@@ -274,7 +276,11 @@ func (j *revisionsCleanupJob) Run() {
 	}
 
 	if err := j.updateCleanupRun(jobId, status, errorMessage, deletedItems); err != nil {
-		log.Errorf("Failed to update cleanup run status: %v", err)
+		logErrorMessage := errorMessage
+		if len(logErrorMessage) > maxErrorMessageLength {
+			logErrorMessage = logErrorMessage[:maxErrorMessageLength-3] + "..."
+		}
+		log.Errorf("Failed to save cleanup run state: %v, jobId: %s, status: %s, errorMessage: %s, deletedItems: %d", err, jobId, status, logErrorMessage, deletedItems)
 		return
 	}
 
