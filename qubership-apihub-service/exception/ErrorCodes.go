@@ -674,8 +674,8 @@ const PrivateWorkspaceNotModifiableMsg = "Only sysadmin can modify private works
 const OperationModelNotFound = "6410"
 const OperationModelNotFoundMsg = "Model '$modelName' doesn't exist for operation '$operationId'"
 
-const InvalidDocumentTransformationReq = "6217"
-const InvalidDocumentTransformationReqMsg = "Document transformation req 'documentTransformationReq' has incorrect format: $error"
+const InvalidDocumentTransformation = "6217"
+const InvalidDocumentTransformationMsg = "Document transformation value $value is unknown"
 
 const UnknownBuildType = "6270"
 const UnknownBuildTypeMsg = "Unknown build type: $type"
@@ -749,19 +749,25 @@ const IncorrectOASExtensionsMsg = "OAS extension is required to be have 'x-' pre
 const DuplicateOASExtensionsNotAllowed = "7102"
 const DuplicateOASExtensionsNotAllowedMsg = "Duplicate OAS extension not allowed: $duplicates"
 
-const ExternalIDPNotFound = "7200"
+const ExportProcessNotFound = "7201"
+const ExportProcessNotFoundMsg = "Export process with exportId=$exportId not found"
+
+const ExportFormatUnknown = "7202"
+const ExportFormatUnknownMsg = "Export format $format is unknown"
+
+const ExternalIDPNotFound = "7300"
 const ExternalIDPNotFoundMsg = "External IDP with id '$id' not found"
 
-const OIDCAuthenticationFailed = "7300"
+const OIDCAuthenticationFailed = "7301"
 const OIDCAuthenticationFailedMsg = "Failed to start OIDC authentication flow: $error"
 
-const OIDCCallbackFailed = "7301"
+const OIDCCallbackFailed = "7302"
 const OIDCCallbackFailedMsg = "OIDC callback processing failed: $error"
 
-const OIDCTokenProcessingFailed = "7302"
+const OIDCTokenProcessingFailed = "7303"
 const OIDCTokenProcessingFailedMsg = "OIDC token processing failed: $error"
 
-const OIDCUserProcessingFailed = "7303"
+const OIDCUserProcessingFailed = "7304"
 const OIDCUserProcessingFailedMsg = "OIDC user processing failed: $error"
 
 const FilesLimitExceeded = "7400"
