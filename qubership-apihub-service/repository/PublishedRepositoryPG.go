@@ -3812,6 +3812,7 @@ func (p publishedRepositoryImpl) deleteVersionRevisions(packageId string, versio
 				if err != nil {
 					return fmt.Errorf("failed to clear default release version: %w", err)
 				}
+				//TODO: clear ad-hoc comparisons related to this version (both current and previous)
 				err = p.clearPreviousVersion(tx, packageId, version)
 				if err != nil {
 					return fmt.Errorf("failed to clear %s version as a previous version: %w", version, err)

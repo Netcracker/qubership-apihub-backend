@@ -915,12 +915,12 @@ func (g systemInfoServiceImpl) GetRevisionsCleanupDeleteReleaseRevisions() bool 
 func (g systemInfoServiceImpl) setRevisionsTTLDays() {
 	envVal := os.Getenv(REVISIONS_TTL_DAYS)
 	if envVal == "" {
-		envVal = "360" //1 year
+		envVal = "365" //1 year
 	}
 	val, err := strconv.Atoi(envVal)
 	if err != nil {
-		log.Errorf("failed to parse %v env value: %v. Value by default - 30", REVISIONS_TTL_DAYS, err.Error())
-		val = 360
+		log.Errorf("failed to parse %v env value: %v. Value by default - 365", REVISIONS_TTL_DAYS, err.Error())
+		val = 365
 	}
 	g.systemInfoMap[REVISIONS_TTL_DAYS] = val
 }
