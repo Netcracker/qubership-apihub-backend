@@ -1267,8 +1267,8 @@ func (p publishedServiceImpl) reCalculateChangelogs(packageInfo view.PackageInfo
 	for _, version := range versions {
 		buildConfig = view.BuildConfig{
 			PackageId:                version.PackageId,
-			Version:                  version.Version,
-			PreviousVersion:          version.PreviousVersion,
+			Version:                  fmt.Sprintf("%v@%v", version.Version, version.Revision),
+			PreviousVersion:          fmt.Sprintf("%v@%v", packageInfo.Version, packageInfo.Revision),
 			PreviousVersionPackageId: version.PreviousVersionPackageId,
 			BuildType:                view.ChangelogType,
 			CreatedBy:                packageInfo.CreatedBy,
@@ -1300,6 +1300,9 @@ func (p publishedServiceImpl) PublishChanges(buildArc *archive.BuildResultArchiv
 	buildArc.PackageInfo.PreviousVersion, buildArc.PackageInfo.PreviousVersionRevision, err = SplitVersionRevision(buildArc.PackageInfo.PreviousVersion)
 	if err != nil {
 		return err
+	}
+	if buildArc.PackageInfo.PreviousVersionPackageId == "" {
+		buildArc.PackageInfo.PreviousVersionPackageId = buildArc.PackageInfo.PackageId
 	}
 	if err := p.publishedValidator.ValidateChanges(buildArc); err != nil {
 		return err
