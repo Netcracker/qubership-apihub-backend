@@ -103,6 +103,7 @@ type DocumentForTransformationView struct {
 	Filename             string   `json:"filename"`
 	IncludedOperationIds []string `json:"includedOperationIds"`
 	Data                 []byte   `json:"data"`
+	PackageRef           string   `json:"packageRef"`
 }
 
 type Openapi struct {
