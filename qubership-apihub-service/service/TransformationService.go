@@ -93,8 +93,8 @@ func (t transformationServiceImpl) GetDataForDocumentsTransformation(packageId, 
 		transformationView.IncludedOperationIds = getCommonOperationFromGroupAndDocumentOperations(operationIdsByGroupName, transformationView)
 		versionDocuments = append(versionDocuments, transformationView)
 
-		packageVersions[versionDocumentEnt.PublishedContentDataEntity.PackageId] =
-			append(packageVersions[versionDocumentEnt.PublishedContentDataEntity.PackageId], view.MakeVersionRefKey(versionDocumentEnt.Version, versionDocumentEnt.Revision))
+		packageVersions[versionDocumentEnt.ContentPackageId] =
+			append(packageVersions[versionDocumentEnt.ContentPackageId], view.MakeVersionRefKey(versionDocumentEnt.Version, versionDocumentEnt.Revision))
 	}
 
 	packagesRefs, err := t.packageVersionEnrichmentService.GetPackageVersionRefsMap(packageVersions)
