@@ -79,6 +79,7 @@ const ATETPublishNewVersion ATEventType = "publish_new_version"
 const ATETPublishNewRevision ATEventType = "publish_new_revision"
 const ATETPatchVersionMeta ATEventType = "patch_version_meta"
 const ATETDeleteVersion ATEventType = "delete_version"
+const ATETDeleteRevision ATEventType = "delete_revision"
 
 // manual groups
 
