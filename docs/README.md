@@ -1,23 +1,23 @@
 # APIHUB documentation
 
-## Development docs
-### [Development Guide](development_guide.md)
-### [Local Development](local_development/local_development.md)
-### [Git Integration](git_integration.md)
+## Development documentation
+### [Development guide](development_guide.md)
+### [Local development](local_development/local_development.md)
+### [Git integration](git_integration.md)
 
 ## Onboarding guides
-### [Onboarding](onboarding.md) - Onboarding process for new team members
-### [Newcomer Environment Setup](newcomer_env_setup.md) - Guide for new developers to set up their environment
+### [Onboarding](onboarding.md)
+### [Newcomer environment setup](newcomer_env_setup.md)
 
 ## Functionality guides
-### [Build Process](build.md)
+### [Build process](build.md)
 ### [Editor](editor.md)
-### [Data Maintenance](data_maintenance.md)
+### [Data maintenance](data_maintenance.md)
 
 ## Admin guides
-### [Operations Migration Analysis Guide](ops_migration_analysis_guide.md)
+### [Operations migration analysis](ops_migration_analysis_guide.md)
 
-## API Documentation
+## API documentation
 ### API specifications
 - [APIHUB API](api/APIHUB%20API.yaml)
 - [Admin API](api/Admin%20API.yaml)
