@@ -26,6 +26,7 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/repository"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
+	"github.com/go-pg/pg/v10"
 	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
 	log "github.com/sirupsen/logrus"
@@ -157,6 +158,7 @@ func (c cleanupServiceImpl) ClearTestData(testId string) error {
 
 func (c cleanupServiceImpl) CreateRevisionsCleanupJob(publishedRepository repository.PublishedRepository, migrationRepository mRepository.MigrationRunRepository, versionCleanupRepository repository.VersionCleanupRepository, instanceId string, schedule string, deleteLastRevision bool, deleteReleaseRevision bool, ttl int) error {
 	job := &revisionsCleanupJob{
+		cp:                       c.cp,
 		publishedRepository:      publishedRepository,
 		migrationRepository:      migrationRepository,
 		versionCleanupRepository: versionCleanupRepository,
@@ -185,6 +187,7 @@ func (c cleanupServiceImpl) CreateRevisionsCleanupJob(publishedRepository reposi
 }
 
 type revisionsCleanupJob struct {
+	cp                       db.ConnectionProvider
 	publishedRepository      repository.PublishedRepository
 	migrationRepository      mRepository.MigrationRunRepository
 	versionCleanupRepository repository.VersionCleanupRepository
@@ -209,6 +212,37 @@ func (j *revisionsCleanupJob) Run() {
 
 	jobId := uuid.New().String()
 	log.Infof("Revisions cleanup job ID: %s", jobId)
+
+	conn := j.cp.GetConnection().Conn()
+	defer conn.Close()
+
+	//TODO: rename lock name
+	var lockAcquired bool
+	_, err = conn.QueryOne(pg.Scan(&lockAcquired),
+		`SELECT pg_try_advisory_lock(hashtext('revisions_cleanup_job'))`)
+	if err != nil {
+		log.Errorf("Failed to attempt lock acquisition: %v", err)
+		return
+	}
+
+	if !lockAcquired {
+		log.Infof("Revisions cleanup job %s skipped - another instance is already running the job", jobId)
+		return
+	}
+
+	log.Infof("Revisions cleanup job %s acquired lock - proceeding with cleanup", jobId)
+	defer func() {
+		var lockReleased bool
+		_, err := conn.QueryOne(pg.Scan(&lockReleased),
+			`SELECT pg_advisory_unlock(hashtext('revisions_cleanup_job'))`)
+		if err != nil {
+			log.Errorf("Failed to release advisory lock: %v", err)
+		} else if !lockReleased {
+			log.Warnf("Failed to release advisory lock - it may have been released already")
+		} else {
+			log.Infof("Successfully released advisory lock for job %s", jobId)
+		}
+	}()
 
 	deleteBefore := time.Now().AddDate(0, 0, -j.ttl)
 	log.Debugf("[revisions cleanup] Will delete revisions older than %s (TTL: %d days)", deleteBefore, j.ttl)
@@ -250,6 +284,7 @@ func (j *revisionsCleanupJob) Run() {
 		}
 		log.Debugf("[revisions cleanup] Processing page %d", page+1)
 
+		//TODO: do we really need to shuffle packages?
 		// shuffle packages to randomize processing order
 		rnd.Shuffle(len(packages), func(i, j int) {
 			packages[i], packages[j] = packages[j], packages[i]

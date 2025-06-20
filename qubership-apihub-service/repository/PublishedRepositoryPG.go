@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
@@ -3783,6 +3784,7 @@ func (p publishedRepositoryImpl) deleteVersionRevisions(packageId string, versio
 				log.Tracef("[revisions cleanup] package %s, version %s, release revision %d, skipping because deleteReleaseRevisions=false", packageId, version, revision.Revision)
 				break
 			}
+			//TODO: maybe we need to make deletion atomic with hasValidReferences?
 			hasRefs, err := p.hasValidReferences(tx, revision)
 			if err != nil {
 				return fmt.Errorf("failed to check references for revision %d: %w", revision.Revision, err)
@@ -3803,16 +3805,25 @@ func (p publishedRepositoryImpl) deleteVersionRevisions(packageId string, versio
 				if err != nil {
 					return fmt.Errorf("failed to mark revision %d as deleted: %w", revision.Revision, err)
 				}
+				err = p.trackRevisionDeletion(tx, packageId, version, revision.Revision, revision.Status)
+				if err != nil {
+					return fmt.Errorf("failed to track revision deletion: %w", err)
+				}
 				deletedCount++
+
+				err = p.clearAdHocComparisons(tx, packageId, version, revision.Revision)
+				if err != nil {
+					return fmt.Errorf("failed to clear ad-hoc comparisons for revision %d: %w", revision.Revision, err)
+				}
 			}
 
 			if len(revisionsToDelete) == len(revisions) {
+				//TODO: do we need to track version deletion? (we already track all revisions deletions)
 				log.Tracef("[revisions cleanup] All revisions for version %s were deleted, cleaning up related data", version)
 				err = p.clearDefaultReleaseVersion(tx, packageId, version)
 				if err != nil {
 					return fmt.Errorf("failed to clear default release version: %w", err)
 				}
-				//TODO: clear ad-hoc comparisons related to this version (both current and previous)
 				err = p.clearPreviousVersion(tx, packageId, version)
 				if err != nil {
 					return fmt.Errorf("failed to clear %s version as a previous version: %w", version, err)
@@ -3843,4 +3854,133 @@ func (p publishedRepositoryImpl) hasValidReferences(tx *pg.Tx, revision entity.P
 		revision.PackageId, revision.Version, revision.Revision)
 
 	return count > 0, err
+}
+
+func (p publishedRepositoryImpl) trackRevisionDeletion(tx *pg.Tx, packageId string, version string, revision int, status string) error {
+	log.Infof("[revisions cleanup] Tracking revision deletion for %s/%s@%d", packageId, version, revision)
+	dataMap := map[string]interface{}{}
+	dataMap["version"] = version
+	dataMap["revision"] = revision
+	dataMap["status"] = status
+	ent := entity.ActivityTrackingEntity{
+		Id:        uuid.New().String(),
+		Type:      string(view.ATETDeleteRevision),
+		Data:      dataMap,
+		PackageId: packageId,
+		Date:      time.Now(),
+		UserId:    "auto-cleaning job",
+	}
+	_, err := tx.Model(&ent).Insert()
+	if err != nil {
+		return fmt.Errorf("failed to track revision deletion: %w", err)
+	}
+	log.Infof("[revisions cleanup] Tracked revision deletion for %s/%s@%d", packageId, version, revision)
+	return nil
+}
+
+//TODO: refactor
+func (p publishedRepositoryImpl) clearAdHocComparisons(tx *pg.Tx, packageId string, version string, revision int) error {
+	log.Tracef("[revisions cleanup] Clearing ad-hoc comparisons for %s/%s@%d", packageId, version, revision)
+
+	var processedCount int
+	offset := 0
+	const batchSize = 100
+
+	for {
+		var comparisonIds []string
+		//TODO: review the queyry
+		_, err := tx.Query(&comparisonIds, `
+			WITH candidate_comparisons AS (
+				SELECT 
+					vc.comparison_id,
+					vc.package_id,
+					vc.version,
+					vc.revision,
+					vc.previous_package_id,
+					vc.previous_version,
+					vc.previous_revision,
+					pv.previous_version AS curr_prev_version,
+					COALESCE(pv.previous_version_package_id, pv.package_id) AS curr_prev_package_id
+				FROM version_comparison vc
+				LEFT JOIN published_version pv ON 
+					pv.package_id = vc.package_id AND 
+					pv.version = vc.version AND 
+					pv.revision = vc.revision
+				WHERE 
+					(vc.package_id = ? AND vc.version = ? AND vc.revision = ?) OR
+					(vc.previous_package_id = ? AND vc.previous_version = ? AND vc.previous_revision = ?)
+				ORDER BY vc.comparison_id
+				LIMIT ?
+				OFFSET ?
+			)
+			SELECT comparison_id FROM candidate_comparisons cc
+			WHERE 
+				((cc.package_id = ? AND cc.version = ? AND cc.revision = ?) AND
+				 ((cc.curr_prev_version IS NULL AND cc.previous_version != '') OR
+				  (cc.curr_prev_version IS NOT NULL AND 
+				   (cc.previous_version != cc.curr_prev_version OR 
+				    cc.previous_package_id != cc.curr_prev_package_id))))
+				OR
+				((cc.previous_package_id = ? AND cc.previous_version = ? AND cc.previous_revision = ?) AND
+				 ((cc.curr_prev_version IS NULL) OR
+				  (cc.curr_prev_version IS NOT NULL AND 
+				   (cc.previous_version != cc.curr_prev_version OR 
+				    cc.previous_package_id != cc.curr_prev_package_id))))
+		`, packageId, version, revision, packageId, version, revision, batchSize, offset,
+			packageId, version, revision, packageId, version, revision)
+
+		if err != nil {
+			if err == pg.ErrNoRows {
+				break
+			}
+			return fmt.Errorf("failed to get ad-hoc comparison candidates: %w", err)
+		}
+
+		if len(comparisonIds) == 0 {
+			break
+		}
+
+
+		for _, comparisonId := range comparisonIds {
+			result, err := tx.Exec(`
+				WITH ref_check AS (
+					SELECT COUNT(*) AS ref_count
+					FROM version_comparison
+					WHERE ? = ANY(refs)
+				),
+				deletion AS (
+					DELETE FROM version_comparison
+					WHERE comparison_id = ?
+					AND (SELECT ref_count FROM ref_check) = 0
+					RETURNING comparison_id
+				)
+				SELECT COUNT(*) FROM deletion
+			`, comparisonId, comparisonId)
+
+			if err != nil {
+				return fmt.Errorf("failed to check and delete ad-hoc comparison %s: %w", comparisonId, err)
+			}
+
+			//TODO: do we really need result.RowsAffected() > 0?
+			if result.RowsAffected() > 0 {
+				log.Tracef("[revisions cleanup] Deleted ad-hoc comparison %s", comparisonId)
+				processedCount++
+			} else {
+				log.Tracef("[revisions cleanup] Skipped ad-hoc comparison %s (referenced or already deleted)", comparisonId)
+			}
+		}
+
+		offset += batchSize
+
+		if len(comparisonIds) < batchSize {
+			break
+		}
+	}
+
+	if processedCount > 0 {
+		log.Debugf("[revisions cleanup] Processed %d ad-hoc comparisons for %s/%s@%d",
+			processedCount, packageId, version, revision)
+	}
+
+	return nil
 }
