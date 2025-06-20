@@ -37,7 +37,7 @@ type OperationGroupService interface {
 	ReplaceOperationGroup_deprecated(packageId string, version string, apiType string, groupName string, replaceReq view.ReplaceOperationGroupReq_deprecated) error
 	ReplaceOperationGroup(ctx context.SecurityContext, packageId string, version string, apiType string, groupName string, replaceReq view.ReplaceOperationGroupReq) error
 	UpdateOperationGroup_deprecated(packageId string, version string, apiType string, groupName string, updateReq view.UpdateOperationGroupReq_deprecated) error
-	UpdateOperationGroup(ctx context.SecurityContext, packageId string, version string, apiType string, groupName string, updateReq view.UpdateOperationGroupReq) error
+	UpdateOperationGroup(ctx context.SecurityContext, packageId string, version string, apiType string, groupName string, updateReq view.UpdateOperationGroupReq, reason string) error
 	DeleteOperationGroup(ctx context.SecurityContext, packageId string, version string, apiType string, groupName string) error
 	CalculateOperationGroups(packageId string, version string, groupingPrefix string) ([]string, error)
 	GetGroupedOperations(packageId string, version string, apiType string, groupName string, searchReq view.OperationListReq) (*view.GroupedOperations, error)
@@ -613,10 +613,10 @@ func (o operationGroupServiceImpl) UpdateOperationGroup_deprecated(packageId str
 	if updateReq.Description != nil && *updateReq.Description != existingGroup.Description {
 		updatedGroup.Description = *updateReq.Description
 	}
-	return o.operationRepo.UpdateOperationGroup(existingGroup, &updatedGroup, nil, nil)
+	return o.operationRepo.UpdateOperationGroup(existingGroup, &updatedGroup, nil, nil, "UpdateOperationGroup_deprecated: service call")
 }
 
-func (o operationGroupServiceImpl) UpdateOperationGroup(ctx context.SecurityContext, packageId string, version string, apiType string, groupName string, updateReq view.UpdateOperationGroupReq) error {
+func (o operationGroupServiceImpl) UpdateOperationGroup(ctx context.SecurityContext, packageId string, version string, apiType string, groupName string, updateReq view.UpdateOperationGroupReq, reason string) error {
 	versionEnt, err := o.publishedRepo.GetVersion(packageId, version)
 	if err != nil {
 		return err
@@ -699,7 +699,7 @@ func (o operationGroupServiceImpl) UpdateOperationGroup(ctx context.SecurityCont
 		newGroupedOperationEntities = &groupedOperationEntities
 	}
 
-	err = o.operationRepo.UpdateOperationGroup(existingGroup, &updatedGroup, templateEnt, newGroupedOperationEntities)
+	err = o.operationRepo.UpdateOperationGroup(existingGroup, &updatedGroup, templateEnt, newGroupedOperationEntities, "svc_UpdateOperationGroup(): "+reason)
 	if err != nil {
 		return err
 	}

@@ -17,6 +17,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/db"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
@@ -48,7 +49,7 @@ type OperationRepository interface {
 	CreateOperationGroup(ent *entity.OperationGroupEntity, templateEntity *entity.OperationGroupTemplateEntity) error
 	DeleteOperationGroup(ent *entity.OperationGroupEntity) error
 	ReplaceOperationGroup(oldGroupEntity *entity.OperationGroupEntity, newGroupEntity *entity.OperationGroupEntity, operationEntities []entity.GroupedOperationEntity, newTemplateEntity *entity.OperationGroupTemplateEntity) error
-	UpdateOperationGroup(oldGroupEntity *entity.OperationGroupEntity, newGroupEntity *entity.OperationGroupEntity, newTemplateEntity *entity.OperationGroupTemplateEntity, newGroupedOperations *[]entity.GroupedOperationEntity) error
+	UpdateOperationGroup(oldGroupEntity *entity.OperationGroupEntity, newGroupEntity *entity.OperationGroupEntity, newTemplateEntity *entity.OperationGroupTemplateEntity, newGroupedOperations *[]entity.GroupedOperationEntity, reason string) error
 	GetOperationGroup(packageId string, version string, revision int, apiType string, groupName string) (*entity.OperationGroupEntity, error)
 	GetOperationGroupTemplateFile(packageId string, version string, revision int, apiType string, groupName string) (*entity.OperationGroupTemplateFileEntity, error)
 	CalculateOperationGroups(packageId string, version string, revision int, groupingPrefix string) ([]string, error)
@@ -1487,7 +1488,7 @@ func (o operationRepositoryImpl) ReplaceOperationGroup(oldGroupEntity *entity.Op
 	})
 }
 
-func (o operationRepositoryImpl) UpdateOperationGroup(oldGroupEntity *entity.OperationGroupEntity, newGroupEntity *entity.OperationGroupEntity, newTemplateEntity *entity.OperationGroupTemplateEntity, newGroupedOperations *[]entity.GroupedOperationEntity) error {
+func (o operationRepositoryImpl) UpdateOperationGroup(oldGroupEntity *entity.OperationGroupEntity, newGroupEntity *entity.OperationGroupEntity, newTemplateEntity *entity.OperationGroupTemplateEntity, newGroupedOperations *[]entity.GroupedOperationEntity, reason string) error {
 	ctx := context.Background()
 	return o.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
 		//update to operation_group.group_id also updates grouped_operation.group_id
@@ -1513,16 +1514,39 @@ func (o operationRepositoryImpl) UpdateOperationGroup(oldGroupEntity *entity.Ope
 		if newGroupedOperations == nil {
 			return nil
 		}
+
+		var oldOps []entity.GroupedOperationEntity
+		err = tx.Model(&oldOps).Where("group_id = ?", newGroupEntity.GroupId).Select()
+		if err != nil {
+			return err
+		}
+
 		_, err = tx.Exec(`delete from grouped_operation where group_id = ?`, newGroupEntity.GroupId)
 		if err != nil {
 			return err
 		}
+
 		if len(*newGroupedOperations) > 0 {
 			_, err = tx.Model(newGroupedOperations).Insert()
 			if err != nil {
 				return err
 			}
 		}
+
+		hist := entity.GroupedOperationHistoryEntity{
+			GroupId: newGroupEntity.GroupId,
+			Time:    time.Now(),
+			Reason:  "repo_UpdateOperationGroup(): " + reason,
+			Data: entity.GroupedOperationHistoryPair{
+				Old: oldOps,
+				New: *newGroupedOperations,
+			},
+		}
+		_, err = tx.Model(&hist).Insert()
+		if err != nil {
+			return err
+		}
+
 		return nil
 	})
 }

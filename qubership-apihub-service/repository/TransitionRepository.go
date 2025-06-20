@@ -387,10 +387,10 @@ func moveNonVersionsData(tx *pg.Tx, fromPkg, toPkg string) (int, error) {
 
 	updateVersCompIdForRefs := `
 		with comp as (
-			select 
+			select
 			comparison_id,
-			md5(package_id||'@'||version||'@'||revision||'@'||previous_package_id||'@'||previous_version||'@'||previous_revision) as new_comparison_id 
-			from version_comparison 
+			md5(package_id||'@'||version||'@'||revision||'@'||previous_package_id||'@'||previous_version||'@'||previous_revision) as new_comparison_id
+			from version_comparison
 			where package_id = ? or previous_package_id = ?
 		)
 		update version_comparison b set refs = array_replace(refs, c.comparison_id, c.new_comparison_id::varchar)
@@ -404,10 +404,10 @@ func moveNonVersionsData(tx *pg.Tx, fromPkg, toPkg string) (int, error) {
 
 	updateVersCompId := `
 		with comp as (
-			select 
+			select
 			comparison_id,
-			md5(package_id||'@'||version||'@'||revision||'@'||previous_package_id||'@'||previous_version||'@'||previous_revision) as new_comparison_id 
-			from version_comparison 
+			md5(package_id||'@'||version||'@'||revision||'@'||previous_package_id||'@'||previous_version||'@'||previous_revision) as new_comparison_id
+			from version_comparison
 			where package_id = ? or previous_package_id = ?
 		)
 		update version_comparison b set comparison_id = c.new_comparison_id::varchar
@@ -513,10 +513,36 @@ func deleteVersionsData(tx *pg.Tx, fromPkg string) error {
 		return fmt.Errorf("failed to delete orig(%s) from published_sources: %w", fromPkg, err)
 	}
 
+	var oldOps []entity.GroupedOperationEntity
+	err = tx.Model(&oldOps).Where("package_id = ?", fromPkg).Select()
+	if err != nil {
+		return err
+	}
+
 	query = "delete from grouped_operation where package_id = ?"
 	_, err = tx.Exec(query, fromPkg)
 	if err != nil {
 		return fmt.Errorf("failed to delete orig(%s) from grouped_operation: %w", fromPkg, err)
+	}
+
+	groupIds := map[string]struct{}{}
+	for _, op := range oldOps {
+		groupIds[op.GroupId] = struct{}{}
+	}
+	for groupId, _ := range groupIds {
+		hist := entity.GroupedOperationHistoryEntity{
+			GroupId: groupId,
+			Time:    time.Now(),
+			Reason:  "transition:deleteVersionsData()",
+			Data: entity.GroupedOperationHistoryPair{
+				Old: oldOps,
+				New: nil,
+			},
+		}
+		_, err = tx.Model(&hist).Insert()
+		if err != nil {
+			return err
+		}
 	}
 
 	query = "delete from operation where package_id = ?"
@@ -614,7 +640,7 @@ func (t transitionRepositoryImpl) TrackTransitionFailed(id, details string) erro
 }
 
 func (t transitionRepositoryImpl) TrackTransitionCompleted(id string, affectedObjects int) error {
-	updateQuery := `update activity_tracking_transition 
+	updateQuery := `update activity_tracking_transition
 	set status = ?, affected_objects = ?, finished_at = ?, progress_percent = 100, completed_serial_number = nextval('activity_tracking_transition_completed_seq')
 	where id=?;`
 	_, err := t.cp.GetConnection().Exec(updateQuery, string(view.StatusComplete), affectedObjects, time.Now(), id)

@@ -87,6 +87,13 @@ func (p publishedRepositoryImpl) MarkVersionDeleted(packageId string, versionNam
 		if err != nil {
 			return err
 		}
+
+		var oldOps []entity.GroupedOperationEntity
+		err = tx.Model(&oldOps).Where("package_id = ?", packageId).Where("version = ?", versionName).Select()
+		if err != nil {
+			return err
+		}
+
 		_, err = tx.Exec(`delete from grouped_operation where package_id = ? and version = ?`, packageId, versionName)
 		if err != nil {
 			return err
@@ -99,6 +106,27 @@ func (p publishedRepositoryImpl) MarkVersionDeleted(packageId string, versionNam
 		_, err = tx.Exec(clearPreviousVersionQuery, versionName, packageId, packageId)
 		if err != nil {
 			return err
+		}
+
+		groupIds := map[string]struct{}{}
+		for _, op := range oldOps {
+			groupIds[op.GroupId] = struct{}{}
+		}
+
+		for groupId, _ := range groupIds {
+			hist := entity.GroupedOperationHistoryEntity{
+				GroupId: groupId,
+				Time:    time.Now(),
+				Reason:  "repo_MarkVersionDeleted()",
+				Data: entity.GroupedOperationHistoryPair{
+					Old: oldOps,
+					New: nil,
+				},
+			}
+			_, err = tx.Model(&hist).Insert()
+			if err != nil {
+				return err
+			}
 		}
 
 		return nil
@@ -181,10 +209,37 @@ func (p publishedRepositoryImpl) markAllVersionsDeletedByPackageId(tx *pg.Tx, pa
 			return err
 		}
 	}
+	var oldOps []entity.GroupedOperationEntity
+	err = tx.Model(&oldOps).Where("package_id = ?", packageId).Select()
+	if err != nil {
+		return err
+	}
+
 	_, err = tx.Exec(`delete from grouped_operation where package_id = ?`, packageId)
 	if err != nil {
 		return err
 	}
+
+	groupIds := map[string]struct{}{}
+	for _, op := range oldOps {
+		groupIds[op.GroupId] = struct{}{}
+	}
+	for groupId, _ := range groupIds {
+		hist := entity.GroupedOperationHistoryEntity{
+			GroupId: groupId,
+			Time:    time.Now(),
+			Reason:  "repo_MarkVersionDeleted()",
+			Data: entity.GroupedOperationHistoryPair{
+				Old: oldOps,
+				New: nil,
+			},
+		}
+		_, err = tx.Model(&hist).Insert()
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -1316,6 +1371,7 @@ func (p publishedRepositoryImpl) propagatePreviousOperationGroups(tx *pg.Tx, ver
 	and o.operation_id = g.operation_id
 	where g.group_id = ?;
 	`
+
 	//this query detects if operation moved to another ref and updates the link in grouped_operation table instead of marking it as deleted
 	copyExistingOperationsFromRefsQuery := `
 	insert into grouped_operation
@@ -1366,6 +1422,7 @@ func (p publishedRepositoryImpl) propagatePreviousOperationGroups(tx *pg.Tx, ver
 		if err != nil {
 			return fmt.Errorf("failed to copy existing grouped operations for package: %w", err)
 		}
+
 		_, err = tx.Exec(copyExistingOperationsFromRefsQuery,
 			version.PackageId, version.Version, version.Revision,
 			newGroup.GroupId, oldGroupId)

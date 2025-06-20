@@ -1083,7 +1083,7 @@ func (o operationGroupControllerImpl) UpdateOperationGroup(w http.ResponseWriter
 		}
 	}
 
-	err = o.operationGroupService.UpdateOperationGroup(ctx, packageId, versionName, apiType, groupName, updateOperationGroupReq)
+	err = o.operationGroupService.UpdateOperationGroup(ctx, packageId, versionName, apiType, groupName, updateOperationGroupReq, "controller_UpdateOperationGroup()")
 	if err != nil {
 		RespondWithError(w, "Failed to update operation group", err)
 		return

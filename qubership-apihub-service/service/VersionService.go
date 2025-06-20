@@ -2320,9 +2320,10 @@ func (v versionServiceImpl) publishFromCSV(ctx context.SecurityContext, dashboar
 			}
 		}
 	}
+
 	err = v.operationGroupService.UpdateOperationGroup(ctx, req.PackageId, req.Version, string(view.RestApiType), dashboardName, view.UpdateOperationGroupReq{
 		Operations: &groupOperations,
-	})
+	}, "publishFromCSV()")
 	if err != nil {
 		v.updateDashboardPublishProcess(publishEntity, string(view.StatusError), fmt.Sprintf("failed to add operations to operation group: %v", err.Error()))
 		return

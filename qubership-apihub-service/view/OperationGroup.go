@@ -70,17 +70,6 @@ type GroupOperations struct {
 	OperationId string `json:"operationId" validate:"required"`
 }
 
-type OperationGroups struct {
-	OperationGroups []OperationGroup `json:"operationGroups"`
-}
-
-type OperationGroup struct {
-	GroupName       string `json:"groupName"`
-	Description     string `json:"description,omitempty"`
-	IsPrefixGroup   bool   `json:"isPrefixGroup"`
-	OperationsCount int    `json:"operationsCount"`
-}
-
 type CalculatedOperationGroups struct {
 	Groups []string `json:"groups"`
 }
