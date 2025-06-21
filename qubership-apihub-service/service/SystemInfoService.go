@@ -80,6 +80,7 @@ const (
 	FAIL_BUILDS_ON_BROKEN_REFS             = "FAIL_BUILDS_ON_BROKEN_REFS"
 	GIT_BRANCH                             = "GIT_BRANCH"
 	GIT_HASH                               = "GIT_HASH"
+	TEST_ALLOW_OVERRIDE_CREATED_AT         = "TEST_ALLOW_OVERRIDE_CREATED_AT"
 
 	maxMB = 8796093022207 // 8796093022207 * 1048576 is safely below MaxInt64
 )
@@ -139,6 +140,7 @@ type SystemInfoService interface {
 	GetSystemApiKey() (string, error)
 	GetEditorDisabled() bool
 	FailBuildOnBrokenRefs() bool
+	GetTestAllowOverrideCreatedAt() bool
 }
 
 func (g systemInfoServiceImpl) GetCredsFromEnv() *view.DbCredentials {
@@ -244,6 +246,7 @@ func (g systemInfoServiceImpl) Init() error {
 	g.setAllowedHosts()
 	g.setEditorDisabled()
 	g.setFailBuildOnBrokenRefs()
+	g.setTestAllowOverrideCreatedAt()
 
 	return nil
 }
@@ -852,4 +855,29 @@ func (g systemInfoServiceImpl) setFailBuildOnBrokenRefs() {
 
 func (g systemInfoServiceImpl) FailBuildOnBrokenRefs() bool {
 	return g.systemInfoMap[FAIL_BUILDS_ON_BROKEN_REFS].(bool)
+}
+
+func (g systemInfoServiceImpl) GetTestAllowOverrideCreatedAt() bool {
+	return g.systemInfoMap[FAIL_BUILDS_ON_BROKEN_REFS].(bool)
+}
+
+func (g systemInfoServiceImpl) setTestAllowOverrideCreatedAt() {
+	var val bool
+	var err error
+
+	if g.IsProductionMode() {
+		val = false
+	} else {
+		envVal := os.Getenv(TEST_ALLOW_OVERRIDE_CREATED_AT)
+		if envVal == "" {
+			envVal = "false"
+		}
+		val, err = strconv.ParseBool(envVal)
+		if err != nil {
+			log.Errorf("failed to parse %v env value: %v. Value by default - false", TEST_ALLOW_OVERRIDE_CREATED_AT, err.Error())
+			val = false
+		}
+	}
+	
+	g.systemInfoMap[TEST_ALLOW_OVERRIDE_CREATED_AT] = val
 }

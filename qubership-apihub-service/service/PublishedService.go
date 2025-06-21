@@ -1085,10 +1085,10 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 	if buildArc.PackageInfo.BuilderVersion != "" {
 		versionMetadata.SetBuilderVersion(buildArc.PackageInfo.BuilderVersion)
 	}
-
+	
 	publishedAt := time.Now()
-	if buildArc.PackageInfo.MigrationBuild && buildArc.PackageInfo.PublishedAt != nil &&
-		!buildArc.PackageInfo.PublishedAt.IsZero() {
+	if (buildArc.PackageInfo.MigrationBuild || p.systemInfoService.GetTestAllowOverrideCreatedAt()) &&
+		buildArc.PackageInfo.PublishedAt != nil && !buildArc.PackageInfo.PublishedAt.IsZero() {
 		publishedAt = *buildArc.PackageInfo.PublishedAt
 	}
 	versionEnt := &entity.PublishedVersionEntity{
