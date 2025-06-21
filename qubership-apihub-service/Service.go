@@ -16,7 +16,6 @@ package main
 
 import (
 	"context"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp/providers"
 	"io"
 	"net/http"
 	_ "net/http/pprof"
@@ -26,6 +25,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp/providers"
 
 	"gopkg.in/natefinch/lumberjack.v2"
 
@@ -62,10 +63,19 @@ func init() {
 	if basePath == "" {
 		basePath = "."
 	}
-	mw := io.MultiWriter(os.Stderr, &lumberjack.Logger{
-		Filename: basePath + "/logs/apihub.log",
-		MaxSize:  10, // megabytes
-	})
+	logFilePath := os.Getenv("LOG_FILE_PATH") //Example: /logs/apihub.log
+	var mw io.Writer
+	if logFilePath != "" {
+		mw = io.MultiWriter(
+			os.Stdout,
+			&lumberjack.Logger{
+				Filename: logFilePath,
+				MaxSize:  10, // megabytes
+			},
+		)
+	} else {
+		mw = os.Stdout
+	}
 	log.SetFormatter(&prefixed.TextFormatter{
 		DisableColors:   true,
 		TimestampFormat: "2006-01-02 15:04:05",
