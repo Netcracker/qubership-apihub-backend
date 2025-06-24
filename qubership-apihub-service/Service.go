@@ -540,6 +540,8 @@ func main() {
 	// Required to verify api key for external authorization
 	r.HandleFunc("/api/v2/auth/apiKey", security.NoSecure(apihubApiKeyController.GetApiKeyByKey)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/auth/apiKey/{apiKeyId}", security.Secure(apihubApiKeyController.GetApiKeyById)).Methods(http.MethodGet)
+	// Required for extensions to check Apihub auth. Just return 200 OK if authentication is passed.
+	r.HandleFunc("/api/v1/auth/token", security.SecureJWT(func(writer http.ResponseWriter, request *http.Request) {})).Methods(http.MethodGet)
 
 	r.HandleFunc("/api/v2/users/{userId}/profile/avatar", security.NoSecure(userController.GetUserAvatar)).Methods(http.MethodGet) // Should not be secured! FE renders avatar as <img src='avatarUrl' and it couldn't include auth header
 	r.HandleFunc("/api/v2/users", security.Secure(userController.GetUsers)).Methods(http.MethodGet)
