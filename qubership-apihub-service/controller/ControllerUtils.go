@@ -17,6 +17,7 @@ package controller
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -27,7 +28,11 @@ import (
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/gorilla/mux"
-	log "github.com/sirupsen/logrus"
+)
+
+const (
+	maxParamItems = 1000
+	maxParamLen   = 8192
 )
 
 func getStringParam(r *http.Request, p string) string {
@@ -98,43 +103,44 @@ func getBodyStrArrayParam(params map[string]interface{}, p string) ([]string, er
 	return nil, fmt.Errorf("parameter %v has incorrect type", p)
 }
 
-func RespondWithError(w http.ResponseWriter, msg string, err error) {
-	log.Errorf("%s: %s", msg, err.Error())
-	if customError, ok := err.(*exception.CustomError); ok {
-		RespondWithCustomError(w, customError)
-	} else {
-		RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusInternalServerError,
-			Message: msg,
-			Debug:   err.Error()})
-	}
-}
-
-func RespondWithCustomError(w http.ResponseWriter, err *exception.CustomError) {
-	log.Debugf("Request failed. Code = %d. Message = %s. Params: %v. Debug: %s", err.Status, err.Message, err.Params, err.Debug)
-	RespondWithJson(w, err.Status, err)
-}
-
-func RespondWithJson(w http.ResponseWriter, code int, payload interface{}) {
-	response, _ := json.Marshal(payload)
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	w.Write(response)
-}
-
 func IsAcceptableAlias(alias string) bool {
 	return alias == url.QueryEscape(alias) && !strings.Contains(alias, ".")
 }
 
-func getListFromParam(r *http.Request, param string) ([]string, error) {
+func getListFromParam(r *http.Request, param string) ([]string, *exception.CustomError) {
 	paramStr := r.URL.Query().Get(param)
 	if paramStr == "" {
 		return []string{}, nil
 	}
 	listStr, err := url.QueryUnescape(paramStr)
 	if err != nil {
-		return nil, err
+		return nil, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidURLEscape,
+			Message: exception.InvalidURLEscapeMsg,
+			Params:  map[string]interface{}{"param": param},
+			Debug:   err.Error(),
+		}
 	}
+	//validations were added based on security scan results to avoid resource exhaustion
+	if len(paramStr) > maxParamLen {
+		return nil, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidParameterValue,
+			Message: exception.InvalidParameterValueLengthMsg,
+			Params:  map[string]interface{}{"param": param, "value": paramStr, "maxLen": maxParamLen},
+		}
+	}
+	commaCount := strings.Count(listStr, ",")
+	if commaCount+1 > maxParamItems {
+		return nil, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidParameterValue,
+			Message: exception.InvalidItemsNumberMsg,
+			Params:  map[string]interface{}{"param": param, "maxItems": maxParamItems},
+		}
+	}
+
 	return strings.Split(listStr, ","), nil
 }
 
@@ -184,7 +190,7 @@ func handlePkgRedirectOrRespondWithError(w http.ResponseWriter, r *http.Request,
 				customError.Code == exception.PublishedVersionNotFound) {
 			newPkg, err := ptHandler.HandleMissingPackageId(packageId)
 			if err != nil {
-				RespondWithError(w, "Package not found, failed to check package move", err)
+				utils.RespondWithError(w, "Package not found, failed to check package move", err)
 				return
 			}
 			if newPkg != "" {
@@ -198,7 +204,7 @@ func handlePkgRedirectOrRespondWithError(w http.ResponseWriter, r *http.Request,
 			}
 		}
 	}
-	RespondWithError(w, msg, err)
+	utils.RespondWithError(w, msg, err)
 }
 
 func getTemplatePath(r *http.Request) string {
