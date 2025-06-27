@@ -1305,9 +1305,6 @@ func (p publishedServiceImpl) PublishChanges(buildArc *archive.BuildResultArchiv
 	if err != nil {
 		return err
 	}
-	if buildArc.PackageInfo.PreviousVersionPackageId == "" {
-		buildArc.PackageInfo.PreviousVersionPackageId = buildArc.PackageInfo.PackageId
-	}
 	if err := p.publishedValidator.ValidateChanges(buildArc); err != nil {
 		return err
 	}
