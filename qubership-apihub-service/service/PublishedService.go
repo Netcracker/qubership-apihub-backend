@@ -1193,11 +1193,11 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 			Date:      time.Now(),
 			UserId:    versionEnt.CreatedBy,
 		})
-	}
 
-	err = p.publishNotificationService.SendNotification(versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
-	if err != nil {
-		log.Errorf("failed to send published version notification: %v", err)
+		err = p.publishNotificationService.SendNotification(versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
+		if err != nil {
+			log.Errorf("failed to send published version notification: %v", err)
+		}
 	}
 
 	utils.PerfLog(time.Since(publishStart).Milliseconds(), 10000, "publishPackage: total package publishing")
