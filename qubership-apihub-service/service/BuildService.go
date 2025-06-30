@@ -98,7 +98,7 @@ func (b *buildServiceImpl) PublishVersion(ctx context.SecurityContext, config vi
 		return nil, versionNameValidationError
 	}
 
-	if config.MigrationBuild == true || config.NoChangelog == true || !config.PublishedAt.IsZero() {
+	if config.MigrationBuild || config.NoChangelog || !config.PublishedAt.IsZero() {
 		return nil, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.ForbiddenDefaultMigrationBuildParameters,
@@ -459,7 +459,9 @@ func (b *buildServiceImpl) GetFreeBuild(builderId string) ([]byte, error) {
 			if err != nil {
 				return nil, err
 			}
-			srcFileReader.Close()
+			if err = srcFileReader.Close(); err != nil {
+				return nil, err
+			}
 		}
 	}
 	fw, err := zw.Create("config.json")
@@ -474,7 +476,9 @@ func (b *buildServiceImpl) GetFreeBuild(builderId string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	zw.Close()
+	if err = zw.Close(); err != nil {
+		return nil, err
+	}
 	return result.Bytes(), nil
 }
 

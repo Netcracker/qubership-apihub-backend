@@ -303,7 +303,7 @@ func regexpEscaped(s string) string {
 
 func MakePackageGroupingPrefixRegex(groupingPrefix string) string {
 	groupingPrefix = regexpEscaped(groupingPrefix)
-	groupingPrefix = strings.Replace(groupingPrefix, regexpEscaped(PackageGroupingPrefixWildcard), `(.*?)`, 1)
+	groupingPrefix = strings.ReplaceAll(groupingPrefix, regexpEscaped(PackageGroupingPrefixWildcard), `(.*?)`)
 	groupingPrefix = "^" + groupingPrefix
 	return groupingPrefix
 }

@@ -69,7 +69,7 @@ func (t transitionRepositoryImpl) MoveGroupingPackage(fromPkg, toPkg string) (in
 		if err != nil {
 			return fmt.Errorf("failed to get from package: %w", err)
 		}
-		if !(fromPkgEnt.Kind == entity.KIND_WORKSPACE || fromPkgEnt.Kind == entity.KIND_GROUP) {
+		if fromPkgEnt.Kind != entity.KIND_WORKSPACE && fromPkgEnt.Kind != entity.KIND_GROUP {
 			return fmt.Errorf("MoveGroupingPackage: not applicable for (from) api kind %s", fromPkgEnt.Kind)
 		}
 		// in this case no data is expected, but need to update child packages
@@ -127,7 +127,7 @@ func (t transitionRepositoryImpl) MovePackage(fromPkg, toPkg string, overwriteHi
 		if err != nil {
 			return fmt.Errorf("failed to get from package: %w", err)
 		}
-		if !(fromPkgEnt.Kind == entity.KIND_PACKAGE || fromPkgEnt.Kind == entity.KIND_DASHBOARD) {
+		if fromPkgEnt.Kind != entity.KIND_PACKAGE && fromPkgEnt.Kind != entity.KIND_DASHBOARD {
 			return fmt.Errorf("MovePackage: not applicable for (from) api kind %s", fromPkgEnt.Kind)
 		}
 		// in this case no child packages expected, but need to update data

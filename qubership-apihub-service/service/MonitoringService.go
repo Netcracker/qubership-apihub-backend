@@ -216,18 +216,14 @@ func (m *monitoringServiceImpl) IncreaseBusinessMetricCounter(userId string, met
 	utils.SafeAsync(func() {
 		m.businessMetricsMutex.Lock()
 		defer m.businessMetricsMutex.Unlock()
-		if _, userMetricExists := m.businessMetrics[userId]; !userMetricExists {
+		if m.businessMetrics[userId] == nil {
 			m.businessMetrics[userId] = map[string]map[string]int{metric: {key: 1}}
+		} else if m.businessMetrics[userId][metric] == nil {
+			m.businessMetrics[userId][metric] = map[string]int{key: 1}
+		} else if _, keyExists := m.businessMetrics[userId][metric][key]; keyExists {
+			m.businessMetrics[userId][metric][key]++
 		} else {
-			if _, metricExists := m.businessMetrics[userId][metric]; !metricExists {
-				m.businessMetrics[userId][metric] = map[string]int{key: 1}
-			} else {
-				if _, keyExists := m.businessMetrics[userId][metric][key]; keyExists {
-					m.businessMetrics[userId][metric][key]++
-				} else {
-					m.businessMetrics[userId][metric][key] = 1
-				}
-			}
+			m.businessMetrics[userId][metric][key] = 1
 		}
 	})
 }

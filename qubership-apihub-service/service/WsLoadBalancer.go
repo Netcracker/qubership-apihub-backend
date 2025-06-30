@@ -165,17 +165,19 @@ func (w *wsLoadBalancerImpl) ListSessions() ([]WSLoadBalancerSession, error) {
 func (w *wsLoadBalancerImpl) HasBranchEditSession(sessionId string) (bool, error) {
 	w.isReadyWg.Wait()
 
-	branchSessionRegex := strings.Replace(sessionId, "|", "\\|", -1)
+	branchSessionRegex := strings.ReplaceAll(sessionId, "|", "\\|")
 	var branchEditSessions []WSLoadBalancerSession
 
 	cursor, err := w.sessMap.Query(query.M{"$onKey": query.M{"$regexMatch": branchSessionRegex}})
 	if err != nil {
 		return false, err
 	}
-	err = cursor.Range(func(key string, value interface{}) bool {
+	if err := cursor.Range(func(key string, value interface{}) bool {
 		branchEditSessions = append(branchEditSessions, value.(WSLoadBalancerSession))
 		return true
-	})
+	}); err != nil {
+		return false, err
+	}
 	if len(branchEditSessions) > 0 {
 		return true, nil
 	}
@@ -242,16 +244,18 @@ func (w *wsLoadBalancerImpl) SelectWsServer(projectId string, branchName string,
 		sessionId = makeBranchEditSessionId(projectId, branchName)
 
 		fileSessionRegex := makeFileEditSessionId(projectId, branchName, ".*")
-		fileSessionRegex = strings.Replace(fileSessionRegex, "|", "\\|", -1)
+		fileSessionRegex = strings.ReplaceAll(fileSessionRegex, "|", "\\|")
 		var fileEditSessions []WSLoadBalancerSession
 		cursor, err := w.sessMap.Query(query.M{"$onKey": query.M{"$regexMatch": fileSessionRegex}})
 		if err != nil {
 			return "", err
 		}
-		err = cursor.Range(func(key string, value interface{}) bool {
+		if err := cursor.Range(func(key string, value interface{}) bool {
 			fileEditSessions = append(fileEditSessions, value.(WSLoadBalancerSession))
 			return true
-		})
+		}); err != nil {
+			log.Errorf("failed to range cursor: %v", err)
+		}
 		// all sessions should be bound to one node
 		if len(fileEditSessions) > 0 {
 			if fileEditSessions[0].NodeAddress == w.bindAddr {
@@ -304,20 +308,28 @@ func (w *wsLoadBalancerImpl) RedirectWs(addr string, serverConn *ws.Conn, origSe
 			_, errR := resp.Body.Read(body)
 			if errR != nil {
 				log.Errorf("Failed to read body: %s", errR)
-				serverConn.Close()
+				if err := serverConn.Close(); err != nil {
+					log.Errorf("Failed to close server connection: %v", err)
+				}
 				return
 			}
 			statusCode = resp.StatusCode
 		}
 		log.Errorf("Redirect to %s failed: %s. Status code: %d, body: %s", addr, err.Error(), statusCode, string(body))
 
-		serverConn.Close()
+		if err := serverConn.Close(); err != nil {
+			log.Errorf("Failed to close server connection: %v", err)
+		}
 		return
 	}
 
-	serverConn.SetReadDeadline(time.Now().Add(PingTime * 2))
+	if err := serverConn.SetReadDeadline(time.Now().Add(PingTime * 2)); err != nil {
+		log.Warnf("Failed to set read deadline for ws connection: %v", err)
+	}
 	serverConn.SetPongHandler(func(appData string) error {
-		serverConn.SetReadDeadline(time.Now().Add(PingTime * 2))
+		if err := serverConn.SetReadDeadline(time.Now().Add(PingTime * 2)); err != nil {
+			log.Warnf("Failed to set read deadline for ws connection: %v", err)
+		}
 		return nil
 	})
 
@@ -328,8 +340,12 @@ func (w *wsLoadBalancerImpl) RedirectWs(addr string, serverConn *ws.Conn, origSe
 	log.Debugf("Forward connection to %s established", addr)
 
 	defer func() {
-		serverConn.Close()
-		clientConn.Close()
+		if err := serverConn.Close(); err != nil {
+			log.Errorf("Failed to close server connection: %v", err)
+		}
+		if err := clientConn.Close(); err != nil {
+			log.Errorf("Failed to close client connection: %v", err)
+		}
 		serverConn = nil
 		clientConn = nil
 		w.forwardedConnections.Delete(addr)
@@ -401,8 +417,12 @@ func (w *wsLoadBalancerImpl) handleBadSessions() {
 			_, fsExists := fileSessions[sessionId]
 			if !fsExists {
 				log.Warnf("Stale redirect session detected: %s, closing connection", addr)
-				fwdConn.clientConn.Close()
-				fwdConn.serverConn.Close()
+				if err := fwdConn.clientConn.Close(); err != nil {
+					log.Errorf("Failed to close client connection: %v", err)
+				}
+				if err := fwdConn.serverConn.Close(); err != nil {
+					log.Errorf("Failed to close server connection: %v", err)
+				}
 				toDelete = append(toDelete, addr)
 			}
 		}
@@ -461,8 +481,12 @@ func (w *wsLoadBalancerImpl) sendPingPong() {
 			fs := value.(forwardedConnection)
 			utils.SafeAsync(func() {
 				if err := fs.serverConn.WriteControl(ws.PingMessage, []byte{}, time.Now().Add(PingTime*2)); err != nil {
-					fs.serverConn.Close()
-					fs.clientConn.Close()
+					if err := fs.serverConn.Close(); err != nil {
+						log.Errorf("Failed to close server connection: %v", err)
+					}
+					if err := fs.clientConn.Close(); err != nil {
+						log.Errorf("Failed to close client connection: %v", err)
+					}
 					w.forwardedConnections.Delete(addr)
 				}
 			})

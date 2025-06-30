@@ -491,13 +491,13 @@ func (w *WsFileEditServiceImpl) SaveFileContent(editSessionId string) {
 func makeGoOtOps(ops []interface{}) ot.Ops {
 	var result ot.Ops
 	for _, op := range ops {
-		switch op.(type) {
+		switch op := op.(type) {
 		case int:
-			result = append(result, ot.Op{N: op.(int)})
+			result = append(result, ot.Op{N: op})
 		case float64:
-			result = append(result, ot.Op{N: int(op.(float64))})
+			result = append(result, ot.Op{N: int(op)})
 		case string:
-			result = append(result, ot.Op{S: op.(string)})
+			result = append(result, ot.Op{S: op})
 		default:
 			log.Errorf("unknown op type: '%+v'", op)
 			continue

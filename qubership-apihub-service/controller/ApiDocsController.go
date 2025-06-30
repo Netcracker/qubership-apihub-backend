@@ -15,13 +15,12 @@
 package controller
 
 import (
-	"errors"
 	"fmt"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 )
@@ -64,7 +63,7 @@ func (a apiDocsControllerImpl) GetSpec(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			break
 		}
-		content, err = ioutil.ReadFile(fullPath)
+		content, err = os.ReadFile(fullPath)
 		if err != nil {
 			break
 		}
@@ -75,13 +74,13 @@ func (a apiDocsControllerImpl) GetSpec(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			break
 		}
-		content, err = ioutil.ReadFile(fullPath)
+		content, err = os.ReadFile(fullPath)
 		if err != nil {
 			break
 		}
 		a.respond(w, content)
 	default:
-		err = errors.New(fmt.Sprintf("There is no API with '%s' title", strings.TrimPrefix(path, "/v3/api-docs/")))
+		err = fmt.Errorf("there is no API with '%s' title", strings.TrimPrefix(path, "/v3/api-docs/"))
 	}
 
 	if err != nil {
@@ -93,5 +92,5 @@ func (a apiDocsControllerImpl) GetSpec(w http.ResponseWriter, r *http.Request) {
 func (a apiDocsControllerImpl) respond(w http.ResponseWriter, content []byte) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write(content)
+	_, _ = w.Write(content)
 }

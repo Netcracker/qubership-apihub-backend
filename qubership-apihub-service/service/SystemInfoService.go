@@ -17,11 +17,12 @@ package service
 import (
 	"encoding/base64"
 	"fmt"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
-	"github.com/coreos/go-oidc/v3/oidc"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
+	"github.com/coreos/go-oidc/v3/oidc"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	log "github.com/sirupsen/logrus"
@@ -750,7 +751,7 @@ func (g systemInfoServiceImpl) setMinioOnlyForBuildResult() {
 		log.Errorf("failed to parse %v env value: %v. Value by default - false", STORAGE_SERVER_STORE_ONLY_BUILD_RESULT, err.Error())
 		val = false
 	}
-	if !g.IsMinioStorageActive() && val == true {
+	if !g.IsMinioStorageActive() && val {
 		val = false
 		log.Warnf("%s was set to false because %s had been set to false", STORAGE_SERVER_STORE_ONLY_BUILD_RESULT, STORAGE_SERVER_ACTIVE)
 	}
@@ -871,7 +872,6 @@ func (g systemInfoServiceImpl) setAccessTokenDurationSec() {
 	}
 
 	if val < 600 {
-		err = fmt.Errorf("env %v has incorrect value, value must be greater than 600. Value by default - 1800", ACCESS_TOKEN_DURATION_SEC)
 		g.systemInfoMap[ACCESS_TOKEN_DURATION_SEC] = 1800
 		return
 	}
@@ -895,7 +895,6 @@ func (g systemInfoServiceImpl) setRefreshTokenDurationSec() {
 		return
 	}
 	if val < g.GetAccessTokenDurationSec() {
-		err = fmt.Errorf("env %v has incorrect value, value must be equal or greater than %v. Value by default - 43200", REFRESH_TOKEN_DURATION_SEC, ACCESS_TOKEN_DURATION_SEC)
 		g.systemInfoMap[REFRESH_TOKEN_DURATION_SEC] = 43200
 		return
 	}

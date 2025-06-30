@@ -16,11 +16,12 @@ package controller
 
 import (
 	"crypto/tls"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
-	log "github.com/sirupsen/logrus"
 	"io"
 	"net/http"
 	"net/url"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
@@ -115,11 +116,11 @@ func (a *agentProxyControllerImpl) Proxy(w http.ResponseWriter, r *http.Request)
 		})
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if err := copyHeader(w.Header(), resp.Header); err != nil {
 		utils.RespondWithCustomError(w, err)
 		return
 	}
 	w.WriteHeader(resp.StatusCode)
-	io.Copy(w, resp.Body)
+	_, _ = io.Copy(w, resp.Body)
 }

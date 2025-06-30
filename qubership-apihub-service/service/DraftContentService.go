@@ -20,7 +20,7 @@ import (
 	goctx "context"
 	"crypto/tls"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"mime"
 	"net/http"
 	"path"
@@ -289,10 +289,7 @@ func (c draftContentServiceImpl) UpdateDraftContentData(ctx context.SecurityCont
 		}
 	}
 
-	sendPatch := false
-	if file.Status == string(view.StatusUnmodified) || file.Status == string(view.StatusMoved) || file.Status == string(view.StatusIncluded) {
-		sendPatch = true // branch file updated event should be sent on first file edit
-	}
+	sendPatch := file.Status == string(view.StatusUnmodified) || file.Status == string(view.StatusMoved) || file.Status == string(view.StatusIncluded)
 
 	status := view.StatusModified
 	fileStatus := view.ParseFileStatus(file.Status)
@@ -880,8 +877,10 @@ func (c draftContentServiceImpl) AddFileFromUrl(ctx context.SecurityContext, pro
 			Message: exception.InvalidUrlMsg,
 		}
 	}
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, &exception.CustomError{
 			Status:  http.StatusBadRequest,

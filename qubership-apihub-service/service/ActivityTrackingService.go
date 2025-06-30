@@ -66,7 +66,7 @@ func (a activityTrackingServiceImpl) GetActivityHistory_deprecated(ctx context.S
 		if err != nil {
 			return nil, fmt.Errorf("failed to get packages by filer : %v.Error - %w", packagesFilter, err)
 		}
-		if packages == nil || len(packages) == 0 {
+		if len(packages) == 0 {
 			return &view.PkgActivityResponse_deprecated{Events: make([]view.PkgActivityResponseItem_depracated, 0)}, err
 		}
 
@@ -83,7 +83,7 @@ func (a activityTrackingServiceImpl) GetActivityHistory_deprecated(ctx context.S
 	if err != nil {
 		return nil, fmt.Errorf("failed to get events for packages: %w", err)
 	}
-	if ents == nil || len(ents) == 0 {
+	if len(ents) == 0 {
 		return &view.PkgActivityResponse_deprecated{Events: make([]view.PkgActivityResponseItem_depracated, 0)}, err
 	}
 
@@ -103,7 +103,7 @@ func (a activityTrackingServiceImpl) GetActivityHistory(ctx context.SecurityCont
 		if err != nil {
 			return nil, fmt.Errorf("failed to get packages by filer : %v.Error - %w", packagesFilter, err)
 		}
-		if packages == nil || len(packages) == 0 {
+		if len(packages) == 0 {
 			return &view.PkgActivityResponse{Events: make([]view.PkgActivityResponseItem, 0)}, err
 		}
 
@@ -120,7 +120,7 @@ func (a activityTrackingServiceImpl) GetActivityHistory(ctx context.SecurityCont
 	if err != nil {
 		return nil, fmt.Errorf("failed to get events for packages: %w", err)
 	}
-	if ents == nil || len(ents) == 0 {
+	if len(ents) == 0 {
 		return &view.PkgActivityResponse{Events: make([]view.PkgActivityResponseItem, 0)}, err
 	}
 

@@ -17,8 +17,8 @@ package utils
 import "strings"
 
 func LikeEscaped(s string) string {
-	s = strings.Replace(s, "\\", "\\\\\\\\", -1)
-	s = strings.Replace(s, "%", "\\%", -1)
-	s = strings.Replace(s, "_", "\\_", -1)
+	s = strings.ReplaceAll(s, "\\", "\\\\\\\\")
+	s = strings.ReplaceAll(s, "%", "\\%")
+	s = strings.ReplaceAll(s, "_", "\\_")
 	return s
 }

@@ -21,6 +21,8 @@ import (
 	"strings"
 	"time"
 
+	"errors"
+
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
 	mEntity "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/migration/entity"
 	mView "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/migration/view"
@@ -183,6 +185,9 @@ func (d dbMigrationServiceImpl) MigrateOperations(migrationId string, req mView.
 
 func (d dbMigrationServiceImpl) GetMigrationReport(migrationId string, includeBuildSamples bool) (*mView.MigrationReport, error) {
 	mRunEnt, err := d.repo.GetMigrationRun(migrationId)
+	if err != nil {
+		return nil, err
+	}
 	if mRunEnt == nil {
 		return nil, fmt.Errorf("migration with id=%s not found", migrationId)
 	}
@@ -209,6 +214,9 @@ func (d dbMigrationServiceImpl) GetMigrationReport(migrationId string, includeBu
 		JoinOn("migrated_version.build_id = b.build_id").
 		Where("migrated_version.migration_id = ?", migrationId).
 		Select()
+	if err != nil {
+		return nil, err
+	}
 
 	for _, mv := range migratedVersions {
 		if mv.Error != "" {
@@ -231,6 +239,9 @@ func (d dbMigrationServiceImpl) GetMigrationReport(migrationId string, includeBu
 
 	migrationChanges := make(map[string]int)
 	_, err = d.cp.GetConnection().Query(pg.Scan(&migrationChanges), `select changes from migration_changes where migration_id = ?`, migrationId)
+	if err != nil && err != pg.ErrNoRows {
+		return nil, err
+	}
 
 	for change, count := range migrationChanges {
 		migrationChange := mView.MigrationChange{
@@ -239,7 +250,7 @@ func (d dbMigrationServiceImpl) GetMigrationReport(migrationId string, includeBu
 		}
 		if includeBuildSamples {
 			changedVersion := new(mEntity.MigratedVersionChangesResultEntity)
-			err = d.cp.GetConnection().Model(changedVersion).
+			_ = d.cp.GetConnection().Model(changedVersion).
 				ColumnExpr(`migrated_version_changes.*,
 						b.metadata->>'build_type' build_type,
 						b.metadata->>'previous_version' previous_version,
@@ -257,6 +268,9 @@ func (d dbMigrationServiceImpl) GetMigrationReport(migrationId string, includeBu
 	}
 	_, err = d.cp.GetConnection().Query(pg.Scan(&result.SuspiciousBuildsCount),
 		`select count(*) from migrated_version_changes where migration_id = ?`, migrationId)
+	if err != nil && err != pg.ErrNoRows {
+		return nil, err
+	}
 
 	return &result, err
 }
@@ -598,7 +612,7 @@ MigrationProcess:
 	log.Info("Finished rebuilding all versions")
 
 	if migrationCancelled {
-		return fmt.Errorf(CancelledMigrationError)
+		return errors.New(CancelledMigrationError)
 	}
 	err = d.rebuildChangelogsAfterVersionsMigrations(migrationId)
 	if err != nil {
@@ -783,7 +797,7 @@ MigrationProcess:
 	}
 	log.Info("Finished rebuilding changelogs")
 	if migrationCancelled {
-		return fmt.Errorf(CancelledMigrationError)
+		return errors.New(CancelledMigrationError)
 	}
 	return nil
 }

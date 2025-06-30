@@ -21,8 +21,6 @@ import (
 )
 
 type AgentEntity struct {
-	tableName struct{} `pg:"agent"`
-
 	AgentId        string    `pg:"agent_id, pk, type:varchar"`
 	Cloud          string    `pg:"cloud, type:varchar"`
 	Namespace      string    `pg:"namespace, type:varchar"`

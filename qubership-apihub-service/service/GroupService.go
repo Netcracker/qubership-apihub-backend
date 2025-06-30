@@ -110,17 +110,18 @@ func (g groupServiceImpl) AddGroup(ctx context.SecurityContext, group *view.Grou
 func (g groupServiceImpl) GetAllGroups(ctx context.SecurityContext, depth int, id string, name string, onlyFavorite bool) (*view.Groups, error) {
 	var entities []entity.PackageFavEntity
 	var err error
-	if depth == 0 {
+	switch depth {
+	case 0:
 		entities, err = g.publishedRepo.GetAllPackageGroups(name, onlyFavorite, ctx.GetUserId())
 		if err != nil {
 			return nil, err
 		}
-	} else if depth == 1 {
+	case 1:
 		entities, err = g.publishedRepo.GetChildPackageGroups(id, name, onlyFavorite, ctx.GetUserId())
 		if err != nil {
 			return nil, err
 		}
-	} else {
+	default:
 		return nil, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.IncorrectDepthForRootGroups,

@@ -22,7 +22,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"sort"
 	"strconv"
@@ -32,19 +32,16 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/archive"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/metrics"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/repository"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service/validation"
-
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 
 	log "github.com/sirupsen/logrus"
-
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
-
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/repository"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 )
 
 type PublishedService interface {
@@ -635,8 +632,12 @@ func readZipFile(zf *zip.File) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
-	return ioutil.ReadAll(f)
+	defer func() {
+		if err := f.Close(); err != nil {
+			log.Errorf("Failed to close zip file: %v", err)
+		}
+	}()
+	return io.ReadAll(f)
 }
 
 func (p publishedServiceImpl) DeleteVersion(ctx context.SecurityContext, packageId string, versionName string) error {
@@ -958,28 +959,6 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 	if err != nil {
 		return err
 	}
-	previousVersionRevision := buildArc.PackageInfo.PreviousVersionRevision
-	if previousVersionRevision == 0 {
-		if buildArc.PackageInfo.PreviousVersion != "" {
-			previousVersionPackageId := buildArc.PackageInfo.PackageId
-			if buildArc.PackageInfo.PreviousVersionPackageId != "" {
-				previousVersionPackageId = buildArc.PackageInfo.PreviousVersionPackageId
-			}
-			previousVersionEnt, err := p.publishedRepo.GetVersionIncludingDeleted(previousVersionPackageId, buildArc.PackageInfo.PreviousVersion)
-			if err != nil {
-				return err
-			}
-			if previousVersionEnt == nil {
-				return &exception.CustomError{
-					Status:  http.StatusBadRequest,
-					Code:    exception.PublishedPackageVersionNotFound,
-					Message: exception.PublishedPackageVersionNotFoundMsg,
-					Params:  map[string]interface{}{"version": buildArc.PackageInfo.PreviousVersion, "packageId": previousVersionPackageId},
-				}
-			}
-			previousVersionRevision = previousVersionEnt.Revision
-		}
-	}
 
 	refEntities, err := p.makePublishedReferencesEntities(buildArc.PackageInfo, buildArc.PackageInfo.Refs)
 	if err != nil {
@@ -1255,7 +1234,7 @@ func (p publishedServiceImpl) makePublishedReferencesEntities(packageInfo view.P
 }
 
 func makePublishedReferenceUniqueKey(entity *entity.PublishedReferenceEntity) string {
-	return fmt.Sprintf(`%v|@@|%v|@@|%v|@@|%v|@@|%v|@@|%v`, entity.RefPackageId, entity.RefVersion, entity.RefRevision, entity.ParentRefPackageId, entity.ParentRefVersion, entity.ParentRefRevision)
+	return fmt.Sprintf(`%v|@@|%v|@@|%v|@@|%v|@@|%v`, entity.RefPackageId, entity.RefVersion, entity.RefRevision, entity.ParentRefPackageId, entity.ParentRefVersion)
 }
 
 func (p publishedServiceImpl) reCalculateChangelogs(packageInfo view.PackageInfoFile) error {

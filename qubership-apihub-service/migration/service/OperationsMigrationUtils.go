@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -30,9 +29,7 @@ import (
 	"strconv"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	mEntity "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/migration/entity"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	"github.com/go-pg/pg/v10"
@@ -42,57 +39,6 @@ import (
 
 const MigrationBuildPriority = -100
 const CancelledMigrationError = "cancelled"
-
-func (d dbMigrationServiceImpl) validateMinRequiredVersion(minRequiredMigrationVersion int) error {
-	var currentMigration entity.MigrationEntity
-	err := d.cp.GetConnection().Model(&currentMigration).
-		First()
-
-	if err != nil {
-		return err
-	}
-	if currentMigration.Dirty {
-		return &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.MigrationVersionIsDirty,
-			Message: exception.MigrationVersionIsDirtyMsg,
-			Params:  map[string]interface{}{"currentVersion": currentMigration.Version},
-		}
-	}
-	if currentMigration.Version < minRequiredMigrationVersion {
-		return &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.MigrationVersionIsTooLow,
-			Message: exception.MigrationVersionIsTooLowMsg,
-			Params:  map[string]interface{}{"currentVersion": currentMigration.Version, "requiredVersion": minRequiredMigrationVersion},
-		}
-	}
-	return nil
-}
-
-func (d dbMigrationServiceImpl) getTypeAndTitleFromPublishedFileData(filename string, checksum string) (string, string) {
-	fileData := new(entity.PublishedContentDataEntity)
-	err := d.cp.GetConnection().Model(fileData).
-		Where("checksum = ?", checksum).
-		First()
-	if err != nil {
-		log.Errorf("failed to get file data by checksum %v", checksum)
-	}
-	title := ""
-	fileType := view.Unknown
-	if fileData != nil && len(fileData.Data) > 0 {
-		fileType, title = service.GetContentInfo(filename, &fileData.Data)
-	}
-
-	if title == "" {
-		log.Infof("failed to calculate title for %v", checksum)
-		title = getTitleFromFilename(filename)
-	}
-	if fileType == view.Unknown {
-		log.Infof("file %v has unknown type", filename)
-	}
-	return string(fileType), title
-}
 
 func (d dbMigrationServiceImpl) addTaskToRebuild(migrationId string, versionEnt entity.PublishedVersionEntity, noChangelog bool) (string, error) {
 	buildId := uuid.New().String()
@@ -374,7 +320,7 @@ func (d dbMigrationServiceImpl) makeBuildSourceEntityFromSources(migrationId str
 		publishedFileEntitiesMap[fileEnt.FileId] = fileEnt
 	}
 	for i, file := range buildConfig.Files {
-		if file.Publish != nil && *file.Publish == true {
+		if file.Publish != nil && *file.Publish {
 			publishedFileEnt, exists := publishedFileEntitiesMap[file.FileId]
 			if !exists {
 				return nil, fmt.Errorf("published file %v not found", file.FileId)
@@ -473,11 +419,6 @@ func getMapKeysGeneric(m map[string]interface{}) []string {
 		result = append(result, k)
 	}
 	return result
-}
-
-func getTitleFromFilename(filename string) string {
-	name := strings.TrimSuffix(filename, filepath.Ext(filename))
-	return strings.Title(strings.ToLower(name))
 }
 
 func (d dbMigrationServiceImpl) cleanupEmptyVersions() error {
@@ -611,7 +552,7 @@ func (d *dbMigrationServiceImpl) getMigrationFilenamesMap() (map[int]string, map
 	if err != nil {
 		return nil, nil, err
 	}
-	defer folder.Close()
+	defer func() { _ = folder.Close() }()
 	fileNames, err := folder.Readdirnames(-1)
 	if err != nil {
 		return nil, nil, err

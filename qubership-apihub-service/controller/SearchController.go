@@ -16,12 +16,13 @@ package controller
 
 import (
 	"encoding/json"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/metrics"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/metrics"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
@@ -51,7 +52,7 @@ type searchControllerImpl struct {
 // deprecated
 func (s searchControllerImpl) Search_deprecated(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
@@ -143,7 +144,7 @@ func (s searchControllerImpl) Search_deprecated(w http.ResponseWriter, r *http.R
 
 func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
@@ -211,8 +212,8 @@ func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
 	start := searchQuery.PublicationDateInterval.StartDate
 	end := searchQuery.PublicationDateInterval.EndDate
 	now := time.Now()
-	if !((!start.IsZero() && start.Year() == (now.Year()-1) && start.Month() == now.Month() && start.Day() == now.Day()) &&
-		(!end.IsZero() && end.Year() == now.Year() && end.Month() == now.Month() && end.Day() == now.Day())) {
+	if start.IsZero() || start.Year() != (now.Year()-1) || start.Month() != now.Month() || start.Day() != now.Day() ||
+		end.IsZero() || end.Year() != now.Year() || end.Month() != now.Month() || end.Day() != now.Day() {
 		// default date interval was modified
 		s.monitoringService.IncreaseBusinessMetricCounter(user, metrics.GlobalSearchDefaultPublicationDateModified, searchLevel)
 	}

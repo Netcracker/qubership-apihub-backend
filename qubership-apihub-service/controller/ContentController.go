@@ -17,11 +17,12 @@ package controller
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -113,7 +114,9 @@ func (c contentControllerImpl) GetContent(w http.ResponseWriter, r *http.Request
 	}
 	w.Header().Set("Content-Type", content.DataType)
 	w.WriteHeader(http.StatusOK)
-	w.Write(content.Data)
+	if _, err := w.Write(content.Data); err != nil {
+		log.Errorf("Ошибка при записи данных в http.ResponseWriter: %v", err)
+	}
 }
 
 func (c contentControllerImpl) GetContentAsFile(w http.ResponseWriter, r *http.Request) {
@@ -142,7 +145,7 @@ func (c contentControllerImpl) GetContentAsFile(w http.ResponseWriter, r *http.R
 	}
 
 	goCtx := context.CreateContextWithSecurity(r.Context(), context.Create(r))
-	goCtx = context.CreateContextWithStacktrace(goCtx, fmt.Sprintf("GetContentAsFile()"))
+	goCtx = context.CreateContextWithStacktrace(goCtx, "GetContentAsFile()")
 
 	content, err := c.branchService.GetContentNoData(goCtx, projectId, branchName, contentId)
 	if err != nil {
@@ -180,7 +183,9 @@ func (c contentControllerImpl) GetContentAsFile(w http.ResponseWriter, r *http.R
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%v", fileName))
 	w.WriteHeader(http.StatusOK)
-	w.Write(data)
+	if _, err := w.Write(data); err != nil {
+		log.Errorf("Ошибка при записи данных в http.ResponseWriter: %v", err)
+	}
 }
 
 func (c contentControllerImpl) UpdateContent(w http.ResponseWriter, r *http.Request) {
@@ -207,8 +212,12 @@ func (c contentControllerImpl) UpdateContent(w http.ResponseWriter, r *http.Requ
 		})
 		return
 	}
-	defer r.Body.Close()
-	data, err := ioutil.ReadAll(r.Body)
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Errorf("Ошибка при закрытии r.Body: %v", err)
+		}
+	}()
+	data, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
@@ -318,11 +327,12 @@ func (c contentControllerImpl) UploadContent(w http.ResponseWriter, r *http.Requ
 					Debug:   err.Error()})
 				return
 			}
-			data, err := ioutil.ReadAll(file)
-			closeErr := file.Close()
-			if closeErr != nil {
-				log.Debugf("failed to close temporal file: %+v", err)
-			}
+			defer func() {
+				if err := file.Close(); err != nil {
+					log.Debugf("Ошибка при закрытии файла: %+v", err)
+				}
+			}()
+			data, err := io.ReadAll(file)
 			if err != nil {
 				log.Error("Failed to upload content:", err.Error())
 				utils.RespondWithCustomError(w, &exception.CustomError{
@@ -443,7 +453,11 @@ func (c contentControllerImpl) MoveFile(w http.ResponseWriter, r *http.Request) 
 		})
 		return
 	}
-	defer r.Body.Close()
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Errorf("Ошибка при закрытии r.Body: %v", err)
+		}
+	}()
 	params, err := getParamsFromBody(r)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
@@ -567,7 +581,11 @@ func (c contentControllerImpl) AddFile(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	defer r.Body.Close()
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Errorf("Ошибка при закрытии r.Body: %v", err)
+		}
+	}()
 	params, err := getParamsFromBody(r)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
@@ -814,7 +832,9 @@ func (c contentControllerImpl) GetContentFromCommit(w http.ResponseWriter, r *ht
 	}
 	w.Header().Set("Content-Type", "text/plain") // For frontend it's convenient to get all types as plain text
 	w.WriteHeader(http.StatusOK)
-	w.Write(data)
+	if _, err := w.Write(data); err != nil {
+		log.Errorf("Ошибка при записи данных в http.ResponseWriter: %v", err)
+	}
 }
 
 func (c contentControllerImpl) GetContentFromBlobId(w http.ResponseWriter, r *http.Request) {
@@ -836,7 +856,9 @@ func (c contentControllerImpl) GetContentFromBlobId(w http.ResponseWriter, r *ht
 	}
 	w.Header().Set("Content-Type", "text/plain") // For frontend it's convenient to get all types as plain text
 	w.WriteHeader(http.StatusOK)
-	w.Write(data)
+	if _, err := w.Write(data); err != nil {
+		log.Errorf("Ошибка при записи данных в http.ResponseWriter: %v", err)
+	}
 }
 
 func (c contentControllerImpl) UpdateMetadata(w http.ResponseWriter, r *http.Request) {
@@ -881,8 +903,12 @@ func (c contentControllerImpl) UpdateMetadata(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	defer r.Body.Close()
-	body, err := ioutil.ReadAll(r.Body)
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Errorf("Ошибка при закрытии r.Body: %v", err)
+		}
+	}()
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
@@ -1036,5 +1062,8 @@ func (c contentControllerImpl) GetAllContent(w http.ResponseWriter, r *http.Requ
 	}
 
 	w.Header().Set("Content-Type", "application/zip")
-	w.Write(content)
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write(content); err != nil {
+		log.Errorf("Ошибка при записи данных в http.ResponseWriter: %v", err)
+	}
 }

@@ -16,8 +16,10 @@ package context
 
 import "context"
 
-const stacktraceKey = "stacktrace"
-const securityKey = "security"
+type contextKey string
+
+const stacktraceKey contextKey = "stacktrace"
+const securityKey contextKey = "security"
 
 func CreateContextWithStacktrace(ctx context.Context, functionWithParameters string) context.Context {
 	var result context.Context

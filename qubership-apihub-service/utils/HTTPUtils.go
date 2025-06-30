@@ -16,12 +16,13 @@ package utils
 
 import (
 	"encoding/json"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
-	log "github.com/sirupsen/logrus"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	log "github.com/sirupsen/logrus"
 )
 
 func DeleteCookie(w http.ResponseWriter, name string, path string, productionMode bool) {
@@ -124,5 +125,7 @@ func RespondWithJson(w http.ResponseWriter, code int, payload interface{}) {
 	response, _ := json.Marshal(payload)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	w.Write(response)
+	if _, err := w.Write(response); err != nil {
+		log.Errorf("failed to write http response: %v", err)
+	}
 }

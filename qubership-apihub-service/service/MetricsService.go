@@ -17,7 +17,6 @@ package service
 import (
 	"time"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/db"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/repository"
 	"github.com/robfig/cron/v3"
 	log "github.com/sirupsen/logrus"
@@ -36,9 +35,8 @@ func NewMetricsService(metricsRepository repository.MetricsRepository) MetricsSe
 }
 
 type metricsServiceImpl struct {
-	metricsRepository  repository.MetricsRepository
-	connectionProvider db.ConnectionProvider
-	cron               *cron.Cron
+	metricsRepository repository.MetricsRepository
+	cron              *cron.Cron
 }
 
 func (c *metricsServiceImpl) CreateJob(schedule string) error {

@@ -426,9 +426,12 @@ func (s OperationComparisonEntity) GetChanges(t OperationComparisonEntity) map[s
 	if len(s.Changes) != 0 || len(t.Changes) != 0 {
 		sChanges := s.Changes
 		var tChanges map[string]interface{}
-		inrec, _ := json.Marshal(t.Changes)
-		json.Unmarshal(inrec, &tChanges)
-		if !reflect.DeepEqual(sChanges, tChanges) {
+		inrec, err := json.Marshal(t.Changes)
+		if err == nil {
+			err = json.Unmarshal(inrec, &tChanges)
+		}
+
+		if err != nil || !reflect.DeepEqual(sChanges, tChanges) {
 			changes["Changes"] = "Changes field has changed"
 		}
 	}

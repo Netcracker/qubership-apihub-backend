@@ -77,7 +77,7 @@ func (l *internalWebsocketServiceImpl) initDTopic() {
 		log.Errorf("Failed to create DTopic: %s", err.Error())
 	}
 	l.wsLogMessages = make(map[string][]interface{})
-	l.wsLogTopic.AddListener(func(topic olric.DTopicMessage) {
+	_, err = l.wsLogTopic.AddListener(func(topic olric.DTopicMessage) {
 		// lock the mutex to prevent concurrent access to the logs map
 		l.wsLogMutex.Lock()
 		defer l.wsLogMutex.Unlock()
@@ -97,6 +97,9 @@ func (l *internalWebsocketServiceImpl) initDTopic() {
 		messages = append(messages, wsMsg.Data)
 		l.wsLogMessages[wsMsg.SessionId] = messages
 	})
+	if err != nil {
+		log.Errorf("Failed to add listener to DTopic: %s", err.Error())
+	}
 
 	l.isReadyWg.Done()
 }
@@ -199,9 +202,15 @@ func (l *internalWebsocketServiceImpl) logIncommingMessages(wsUrl string, sessio
 		log.Errorf("Failed to connect to internal ws : %v , %s ", err.Error(), wsUrl)
 		return
 	}
-	defer ws.Close()
+	defer func() {
+		if err := ws.Close(); err != nil {
+			log.Errorf("Failed to close internal ws: %v", err)
+		}
+	}()
 
-	ws.SetReadDeadline(time.Now().Add(time.Hour))
+	if err := ws.SetReadDeadline(time.Now().Add(time.Hour)); err != nil {
+		log.Errorf("Failed to set read deadline for internal ws: %v", err)
+	}
 	for {
 		_, message, err := ws.ReadMessage()
 		if err != nil {
@@ -224,7 +233,11 @@ func (l *internalWebsocketServiceImpl) sendMessageToWebsocket(wsUrl string, mess
 		log.Errorf("Failed to connect to internal ws: %v , %s ", err.Error(), wsUrl)
 		return
 	}
-	defer ws.Close()
+	defer func() {
+		if err := ws.Close(); err != nil {
+			log.Errorf("Failed to close internal ws: %v", err)
+		}
+	}()
 
 	if err := ws.WriteJSON(message); err != nil {
 		log.Debugf("Failed to send message to internal ws: %v", err.Error())

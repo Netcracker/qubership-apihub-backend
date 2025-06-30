@@ -16,7 +16,7 @@ package controller
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -29,6 +29,7 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
+	log "github.com/sirupsen/logrus"
 )
 
 type PackageController interface {
@@ -164,7 +165,7 @@ func (p packageControllerImpl) GetPackage(w http.ResponseWriter, r *http.Request
 		return
 	}
 	showParentsString := r.URL.Query().Get("showParents")
-	showParents, err := strconv.ParseBool(showParentsString)
+	showParents, _ := strconv.ParseBool(showParentsString)
 
 	packageInfo, err := p.packageService.GetPackage(ctx, packageId, showParents)
 	if err != nil {
@@ -328,8 +329,12 @@ func (p packageControllerImpl) GetPackagesList(w http.ResponseWriter, r *http.Re
 }
 
 func (p packageControllerImpl) CreatePackage(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
-	body, err := ioutil.ReadAll(r.Body)
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Errorf("failed to close request body: %v", err)
+		}
+	}()
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
@@ -424,8 +429,12 @@ func (p packageControllerImpl) UpdatePackage(w http.ResponseWriter, r *http.Requ
 		})
 		return
 	}
-	defer r.Body.Close()
-	body, err := ioutil.ReadAll(r.Body)
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Errorf("failed to close request body: %v", err)
+		}
+	}()
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,

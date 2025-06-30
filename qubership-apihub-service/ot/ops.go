@@ -53,7 +53,7 @@ func (ops Ops) Count() (ret, del, ins int) {
 		case op.N < 0:
 			del += -op.N
 		case op.N == 0:
-			for _ = range op.S {
+			for range op.S {
 				ins++
 			}
 		}

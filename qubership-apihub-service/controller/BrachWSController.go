@@ -15,11 +15,11 @@
 package controller
 
 import (
-	"fmt"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
@@ -97,7 +97,7 @@ func (c branchWSControllerImpl) ConnectToProjectBranch(w http.ResponseWriter, r 
 	}
 
 	goCtx := context.CreateContextWithSecurity(r.Context(), context.Create(r))
-	goCtx = context.CreateContextWithStacktrace(goCtx, fmt.Sprintf("ConnectToProjectBranch()"))
+	goCtx = context.CreateContextWithStacktrace(goCtx, "ConnectToProjectBranch()")
 
 	err = c.branchService.ConnectToWebsocket(goCtx, projectId, branchName, wsId, websocket)
 	if err != nil {

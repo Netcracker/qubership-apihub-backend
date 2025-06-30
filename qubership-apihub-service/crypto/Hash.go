@@ -22,7 +22,9 @@ import (
 
 func CreateRandomHash() string {
 	bytes := make([]byte, 32) //32 symbols
-	rand.Read(bytes)
+	if _, err := rand.Read(bytes); err != nil {
+		panic(err)
+	}
 	return hex.EncodeToString(bytes[:])
 }
 

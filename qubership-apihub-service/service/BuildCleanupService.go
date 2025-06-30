@@ -20,7 +20,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/db"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	mRepository "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/migration/repository"
@@ -56,7 +55,6 @@ func NewDBCleanupService(cleanUpRepository repository.BuildCleanupRepository,
 type dbCleanupServiceImpl struct {
 	cleanUpRepository            repository.BuildCleanupRepository
 	migrationRepository          mRepository.MigrationRunRepository
-	connectionProvider           db.ConnectionProvider
 	cron                         *cron.Cron
 	rmMigrationBuildDataRes      map[string]interface{}
 	rmMigrationBuildDataResMutex sync.RWMutex
@@ -108,7 +106,7 @@ func (j BuildCleanupJob) Run() {
 		log.Error("Failed to check for running migrations for build cleanup job")
 		return
 	}
-	if migrations != nil && len(migrations) != 0 {
+	if len(migrations) != 0 {
 		log.Infof("Cleanup was skipped at %s due to migration run", scheduledAt)
 		return
 	}

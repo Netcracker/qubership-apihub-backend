@@ -18,7 +18,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -175,7 +175,7 @@ func (p publishV2ControllerImpl) Publish(w http.ResponseWriter, r *http.Request)
 			return
 		}
 
-		sourcesData, err = ioutil.ReadAll(sourcesFile)
+		sourcesData, err = io.ReadAll(sourcesFile)
 		closeErr := sourcesFile.Close()
 		if closeErr != nil {
 			log.Debugf("failed to close temporal file: %+v", err)
@@ -374,8 +374,12 @@ func (p publishV2ControllerImpl) GetPublishStatuses(w http.ResponseWriter, r *ht
 		return
 	}
 
-	defer r.Body.Close()
-	body, err := ioutil.ReadAll(r.Body)
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Errorf("failed to close request body: %v", err)
+		}
+	}()
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
@@ -509,7 +513,7 @@ func (p publishV2ControllerImpl) SetPublishStatus_deprecated(w http.ResponseWrit
 				Debug:   err.Error()})
 			return
 		}
-		packageData, err = ioutil.ReadAll(sourcesFile)
+		packageData, err = io.ReadAll(sourcesFile)
 		closeErr := sourcesFile.Close()
 		if closeErr != nil {
 			log.Debugf("failed to close temporal file: %+v", err)
@@ -673,7 +677,7 @@ func (p publishV2ControllerImpl) SetPublishStatus(w http.ResponseWriter, r *http
 				Debug:   err.Error()})
 			return
 		}
-		data, err = ioutil.ReadAll(sourcesFile)
+		data, err = io.ReadAll(sourcesFile)
 		closeErr := sourcesFile.Close()
 		if closeErr != nil {
 			log.Debugf("failed to close temporal file: %+v", err)
@@ -738,7 +742,9 @@ func (p publishV2ControllerImpl) GetFreeBuild(w http.ResponseWriter, r *http.Req
 
 	if src != nil {
 		w.Header().Set("Content-Type", "application/zip")
-		w.Write(src)
+		if _, err := w.Write(src); err != nil {
+			log.Errorf("Failed to write free build: %v", err)
+		}
 	} else {
 		w.WriteHeader(http.StatusNoContent)
 	}

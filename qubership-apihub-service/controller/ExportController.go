@@ -18,11 +18,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"io"
 	"net/http"
 	"net/url"
 	"strconv"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 
 	log "github.com/sirupsen/logrus"
 
@@ -175,7 +176,9 @@ func (e exportControllerImpl) ExportOperationGroupAsOpenAPIDocuments_deprecated(
 	w.Header().Set("Content-Transfer-Encoding", "binary")
 	w.Header().Set("Expires", "0")
 	w.WriteHeader(http.StatusOK)
-	w.Write(content)
+	if _, err := w.Write(content); err != nil {
+		log.Errorf("Failed to write response: %v", err)
+	}
 }
 
 func (e exportControllerImpl) ExportOperationGroupAsOpenAPIDocuments_deprecated_2(w http.ResponseWriter, r *http.Request) {
@@ -295,8 +298,9 @@ func (e exportControllerImpl) ExportOperationGroupAsOpenAPIDocuments_deprecated_
 
 	w.Header().Set("Expires", "0")
 	w.WriteHeader(http.StatusOK)
-	w.Write(content)
-
+	if _, err := w.Write(content); err != nil {
+		log.Errorf("Failed to write response: %v", err)
+	}
 }
 
 func (e exportControllerImpl) GenerateVersionDoc(w http.ResponseWriter, r *http.Request) {
@@ -364,7 +368,9 @@ func (e exportControllerImpl) GenerateVersionDoc(w http.ResponseWriter, r *http.
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write(data)
+	if _, err := w.Write(data); err != nil {
+		log.Errorf("Failed to write response: %v", err)
+	}
 }
 
 func (e exportControllerImpl) GenerateFileDoc(w http.ResponseWriter, r *http.Request) {
@@ -435,7 +441,9 @@ func (e exportControllerImpl) GenerateFileDoc(w http.ResponseWriter, r *http.Req
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write(data)
+	if _, err := w.Write(data); err != nil {
+		log.Errorf("Failed to write response: %v", err)
+	}
 }
 
 // GenerateApiChangesExcelReport deprecated
@@ -465,32 +473,6 @@ func (e exportControllerImpl) GenerateApiChangesExcelReport(w http.ResponseWrite
 			Debug:   err.Error(),
 		})
 		return
-	}
-
-	format, err := url.QueryUnescape(r.URL.Query().Get("format"))
-	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.InvalidURLEscape,
-			Message: exception.InvalidURLEscapeMsg,
-			Params:  map[string]interface{}{"param": "format"},
-			Debug:   err.Error(),
-		})
-		return
-	}
-	if format == "" {
-		format = view.ExportFormatXlsx
-	} else {
-		supportedFormat := view.ValidateApiChangesExportFormat(format)
-		if !supportedFormat {
-			utils.RespondWithCustomError(w, &exception.CustomError{
-				Status:  http.StatusBadRequest,
-				Code:    exception.UnsupportedFormat,
-				Message: exception.UnsupportedFormatMsg,
-				Params:  map[string]interface{}{"format": format},
-			})
-			return
-		}
 	}
 	previousVersion, err := url.QueryUnescape(r.URL.Query().Get("previousVersion"))
 	if err != nil {
@@ -540,7 +522,9 @@ func (e exportControllerImpl) GenerateApiChangesExcelReport(w http.ResponseWrite
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=APIChanges_%s_%s.xlsx", packageId, versionName))
 	w.Header().Set("Content-Transfer-Encoding", "binary")
 	w.Header().Set("Expires", "0")
-	apiChangesReport.Write(w)
+	if err := apiChangesReport.Write(w); err != nil {
+		log.Errorf("Failed to write api changes report for package %s and version %s: %v", packageId, version, err)
+	}
 }
 
 func (e exportControllerImpl) GenerateApiChangesExcelReportV3(w http.ResponseWriter, r *http.Request) {
@@ -731,7 +715,9 @@ func (e exportControllerImpl) GenerateApiChangesExcelReportV3(w http.ResponseWri
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=APIChanges_%s_%s.xlsx", packageId, versionName))
 	w.Header().Set("Content-Transfer-Encoding", "binary")
 	w.Header().Set("Expires", "0")
-	apiChangesReport.Write(w)
+	if err := apiChangesReport.Write(w); err != nil {
+		log.Errorf("Failed to write api changes report V3 for package %s and version %s: %v", packageId, version, err)
+	}
 }
 
 func (e exportControllerImpl) GenerateOperationsExcelReport(w http.ResponseWriter, r *http.Request) {
@@ -909,7 +895,9 @@ func (e exportControllerImpl) GenerateOperationsExcelReport(w http.ResponseWrite
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=APIOperations_%s_%s.xlsx", packageId, versionName))
 	w.Header().Set("Content-Transfer-Encoding", "binary")
 	w.Header().Set("Expires", "0")
-	operationsReport.Write(w)
+	if err := operationsReport.Write(w); err != nil {
+		log.Errorf("Failed to write operations report for package %s and version %s: %v", packageId, version, err)
+	}
 }
 
 func (e exportControllerImpl) GenerateDeprecatedOperationsExcelReport(w http.ResponseWriter, r *http.Request) {
@@ -1078,11 +1066,17 @@ func (e exportControllerImpl) GenerateDeprecatedOperationsExcelReport(w http.Res
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=DeprecatedOperations_%s_%s.xlsx", packageId, versionName))
 	w.Header().Set("Content-Transfer-Encoding", "binary")
 	w.Header().Set("Expires", "0")
-	deprecatedOperationsReport.Write(w)
+	if err := deprecatedOperationsReport.Write(w); err != nil {
+		log.Errorf("Failed to write deprecated operations report for package %s and version %s: %v", packageId, version, err)
+	}
 }
 
 func (e exportControllerImpl) StartAsyncExport(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Errorf("Failed to close request body: %v", err)
+		}
+	}()
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
@@ -1256,5 +1250,7 @@ func (e exportControllerImpl) GetAsyncExportStatus(w http.ResponseWriter, r *htt
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%v", result.FileName))
 	w.WriteHeader(http.StatusOK)
-	w.Write(result.Data)
+	if _, err := w.Write(result.Data); err != nil {
+		log.Errorf("Failed to write export data: %v", err)
+	}
 }

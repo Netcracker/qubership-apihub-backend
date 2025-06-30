@@ -205,7 +205,7 @@ func (doc Doc) WriteTo(w io.Writer) (nn int64, err error) {
 
 func (doc Doc) String() string {
 	var buf bytes.Buffer
-	doc.WriteTo(&buf)
+	_, _ = doc.WriteTo(&buf)
 	return buf.String()
 }
 

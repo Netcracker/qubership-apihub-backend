@@ -17,13 +17,16 @@ package controller
 import (
 	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
+
+	log "github.com/sirupsen/logrus"
+
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
-	"io"
-	"net/http"
 )
 
 type PersonalAccessTokenController interface {
@@ -43,7 +46,11 @@ type PersonalAccessTokenControllerImpl struct {
 }
 
 func (u PersonalAccessTokenControllerImpl) CreatePAT(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Errorf("failed to close request body: %v", err)
+		}
+	}()
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{

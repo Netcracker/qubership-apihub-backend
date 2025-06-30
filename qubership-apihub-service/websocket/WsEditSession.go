@@ -58,9 +58,13 @@ func NewWsEditSession(editSessionId string, messageHandler WsMessageHandler, ses
 }
 
 func (b *WsEditSession) ConnectClient(wsId string, conn *ws.Conn, user view.User, extWg *sync.WaitGroup) {
-	conn.SetReadDeadline(time.Now().Add(PingTime * 2))
+	if err := conn.SetReadDeadline(time.Now().Add(PingTime * 2)); err != nil {
+		log.Warnf("Failed to set read deadline for ws connection: %v", err)
+	}
 	conn.SetPongHandler(func(appData string) error {
-		conn.SetReadDeadline(time.Now().Add(PingTime * 2))
+		if err := conn.SetReadDeadline(time.Now().Add(PingTime * 2)); err != nil {
+			log.Warnf("Failed to set read deadline for ws connection: %v", err)
+		}
 		return nil
 	})
 
@@ -186,7 +190,11 @@ func (b *WsEditSession) NotifyAll(message interface{}) {
 }
 
 func (b *WsEditSession) handleIncomingMessages(connection *ws.Conn, wsId string, user view.User) {
-	defer connection.Close()
+	defer func() {
+		if err := connection.Close(); err != nil {
+			log.Errorf("Failed to close ws connection: %v", err)
+		}
+	}()
 	for {
 		_, data, err := connection.ReadMessage()
 		if err != nil {
@@ -233,7 +241,9 @@ func (b *WsEditSession) ForceDisconnectAll() {
 	utils.SafeAsync(func() {
 		b.clients.Range(func(key, value interface{}) bool {
 			c := value.(*WsClient)
-			c.Connection.Close()
+			if err := c.Connection.Close(); err != nil {
+				log.Errorf("Failed to close ws connection: %v", err)
+			}
 			return true
 		})
 	})
@@ -243,7 +253,9 @@ func (b *WsEditSession) ForceDisconnect(wsId string) {
 	v, exists := b.clients.Load(wsId)
 	if exists {
 		client := v.(*WsClient)
-		client.Connection.Close()
+		if err := client.Connection.Close(); err != nil {
+			log.Errorf("Failed to close ws connection: %v", err)
+		}
 	}
 }
 
@@ -275,7 +287,9 @@ func (b *WsEditSession) SendPingToAllClients() {
 				log.Errorf("Can't send ping for %v", client.SessionId)
 				log.Debugf("Connection wsId=%v will be closed due to timeout: %v", client.SessionId, err.Error())
 				b.handleClientDisconnect(client.SessionId)
-				client.Connection.Close()
+				if err := client.Connection.Close(); err != nil {
+					log.Errorf("Failed to close ws connection: %v", err)
+				}
 			}
 		})
 		return true

@@ -118,7 +118,7 @@ func (p publishedRepositoryImpl) PatchVersion(packageId string, versionName stri
 
 	ent := new(entity.PublishedVersionEntity)
 
-	p.cp.GetConnection().RunInTransaction(context.Background(), func(tx *pg.Tx) error {
+	err := p.cp.GetConnection().RunInTransaction(context.Background(), func(tx *pg.Tx) error {
 		err := p.cp.GetConnection().Model(ent).
 			Where("package_id = ?", packageId).
 			Where("version = ?", versionName).
@@ -147,7 +147,7 @@ func (p publishedRepositoryImpl) PatchVersion(packageId string, versionName stri
 		return nil
 	})
 
-	return ent, nil
+	return ent, err
 }
 
 func (p publishedRepositoryImpl) markAllVersionsDeletedByPackageId(tx *pg.Tx, packageId string, userId string) error {
@@ -2855,12 +2855,13 @@ func (p publishedRepositoryImpl) deleteGroup(tx *pg.Tx, packageId string, userId
 		}
 	}
 	for _, child := range children {
-		if child.Kind == entity.KIND_GROUP || child.Kind == entity.KIND_WORKSPACE {
+		switch child.Kind {
+		case entity.KIND_GROUP, entity.KIND_WORKSPACE:
 			err := p.deleteGroup(tx, child.Id, userId)
 			if err != nil {
 				return err
 			}
-		} else if child.Kind == entity.KIND_PACKAGE || child.Kind == entity.KIND_DASHBOARD {
+		case entity.KIND_PACKAGE, entity.KIND_DASHBOARD:
 			err := p.deletePackage(tx, child.Id, userId)
 			if err != nil {
 				return err
@@ -3548,6 +3549,9 @@ func (p publishedRepositoryImpl) DeletePublishedSourcesArchives(checksums []stri
 		deletedRows += result.RowsAffected()
 		return nil
 	})
+	if err != nil {
+		return err
+	}
 
 	if deletedRows > 0 {
 		_, err = p.cp.GetConnection().Exec("vacuum full published_sources_archives")
