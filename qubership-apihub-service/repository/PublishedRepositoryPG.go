@@ -3839,12 +3839,12 @@ func (p publishedRepositoryImpl) deleteVersionRevisions(ctx context.Context, pac
 					WHERE package_id = ? AND version = ? AND revision = ? AND deleted_at IS NULL
 					AND NOT EXISTS (
 						SELECT 1 FROM published_version_reference ref
-						INNER JOIN published_version ver ON 
-								ver.package_id = ref.package_id AND
-								ver.version = ref.version AND
-								ver.revision = ref.revision
+						INNER JOIN published_version pv ON 
+								pv.package_id = ref.package_id AND
+								pv.version = ref.version AND
+								pv.revision = ref.revision
 						WHERE ref.reference_id = ? AND ref.reference_version = ? AND ref.reference_revision = ?
-						AND ver.deleted_at IS NULL
+						AND pv.deleted_at IS NULL
 					)
 				`, time.Now(), deletedBy,
 					revision.PackageId, revision.Version, revision.Revision,
@@ -3982,7 +3982,6 @@ func (p publishedRepositoryImpl) clearAdHocComparisons(tx *pg.Tx, packageId stri
     				FROM version_comparison
     				WHERE ? = ANY(refs)
 				)
-				RETURNING 1
 			`, comparisonId, comparisonId)
 			if err != nil {
 				return fmt.Errorf("failed to check and delete ad-hoc comparison %s: %w", comparisonId, err)
