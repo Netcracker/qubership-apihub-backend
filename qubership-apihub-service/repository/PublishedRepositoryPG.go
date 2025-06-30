@@ -1127,9 +1127,22 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 			}
 			utils.PerfLog(time.Since(start).Milliseconds(), 50, "CreateVersionWithData: operationsData insert")
 		}
+
+		var existingGroupedOperations []entity.GroupedOperationEntity
+
 		if packageInfo.MigrationBuild {
 			// In case of migration list of operations may change due to new builder implementation, so need to cleanup existing list before insert
+
 			start = time.Now()
+			// Need to preserve grouped operations, since it will be deleted along with operations
+			err = tx.Model(&existingGroupedOperations).
+				Where("package_id = ?", version.PackageId).
+				Where("version = ?", version.Version).
+				Where("revision = ?", version.Revision).Select()
+			if err != nil {
+				return fmt.Errorf("failed to fetch grouped operations before operations cleanup: %w", err)
+			}
+
 			_, err := tx.Model(&entity.OperationEntity{}).
 				Where("package_id=?", version.PackageId).
 				Where("version=?", version.Version).
@@ -1232,6 +1245,33 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 			}
 			utils.PerfLog(time.Since(start).Milliseconds(), 50, "CreateVersionWithData: builderNotifications insert")
 		}
+
+		if len(existingGroupedOperations) > 0 {
+			// Restore grouped operations
+			start = time.Now()
+
+			// Check that every grouped operation still exists in the new list
+			opMap := make(map[string]struct{})
+			for _, op := range operations {
+				opMap[op.OperationId] = struct{}{}
+			}
+			var groupedOperationsToRestore []entity.GroupedOperationEntity
+			for _, groupedOperation := range existingGroupedOperations {
+				if _, ok := opMap[groupedOperation.OperationId]; ok {
+					groupedOperationsToRestore = append(groupedOperationsToRestore, groupedOperation)
+				} else {
+					log.Warnf("Grouped operation with id %s is not found in the operations list and will not be restored. PackageId=%s, version=%s, revision=%d",
+						groupedOperation.OperationId, version.PackageId, version.Version, version.Revision)
+				}
+			}
+
+			_, err = tx.Model(&groupedOperationsToRestore).Insert()
+			if err != nil {
+				return fmt.Errorf("failed to restore grouped operations: %w", err)
+			}
+			utils.PerfLog(time.Since(start).Milliseconds(), 50, "CreateVersionWithData: restore grouped operations")
+		}
+
 		if !packageInfo.MigrationBuild {
 			start = time.Now()
 			err = p.propagatePreviousOperationGroups(tx, version)
@@ -3429,7 +3469,7 @@ func (p publishedRepositoryImpl) GetVersionRefsComparisons(comparisonId string) 
 func (p publishedRepositoryImpl) GetVersionRevisionContentForDocumentsTransformation(packageId string, versionName string, revision int, searchQuery entity.ContentForDocumentsTransformationSearchQueryEntity) ([]entity.PublishedContentWithDataEntity, error) {
 	var ents []entity.PublishedContentWithDataEntity
 	query := p.cp.GetConnection().Model(&ents).Distinct().
-		ColumnExpr("published_version_revision_content.*").ColumnExpr("pd.*")
+		ColumnExpr("published_version_revision_content.*").ColumnExpr("pd.*").ColumnExpr("published_version_revision_content.package_id as content_package_id")
 	query.Join(`inner join
 			(with refs as(
 				select s.reference_id as package_id, s.reference_version as version, s.reference_revision as revision
