@@ -177,7 +177,8 @@ func (s systemInfoServiceImpl) GetMinioStorageCreds() *view.MinioStorageCreds {
 
 func NewSystemInfoService() (SystemInfoService, error) {
 	s := &systemInfoServiceImpl{
-		systemInfoMap: make(map[string]interface{})}
+		systemInfoMap: make(map[string]interface{}),
+	}
 	if err := s.Init(); err != nil {
 		log.Error("Failed to read system info: " + err.Error())
 		return nil, err
@@ -853,6 +854,7 @@ func (g systemInfoServiceImpl) setEditorDisabled() {
 func (g systemInfoServiceImpl) GetEditorDisabled() bool {
 	return g.systemInfoMap[EDITOR_DISABLED].(bool)
 }
+
 func (g systemInfoServiceImpl) setFailBuildOnBrokenRefs() {
 	envVal := os.Getenv(FAIL_BUILDS_ON_BROKEN_REFS)
 	if envVal == "" {

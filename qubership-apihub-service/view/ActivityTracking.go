@@ -98,7 +98,7 @@ func ConvertEventTypes(input []string) []string {
 		case "new_version":
 			output = append(output, string(ATETPublishNewVersion))
 		case "package_version":
-			output = append(output, string(ATETPublishNewRevision), string(ATETPatchVersionMeta), string(ATETDeleteVersion))
+			output = append(output, string(ATETPublishNewRevision), string(ATETPatchVersionMeta), string(ATETDeleteVersion), string(ATETDeleteRevision))
 		case "package_management":
 			output = append(output, string(ATETPatchPackageMeta), string(ATETCreatePackage), string(ATETDeletePackage))
 		case "operations_group":

@@ -15,6 +15,7 @@
 package repository
 
 import (
+	"context"
 	"time"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
@@ -64,7 +65,7 @@ type PublishedRepository interface {
 	GetLastVersion(id string) (*entity.PublishedVersionEntity, error)
 	GetDefaultVersion(packageId string, status string) (*entity.PublishedVersionEntity, error)
 	CleanupDeleted() error
-	DeletePackageRevisionsBeforeDate(packageId string, beforeDate time.Time, deleteLastRevision bool, deleteReleaseRevisions bool, deletedBy string) (int, error)
+	DeletePackageRevisionsBeforeDate(ctx context.Context, packageId string, beforeDate time.Time, deleteLastRevision bool, deleteReleaseRevisions bool, deletedBy string) (int, error)
 
 	GetFileSharedInfo(packageId string, fileId string, versionName string) (*entity.SharedUrlInfoEntity, error)
 	GetFileSharedInfoById(sharedId string) (*entity.SharedUrlInfoEntity, error)
@@ -87,7 +88,7 @@ type PublishedRepository interface {
 	DeletePackage(id string, userId string) error
 	GetPackageGroupsByName(name string) ([]entity.PackageEntity, error)
 	GetFilteredPackages(filter string, parentId string) ([]entity.PackageEntity, error)
-	GetFilteredPackagesWithOffset(searchReq view.PackageListReq, userId string) ([]entity.PackageEntity, error)
+	GetFilteredPackagesWithOffset(ctx context.Context, searchReq view.PackageListReq, userId string) ([]entity.PackageEntity, error)
 	GetPackageForServiceName(serviceName string) (*entity.PackageEntity, error)
 	GetVersionValidationChanges(packageId string, versionName string, revision int) (*entity.PublishedVersionValidationEntity, error)
 	GetVersionValidationProblems(packageId string, versionName string, revision int) (*entity.PublishedVersionValidationEntity, error)

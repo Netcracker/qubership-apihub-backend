@@ -15,6 +15,7 @@
 package service
 
 import (
+	stdctx "context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -62,7 +63,7 @@ func (a activityTrackingServiceImpl) GetActivityHistory_deprecated(ctx context.S
 			OnlyShared:   req.OnlyShared,
 			Kind:         req.Kind,
 		}
-		packages, err := a.publishedRepo.GetFilteredPackagesWithOffset(packagesFilter, ctx.GetUserId())
+		packages, err := a.publishedRepo.GetFilteredPackagesWithOffset(stdctx.Background(), packagesFilter, ctx.GetUserId())
 		if err != nil {
 			return nil, fmt.Errorf("failed to get packages by filer : %v.Error - %w", packagesFilter, err)
 		}
@@ -99,7 +100,7 @@ func (a activityTrackingServiceImpl) GetActivityHistory(ctx context.SecurityCont
 			OnlyShared:   req.OnlyShared,
 			Kind:         req.Kind,
 		}
-		packages, err := a.publishedRepo.GetFilteredPackagesWithOffset(packagesFilter, ctx.GetUserId())
+		packages, err := a.publishedRepo.GetFilteredPackagesWithOffset(stdctx.Background(), packagesFilter, ctx.GetUserId())
 		if err != nil {
 			return nil, fmt.Errorf("failed to get packages by filer : %v.Error - %w", packagesFilter, err)
 		}
@@ -259,6 +260,7 @@ func (a activityTrackingServiceImpl) makePkgActivityResponse(ents []entity.Enric
 			ent.Type == string(view.ATETPublishNewVersion) ||
 			ent.Type == string(view.ATETPatchVersionMeta) ||
 			ent.Type == string(view.ATETDeleteVersion) ||
+			ent.Type == string(view.ATETDeleteRevision) ||
 			ent.Type == string(view.ATETCreateManualGroup) ||
 			ent.Type == string(view.ATETDeleteManualGroup) ||
 			ent.Type == string(view.ATETOperationsGroupParameters) {

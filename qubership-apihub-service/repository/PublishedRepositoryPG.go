@@ -2895,9 +2895,9 @@ func (p publishedRepositoryImpl) GetFilteredPackages(filter string, parentId str
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetFilteredPackagesWithOffset(searchReq view.PackageListReq, userId string) ([]entity.PackageEntity, error) {
+func (p publishedRepositoryImpl) GetFilteredPackagesWithOffset(ctx context.Context, searchReq view.PackageListReq, userId string) ([]entity.PackageEntity, error) {
 	var result []entity.PackageEntity
-	query := p.cp.GetConnection().Model(&result).
+	query := p.cp.GetConnection().ModelContext(ctx, &result).
 		Where("deleted_at is ?", nil)
 	if searchReq.OnlyFavorite {
 		query.Join("INNER JOIN favorite_packages as fav").
@@ -3715,12 +3715,12 @@ func (p publishedRepositoryImpl) GetCSVDashboardPublishReport(publishId string) 
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) DeletePackageRevisionsBeforeDate(packageId string, deleteBefore time.Time, deleteLastRevision bool, deleteReleaseRevisions bool, deletedBy string) (int, error) {
+func (p publishedRepositoryImpl) DeletePackageRevisionsBeforeDate(ctx context.Context, packageId string, deleteBefore time.Time, deleteLastRevision bool, deleteReleaseRevisions bool, deletedBy string) (int, error) {
 	var totalDeletedCount int
 	var processingErrors []error
 
 	var versions []string
-	err := p.cp.GetConnection().Model((*entity.PublishedVersionEntity)(nil)).
+	err := p.cp.GetConnection().ModelContext(ctx, (*entity.PublishedVersionEntity)(nil)).
 		Column("version").
 		Where("package_id = ? AND deleted_at is null", packageId).
 		Order("version ASC").
@@ -3732,8 +3732,11 @@ func (p publishedRepositoryImpl) DeletePackageRevisionsBeforeDate(packageId stri
 
 	for idx, version := range versions {
 		log.Tracef("[revisions cleanup] Processing version %d/%d: %s", idx+1, len(versions), version)
-		deletedCount, err := p.deleteVersionRevisions(packageId, version, deleteBefore, deleteLastRevision, deleteReleaseRevisions, deletedBy)
+		deletedCount, err := p.deleteVersionRevisions(ctx, packageId, version, deleteBefore, deleteLastRevision, deleteReleaseRevisions, deletedBy)
 		if err != nil {
+			if ctx.Err() != nil {
+				return totalDeletedCount, ctx.Err()
+			}
 			processingErrors = append(processingErrors, fmt.Errorf("failed to process version %s: %w", version, err))
 			continue
 		}
@@ -3757,9 +3760,9 @@ func (p publishedRepositoryImpl) DeletePackageRevisionsBeforeDate(packageId stri
 	return totalDeletedCount, nil
 }
 
-func (p publishedRepositoryImpl) deleteVersionRevisions(packageId string, version string, deleteBefore time.Time, deleteLastRevision bool, deleteReleaseRevisions bool, deletedBy string) (int, error) {
+func (p publishedRepositoryImpl) deleteVersionRevisions(ctx context.Context, packageId string, version string, deleteBefore time.Time, deleteLastRevision bool, deleteReleaseRevisions bool, deletedBy string) (int, error) {
 	var deletedCount int
-	err := p.cp.GetConnection().RunInTransaction(context.Background(), func(tx *pg.Tx) error {
+	err := p.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
 		var revisions []entity.PublishedVersionEntity
 		err := tx.Model(&revisions).
 			Where("package_id = ? AND version = ? AND deleted_at is null", packageId, version).
@@ -3769,7 +3772,7 @@ func (p publishedRepositoryImpl) deleteVersionRevisions(packageId string, versio
 			return fmt.Errorf("failed to get revisions: %w", err)
 		}
 
-		var revisionsToDelete []*entity.PublishedVersionEntity
+		var candidates []*entity.PublishedVersionEntity
 		lastRevisionIndex := len(revisions) - 1
 		for i, revision := range revisions {
 			if !revision.PublishedAt.Before(deleteBefore) {
@@ -3784,49 +3787,67 @@ func (p publishedRepositoryImpl) deleteVersionRevisions(packageId string, versio
 				log.Tracef("[revisions cleanup] package %s, version %s, release revision %d, skipping because deleteReleaseRevisions=false", packageId, version, revision.Revision)
 				break
 			}
-			//TODO: maybe we need to make deletion atomic with hasValidReferences?
-			hasRefs, err := p.hasValidReferences(tx, revision)
-			if err != nil {
-				return fmt.Errorf("failed to check references for revision %d: %w", revision.Revision, err)
-			}
-			if hasRefs {
-				log.Tracef("[revisions cleanup] package %s, version %s, revision %d has references, skipping", packageId, version, revision.Revision)
-				break
-			}
-			revisionsToDelete = append(revisionsToDelete, &revision)
+			candidates = append(candidates, &revision)
 		}
 
-		if len(revisionsToDelete) > 0 {
-			deletedAt := time.Now()
-			for _, revision := range revisionsToDelete {
-				revision.DeletedAt = &deletedAt
-				revision.DeletedBy = deletedBy
-				_, err := tx.Model(revision).WherePK().Update()
+		if len(candidates) > 0 {
+			for _, revision := range candidates {
+				// check for references and update in a single atomic operation
+				result, err := tx.Exec(`
+					UPDATE published_version 
+					SET deleted_at = ?, deleted_by = ?
+					WHERE package_id = ? AND version = ? AND revision = ? AND deleted_at IS NULL
+					AND NOT EXISTS (
+						SELECT 1 FROM published_version_reference ref
+						INNER JOIN published_version ver ON 
+								ver.package_id = ref.package_id AND
+								ver.version = ref.version AND
+								ver.revision = ref.revision
+						WHERE ref.reference_id = ? AND ref.reference_version = ? AND ref.reference_revision = ?
+						AND ver.deleted_at IS NULL
+					)
+				`, time.Now(), deletedBy,
+					revision.PackageId, revision.Version, revision.Revision,
+					revision.PackageId, revision.Version, revision.Revision)
+
 				if err != nil {
 					return fmt.Errorf("failed to mark revision %d as deleted: %w", revision.Revision, err)
 				}
-				err = p.trackRevisionDeletion(tx, packageId, version, revision.Revision, revision.Status)
+
+				if result.RowsAffected() == 0 {
+					log.Tracef("[revisions cleanup] package %s, version %s, revision %d has references or was already deleted, skipping", packageId, version, revision.Revision)
+					break
+				}
+
+				err = p.trackDeletion(tx, packageId, version, revision.Revision, revision.Status, string(view.ATETDeleteRevision))
 				if err != nil {
 					return fmt.Errorf("failed to track revision deletion: %w", err)
 				}
-				deletedCount++
 
 				err = p.clearAdHocComparisons(tx, packageId, version, revision.Revision)
 				if err != nil {
 					return fmt.Errorf("failed to clear ad-hoc comparisons for revision %d: %w", revision.Revision, err)
 				}
+
+				deletedCount++
 			}
 
-			if len(revisionsToDelete) == len(revisions) {
-				//TODO: do we need to track version deletion? (we already track all revisions deletions)
+			if deletedCount == len(revisions) {
 				log.Tracef("[revisions cleanup] All revisions for version %s were deleted, cleaning up related data", version)
 				err = p.clearDefaultReleaseVersion(tx, packageId, version)
 				if err != nil {
 					return fmt.Errorf("failed to clear default release version: %w", err)
 				}
+
 				err = p.clearPreviousVersion(tx, packageId, version)
 				if err != nil {
 					return fmt.Errorf("failed to clear %s version as a previous version: %w", version, err)
+				}
+
+				lastRevision := revisions[lastRevisionIndex]
+				err = p.trackDeletion(tx, packageId, version, lastRevision.Revision, lastRevision.Status, string(view.ATETDeleteVersion))
+				if err != nil {
+					return fmt.Errorf("failed to track version deletion: %w", err)
 				}
 			}
 		}
@@ -3841,30 +3862,15 @@ func (p publishedRepositoryImpl) deleteVersionRevisions(packageId string, versio
 	return deletedCount, nil
 }
 
-func (p publishedRepositoryImpl) hasValidReferences(tx *pg.Tx, revision entity.PublishedVersionEntity) (bool, error) {
-	var count int
-	_, err := tx.QueryOne(pg.Scan(&count), `
-		SELECT COUNT(*) FROM published_version_reference ref
-		INNER JOIN published_version ver ON 
-				ver.package_id = ref.package_id AND
-				ver.version = ref.version AND
-				ver.revision = ref.revision
-		WHERE ref.reference_id = ? AND ref.reference_version = ? AND ref.reference_revision = ?
-		AND ver.deleted_at IS NULL`,
-		revision.PackageId, revision.Version, revision.Revision)
-
-	return count > 0, err
-}
-
-func (p publishedRepositoryImpl) trackRevisionDeletion(tx *pg.Tx, packageId string, version string, revision int, status string) error {
-	log.Infof("[revisions cleanup] Tracking revision deletion for %s/%s@%d", packageId, version, revision)
+func (p publishedRepositoryImpl) trackDeletion(tx *pg.Tx, packageId string, version string, revision int, status string, eventType string) error {
 	dataMap := map[string]interface{}{}
 	dataMap["version"] = version
 	dataMap["revision"] = revision
 	dataMap["status"] = status
+	dataMap["deletedByJob"] = true
 	ent := entity.ActivityTrackingEntity{
 		Id:        uuid.New().String(),
-		Type:      string(view.ATETDeleteRevision),
+		Type:      eventType,
 		Data:      dataMap,
 		PackageId: packageId,
 		Date:      time.Now(),
@@ -3872,24 +3878,20 @@ func (p publishedRepositoryImpl) trackRevisionDeletion(tx *pg.Tx, packageId stri
 	}
 	_, err := tx.Model(&ent).Insert()
 	if err != nil {
-		return fmt.Errorf("failed to track revision deletion: %w", err)
+		return fmt.Errorf("failed to track deletion: %w", err)
 	}
-	log.Infof("[revisions cleanup] Tracked revision deletion for %s/%s@%d", packageId, version, revision)
 	return nil
 }
 
-//TODO: refactor
 func (p publishedRepositoryImpl) clearAdHocComparisons(tx *pg.Tx, packageId string, version string, revision int) error {
 	log.Tracef("[revisions cleanup] Clearing ad-hoc comparisons for %s/%s@%d", packageId, version, revision)
 
-	var processedCount int
-	offset := 0
-	const batchSize = 100
+	var deletedCount int
+	page, limit := 0, 100
 
 	for {
-		var comparisonIds []string
-		//TODO: review the queyry
-		_, err := tx.Query(&comparisonIds, `
+		var candidateIds []string
+		_, err := tx.Query(&candidateIds, `
 			WITH candidate_comparisons AS (
 				SELECT 
 					vc.comparison_id,
@@ -3899,8 +3901,8 @@ func (p publishedRepositoryImpl) clearAdHocComparisons(tx *pg.Tx, packageId stri
 					vc.previous_package_id,
 					vc.previous_version,
 					vc.previous_revision,
-					pv.previous_version AS curr_prev_version,
-					COALESCE(pv.previous_version_package_id, pv.package_id) AS curr_prev_package_id
+					pv.previous_version AS actual_previous_version,
+					COALESCE(pv.previous_version_package_id, pv.package_id) AS actual_previous_package_id
 				FROM version_comparison vc
 				LEFT JOIN published_version pv ON 
 					pv.package_id = vc.package_id AND 
@@ -3915,20 +3917,10 @@ func (p publishedRepositoryImpl) clearAdHocComparisons(tx *pg.Tx, packageId stri
 			)
 			SELECT comparison_id FROM candidate_comparisons cc
 			WHERE 
-				((cc.package_id = ? AND cc.version = ? AND cc.revision = ?) AND
-				 ((cc.curr_prev_version IS NULL AND cc.previous_version != '') OR
-				  (cc.curr_prev_version IS NOT NULL AND 
-				   (cc.previous_version != cc.curr_prev_version OR 
-				    cc.previous_package_id != cc.curr_prev_package_id))))
-				OR
-				((cc.previous_package_id = ? AND cc.previous_version = ? AND cc.previous_revision = ?) AND
-				 ((cc.curr_prev_version IS NULL) OR
-				  (cc.curr_prev_version IS NOT NULL AND 
-				   (cc.previous_version != cc.curr_prev_version OR 
-				    cc.previous_package_id != cc.curr_prev_package_id))))
-		`, packageId, version, revision, packageId, version, revision, batchSize, offset,
-			packageId, version, revision, packageId, version, revision)
-
+				cc.actual_previous_version IS NULL OR
+				(cc.previous_version != cc.actual_previous_version OR 
+				cc.previous_package_id != cc.actual_previous_package_id)
+		`, packageId, version, revision, packageId, version, revision, limit, page*limit)
 		if err != nil {
 			if err == pg.ErrNoRows {
 				break
@@ -3936,50 +3928,43 @@ func (p publishedRepositoryImpl) clearAdHocComparisons(tx *pg.Tx, packageId stri
 			return fmt.Errorf("failed to get ad-hoc comparison candidates: %w", err)
 		}
 
-		if len(comparisonIds) == 0 {
+		if len(candidateIds) == 0 {
 			break
 		}
 
-
-		for _, comparisonId := range comparisonIds {
+		for _, comparisonId := range candidateIds {
+			// check for references and delete in a single atomic operation
 			result, err := tx.Exec(`
-				WITH ref_check AS (
-					SELECT COUNT(*) AS ref_count
-					FROM version_comparison
-					WHERE ? = ANY(refs)
-				),
-				deletion AS (
-					DELETE FROM version_comparison
-					WHERE comparison_id = ?
-					AND (SELECT ref_count FROM ref_check) = 0
-					RETURNING comparison_id
+				DELETE FROM version_comparison
+				WHERE comparison_id = ?
+				AND NOT EXISTS (
+    				SELECT 1 
+    				FROM version_comparison
+    				WHERE ? = ANY(refs)
 				)
-				SELECT COUNT(*) FROM deletion
+				RETURNING 1
 			`, comparisonId, comparisonId)
-
 			if err != nil {
 				return fmt.Errorf("failed to check and delete ad-hoc comparison %s: %w", comparisonId, err)
 			}
 
-			//TODO: do we really need result.RowsAffected() > 0?
 			if result.RowsAffected() > 0 {
 				log.Tracef("[revisions cleanup] Deleted ad-hoc comparison %s", comparisonId)
-				processedCount++
+				deletedCount++
 			} else {
 				log.Tracef("[revisions cleanup] Skipped ad-hoc comparison %s (referenced or already deleted)", comparisonId)
 			}
 		}
 
-		offset += batchSize
-
-		if len(comparisonIds) < batchSize {
+		if len(candidateIds) < limit {
 			break
 		}
+		page++
 	}
 
-	if processedCount > 0 {
-		log.Debugf("[revisions cleanup] Processed %d ad-hoc comparisons for %s/%s@%d",
-			processedCount, packageId, version, revision)
+	if deletedCount > 0 {
+		log.Tracef("[revisions cleanup] Deleted %d ad-hoc comparisons for %s/%s@%d",
+			deletedCount, packageId, version, revision)
 	}
 
 	return nil
