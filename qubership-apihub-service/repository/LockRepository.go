@@ -56,7 +56,7 @@ func (r *lockRepositoryImpl) TryAcquireLock(ctx context.Context, lockName string
 	safeNow := now.Add(-clockSkewMargin)
 	expiresAt := now.Add(time.Duration(leaseSeconds) * time.Second)
 
-	existingLock, err := r.GetLockInfo(ctx, lockName)
+	existingLock, err := r.findExistingLock(ctx, lockName)
 	if err != nil {
 		return false, err
 	}
@@ -70,6 +70,22 @@ func (r *lockRepositoryImpl) TryAcquireLock(ctx context.Context, lockName string
 	}
 
 	return r.takeOverExpiredLock(ctx, lockName, instanceId, now, expiresAt, existingLock.Version, safeNow)
+}
+
+func (r *lockRepositoryImpl) findExistingLock(ctx context.Context, lockName string) (*entity.LockEntity, error) {
+	var existingLock entity.LockEntity
+	err := r.cp.GetConnection().ModelContext(ctx, &existingLock).
+		Where("name = ?", lockName).
+		Select()
+		
+	if err != nil {
+		if errors.Is(err, pg.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to check existing lock: %w", err)
+	}
+	
+	return &existingLock, nil
 }
 
 func (r *lockRepositoryImpl) createNewLock(ctx context.Context, lockName, instanceId string, now, expiresAt time.Time) (bool, error) {
