@@ -665,8 +665,7 @@ func MakeOperationComparisonChangelogView_deprecated_2(entity OperationCompariso
 	return operationComparisonChangelogView
 }
 
-// todo use current (not deprecated entity)
-func MakeOperationComparisonChangesView(entity OperationComparisonChangelogEntity_deprecated) interface{} {
+func MakeOperationComparisonChangesView(entity OperationComparisonChangelogEntity) interface{} {
 	var action string
 	if entity.DataHash == "" {
 		action = view.ChangelogActionRemove
