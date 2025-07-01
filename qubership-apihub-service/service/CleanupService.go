@@ -206,7 +206,6 @@ type revisionsCleanupJob struct {
 func (j *revisionsCleanupJob) Run() {
 	jobId := uuid.New().String()
 	deletedItems := 0
-	log.Infof("Revisions cleanup job ID: %s", jobId)
 
 	defer func() {
 		if err := recover(); err != nil {
@@ -219,6 +218,8 @@ func (j *revisionsCleanupJob) Run() {
 	if j.isMigrationRunning() {
 		return
 	}
+
+	log.Infof("Revisions cleanup job ID: %s", jobId)
 
 	ctx, cancel := context.WithTimeout(context.Background(), cleanupJobTimeout)
 	defer cancel()
@@ -267,7 +268,7 @@ func (j *revisionsCleanupJob) acquireLock(ctx context.Context, jobId string, can
 			if !ok {
 				return
 			}
-			log.Warnf("Lock %s lost: %s. Canceling the cleanup job.", event.LockName, event.Reason)
+			log.Warnf("Lock %s lost: %s. Canceling revisions cleanup job", event.LockName, event.Reason)
 			cancel()
 		}()
 	}
@@ -286,7 +287,7 @@ func (j *revisionsCleanupJob) releaseLock(ctx context.Context) {
 				log.Errorf("Failed to release lock for revisions cleanup: %v", err)
 			}
 		} else {
-			log.Debugf("Not releasing lock for cleanup job as it was already lost")
+			log.Debugf("Lock for revisions cleanup job was already lost, skipping release")
 		}
 	default:
 		if err := j.lockService.ReleaseLock(ctx, sharedLockName); err != nil {
@@ -318,12 +319,12 @@ func (j *revisionsCleanupJob) processPackages(ctx context.Context, jobId string,
 	for {
 		select {
 		case <-ctx.Done():
-			errorMessage := "Job interrupted - distributed lock was lost"
+			errorMessage := "distributed lock was lost"
 			if ctx.Err() == context.DeadlineExceeded {
-				errorMessage = "Job interrupted - timeout"
+				errorMessage = "timeout"
 			}
 			log.Warnf("Revisions cleanup job %s interrupted - %s", jobId, errorMessage)
-			return deletedItems, errors, fmt.Errorf("%s", errorMessage)
+			return deletedItems, errors, fmt.Errorf("job interrupted - %s", errorMessage)
 		default:
 		}
 
@@ -351,12 +352,12 @@ func (j *revisionsCleanupJob) processPackages(ctx context.Context, jobId string,
 		for idx, pkg := range packages {
 			select {
 			case <-ctx.Done():
-				errorMessage := "Job interrupted - distributed lock was lost"
+				errorMessage := "distributed lock was lost"
 				if ctx.Err() == context.DeadlineExceeded {
-					errorMessage = "Job interrupted - timeout"
+					errorMessage = "timeout"
 				}
 				log.Warnf("Revisions cleanup job %s interrupted during package processing - %s", jobId, errorMessage)
-				return deletedItems, errors, fmt.Errorf("%s", errorMessage)
+				return deletedItems, errors, fmt.Errorf("job interrupted - %s", errorMessage)
 			default:
 			}
 
