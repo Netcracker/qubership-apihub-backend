@@ -198,11 +198,11 @@ func (s *lockServiceImpl) isNonRetryableError(err error) bool {
 }
 
 func (s *lockServiceImpl) waitWithBackoff(ctx context.Context, attempt int) error {
-	backoffMs := 100 * time.Duration(attempt+1)
+	backoff := 100 * time.Duration(attempt+1)
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case <-time.After(backoffMs * time.Millisecond):
+	case <-time.After(backoff * time.Millisecond):
 		return nil
 	}
 }
@@ -237,7 +237,10 @@ func (s *lockServiceImpl) runHeartbeat(ctx context.Context, lockName string, opt
 
 	defer func() {
 		s.mu.Lock()
-		delete(s.heartbeatCancelers, lockName)
+		if cancel, exists := s.heartbeatCancelers[lockName]; exists {
+			cancel()
+			delete(s.heartbeatCancelers, lockName)
+		}
 		s.mu.Unlock()
 		log.Debugf("Heartbeat for lock %s stopped", lockName)
 	}()
