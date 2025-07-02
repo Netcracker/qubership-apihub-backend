@@ -78,6 +78,21 @@ func MakeActivityTrackingEventView_depracated(ent EnrichedActivityTrackingEntity
 	}
 
 }
+
+func MakeActivityTrackingEventView_deprecated_2(ent EnrichedActivityTrackingEntity) view.PkgActivityResponseItem {
+	return view.PkgActivityResponseItem{
+		PackageName: ent.PackageName,
+		PackageKind: ent.PackageKind,
+		Principal:   *MakePrincipalView(&ent.PrincipalEntity),
+		ActivityTrackingEvent: view.ActivityTrackingEvent{
+			Type:      view.ATEventType(ent.Type),
+			Data:      ent.Data,
+			PackageId: ent.PackageId,
+			Date:      ent.Date,
+		},
+	}
+}
+
 func MakeActivityTrackingEventView(ent EnrichedActivityTrackingEntity) view.PkgActivityResponseItem {
 	var principal map[string]interface{}
 
@@ -100,7 +115,6 @@ func MakeActivityTrackingEventView(ent EnrichedActivityTrackingEntity) view.PkgA
 			Data:      ent.Data,
 			PackageId: ent.PackageId,
 			Date:      ent.Date,
-			UserId:    ent.UserId,
 		},
 	}
 }

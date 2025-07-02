@@ -1164,7 +1164,7 @@ paths:
             * package_members - grant_role, update_role, delete_role.
             * package_security - generate_api_key, revoke_api_key.
             * new_version - publish_new_version.
-            * package_version - patch_version_meta, delete_version, publish_new_revision.
+            * package_version - patch_version_meta, delete_version, publish_new_revision, delete_revision.
             * package_management - create_package, delete_package, patch_package_meta.
             * operations_group - create_manual_group, delete_manual_group, update_operations_group_parameters
           in: query
@@ -1200,7 +1200,7 @@ paths:
                       type: object
                       required:
                         - date
-                        - userName
+                        - principal
                         - packageId
                         - packageName
                         - kind
@@ -1211,7 +1211,7 @@ paths:
                           type: string
                           format: date-time
                         principal:
-                          $ref: "#/components/schemas/Principal"
+                          $ref: "#/components/schemas/ActivityHistoryPrincipal"
                         packageId:
                           description: Package unique string identifier (full alias)
                           type: string
@@ -1239,6 +1239,7 @@ paths:
                             - update_role
                             - publish_new_version
                             - delete_version
+                            - delete_revision
                             - publish_new_revision
                             - patch_version_meta
                             - patch_package_meta
@@ -2604,7 +2605,7 @@ paths:
             * package_members - grant_role, update_role, delete_role.
             * package_security - generate_api_key, revoke_api_key.
             * new_version - publish_new_version.
-            * package_version - patch_version_meta, delete_version, publish_new_revision.
+            * package_version - patch_version_meta, delete_version, publish_new_revision, delete_revision.
             * package_management - create_package, delete_package, patch_package_meta.
             * operations_group - create_manual_group, delete_manual_group,
             update_operations_group_parameters
@@ -2647,7 +2648,7 @@ paths:
                       type: object
                       required:
                         - date
-                        - userName
+                        - principal
                         - packageId
                         - packageName
                         - kind
@@ -2657,8 +2658,8 @@ paths:
                           description: Date when event was generated
                           type: string
                           format: date-time
-                        userName:
-                          $ref: "#/components/schemas/Principal"
+                        principal:
+                          $ref: "#/components/schemas/ActivityHistoryPrincipal"
                         packageId:
                           description: Package unique string identifier (full alias)
                           type: string
@@ -2686,6 +2687,7 @@ paths:
                             - update_role
                             - publish_new_version
                             - delete_version
+                            - delete_revision
                             - publish_new_revision
                             - patch_version_meta
                             - patch_package_meta
@@ -15496,6 +15498,33 @@ components:
               enum:
                 - user
                 - apiKey
+    ActivityHistoryPrincipal:
+      description: User, API key or automatic job
+      allOf:
+        - oneOf:
+          - $ref: "#/components/schemas/User"
+          - $ref: "#/components/schemas/ApiKey"
+          - $ref: "#/components/schemas/Job"
+        - type: object
+          required:
+            - type
+          properties:
+            type:
+              description: Identifies whether principal is user, API key or automatic job
+              type: string
+              enum:
+                - user
+                - apiKey
+                - job
+    Job:
+      description: Automatic job
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: Job identifier
     ReferencedPackage:
       description: Package reference
       type: object
