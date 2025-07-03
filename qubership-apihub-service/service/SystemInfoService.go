@@ -1076,8 +1076,7 @@ func (g systemInfoServiceImpl) GetAuthConfig() idp.AuthConfig {
 }
 
 func (g systemInfoServiceImpl) setRevisionsCleanupSchedule() {
-	// g.systemInfoMap[REVISIONS_CLEANUP_SCHEDULE] = "0 1 * * 6" // at 01:00 AM on Saturday
-	g.systemInfoMap[REVISIONS_CLEANUP_SCHEDULE] = "* * * * *" // every minute
+	g.systemInfoMap[REVISIONS_CLEANUP_SCHEDULE] = "0 1 * * 6" // at 01:00 AM on Saturday
 }
 
 func (g systemInfoServiceImpl) GetRevisionsCleanupSchedule() string {
