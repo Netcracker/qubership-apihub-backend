@@ -4022,14 +4022,13 @@ func (p publishedRepositoryImpl) GetVersionComparisonsCleanupCandidates(ctx cont
 				vc.previous_version,
 				vc.previous_revision,
 				vc.last_active,
-				pv.package_id IS NULL AS version_not_published,
+				pv.package_id IS NULL AS revision_not_published,
 				pv.previous_version AS actual_previous_version,
 				COALESCE(pv.previous_version_package_id, pv.package_id) AS actual_previous_package_id,
 				(SELECT MAX(revision) 
 					FROM published_version 
 					WHERE package_id = vc.previous_package_id 
-					AND version = vc.previous_version) AS previous_max_revision,
-				pv.deleted_at IS NOT NULL AS deleted
+					AND version = vc.previous_version) AS previous_max_revision
 			FROM version_comparison vc
 			LEFT JOIN published_version pv ON 
 				pv.package_id = vc.package_id AND 
@@ -4042,7 +4041,7 @@ func (p publishedRepositoryImpl) GetVersionComparisonsCleanupCandidates(ctx cont
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return []entity.VersionComparisonCleanupCandidateEntity{}, nil
-		}
+		}	
 		return nil, fmt.Errorf("failed to get cleanup candidates: %w", err)
 	}
 

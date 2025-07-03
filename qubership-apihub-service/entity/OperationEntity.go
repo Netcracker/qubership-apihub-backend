@@ -127,11 +127,10 @@ type VersionComparisonCleanupCandidateEntity struct {
 	PreviousVersion         string    `pg:"previous_version"`
 	PreviousRevision        int       `pg:"previous_revision"`
 	LastActive              time.Time `pg:"last_active"`
-	VersionNotPublished     bool      `pg:"version_not_published"`
+	RevisionNotPublished    bool      `pg:"revision_not_published"`
 	ActualPreviousVersion   *string   `pg:"actual_previous_version"`
 	ActualPreviousPackageId *string   `pg:"actual_previous_package_id"`
-	PreviousMaxRevision     int      `pg:"previous_max_revision"`
-	Deleted                 bool      `pg:"deleted"`
+	PreviousMaxRevision     int       `pg:"previous_max_revision"`
 }
 
 func MakeRefComparisonView(entity VersionComparisonEntity) *view.RefComparison {

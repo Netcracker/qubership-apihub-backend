@@ -163,45 +163,39 @@ func (c cleanupServiceImpl) ClearTestData(testId string) error {
 
 func (c cleanupServiceImpl) CreateRevisionsCleanupJob(publishedRepository repository.PublishedRepository, migrationRepository mRepository.MigrationRunRepository, versionCleanupRepository repository.VersionCleanupRepository, lockService LockService, instanceId string, schedule string, deleteLastRevision bool, deleteReleaseRevision bool, ttl int) error {
 	job := &revisionsCleanupJob{
-		cp:                       c.cp,
-		publishedRepository:      publishedRepository,
-		migrationRepository:      migrationRepository,
+		baseCleanupJob: baseCleanupJob{
+			cp:                  c.cp,
+			publishedRepository: publishedRepository,
+			migrationRepository: migrationRepository,
+			lockService:         lockService,
+			instanceId:          instanceId,
+			ttl:                 ttl,
+			jobType:             "revisions",
+		},
 		versionCleanupRepository: versionCleanupRepository,
-		lockService:              lockService,
-		instanceId:               instanceId,
 		deleteLastRevision:       deleteLastRevision,
 		deleteReleaseRevision:    deleteReleaseRevision,
-		ttl:                      ttl,
 	}
-	if len(c.cron.Entries()) == 0 {
-		location, err := time.LoadLocation("")
-		if err != nil {
-			return err
-		}
-		c.cron = cron.New(cron.WithLocation(location))
-		c.cron.Start()
-	}
-	wrappedJob := cron.NewChain(cron.SkipIfStillRunning(cron.DefaultLogger)).Then(job)
-	_, err := c.cron.AddJob(schedule, wrappedJob)
-	if err != nil {
-		log.Warnf("Revisions cleanup job wasn't added for schedule - %s. With error - %s", schedule, err)
-		return err
-	}
-	log.Infof("Revisions cleanup job was created with schedule - %s", schedule)
-
-	return nil
+	return c.addCleanupJob(job, schedule)
 }
 
 func (c cleanupServiceImpl) CreateComparisonsCleanupJob(publishedRepo repository.PublishedRepository, migrationRepository mRepository.MigrationRunRepository, comparisonCleanupRepo repository.ComparisonCleanupRepository, lockService LockService, instanceId string, schedule string, ttl int) error {
 	job := &comparisonsCleanupJob{
-		cp:                    c.cp,
-		publishedRepository:   publishedRepo,
-		migrationRepository:   migrationRepository,
+		baseCleanupJob: baseCleanupJob{
+			cp:                  c.cp,
+			publishedRepository: publishedRepo,
+			migrationRepository: migrationRepository,
+			lockService:         lockService,
+			instanceId:          instanceId,
+			ttl:                 ttl,
+			jobType:             "comparisons",
+		},
 		comparisonCleanupRepo: comparisonCleanupRepo,
-		lockService:           lockService,
-		instanceId:            instanceId,
-		ttl:                   ttl,
 	}
+	return c.addCleanupJob(job, schedule)
+}
+
+func (c cleanupServiceImpl) addCleanupJob(job cron.Job, schedule string) error {
 	if len(c.cron.Entries()) == 0 {
 		location, err := time.LoadLocation("")
 		if err != nil {
@@ -213,35 +207,117 @@ func (c cleanupServiceImpl) CreateComparisonsCleanupJob(publishedRepo repository
 	wrappedJob := cron.NewChain(cron.SkipIfStillRunning(cron.DefaultLogger)).Then(job)
 	_, err := c.cron.AddJob(schedule, wrappedJob)
 	if err != nil {
-		log.Warnf("Comparisons cleanup job wasn't added for schedule - %s. With error - %s", schedule, err)
+		log.Warnf("Cleanup job wasn't added for schedule - %s. With error - %s", schedule, err)
 		return err
 	}
-	log.Infof("Comparisons cleanup job was created with schedule - %s", schedule)
+	log.Infof("Cleanup job was created with schedule - %s", schedule)
 
 	return nil
 }
 
+type baseCleanupJob struct {
+	cp                  db.ConnectionProvider
+	publishedRepository repository.PublishedRepository
+	migrationRepository mRepository.MigrationRunRepository
+	lockService         LockService
+	instanceId          string
+	ttl                 int
+	jobType             string
+}
+
+func (j *baseCleanupJob) isMigrationRunning() bool {
+	startTime := time.Now().Round(time.Second)
+	log.Infof("Starting %s cleanup job at %s", j.jobType, startTime)
+	migrations, err := j.migrationRepository.GetRunningMigrations()
+	if err != nil {
+		log.Errorf("Failed to check for running migrations for %s cleanup job", j.jobType)
+		return true
+	}
+	if len(migrations) != 0 {
+		log.Infof("%s cleanup was skipped at %s due to migration run", j.jobType, startTime)
+		return true
+	}
+	return false
+}
+
+func (j *baseCleanupJob) acquireLock(ctx context.Context, jobId string, cancel context.CancelFunc) bool {
+	lockOptions := LockOptions{
+		LeaseSeconds:             120,
+		HeartbeatIntervalSeconds: 30,
+		NotifyOnLoss:             true,
+	}
+
+	acquired, lockLostCh, err := j.lockService.AcquireLock(ctx, sharedLockName, lockOptions)
+	if err != nil {
+		log.Errorf("Failed to acquire lock for %s cleanup: %v", j.jobType, err)
+		return false
+	}
+
+	if !acquired {
+		log.Infof("%s cleanup job %s skipped - lock is held by another instance or job", j.jobType, jobId)
+		return false
+	}
+
+	if lockLostCh != nil {
+		go func() {
+			event, ok := <-lockLostCh
+			if !ok {
+				return
+			}
+			log.Warnf("Lock %s lost: %s. Canceling %s cleanup job", event.LockName, event.Reason, j.jobType)
+			cancel()
+		}()
+	}
+
+	return true
+}
+
+func (j *baseCleanupJob) releaseLock(ctx context.Context) {
+	select {
+	case <-ctx.Done():
+		if ctx.Err() == context.DeadlineExceeded {
+			releaseCtx, releaseCancel := j.createUpdateContext(ctx)
+			defer releaseCancel()
+
+			if err := j.lockService.ReleaseLock(releaseCtx, sharedLockName); err != nil {
+				log.Errorf("Failed to release lock for %s cleanup: %v", j.jobType, err)
+			}
+		} else {
+			log.Debugf("Lock for %s cleanup job was already lost, skipping release", j.jobType)
+		}
+	default:
+		if err := j.lockService.ReleaseLock(ctx, sharedLockName); err != nil {
+			log.Errorf("Failed to release lock for %s cleanup: %v", j.jobType, err)
+		}
+	}
+}
+
+func (j *baseCleanupJob) createUpdateContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if ctx.Err() != nil {
+		return context.WithTimeout(context.Background(), 10*time.Second)
+	}
+	return ctx, func() {}
+}
+
 type revisionsCleanupJob struct {
-	cp                       db.ConnectionProvider
-	publishedRepository      repository.PublishedRepository
-	migrationRepository      mRepository.MigrationRunRepository
+	baseCleanupJob
 	versionCleanupRepository repository.VersionCleanupRepository
-	lockService              LockService
-	instanceId               string
 	deleteLastRevision       bool
 	deleteReleaseRevision    bool
-	ttl                      int
 }
 
 func (j *revisionsCleanupJob) Run() {
 	jobId := uuid.New().String()
 	deletedItems := 0
 
+	ctx, cancel := context.WithTimeout(context.Background(), cleanupJobTimeout)
+	defer cancel()
+
 	defer func() {
 		if err := recover(); err != nil {
 			errorMsg := fmt.Sprintf("Revisions cleanup job %s failed with panic: %v", jobId, err)
 			log.Errorf("%s", errorMsg)
-			_ = j.updateCleanupRun(context.Background(), jobId, string(view.StatusError), errorMsg, deletedItems)
+			_ = j.updateCleanupRun(ctx, jobId, string(view.StatusError), errorMsg, deletedItems)
 		}
 	}()
 
@@ -250,9 +326,6 @@ func (j *revisionsCleanupJob) Run() {
 	}
 
 	log.Infof("Revisions cleanup job ID: %s", jobId)
-
-	ctx, cancel := context.WithTimeout(context.Background(), cleanupJobTimeout)
-	defer cancel()
 
 	if !j.acquireLock(ctx, jobId, cancel) {
 		return
@@ -272,58 +345,6 @@ func (j *revisionsCleanupJob) Run() {
 	}
 
 	j.finishCleanupRun(ctx, jobId, errors, deletedItems)
-}
-
-func (j *revisionsCleanupJob) acquireLock(ctx context.Context, jobId string, cancel context.CancelFunc) bool {
-	lockOptions := LockOptions{
-		LeaseSeconds:             120,
-		HeartbeatIntervalSeconds: 30,
-		NotifyOnLoss:             true,
-	}
-
-	acquired, lockLostCh, err := j.lockService.AcquireLock(ctx, sharedLockName, lockOptions)
-	if err != nil {
-		log.Errorf("Failed to acquire lock for revisions cleanup: %v", err)
-		return false
-	}
-
-	if !acquired {
-		log.Infof("Revisions cleanup job %s skipped - another instance is already running the job", jobId)
-		return false
-	}
-
-	if lockLostCh != nil {
-		go func() {
-			event, ok := <-lockLostCh
-			if !ok {
-				return
-			}
-			log.Warnf("Lock %s lost: %s. Canceling revisions cleanup job", event.LockName, event.Reason)
-			cancel()
-		}()
-	}
-
-	return true
-}
-
-func (j *revisionsCleanupJob) releaseLock(ctx context.Context) {
-	select {
-	case <-ctx.Done():
-		if ctx.Err() == context.DeadlineExceeded {
-			releaseCtx, releaseCancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer releaseCancel()
-
-			if err := j.lockService.ReleaseLock(releaseCtx, sharedLockName); err != nil {
-				log.Errorf("Failed to release lock for revisions cleanup: %v", err)
-			}
-		} else {
-			log.Debugf("Lock for revisions cleanup job was already lost, skipping release")
-		}
-	default:
-		if err := j.lockService.ReleaseLock(ctx, sharedLockName); err != nil {
-			log.Errorf("Failed to release lock for revisions cleanup: %v", err)
-		}
-	}
 }
 
 func (j *revisionsCleanupJob) initializeCleanupRun(ctx context.Context, jobId string, deleteBefore time.Time) error {
@@ -394,7 +415,7 @@ func (j *revisionsCleanupJob) processPackages(ctx context.Context, jobId string,
 			log.Debugf("[revisions cleanup] Processing package %d/%d: %s", idx+1, len(packages), pkg.Id)
 			count, err := j.publishedRepository.DeletePackageRevisionsBeforeDate(ctx, pkg.Id, deleteBefore, j.deleteLastRevision, j.deleteReleaseRevision, "revisions_cleanup_job_"+jobId)
 			if err != nil {
-				log.Errorf("Failed to delete revisions of package %s during revisions cleanup %s: %v", pkg.Id, jobId, err)
+				log.Warnf("Failed to delete revisions of package %s during revisions cleanup %s: %v", pkg.Id, jobId, err)
 				errors = append(errors, fmt.Sprintf("package %s: %s", pkg.Id, err.Error()))
 			}
 			deletedItems += count
@@ -405,21 +426,6 @@ func (j *revisionsCleanupJob) processPackages(ctx context.Context, jobId string,
 	}
 
 	return deletedItems, errors, nil
-}
-
-func (j *revisionsCleanupJob) isMigrationRunning() bool {
-	startTime := time.Now().Round(time.Second)
-	log.Infof("Starting revisions cleanup job at %s", startTime)
-	migrations, err := j.migrationRepository.GetRunningMigrations()
-	if err != nil {
-		log.Error("Failed to check for running migrations for build cleanup job")
-		return true
-	}
-	if len(migrations) != 0 {
-		log.Infof("Revisions cleanup was skipped at %s due to migration run", startTime)
-		return true
-	}
-	return false
 }
 
 func (j *revisionsCleanupJob) finishCleanupRun(ctx context.Context, jobId string, errors []string, deletedItems int) {
@@ -444,13 +450,8 @@ func (j *revisionsCleanupJob) finishCleanupRun(ctx context.Context, jobId string
 }
 
 func (j *revisionsCleanupJob) updateCleanupRun(ctx context.Context, jobId string, status string, errorMessage string, deletedItems int) error {
-	updateCtx := ctx
-	if ctx.Err() != nil {
-		// in case of timeout or lock lost, we need to use new context for update
-		var cancel context.CancelFunc
-		updateCtx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-	}
+	updateCtx, cancel := j.createUpdateContext(ctx)
+	defer cancel()
 
 	err := j.versionCleanupRepository.UpdateVersionCleanupRun(updateCtx, jobId, status, errorMessage, deletedItems)
 	if err != nil {
@@ -460,15 +461,9 @@ func (j *revisionsCleanupJob) updateCleanupRun(ctx context.Context, jobId string
 	return nil
 }
 
-//TODO: avoid code duplication with revisions cleanup job
 type comparisonsCleanupJob struct {
-	cp                    db.ConnectionProvider
-	publishedRepository   repository.PublishedRepository
-	migrationRepository   mRepository.MigrationRunRepository
+	baseCleanupJob
 	comparisonCleanupRepo repository.ComparisonCleanupRepository
-	lockService           LockService
-	instanceId            string
-	ttl                   int
 }
 
 func (j *comparisonsCleanupJob) Run() {
@@ -501,65 +496,13 @@ func (j *comparisonsCleanupJob) Run() {
 		return
 	}
 
-	deletedItems, err := j.processComparisons(ctx, jobId, deleteBefore, deletedItems)
+	deletedItems, errors, err := j.processComparisons(ctx, jobId, deleteBefore, deletedItems)
 	if err != nil {
 		_ = j.updateCleanupRun(ctx, jobId, string(view.StatusError), err.Error(), deletedItems)
 		return
 	}
 
-	j.finishCleanupRun(ctx, jobId, deletedItems)
-}
-
-func (j *comparisonsCleanupJob) acquireLock(ctx context.Context, jobId string, cancel context.CancelFunc) bool {
-	lockOptions := LockOptions{
-		LeaseSeconds:             120,
-		HeartbeatIntervalSeconds: 30,
-		NotifyOnLoss:             true,
-	}
-
-	acquired, lockLostCh, err := j.lockService.AcquireLock(ctx, sharedLockName, lockOptions)
-	if err != nil {
-		log.Errorf("Failed to acquire lock for comparison cleanup: %v", err)
-		return false
-	}
-
-	if !acquired {
-		log.Infof("Comparison cleanup job %s skipped - another instance is already running the job", jobId)
-		return false
-	}
-
-	if lockLostCh != nil {
-		go func() {
-			event, ok := <-lockLostCh
-			if !ok {
-				return
-			}
-			log.Warnf("Lock %s lost: %s. Canceling comparisons cleanup job.", event.LockName, event.Reason)
-			cancel()
-		}()
-	}
-
-	return true
-}
-
-func (j *comparisonsCleanupJob) releaseLock(ctx context.Context) {
-	select {
-	case <-ctx.Done():
-		if ctx.Err() == context.DeadlineExceeded {
-			releaseCtx, releaseCancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer releaseCancel()
-
-			if err := j.lockService.ReleaseLock(releaseCtx, sharedLockName); err != nil {
-				log.Errorf("Failed to release lock for comparison cleanup: %v", err)
-			}
-		} else {
-			log.Debugf("Not releasing lock for cleanup job as it was already lost")
-		}
-	default:
-		if err := j.lockService.ReleaseLock(ctx, sharedLockName); err != nil {
-			log.Errorf("Failed to release lock for comparison cleanup: %v", err)
-		}
-	}
+	j.finishCleanupRun(ctx, jobId, errors, deletedItems)
 }
 
 func (j *comparisonsCleanupJob) initializeCleanupRun(ctx context.Context, jobId string, deleteBefore time.Time) error {
@@ -578,7 +521,7 @@ func (j *comparisonsCleanupJob) initializeCleanupRun(ctx context.Context, jobId 
 	return nil
 }
 
-func (j *comparisonsCleanupJob) processComparisons(ctx context.Context, jobId string, deleteBefore time.Time, deletedItems int) (int, error) {
+func (j *comparisonsCleanupJob) processComparisons(ctx context.Context, jobId string, deleteBefore time.Time, deletedItems int) (int, []string, error) {
 	page, limit := 0, 100
 	var errors []string
 
@@ -590,7 +533,7 @@ func (j *comparisonsCleanupJob) processComparisons(ctx context.Context, jobId st
 				errorMessage = "timeout"
 			}
 			log.Warnf("Comparisons cleanup job %s interrupted - %s", jobId, errorMessage)
-			return deletedItems, fmt.Errorf("job interrupted - %s", errorMessage)
+			return deletedItems, errors, fmt.Errorf("job interrupted - %s", errorMessage)
 		default:
 		}
 
@@ -614,75 +557,63 @@ func (j *comparisonsCleanupJob) processComparisons(ctx context.Context, jobId st
 					errorMessage = "timeout"
 				}
 				log.Warnf("Comparison cleanup job %s interrupted - %s", jobId, errorMessage)
-				return deletedItems, fmt.Errorf("job interrupted - %s", errorMessage)
+				return deletedItems, errors, fmt.Errorf("job interrupted - %s", errorMessage)
 			default:
 			}
-			//TODO: should we check for changelog here ?
+
 			deleteCandidate := false
-			if candidate.Deleted || candidate.VersionNotPublished {
+			if candidate.RevisionNotPublished {
+				log.Tracef("[comparisons cleanup] Deleting comparison %s because revision is not published", candidate.ComparisonId)
+				deleteCandidate = true
+			} else if candidate.LastActive.Before(deleteBefore) && (candidate.ActualPreviousVersion == nil || candidate.ActualPreviousPackageId == nil ||
+				*candidate.ActualPreviousVersion != candidate.PreviousVersion || *candidate.ActualPreviousPackageId != candidate.PreviousPackageId) {
+				log.Tracef("[comparisons cleanup] Comparison %s is ad-hoc, deleting", candidate.ComparisonId)
+				deleteCandidate = true
+			} else if candidate.ActualPreviousPackageId != nil && candidate.ActualPreviousVersion != nil &&
+				candidate.PreviousPackageId == *candidate.ActualPreviousPackageId &&
+				candidate.PreviousVersion == *candidate.ActualPreviousVersion &&
+				candidate.PreviousRevision != candidate.PreviousMaxRevision {
+				log.Tracef("[comparisons cleanup] Comparison %s is not actual changelog, deleting", candidate.ComparisonId)
 				deleteCandidate = true
 			}
-
-			if !deleteCandidate {
-				if candidate.LastActive.Before(deleteBefore) && (candidate.ActualPreviousVersion == nil || (*candidate.ActualPreviousVersion != candidate.PreviousVersion || *candidate.ActualPreviousPackageId != candidate.PreviousPackageId)) {
-					deleteCandidate = true
-				} else if candidate.PreviousRevision != candidate.PreviousMaxRevision {
-					deleteCandidate = true
-				}
-			}
-
-			log.Debugf("[comparisons cleanup] Attempting to delete comparison %s", candidate.ComparisonId)
 
 			if deleteCandidate {
 				deleted, err := j.publishedRepository.DeleteVersionComparison(ctx, candidate.ComparisonId)
 				if err != nil {
-					log.Errorf("[comparison cleanup] Error deleting comparison %s: %v", candidate.ComparisonId, err)
+					log.Warnf("[comparison cleanup] Error deleting comparison %s: %v", candidate.ComparisonId, err)
 					errors = append(errors, fmt.Sprintf("Error deleting comparison %s: %v", candidate.ComparisonId, err))
 				} else if deleted {
-					log.Debugf("[comparisons cleanup] Successfully deleted comparison %s", candidate.ComparisonId)
+					log.Debugf("[comparisons cleanup] Deleted version comparison %s, packageId: %s, version: %s, revision: %d, previousPackageId: %s, previousVersion: %s, previousRevision: %d",
+						candidate.ComparisonId, candidate.PackageId, candidate.Version, candidate.Revision, candidate.PreviousPackageId, candidate.PreviousVersion, candidate.PreviousRevision)
 					deletedItems++
 				} else {
-					log.Debugf("[comparisons cleanup] Comparison %s was not deleted (likely referenced by another comparison)", candidate.ComparisonId)
+					log.Tracef("[comparisons cleanup] Comparison %s was not deleted (referenced by another comparison or already deleted)", candidate.ComparisonId)
 				}
 			}
 
 		}
+		log.Debugf("[comparisons cleanup] Completed processing page %d, total deleted items so far: %d", page+1, deletedItems)
 		page++
 	}
 
-	if len(errors) > 0 {
-		errorMessage := strings.Join(errors[:min(10, len(errors))], "; ")
-		if len(errors) > 10 {
-			errorMessage += fmt.Sprintf(" and %d more errors", len(errors)-10)
-		}
-		return deletedItems, fmt.Errorf("completed with errors: %s", errorMessage)
-	}
-
-	log.Debugf("[comparisons cleanup] Completed processing comparisons, total deleted items: %d", deletedItems)
-	return deletedItems, nil
+	return deletedItems, errors, nil
 }
 
-func (j *comparisonsCleanupJob) isMigrationRunning() bool {
-	startTime := time.Now().Round(time.Second)
-	log.Infof("Starting comparison cleanup job at %s", startTime)
-	migrations, err := j.migrationRepository.GetRunningMigrations()
-	if err != nil {
-		log.Error("Failed to check for running migrations for comparison cleanup job")
-		return true
-	}
-	if len(migrations) != 0 {
-		log.Infof("Comparison cleanup was skipped at %s due to migration run", startTime)
-		return true
-	}
-	return false
-}
-
-func (j *comparisonsCleanupJob) finishCleanupRun(ctx context.Context, jobId string, deletedItems int) {
+func (j *comparisonsCleanupJob) finishCleanupRun(ctx context.Context, jobId string, errors []string, deletedItems int) {
 	status := string(view.StatusComplete)
 	errorMessage := ""
+	if len(errors) > 0 {
+		status = string(view.StatusError)
+		errorMessage = fmt.Sprintf("Failed version comparisons: %s", strings.Join(errors, "; "))
+	}
 
 	if err := j.updateCleanupRun(ctx, jobId, status, errorMessage, deletedItems); err != nil {
-		log.Errorf("Failed to save cleanup run state: %v, jobId: %s, status: %s, deletedItems: %d", err, jobId, status, deletedItems)
+		logErrorMessage := errorMessage
+		runes := []rune(logErrorMessage)
+		if len(runes) > maxErrorMessageLength {
+			logErrorMessage = string(runes[:maxErrorMessageLength-3]) + "..."
+		}
+		log.Errorf("Failed to save cleanup run state: %v, jobId: %s, status: %s, %s, deletedItems: %d, errorMessage: %s", err, jobId, status, logErrorMessage, deletedItems, errorMessage)
 		return
 	}
 
@@ -690,13 +621,8 @@ func (j *comparisonsCleanupJob) finishCleanupRun(ctx context.Context, jobId stri
 }
 
 func (j *comparisonsCleanupJob) updateCleanupRun(ctx context.Context, jobId string, status string, errorMessage string, deletedItems int) error {
-	updateCtx := ctx
-	if ctx.Err() != nil {
-		// in case of timeout or lock lost, we need to use new context for update
-		var cancel context.CancelFunc
-		updateCtx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-	}
+	updateCtx, cancel := j.createUpdateContext(ctx)
+	defer cancel()
 
 	err := j.comparisonCleanupRepo.UpdateComparisonCleanupRun(updateCtx, jobId, status, errorMessage, deletedItems)
 	if err != nil {
