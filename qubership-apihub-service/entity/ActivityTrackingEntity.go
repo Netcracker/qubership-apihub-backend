@@ -94,22 +94,10 @@ func MakeActivityTrackingEventView_deprecated_2(ent EnrichedActivityTrackingEnti
 }
 
 func MakeActivityTrackingEventView(ent EnrichedActivityTrackingEntity) view.PkgActivityResponseItem {
-	var principal map[string]interface{}
-
-	if deletedByJob, ok := ent.Data["deletedByJob"].(bool); ok && deletedByJob {
-		principal = map[string]interface{}{
-			"type": view.PTJob,
-			"id":   ent.UserId,
-		}
-		delete(ent.Data, "deletedByJob")
-	} else {
-		principal = *MakePrincipalView(&ent.PrincipalEntity)
-	}
-
 	return view.PkgActivityResponseItem{
 		PackageName: ent.PackageName,
 		PackageKind: ent.PackageKind,
-		Principal:   principal,
+		Principal:   *MakeActivityHistoryPrincipalView(&ent.PrincipalEntity),
 		ActivityTrackingEvent: view.ActivityTrackingEvent{
 			Type:      view.ATEventType(ent.Type),
 			Data:      ent.Data,

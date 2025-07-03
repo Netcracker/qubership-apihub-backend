@@ -14,22 +14,15 @@
 
 package view
 
-type PrincipalUserView struct {
-	PrincipalType PrincipalType `json:"type"`
-	User
-}
-type PrincipalApiKeyView struct {
-	PrincipalType PrincipalType `json:"type"`
-	ApiKey
+type Job struct {
+	Id   string `json:"id"`
+	Name string `json:"name"`
 }
 
-type PrincipalJobView struct {
-	PrincipalType PrincipalType `json:"type"`
-	Job
+func ConvertJobName(name string) string {
+	switch name {
+	case "revisions_cleanup":
+		return "auto-cleaning job"
+	}
+	return name
 }
-
-type PrincipalType string
-
-const PTUser PrincipalType = "user"
-const PTApiKey PrincipalType = "apiKey"
-const PTJob PrincipalType = "job"

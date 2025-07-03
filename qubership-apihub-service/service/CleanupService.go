@@ -362,7 +362,7 @@ func (j *revisionsCleanupJob) processPackages(ctx context.Context, jobId string,
 			}
 
 			log.Debugf("[revisions cleanup] Processing package %d/%d: %s", idx+1, len(packages), pkg.Id)
-			count, err := j.publishedRepository.DeletePackageRevisionsBeforeDate(ctx, pkg.Id, deleteBefore, j.deleteLastRevision, j.deleteReleaseRevision, "revisions_cleanup_job_"+jobId)
+			count, err := j.publishedRepository.DeletePackageRevisionsBeforeDate(ctx, pkg.Id, deleteBefore, j.deleteLastRevision, j.deleteReleaseRevision, "job_revisions_cleanup|"+jobId)
 			if err != nil {
 				log.Errorf("Failed to delete revisions of package %s during revisions cleanup %s: %v", pkg.Id, jobId, err)
 				errors = append(errors, fmt.Sprintf("package %s: %s", pkg.Id, err.Error()))

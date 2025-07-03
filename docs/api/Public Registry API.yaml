@@ -15521,10 +15521,14 @@ components:
       type: object
       required:
         - id
+        - name
       properties:
         id:
           type: string
           description: Job identifier
+        name:
+          type: string
+          description: Job name
     ReferencedPackage:
       description: Package reference
       type: object
