@@ -142,7 +142,7 @@ paths:
                               type: string
                             type:
                               type: string
-                              enum: [ internal, external ]
+                              enum: [internal, external]
                             displayName:
                               type: string
                             imageSvg:
@@ -374,20 +374,20 @@ paths:
       description: Logs out the authenticated user and invalidates all active sessions.
       operationId: logoutUser
       security:
-        - BearerAuth: [ ]
-        - CookieAuth: [ ]
+        - BearerAuth: []
+        - CookieAuth: []
       responses:
         "204":
           description: No content
           content: {}
-        '401':
+        "401":
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
               example: {}
-        '500':
+        "500":
           description: Internal Server Error
           content:
             application/json:
@@ -401,7 +401,7 @@ paths:
       tags:
         - Export
       summary: Async export of version, document or operations group
-      description: | 
+      description: |
         Start export of package version, one document or operations group. Use ```GET /api/v1/export/publish/{publishId}/status``` to get status of export and exported file itself.\
         Export of document is currently available for documents with type openapi-3-1, openapi-3-0, or openapi-2-0 and is intended to retrieve content with some transformations. For other document types, use GET /api/v2/packages/{packageId}/versions/{version}/files/{slug} to obtain the original document content.\
         Export of operations group is currently available for groups with apiType = REST.
@@ -506,7 +506,7 @@ paths:
         - api-key: []
         - PersonalAccessToken: []
       responses:
-        '200':
+        "200":
           description: Success
           content:
             application/json:
@@ -514,7 +514,7 @@ paths:
                 type: object
                 properties:
                   status:
-                    description: | 
+                    description: |
                       Export process status.\
                       "none" status means - not started.
                     type: string
@@ -535,50 +535,50 @@ paths:
             Content-Disposition:
               schema:
                 type: string
-                description: | 
+                description: |
                   File name for exported entity.
                     - if version was exported: <packageId>_<version>.<extension>
                     - if document was exported: <packageId>_<version>_<file name>.<extension>
                     - if operations group was exported: <packageId>_<version>_<group name>.<extension>
                 example: attachment; filename="PCKG1.zip"
-        '400':
+        "400":
           description: Bad request
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
               examples:
                 IncorrectInputParams:
-                  $ref: '#/components/examples/IncorrectInputParameters'
-        '401':
+                  $ref: "#/components/examples/IncorrectInputParameters"
+        "401":
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
               examples: {}
-        '404':
+        "404":
           description: Not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
               examples:
                 PackageNotFound:
-                  $ref: '#/components/examples/PackageNotFound'
+                  $ref: "#/components/examples/PackageNotFound"
                 VersionNotFound:
-                  $ref: '#/components/examples/VersionNotFound'
+                  $ref: "#/components/examples/VersionNotFound"
                 FileNotFound:
-                  $ref: '#/components/examples/FileNotFound'
-        '500':
+                  $ref: "#/components/examples/FileNotFound"
+        "500":
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
               examples:
                 InternalServerError:
-                  $ref: '#/components/examples/InternalServerError'
+                  $ref: "#/components/examples/InternalServerError"
   /api/v2/activity:
     get:
       tags:
@@ -622,7 +622,7 @@ paths:
                 - group
                 - package
                 - dashboard
-            example: [ group, package, dashboard ]
+            example: [group, package, dashboard]
         - name: types
           description: |
             Filter for events by group types:
@@ -894,7 +894,7 @@ paths:
                 - group
                 - package
                 - dashboard
-            example: [ group, package, dashboard ]
+            example: [group, package, dashboard]
         - name: types
           description: |
             Filter for events by group types:
@@ -1157,14 +1157,14 @@ paths:
                 - group
                 - package
                 - dashboard
-            example: [ group, package, dashboard ]
+            example: [group, package, dashboard]
         - name: types
           description: |
             Filter for events by group types:
             * package_members - grant_role, update_role, delete_role.
             * package_security - generate_api_key, revoke_api_key.
             * new_version - publish_new_version.
-            * package_version - patch_version_meta, delete_version, publish_new_revision.
+            * package_version - patch_version_meta, delete_version, delete_revision, publish_new_revision.
             * package_management - create_package, delete_package, patch_package_meta.
             * operations_group - create_manual_group, delete_manual_group, update_operations_group_parameters
           in: query
@@ -1239,6 +1239,7 @@ paths:
                             - update_role
                             - publish_new_version
                             - delete_version
+                            - delete_revision
                             - publish_new_revision
                             - patch_version_meta
                             - patch_package_meta
@@ -1419,6 +1420,20 @@ paths:
                                 isPrefixGroup:
                                   type: boolean
                                   description: true - if the group created automatically via restGroupingPrefix.
+                            - type: object
+                              title: ParamsForDeleteRevision
+                              description: |
+                                params for delete_revision event
+                              required:
+                                - version
+                                - status
+                              properties:
+                                version:
+                                  description: Package version name with revision. The <version>@<revision> format is used.
+                                  type: string
+                                  example: "4@2"
+                                status:
+                                  $ref: "#/components/schemas/VersionStatusEnum"
         "401":
           description: Unauthorized
           content:
@@ -1929,7 +1944,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -1993,7 +2008,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -2604,7 +2619,7 @@ paths:
             * package_members - grant_role, update_role, delete_role.
             * package_security - generate_api_key, revoke_api_key.
             * new_version - publish_new_version.
-            * package_version - patch_version_meta, delete_version, publish_new_revision.
+            * package_version - patch_version_meta, delete_version, delete_revision, publish_new_revision.
             * package_management - create_package, delete_package, patch_package_meta.
             * operations_group - create_manual_group, delete_manual_group,
             update_operations_group_parameters
@@ -2686,6 +2701,7 @@ paths:
                             - update_role
                             - publish_new_version
                             - delete_version
+                            - delete_revision
                             - publish_new_revision
                             - patch_version_meta
                             - patch_package_meta
@@ -2869,6 +2885,20 @@ paths:
                                   enum:
                                     - rest
                                     - graphql
+                            - type: object
+                              title: ParamsForDeleteRevision
+                              description: |
+                                params for delete_revision event
+                              required:
+                                - version
+                                - status
+                              properties:
+                                version:
+                                  description: Package version name with revision. The <version>@<revision> format is used.
+                                  type: string
+                                  example: "4@2"
+                                status:
+                                  $ref: "#/components/schemas/VersionStatusEnum"
         "301":
           description: Moved Permanently
           headers:
@@ -3614,13 +3644,13 @@ paths:
                 - name
                 - daysUntilExpiry
       responses:
-        '201':
+        "201":
           description: Created
           content:
             application/json:
               schema:
                 allOf:
-                  - $ref: '#/components/schemas/PersonalAccessToken'
+                  - $ref: "#/components/schemas/PersonalAccessToken"
                   - type: object
                     required:
                       - token
@@ -3630,38 +3660,38 @@ paths:
                           Generated personall acess token.
                         type: string
               examples: {}
-        '400':
+        "400":
           description: Bad request
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
               examples:
                 IncorrectInputParams:
-                  $ref: '#/components/examples/IncorrectInputParameters'
-        '401':
+                  $ref: "#/components/examples/IncorrectInputParameters"
+        "401":
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
               examples: {}
-        '409':
+        "409":
           description: Conflict
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
               examples: {}
-        '500':
+        "500":
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
               examples:
                 InternalServerError:
-                  $ref: '#/components/examples/InternalServerError'
+                  $ref: "#/components/examples/InternalServerError"
     get:
       tags:
         - User profile
@@ -3674,38 +3704,38 @@ paths:
         - BearerAuth: []
         - CookieAuth: []
       responses:
-        '200':
+        "200":
           description: Success
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/PersonalAccessToken'
+                  $ref: "#/components/schemas/PersonalAccessToken"
               examples: {}
-        '401':
+        "401":
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
               examples: {}
-        '404':
+        "404":
           description: Not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
               examples: {}
-        '500':
+        "500":
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
               examples:
                 InternalServerError:
-                  $ref: '#/components/examples/InternalServerError'
+                  $ref: "#/components/examples/InternalServerError"
   "/api/v1/personalAccessToken/{id}":
     parameters:
       - name: id
@@ -3725,39 +3755,39 @@ paths:
         - BearerAuth: []
         - CookieAuth: []
       responses:
-        '204':
+        "204":
           description: No content
           content: {}
-        '401':
+        "401":
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
               examples: {}
-        '403':
+        "403":
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
               examples: {}
-        '404':
+        "404":
           description: Not Found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
               examples: {}
-        '500':
+        "500":
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
               examples:
                 InternalServerError:
-                  $ref: '#/components/examples/InternalServerError'
+                  $ref: "#/components/examples/InternalServerError"
   "/api/v2/packages/{packageId}/favor":
     parameters:
       - $ref: "#/components/parameters/packageId"
@@ -3899,7 +3929,8 @@ paths:
         - name: resolveConflicts
           in: query
           required: false
-          description: "In case when resolved refs list contains multiple versions of the same package:
+          description:
+            "In case when resolved refs list contains multiple versions of the same package:
 
             - if resolveConflicts=false - status 400 (Bad request). Conflicts should be resolved manually.
 
@@ -4289,7 +4320,7 @@ paths:
                   $ref: "#/components/examples/InternalServerError"
   "/api/v1/packages/{packageId}/publish/withOperationsGroup":
     parameters:
-        - $ref: '#/components/parameters/packageId'
+      - $ref: "#/components/parameters/packageId"
     post:
       tags:
         - Publish
@@ -4340,11 +4371,11 @@ paths:
                 version:
                   description: Version name for publication in the dashboard.
                   type: string
-                  example: '2022.3'
+                  example: "2022.3"
                 previousVersion:
                   description: Name of the previous published version in the dashboard.
                   type: string
-                  example: '2022.2'
+                  example: "2022.2"
                 previousVersionPackageId:
                   description: >-
                     packageId of the previous version. The parameter may be
@@ -4352,7 +4383,7 @@ paths:
                   type: string
                   example: NC.CloudBSS.CPQ.Q-TMF
                 status:
-                  $ref: '#/components/schemas/VersionStatusEnum'
+                  $ref: "#/components/schemas/VersionStatusEnum"
                 versionLabels:
                   description: List of version labels in dashboard version.
                   type: array
@@ -4361,7 +4392,7 @@ paths:
                   example:
                     - part-of:CloudBSS-CPQBE
       responses:
-        '202':
+        "202":
           description: Publish process started
           content:
             application/json:
@@ -4373,50 +4404,50 @@ paths:
                     description: Publish process Id
                     format: uuid
                     example: 9c8e9045-dd9c-4946-b9e4-e05e3f41c4cc
-        '400':
+        "400":
           description: Bad request
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
               examples:
                 IncorrectInputParams:
-                  $ref: '#/components/examples/IncorrectInputParameters'
-        '401':
+                  $ref: "#/components/examples/IncorrectInputParameters"
+        "401":
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
               examples: {}
-        '403':
+        "403":
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
               examples: {}
-        '404':
+        "404":
           description: Not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
               examples:
                 PackageNotFound:
-                  $ref: '#/components/examples/PackageNotFound'
-        '500':
+                  $ref: "#/components/examples/PackageNotFound"
+        "500":
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
               examples:
                 InternalServerError:
-                  $ref: '#/components/examples/InternalServerError'
+                  $ref: "#/components/examples/InternalServerError"
   "/api/v1/packages/{packageId}/publish/{publishId}/withOperationsGroup/status":
     parameters:
-      - $ref: '#/components/parameters/packageId'
+      - $ref: "#/components/parameters/packageId"
       - name: publishId
         description: Publish Id
         in: path
@@ -4437,7 +4468,7 @@ paths:
         - CookieAuth: []
         - api-key: []
       responses:
-        '200':
+        "200":
           description: Success
           content:
             application/json:
@@ -4461,41 +4492,41 @@ paths:
                         * N operations were not included into \<operation group name\> operation group.
                         If all services and operations were included into dashboard and group, then message shall be empty.
                     type: string
-        '401':
+        "401":
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
               examples: {}
-        '403':
+        "403":
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
               examples: {}
-        '404':
+        "404":
           description: Not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
               examples:
                 PackageNotFound:
-                  $ref: '#/components/examples/PackageNotFound'
-        '500':
+                  $ref: "#/components/examples/PackageNotFound"
+        "500":
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
               examples:
                 InternalServerError:
-                  $ref: '#/components/examples/InternalServerError'
+                  $ref: "#/components/examples/InternalServerError"
   "/api/v1/packages/{packageId}/publish/{publishId}/withOperationsGroup/status/report":
     parameters:
-      - $ref: '#/components/parameters/packageId'
+      - $ref: "#/components/parameters/packageId"
       - name: publishId
         description: Publish Id
         in: path
@@ -4517,7 +4548,7 @@ paths:
         - CookieAuth: []
         - api-key: []
       responses:
-        '200':
+        "200":
           description: Success
           content:
             text/csv:
@@ -4525,38 +4556,38 @@ paths:
                 type: string
                 format: binary
                 description: CSV file which contains initial (input) content and supplemented with information about status and details info if any problems occured (package version was not found, operation was not found, insufficient information provided).
-        '401':
+        "401":
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
               examples: {}
-        '403':
+        "403":
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
               examples: {}
-        '404':
+        "404":
           description: Not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
               examples:
                 PackageNotFound:
-                  $ref: '#/components/examples/PackageNotFound'
-        '500':
+                  $ref: "#/components/examples/PackageNotFound"
+        "500":
           description: Internal Server Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
               examples:
                 InternalServerError:
-                  $ref: '#/components/examples/InternalServerError'
+                  $ref: "#/components/examples/InternalServerError"
   "/api/v2/packages/{packageId}/versions":
     parameters:
       - $ref: "#/components/parameters/packageId"
@@ -4921,7 +4952,7 @@ paths:
                                 - rest
                                 - graphql
                             changesSummary:
-                              $ref: '#/components/schemas/ChangeSummary'
+                              $ref: "#/components/schemas/ChangeSummary"
                             operationsCount:
                               type: number
                             deprecatedCount:
@@ -4941,42 +4972,42 @@ paths:
                           List of groups.
                         items:
                           allOf:
-                          - description: Version group.
-                            type: object
-                            required:
-                              - groupName
-                              - apiType
-                              - isPrefixGroup
-                            properties:
-                              groupName:
-                                type: string
-                                description: Unique group name.
-                                example: New_operation_group
-                              apiType:
-                                type: string
-                                description: Type of the API.
-                                example: rest
-                              description:
-                                type: string
-                                description: Description of group.
-                              isPrefixGroup:
-                                type: boolean
-                                description: true - if the group created automatically via restGroupingPrefix.
-                                example: false
-                              exportTemplateFileName:
-                                type: string
-                                description: The name of the export template file, if there is one.
-                                example: template123.json
-                          - type: object
-                            required:
-                              - operationsCount
-                            properties:
-                              operationsCount:
-                                type: number
-                                description: Number of operations in operation group
-                              ghostOperationsCount:
-                                type: number
-                                description: Number of ghost operations in operation group
+                            - description: Version group.
+                              type: object
+                              required:
+                                - groupName
+                                - apiType
+                                - isPrefixGroup
+                              properties:
+                                groupName:
+                                  type: string
+                                  description: Unique group name.
+                                  example: New_operation_group
+                                apiType:
+                                  type: string
+                                  description: Type of the API.
+                                  example: rest
+                                description:
+                                  type: string
+                                  description: Description of group.
+                                isPrefixGroup:
+                                  type: boolean
+                                  description: true - if the group created automatically via restGroupingPrefix.
+                                  example: false
+                                exportTemplateFileName:
+                                  type: string
+                                  description: The name of the export template file, if there is one.
+                                  example: template123.json
+                            - type: object
+                              required:
+                                - operationsCount
+                              properties:
+                                operationsCount:
+                                  type: number
+                                  description: Number of operations in operation group
+                                ghostOperationsCount:
+                                  type: number
+                                  description: Number of ghost operations in operation group
         "301":
           description: Moved Permanently
           headers:
@@ -5058,7 +5089,11 @@ paths:
                   type: array
                   items:
                     type: string
-                  example: ["app.kubernetes.io/part-of:CloudQSS-CPQBE", "app.kubernetes.io/version:release-candidate-20230410.152115-2782"]
+                  example:
+                    [
+                      "app.kubernetes.io/part-of:CloudQSS-CPQBE",
+                      "app.kubernetes.io/version:release-candidate-20230410.152115-2782",
+                    ]
       responses:
         "200":
           description: Success
@@ -5265,12 +5300,12 @@ paths:
                               $ref: "#/components/schemas/ApiType"
                             changesSummary:
                               allOf:
-                                - $ref: '#/components/schemas/ChangeSummary'
+                                - $ref: "#/components/schemas/ChangeSummary"
                                 - type: object
                                   description: Number of declarative changes in the version.
                             numberOfImpactedOperations:
                               allOf:
-                                - $ref: '#/components/schemas/ChangeSummary'
+                                - $ref: "#/components/schemas/ChangeSummary"
                                 - type: object
                                   description: Number of operations impacted by each severety type.
                             operationsCount:
@@ -5324,17 +5359,17 @@ paths:
                           List of groups.
                         items:
                           allOf:
-                          - $ref: "#/components/schemas/CreateOperationGroup"
-                          - type: object
-                            required:
-                              - operationsCount
-                            properties:
-                              operationsCount:
-                                type: number
-                                description: Number of operations in operation group
-                              ghostOperationsCount:
-                                type: number
-                                description: Number of ghost operations in operation group
+                            - $ref: "#/components/schemas/CreateOperationGroup"
+                            - type: object
+                              required:
+                                - operationsCount
+                              properties:
+                                operationsCount:
+                                  type: number
+                                  description: Number of operations in operation group
+                                ghostOperationsCount:
+                                  type: number
+                                  description: Number of ghost operations in operation group
         "301":
           description: Moved Permanently
           headers:
@@ -5431,12 +5466,12 @@ paths:
                               $ref: "#/components/schemas/ApiType"
                             numberOfImpactedOperations:
                               allOf:
-                                - $ref: '#/components/schemas/ChangeSummary'
+                                - $ref: "#/components/schemas/ChangeSummary"
                                 - type: object
                                   description: Number of operations impacted by each severety type.
                             changesSummary:
                               allOf:
-                                - $ref: '#/components/schemas/ChangeSummary'
+                                - $ref: "#/components/schemas/ChangeSummary"
                                 - type: object
                                   description: Number of declarative changes of each severety type.
                             tags:
@@ -5485,12 +5520,12 @@ paths:
                                     $ref: "#/components/schemas/ApiType"
                                   numberOfImpactedOperations:
                                     allOf:
-                                      - $ref: '#/components/schemas/ChangeSummary'
+                                      - $ref: "#/components/schemas/ChangeSummary"
                                       - type: object
                                         description: Number of operations impacted by each severety type.
                                   changesSummary:
                                     allOf:
-                                      - $ref: '#/components/schemas/ChangeSummary'
+                                      - $ref: "#/components/schemas/ChangeSummary"
                                       - type: object
                                         description: Number of declarative changes of each severety type.
                                   tags:
@@ -5517,7 +5552,12 @@ paths:
                             name: Quote Management TMF648
                             version: "2022.2@5"
                             status: release
-                            parentPackages: ["qubership", "Qubership JSS", "Sample Management"]
+                            parentPackages:
+                              [
+                                "qubership",
+                                "Qubership JSS",
+                                "Sample Management",
+                              ]
                             deletedAt: "2023-05-30T17:17:11.755146Z"
                             deletedBy: "user1221"
                             notLatestRevision: true
@@ -5742,7 +5782,8 @@ paths:
                         name: Quote Management TMF648
                         version: "2022.2@5"
                         status: release
-                        parentPackages: ["qubership", "Qubership JSS", "Sample Management"]
+                        parentPackages:
+                          ["qubership", "Qubership JSS", "Sample Management"]
                         deletedAt: "2023-05-30T17:17:11.755146Z"
                         deletedBy: "user1221"
                         notLatestRevision: true
@@ -5918,46 +5959,46 @@ paths:
                     items:
                       allOf:
                         - oneOf:
-                          - title: RestOperation
-                            type: object
-                            required:
+                            - title: RestOperation
+                              type: object
+                              required:
                                 - path
                                 - method
-                            properties:
-                              path:
-                                description: Operation endpoint path.
-                                type: string
-                                example: "/quoteManagement/v5/quote"
-                              method:
-                                description: Operation method.
-                                type: string
-                                enum:
-                                  - post
-                                  - get
-                                  - put
-                                  - patch
-                                  - delete
-                                  - head
-                                  - options
-                                  - connect
-                                  - trace
-                          - title: GraphQLOperation
-                            type: object
-                            required:
-                              - type
-                              - method
-                            properties:
-                              type:
-                                description: Operation type
-                                type: string
-                                enum:
-                                  - query
-                                  - mutation
-                                  - subscription
-                              method:
-                                description: GraphQL operation method.
-                                type: string
-                                example: getPaymentMethodSpecificationCore
+                              properties:
+                                path:
+                                  description: Operation endpoint path.
+                                  type: string
+                                  example: "/quoteManagement/v5/quote"
+                                method:
+                                  description: Operation method.
+                                  type: string
+                                  enum:
+                                    - post
+                                    - get
+                                    - put
+                                    - patch
+                                    - delete
+                                    - head
+                                    - options
+                                    - connect
+                                    - trace
+                            - title: GraphQLOperation
+                              type: object
+                              required:
+                                - type
+                                - method
+                              properties:
+                                type:
+                                  description: Operation type
+                                  type: string
+                                  enum:
+                                    - query
+                                    - mutation
+                                    - subscription
+                                method:
+                                  description: GraphQL operation method.
+                                  type: string
+                                  example: getPaymentMethodSpecificationCore
                         - type: object
                           required:
                             - operationId
@@ -5994,7 +6035,8 @@ paths:
                         name: Quote Management TMF648
                         version: "2022.2@5"
                         status: release
-                        parentPackages: ["qubership", "Qubership JSS", "Sample Management"]
+                        parentPackages:
+                          ["qubership", "Qubership JSS", "Sample Management"]
                         deletedAt: "2023-05-30T17:17:11.755146Z"
                         deletedBy: "user1221"
                         notLatestRevision: true
@@ -6161,23 +6203,23 @@ paths:
                     items:
                       allOf:
                         - oneOf:
-                          - title: RestOperation
-                            type: object
-                            properties:
-                              previousOperation:
-                                $ref: "#/components/schemas/RestOperationInfoFromDifferentVersions"
-                              currentOperation:
-                                $ref: "#/components/schemas/RestOperationInfoFromDifferentVersions"
-                          - title: GraphQLOperation
-                            type: object
-                            required:
-                              - type
-                              - method
-                            properties:
-                              previousOperation:
-                                $ref: "#/components/schemas/GqlOperationInfoFromDifferentVersions"
-                              currentOperation:
-                                $ref: "#/components/schemas/GqlOperationInfoFromDifferentVersions"
+                            - title: RestOperation
+                              type: object
+                              properties:
+                                previousOperation:
+                                  $ref: "#/components/schemas/RestOperationInfoFromDifferentVersions"
+                                currentOperation:
+                                  $ref: "#/components/schemas/RestOperationInfoFromDifferentVersions"
+                            - title: GraphQLOperation
+                              type: object
+                              required:
+                                - type
+                                - method
+                              properties:
+                                previousOperation:
+                                  $ref: "#/components/schemas/GqlOperationInfoFromDifferentVersions"
+                                currentOperation:
+                                  $ref: "#/components/schemas/GqlOperationInfoFromDifferentVersions"
                         - type: object
                           required:
                             - changeSummary
@@ -6203,7 +6245,8 @@ paths:
                         name: Quote Management TMF648
                         version: "2022.2@5"
                         status: release
-                        parentPackages: ["qubership", "Qubership JSS", "Sample Management"]
+                        parentPackages:
+                          ["qubership", "Qubership JSS", "Sample Management"]
                         deletedAt: "2023-05-30T17:17:11.755146Z"
                         deletedBy: "user1221"
                         notLatestRevision: true
@@ -6425,9 +6468,9 @@ paths:
       description: Export API changes to xlsx file
       operationId: getPackageIdVersionIdChangesExport
       security:
-        - BearerAuth: [ ]
-        - CookieAuth: [ ]
-        - api-key: [ ]
+        - BearerAuth: []
+        - CookieAuth: []
+        - api-key: []
       responses:
         "200":
           description: Success
@@ -6469,7 +6512,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              examples: { }
+              examples: {}
         "404":
           description: Not found
           content:
@@ -6912,27 +6955,27 @@ paths:
         - CookieAuth: []
         - api-key: []
       parameters:
-      - name: clientBuild
-        in: query
-        description: Client-side package build will be used.
-        required: false
-        schema:
-          type: boolean
-          default: false
-      - name: builderId
-        in: query
-        required: false
-        description: Builder identifier. **Required** if clientBuild=true.
-        schema:
-          type: string
-      - name: reCalculate
-        in: query
-        description: |
-          Flag for the force document re-calculation.
-          May be used after the previous API call with **error** status.
-        schema:
-          type: boolean
-          default: false
+        - name: clientBuild
+          in: query
+          description: Client-side package build will be used.
+          required: false
+          schema:
+            type: boolean
+            default: false
+        - name: builderId
+          in: query
+          required: false
+          description: Builder identifier. **Required** if clientBuild=true.
+          schema:
+            type: string
+        - name: reCalculate
+          in: query
+          description: |
+            Flag for the force document re-calculation.
+            May be used after the previous API call with **error** status.
+          schema:
+            type: boolean
+            default: false
       responses:
         "200":
           description: Documents transformation completed successfully
@@ -7084,40 +7127,40 @@ paths:
         - CookieAuth: []
         - api-key: []
       parameters:
-      - name: clientBuild
-        in: query
-        description: Client-side package build will be used.
-        required: false
-        schema:
-          type: boolean
-          default: false
-      - name: builderId
-        in: query
-        required: false
-        description: Builder identifier. **Required** if clientBuild=true.
-        schema:
-          type: string
-      - name: reCalculate
-        in: query
-        description: |
-          Flag for the force document re-calculation.
-          May be used after the previous API call with **error** status.
-        schema:
-          type: boolean
-          default: false
-      - name: format
-        in: query
-        description: |
-          Format of the exported file.\
-          If buidType = reducedSourceSpecifications, then format can be yaml, json or html.\
-          If buidType = mergedspecification, then format can be yaml or json; html is not supported for this buildType.
-        schema:
-          type: string
-          enum:
-            - yaml
-            - json
-            - html
-          default: json
+        - name: clientBuild
+          in: query
+          description: Client-side package build will be used.
+          required: false
+          schema:
+            type: boolean
+            default: false
+        - name: builderId
+          in: query
+          required: false
+          description: Builder identifier. **Required** if clientBuild=true.
+          schema:
+            type: string
+        - name: reCalculate
+          in: query
+          description: |
+            Flag for the force document re-calculation.
+            May be used after the previous API call with **error** status.
+          schema:
+            type: boolean
+            default: false
+        - name: format
+          in: query
+          description: |
+            Format of the exported file.\
+            If buidType = reducedSourceSpecifications, then format can be yaml, json or html.\
+            If buidType = mergedspecification, then format can be yaml or json; html is not supported for this buildType.
+          schema:
+            type: string
+            enum:
+              - yaml
+              - json
+              - html
+            default: json
       responses:
         "200":
           description: Documents transformation completed successfully
@@ -7311,7 +7354,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              examples: { }
+              examples: {}
         "500":
           description: Internal Server Error
           content:
@@ -7437,7 +7480,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              examples: { }
+              examples: {}
         "500":
           description: Internal Server Error
           content:
@@ -7475,7 +7518,7 @@ paths:
                 description: Binary content for unsupported file types (doc, xls, jpg, png, etc.).
                 type: string
                 format: binary
-          headers: 
+          headers:
             Content-Disposition:
               schema:
                 type: string
@@ -7620,9 +7663,9 @@ paths:
         Export sources of package version as a zip archive and build configuration that was used for this version.
       operationId: getPackageVersionSourcesWithBuildConfig
       security:
-          - BearerAuth: [ ]
-          - CookieAuth: [ ]
-          - api-key: [ ]
+        - BearerAuth: []
+        - CookieAuth: []
+        - api-key: []
       responses:
         "200":
           description: Success
@@ -7652,14 +7695,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              examples: { }
+              examples: {}
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              examples: { }
+              examples: {}
         "404":
           description: Not found
           content:
@@ -7800,7 +7843,12 @@ paths:
                         description: List of permissions applicable to the role.
                         items:
                           $ref: "#/components/schemas/Permission"
-                        example: ["read", "create_and_update_package", "delete_package"]
+                        example:
+                          [
+                            "read",
+                            "create_and_update_package",
+                            "delete_package",
+                          ]
         "400":
           description: Bad request
           content:
@@ -7857,7 +7905,12 @@ paths:
                               description: List of permissions applicable to the role.
                               items:
                                 $ref: "#/components/schemas/Permission"
-                              example: ["read", "create_and_update_package", "delete_package"]
+                              example:
+                                [
+                                  "read",
+                                  "create_and_update_package",
+                                  "delete_package",
+                                ]
         "401":
           description: Unauthorized
           content:
@@ -7907,7 +7960,8 @@ paths:
                   type: array
                   items:
                     $ref: "#/components/schemas/Permission"
-                  example: ["read", "create_and_update_package", "delete_package"]
+                  example:
+                    ["read", "create_and_update_package", "delete_package"]
       responses:
         "204":
           description: No content
@@ -8134,7 +8188,12 @@ paths:
                               description: List of permissions applicable to the role.
                               items:
                                 $ref: "#/components/schemas/Permission"
-                              example: ["read", "create_and_update_package", "delete_package"]
+                              example:
+                                [
+                                  "read",
+                                  "create_and_update_package",
+                                  "delete_package",
+                                ]
         "301":
           description: Moved Permanently
           headers:
@@ -9508,7 +9567,7 @@ paths:
               examples:
                 InternalServerError:
                   $ref: "#/components/examples/InternalServerError"
-  '/api/v2/agents/{agentId}/namespaces/{name}/serviceNames':
+  "/api/v2/agents/{agentId}/namespaces/{name}/serviceNames":
     get:
       summary: Get list of service names
       description: |
@@ -9848,8 +9907,8 @@ paths:
             type: string
             example: user1221
       security:
-        - BearerAuth: [ ]
-        - CookieAuth: [ ]
+        - BearerAuth: []
+        - CookieAuth: []
       responses:
         "200":
           description: Success
@@ -9857,21 +9916,21 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/User"
-              examples: { }
+              examples: {}
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              examples: { }
+              examples: {}
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              examples: { }
+              examples: {}
         "404":
           description: Not found
           content:
@@ -10071,7 +10130,8 @@ paths:
                           name: Quote Management TMF648
                           version: "2022.2@5"
                           status: release
-                          parentPackages: ["qubership", "Qubership JSS", "Sample Management"]
+                          parentPackages:
+                            ["qubership", "Qubership JSS", "Sample Management"]
                           deletedAt: "2023-05-30T17:17:11.755146Z"
                           deletedBy: "user1221"
                           notLatestRevision: true
@@ -10232,7 +10292,8 @@ paths:
             type: array
             items:
               type: string
-            example: ["get-quoteManagement-v5-quote", "post-quoteManagement-v5-quote"]
+            example:
+              ["get-quoteManagement-v5-quote", "post-quoteManagement-v5-quote"]
         - name: hashList
           in: query
           description: List of the hash to filter.
@@ -10297,7 +10358,8 @@ paths:
                         name: Quote Management TMF648
                         version: "2022.2@5"
                         status: release
-                        parentPackages: ["qubership", "Qubership JSS", "Sample Management"]
+                        parentPackages:
+                          ["qubership", "Qubership JSS", "Sample Management"]
                         deletedAt: "2023-05-30T17:17:11.755146Z"
                         deletedBy: "user1221"
                         notLatestRevision: true
@@ -10352,8 +10414,8 @@ paths:
         Get summary of deprecated operations in the version
       operationId: getPackageIdVersionDeprecatedSummaryV3
       security:
-        - BearerAuth: [ ]
-        - CookieAuth: [ ]
+        - BearerAuth: []
+        - CookieAuth: []
       parameters:
         - $ref: "#/components/parameters/packageId"
         - $ref: "#/components/parameters/version"
@@ -10384,7 +10446,7 @@ paths:
                               type: array
                               items:
                                 type: string
-                              example: [ "tag1", "tag2" ]
+                              example: ["tag1", "tag2"]
                   - type: object
                     title: dashboard
                     required:
@@ -10418,7 +10480,7 @@ paths:
                                     type: array
                                     items:
                                       type: string
-                                    example: [ "tag1", "tag2" ]
+                                    example: ["tag1", "tag2"]
                       packages:
                         description: |
                           A mapped list of the packageId and version name concatenation with At sign to the package objects.
@@ -10434,7 +10496,12 @@ paths:
                             name: Quote Management TMF648
                             version: "2022.2@5"
                             status: release
-                            parentPackages: ["qubership", "Qubership JSS", "Sample Management"]
+                            parentPackages:
+                              [
+                                "qubership",
+                                "Qubership JSS",
+                                "Sample Management",
+                              ]
                             deletedAt: "2023-05-30T17:17:11.755146Z"
                             deletedBy: "user1221"
                             notLatestRevision: true
@@ -10482,9 +10549,9 @@ paths:
         List of deprecated operations in the current version
       operationId: getPackagesIdVersionsIdApiTypeDeprecations
       security:
-        - BearerAuth: [ ]
-        - CookieAuth: [ ]
-        - api-key: [ ]
+        - BearerAuth: []
+        - CookieAuth: []
+        - api-key: []
       parameters:
         - $ref: "#/components/parameters/apiType"
         - $ref: "#/components/parameters/packageId"
@@ -10502,7 +10569,8 @@ paths:
             type: array
             items:
               type: string
-            example: [ "get-quoteManagement-v5-quote", "post-quoteManagement-v5-quote" ]
+            example:
+              ["get-quoteManagement-v5-quote", "post-quoteManagement-v5-quote"]
         - name: version
           in: path
           description: |
@@ -10617,7 +10685,7 @@ paths:
                               type: array
                               items:
                                 type: string
-                              example: [ "2022.2", "2022,1", "2021.4" ]
+                              example: ["2022.2", "2022,1", "2021.4"]
                             deprecatedCount:
                               type: string
                               description: number of deprecated items in the operation
@@ -10655,7 +10723,8 @@ paths:
                         name: Quote Management TMF648
                         version: "2022.2@5"
                         status: release
-                        parentPackages: ["qubership", "Qubership JSS", "Sample Management"]
+                        parentPackages:
+                          ["qubership", "Qubership JSS", "Sample Management"]
                         deletedAt: "2023-05-30T17:17:11.755146Z"
                         deletedBy: "user1221"
                         notLatestRevision: true
@@ -10704,9 +10773,9 @@ paths:
         Deprecated item is entity that is deprecated inside of API operation. For example for REST API it can be parameter or schema, for GraphQL API - field or enum value.
       operationId: getPackagesIdVersionsApiTypeOperationsIddeprecatedItems
       security:
-        - BearerAuth: [ ]
-        - CookieAuth: [ ]
-        - api-key: [ ]
+        - BearerAuth: []
+        - CookieAuth: []
+        - api-key: []
       parameters:
         - $ref: "#/components/parameters/apiType"
         - $ref: "#/components/parameters/packageId"
@@ -10766,9 +10835,9 @@ paths:
         Get list of operations that have the same model
       operationId: getPackagesIdVersionsApiTypeOperationsIdModelsModelName
       security:
-        - BearerAuth: [ ]
-        - CookieAuth: [ ]
-        - api-key: [ ]
+        - BearerAuth: []
+        - CookieAuth: []
+        - api-key: []
       parameters:
         - $ref: "#/components/parameters/apiType"
         - $ref: "#/components/parameters/packageId"
@@ -10842,9 +10911,9 @@ paths:
         Export operations of specific API type.
       operationId: getPackagesIdVersionsIdApiTypeOperationsExport
       security:
-        - BearerAuth: [ ]
-        - CookieAuth: [ ]
-        - api-key: [ ]
+        - BearerAuth: []
+        - CookieAuth: []
+        - api-key: []
       parameters:
         - $ref: "#/components/parameters/apiType"
         - $ref: "#/components/parameters/packageId"
@@ -10957,7 +11026,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              examples: { }
+              examples: {}
         "500":
           description: Internal Server Error
           content:
@@ -10976,9 +11045,9 @@ paths:
         Export operations of specific API type.
       operationId: getPackagesIdVersionsIdApiTypeOperationsExport
       security:
-        - BearerAuth: [ ]
-        - CookieAuth: [ ]
-        - api-key: [ ]
+        - BearerAuth: []
+        - CookieAuth: []
+        - api-key: []
       parameters:
         - $ref: "#/components/parameters/apiType"
         - $ref: "#/components/parameters/packageId"
@@ -11089,7 +11158,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              examples: { }
+              examples: {}
         "500":
           description: Internal Server Error
           content:
@@ -11215,7 +11284,8 @@ paths:
           example: QS.RUNENV.K8S-SERVER.CJM-QSS-DEV-2.Q-TMF
         - in: query
           name: previousVersionOperationId
-          description: Operation unique identifier from previous version (not the same as operationId tag from the OpenAPI file).\
+          description:
+            Operation unique identifier from previous version (not the same as operationId tag from the OpenAPI file).\
             Empty, if requested operation is added in the current version; otherwise, must be specified.
           schema:
             type: string
@@ -11554,195 +11624,201 @@ paths:
                   $ref: "#/components/examples/InternalServerError"
   "/api/v2/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}":
     get:
-        tags:
-          - Versions
-          - Operation groups
-        summary: Get list of operations for operation group
-        description: |
-          Get list of operations from operation group. The result list depends on the API type.
-        security:
-          - BearerAuth: []
-          - CookieAuth: []
-          - api-key: []
-        parameters:
-          - $ref: "#/components/parameters/apiType"
-          - $ref: "#/components/parameters/packageId"
-          - $ref: "#/components/parameters/version"
-          - $ref: "#/components/parameters/groupName"
-          - $ref: "#/components/parameters/apiAudience"
-          - name: textFilter
-            in: query
-            description: Filter by title/path/method.
-            schema:
-              type: string
-          - name: documentSlug
-            in: query
-            description: Filter by document
-            schema:
-              type: string
-              example: "billing-rating-catalog-integration-service1-json"
-          - name: tag
-            in: query
-            description: |
-              Name of the tag for filtering/grouping.
-              A full match is required. To get the list of available tags use GET /tags API.
-            schema:
-              type: string
-              example: RestControllerV5
-          - name: emptyTag
-            in: query
-            description: |
-              Flag, filtering the operations without tags at all.
+      tags:
+        - Versions
+        - Operation groups
+      summary: Get list of operations for operation group
+      description: |
+        Get list of operations from operation group. The result list depends on the API type.
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+        - api-key: []
+      parameters:
+        - $ref: "#/components/parameters/apiType"
+        - $ref: "#/components/parameters/packageId"
+        - $ref: "#/components/parameters/version"
+        - $ref: "#/components/parameters/groupName"
+        - $ref: "#/components/parameters/apiAudience"
+        - name: textFilter
+          in: query
+          description: Filter by title/path/method.
+          schema:
+            type: string
+        - name: documentSlug
+          in: query
+          description: Filter by document
+          schema:
+            type: string
+            example: "billing-rating-catalog-integration-service1-json"
+        - name: tag
+          in: query
+          description: |
+            Name of the tag for filtering/grouping.
+            A full match is required. To get the list of available tags use GET /tags API.
+          schema:
+            type: string
+            example: RestControllerV5
+        - name: emptyTag
+          in: query
+          description: |
+            Flag, filtering the operations without tags at all.
 
-              In response will be returned the list of operations, on what the tag is not filled in.
+            In response will be returned the list of operations, on what the tag is not filled in.
 
-              This attribute has a higher priority than the **tag**. In case, then **emptyTag: true**, it will override the **tag** filter.
-            schema:
-              type: boolean
-              default: false
-          - name: onlyAddable
-            in: query
-            description: |
-              Flag for filtering operations that are not included in this group
+            This attribute has a higher priority than the **tag**. In case, then **emptyTag: true**, it will override the **tag** filter.
+          schema:
+            type: boolean
+            default: false
+        - name: onlyAddable
+          in: query
+          description: |
+            Flag for filtering operations that are not included in this group
 
-              true - will return all operations from version except operations that are already included in this group
+            true - will return all operations from version except operations that are already included in this group
 
-              false - will return all operations that are included in this group
-            schema:
-              type: boolean
-              default: false
-          - name: kind
-            description: |
-              Operation kind.
-              * bwc - API with backward compatibility support (a.k.a. public).
-              * no-bwc - API without backward compatibility support (a.k.a. internal).
-              * experimental - APIs for feature testing. Usage is not recommended.
-            in: query
-            schema:
-              type: string
-              enum:
-                - all
-                - bwc
-                - no-bwc
-                - experimental
-              default: all
-          - name: deprecated
-            description: Filter operations by 'deprecated' status.
-            in: query
-            schema:
-              type: string
-              enum:
-                - "all"
-                - "true"
-                - "false"
-              default: all
-          - name: refPackageId
-            description: Filter by package id of ref package, shall be used in case of dashboard.
-            in: query
-            schema:
-              type: string
-          - $ref: "#/components/parameters/limit"
-          - $ref: "#/components/parameters/page"
-        responses:
-          "200":
-            description: Success
-            content:
-              application/json:
-                schema:
-                  description: List of group operations.
-                  type: object
-                  properties:
-                    operations:
-                      type: array
-                      description: |
-                        List of grouped operations that were present in the previous revision and are deleted in the current revision.
-                      items:
-                        allOf:
-                          - oneOf:
-                              - $ref: "#/components/schemas/RestOperation"
-                              - $ref: "#/components/schemas/GraphQLOperation"
-                              - $ref: "#/components/schemas/ProtobufOperation"
-                          - type: object
-                            properties:
-                              packageRef:
-                                description: |
-                                  Parent package and version link.
-                                  Created by the concatenation of the packageId and version name with At sign.
+            false - will return all operations that are included in this group
+          schema:
+            type: boolean
+            default: false
+        - name: kind
+          description: |
+            Operation kind.
+            * bwc - API with backward compatibility support (a.k.a. public).
+            * no-bwc - API without backward compatibility support (a.k.a. internal).
+            * experimental - APIs for feature testing. Usage is not recommended.
+          in: query
+          schema:
+            type: string
+            enum:
+              - all
+              - bwc
+              - no-bwc
+              - experimental
+            default: all
+        - name: deprecated
+          description: Filter operations by 'deprecated' status.
+          in: query
+          schema:
+            type: string
+            enum:
+              - "all"
+              - "true"
+              - "false"
+            default: all
+        - name: refPackageId
+          description: Filter by package id of ref package, shall be used in case of dashboard.
+          in: query
+          schema:
+            type: string
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/page"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                description: List of group operations.
+                type: object
+                properties:
+                  operations:
+                    type: array
+                    description: |
+                      List of grouped operations that were present in the previous revision and are deleted in the current revision.
+                    items:
+                      allOf:
+                        - oneOf:
+                            - $ref: "#/components/schemas/RestOperation"
+                            - $ref: "#/components/schemas/GraphQLOperation"
+                            - $ref: "#/components/schemas/ProtobufOperation"
+                        - type: object
+                          properties:
+                            packageRef:
+                              description: |
+                                Parent package and version link.
+                                Created by the concatenation of the packageId and version name with At sign.
+                              type: string
+                              example: "QS.CloudQSS.CPQ.Q-TMF@2023.2"
+                  packages:
+                    description: |
+                      A mapped list of the packageId and version name concatenation with At sign to the package objects.
+                    type: object
+                    additionalProperties:
+                      allOf:
+                        - $ref: "#/components/schemas/PackageVersionRef"
+                        - type: object
+                          properties:
+                            versionRevision:
+                              description: Number of the revision.
+                              type: integer
+                              format: int32
+                              example: 3
+                            parentPackages:
+                              description: List of parent package names.
+                              type: array
+                              items:
                                 type: string
-                                example: "QS.CloudQSS.CPQ.Q-TMF@2023.2"
-                    packages:
-                      description: |
-                        A mapped list of the packageId and version name concatenation with At sign to the package objects.
-                      type: object
-                      additionalProperties:
-                        allOf:
-                          - $ref: "#/components/schemas/PackageVersionRef"
-                          - type: object
-                            properties:
-                              versionRevision:
-                                description: Number of the revision.
-                                type: integer
-                                format: int32
-                                example: 3
-                              parentPackages:
-                                description: List of parent package names.
-                                type: array
-                                items:
-                                  type: string
-                                example: ["qubership", "Qubership JSS", "Sample Management"]
-                      example:
-                        QS.CloudQSS.CPQ.Q-TMF@2023.2:
-                          parentPackages: ["qubership", "Qubership JSS", "Sample Management"]
-                          refId: "QS.CloudQSS.CPQ.Q-TMF"
-                          kind: "package"
-                          name: "Quote Management TMF648"
-                          version: "2023.2"
-                          status: "release"
-                          deletedAt: "2023-05-30T17:17:11.755146Z"
-                          deletedBy: "user1221"
-                          versionRevision: 3
-          "301":
-            description: Moved Permanently
-            headers:
-              Location:
-                schema:
-                  type: string
-                description: Current ednpoint with new packageId of moved package
-              X-New-Package-Id:
-                schema:
-                  type: string
-                description: New packageId of moved package
-          "400":
-            description: Bad request
-            content:
-              application/json:
-                schema:
-                  $ref: "#/components/schemas/ErrorResponse"
-                examples:
-                  IncorrectInputParams:
-                    $ref: "#/components/examples/IncorrectInputParameters"
-          "401":
-            description: Unauthorized
-            content:
-              application/json:
-                schema:
-                  $ref: "#/components/schemas/ErrorResponse"
-          "404":
-            description: Not found
-            content:
-              application/json:
-                schema:
-                  $ref: "#/components/schemas/ErrorResponse"
-                examples: {}
-          "500":
-            description: Internal Server Error
-            content:
-              application/json:
-                schema:
-                  $ref: "#/components/schemas/ErrorResponse"
-                examples:
-                  InternalServerError:
-                    $ref: "#/components/examples/InternalServerError"
+                              example:
+                                [
+                                  "qubership",
+                                  "Qubership JSS",
+                                  "Sample Management",
+                                ]
+                    example:
+                      QS.CloudQSS.CPQ.Q-TMF@2023.2:
+                        parentPackages:
+                          ["qubership", "Qubership JSS", "Sample Management"]
+                        refId: "QS.CloudQSS.CPQ.Q-TMF"
+                        kind: "package"
+                        name: "Quote Management TMF648"
+                        version: "2023.2"
+                        status: "release"
+                        deletedAt: "2023-05-30T17:17:11.755146Z"
+                        deletedBy: "user1221"
+                        versionRevision: 3
+        "301":
+          description: Moved Permanently
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                IncorrectInputParams:
+                  $ref: "#/components/examples/IncorrectInputParameters"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
     put:
       deprecated: true
       x-deprecation-reason: New version of API is created - PUT /api/v3/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}
@@ -11804,16 +11880,16 @@ paths:
         "200":
           description: Successful
         "301":
-            description: Moved Permanently
-            headers:
-              Location:
-                schema:
-                  type: string
-                description: Current ednpoint with new packageId of moved package
-              X-New-Package-Id:
-                schema:
-                  type: string
-                description: New packageId of moved package
+          description: Moved Permanently
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
         "401":
           description: Unauthorized
           content:
@@ -11886,16 +11962,16 @@ paths:
           description: No content
           content: {}
         "301":
-            description: Moved Permanently
-            headers:
-              Location:
-                schema:
-                  type: string
-                description: Current ednpoint with new packageId of moved package
-              X-New-Package-Id:
-                schema:
-                  type: string
-                description: New packageId of moved package
+          description: Moved Permanently
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
         "400":
           description: Bad request
           content:
@@ -11957,16 +12033,16 @@ paths:
           description: No content
           content: {}
         "301":
-            description: Moved Permanently
-            headers:
-              Location:
-                schema:
-                  type: string
-                description: Current ednpoint with new packageId of moved package
-              X-New-Package-Id:
-                schema:
-                  type: string
-                description: New packageId of moved package
+          description: Moved Permanently
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
         "401":
           description: Unauthorized
           content:
@@ -12070,16 +12146,16 @@ paths:
           description: No content
           content: {}
         "301":
-            description: Moved Permanently
-            headers:
-              Location:
-                schema:
-                  type: string
-                description: Current ednpoint with new packageId of moved package
-              X-New-Package-Id:
-                schema:
-                  type: string
-                description: New packageId of moved package
+          description: Moved Permanently
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
         "400":
           description: Bad request
           content:
@@ -12198,16 +12274,16 @@ paths:
         "200":
           description: Successful
         "301":
-            description: Moved Permanently
-            headers:
-              Location:
-                schema:
-                  type: string
-                description: Current ednpoint with new packageId of moved package
-              X-New-Package-Id:
-                schema:
-                  type: string
-                description: New packageId of moved package
+          description: Moved Permanently
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
         "401":
           description: Unauthorized
           content:
@@ -12351,16 +12427,16 @@ paths:
                     example: ["v1", "v2"]
               examples: {}
         "301":
-            description: Moved Permanently
-            headers:
-              Location:
-                schema:
-                  type: string
-                description: Current ednpoint with new packageId of moved package
-              X-New-Package-Id:
-                schema:
-                  type: string
-                description: New packageId of moved package
+          description: Moved Permanently
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
         "401":
           description: Unauthorized
           content:
@@ -12402,16 +12478,16 @@ paths:
         "200":
           description: Success
         "301":
-            description: Moved Permanently
-            headers:
-              Location:
-                schema:
-                  type: string
-                description: Current ednpoint with new packageId of moved package
-              X-New-Package-Id:
-                schema:
-                  type: string
-                description: New packageId of moved package
+          description: Moved Permanently
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
         "401":
           description: Unauthorized
           content:
@@ -12506,22 +12582,23 @@ paths:
                         name: Quote Management TMF648
                         version: "2022.2@5"
                         status: release
-                        parentPackages: ["qubership", "Qubership JSS", "Sample Management"]
+                        parentPackages:
+                          ["qubership", "Qubership JSS", "Sample Management"]
                         deletedAt: "2023-05-30T17:17:11.755146Z"
                         deletedBy: "user1221"
                         notLatestRevision: true
               examples: {}
         "301":
-            description: Moved Permanently
-            headers:
-              Location:
-                schema:
-                  type: string
-                description: Current ednpoint with new packageId of moved package
-              X-New-Package-Id:
-                schema:
-                  type: string
-                description: New packageId of moved package
+          description: Moved Permanently
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
         "401":
           description: Unauthorized
           content:
@@ -12882,9 +12959,10 @@ paths:
                               type: array
                               items:
                                 type: string
-                              example: [
+                              example:
+                                [
                                   "get-quoteManagement-v5-quote",
-                                  "post-quoteManagement-v5-quote"
+                                  "post-quoteManagement-v5-quote",
                                 ]
                             data:
                               description: Content of the operation as a JSON object
@@ -12996,7 +13074,8 @@ paths:
                         name: Quote Management TMF648
                         version: "2022.2@5"
                         status: release
-                        parentPackages: ["qubership", "Qubership JSS", "Sample Management"]
+                        parentPackages:
+                          ["qubership", "Qubership JSS", "Sample Management"]
                         deletedAt: "2023-05-30T17:17:11.755146Z"
                         deletedBy: "user1221"
                         notLatestRevision: true
@@ -13461,16 +13540,17 @@ paths:
                         - $ref: "#/components/schemas/ReferencedPackage"
                         - type: object
                     example:
-                          QS.CloudQSS.CPQ.Q-TMF@2023.2:
-                            refId: QS.CloudQSS.CPQ.Q-TMF
-                            kind: package
-                            name: Quote Management TMF648
-                            version: "2022.2@5"
-                            status: release
-                            parentPackages: ["qubership", "Qubership JSS", "Sample Management"]
-                            deletedAt: "2023-05-30T17:17:11.755146Z"
-                            deletedBy: "user1221"
-                            notLatestRevision: true
+                      QS.CloudQSS.CPQ.Q-TMF@2023.2:
+                        refId: QS.CloudQSS.CPQ.Q-TMF
+                        kind: package
+                        name: Quote Management TMF648
+                        version: "2022.2@5"
+                        status: release
+                        parentPackages:
+                          ["qubership", "Qubership JSS", "Sample Management"]
+                        deletedAt: "2023-05-30T17:17:11.755146Z"
+                        deletedBy: "user1221"
+                        notLatestRevision: true
               examples: {}
         "301":
           description: Moved Permanently
@@ -13519,9 +13599,9 @@ paths:
         Get the list of version revisions.
       operationId: getPackagesIdVersionsIdRevisions
       security:
-        - BearerAuth: [ ]
-        - CookieAuth: [ ]
-        - api-key: [ ]
+        - BearerAuth: []
+        - CookieAuth: []
+        - api-key: []
       parameters:
         - $ref: "#/components/parameters/packageId"
         - $ref: "#/components/parameters/version"
@@ -13579,7 +13659,7 @@ paths:
                           type: array
                           items:
                             type: string
-                          example: [ "part-of:CloudQSS-CPQBE" ]
+                          example: ["part-of:CloudQSS-CPQBE"]
                         publishMeta:
                           additionalProperties: true
                           description: Publish metadata.
@@ -13607,7 +13687,7 @@ paths:
                               description: Namespace of Agent's publication.
                               type: string
                               example: cloudQSS-release2
-              examples: { }
+              examples: {}
         "301":
           description: Moved Permanently
           headers:
@@ -13634,14 +13714,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              examples: { }
+              examples: {}
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              examples: { }
+              examples: {}
         "404":
           description: Not found
           content:
@@ -13669,9 +13749,9 @@ paths:
         Get the list of version revisions.
       operationId: getPackagesIdVersionsIdRevisionsV3
       security:
-        - BearerAuth: [ ]
-        - CookieAuth: [ ]
-        - api-key: [ ]
+        - BearerAuth: []
+        - CookieAuth: []
+        - api-key: []
       parameters:
         - $ref: "#/components/parameters/packageId"
         - $ref: "#/components/parameters/version"
@@ -13695,7 +13775,7 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/PackageVersionRevision"
-              examples: { }
+              examples: {}
         "301":
           description: Moved Permanently
           headers:
@@ -13722,7 +13802,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              examples: { }
+              examples: {}
         "404":
           description: Not found
           content:
@@ -13751,9 +13831,9 @@ paths:
       description: Recursively delete all expired versions in 'Draft' status under group or workspace
       operationId: deleteExpiredVersionsRecursively
       security:
-        - BearerAuth: [ ]
-        - CookieAuth: [ ]
-        - api-key: [ ]
+        - BearerAuth: []
+        - CookieAuth: []
+        - api-key: []
       requestBody:
         description: Recursive delete parameters
         content:
@@ -13764,8 +13844,8 @@ paths:
                 olderThanDate:
                   description: Versions published earlier than the date are going to be deleted.
                   type: string
-                  format: 'date'
-                  example: '2023-05-12'
+                  format: "date"
+                  example: "2023-05-12"
       responses:
         "200":
           description: Success
@@ -14066,7 +14146,7 @@ paths:
                   type: array
                   items:
                     type: string
-                  example: ["QS.CloudQSS.CPQ.Q-TMF","QS.CloudQSS.CPQ.QE-SRV"]
+                  example: ["QS.CloudQSS.CPQ.Q-TMF", "QS.CloudQSS.CPQ.QE-SRV"]
         required: true
       responses:
         "200":
@@ -14090,7 +14170,7 @@ paths:
                     - release
                   QS.CloudQSS.CPQ.QE-SRV:
                     - draft
-        '400':
+        "400":
           description: default response
           content:
             application/json:
@@ -14117,7 +14197,7 @@ paths:
       description: Allows to send any request to any address.
       operationId: getAgentsIdNamespacesIdServicesProxy
       security:
-        - { }
+        - {}
       tags:
         - TryIt
       parameters:
@@ -14188,8 +14268,8 @@ paths:
             type: string
             default: json
             enum:
-            - json
-            - xlsx
+              - json
+              - xlsx
         - name: parentPackageId
           description: Return business metrics only for specific group\workspace
           in: query
@@ -14562,7 +14642,7 @@ components:
             type: array
             items:
               type: string
-            example: [ "2022.2", "2022,1", "2021.4" ]
+            example: ["2022.2", "2022,1", "2021.4"]
           declarationJsonPaths:
             description: Declarative path to deprecated item.
             type: array
@@ -14570,9 +14650,13 @@ components:
               type: array
               items:
                 anyOf:
-                - type: string
-                - type: integer
-            example: [["paths", "/post/saml/", "test", 1], ["paths", "/post/saml/", "test", 22]]
+                  - type: string
+                  - type: integer
+            example:
+              [
+                ["paths", "/post/saml/", "test", 1],
+                ["paths", "/post/saml/", "test", 22],
+              ]
           description:
             description: Human-readable description of deprecated item.
             type: string
@@ -14599,7 +14683,7 @@ components:
     ExportVersion:
       type: object
       title: Export entire version
-      description: | 
+      description: |
         Export settings for exporting a version (i.e., all documents from the version). Only version of package with kind = package can be exported.\
           * format = html: the export result includes a ZIP file containing interactive HTML for OpenAPI documents (i.e., those with types openapi-3-1, openapi-3-0, or openapi-2-0) and raw files for all other document types.
           * format = yaml/json: the export result includes a ZIP file containing OpenAPI documents in yaml/json format accordingly, and raw files for all other document types.
@@ -14630,7 +14714,7 @@ components:
           type: boolean
           default: false
         format:
-          description: | 
+          description: |
             File format for export.
           type: string
           enum:
@@ -14643,7 +14727,7 @@ components:
       description: |
         Export settings for exporting one document. The option is applicable only for document types - openapi-3-1 / openapi-3-0 / openapi-2-0.
         The export result is determined by the "format" parameter.
-      required: 
+      required:
         - exportedEntity
         - packageId
         - version
@@ -14663,13 +14747,13 @@ components:
           description: Package version
           type: string
           example: 2024.2
-        documentId: 
+        documentId:
           description: Unique string identifier of document to export. Type of this document must be openapi-3-1 / openapi-3-0 / openapi-2-0.
           type: string
           pattern: "^[a-z0-9-]"
           example: "qitmf-v5-11-json"
         format:
-          description: | 
+          description: |
             File format for export.
           type: string
           enum:
@@ -14684,10 +14768,10 @@ components:
     ExportRestOperationsGroup:
       type: object
       title: Export REST operations group
-      description: | 
+      description: |
         Export settings for exporting the operations group. The option is applicable only for groups with apiType = REST.
         The export result is determined by the "format" and "buildType" parameters.
-      required: 
+      required:
         - exportedEntity
         - packageId
         - version
@@ -14721,7 +14805,7 @@ components:
             - reducedSourceSpecifications
             - mergedSpecification
         format:
-          description: | 
+          description: |
             Format of the exported file.\
             If operationsSpecTransformation = reducedSourceSpecifications, then export result is a ZIP file containing files in selected format.\ 
             If operationsSpecTransformation = mergedSpecification:
@@ -14875,10 +14959,10 @@ components:
       properties:
         allowedOasExtensions:
           description: >-
-            List of OAS extensions that shall be preserverd when user exports OpenAPI specification(s) with remove OAS extensions option. 
+            List of OAS extensions that shall be preserverd when user exports OpenAPI specification(s) with remove OAS extensions option.
           type: array
           items:
-            type: object 
+            type: object
             properties:
               oasExtension:
                 description: |
@@ -14904,7 +14988,7 @@ components:
                   - package
     PackageExportConfigUpdate:
       description: Parameters for update of package export config.
-      type: object 
+      type: object
       properties:
         allowedOasExtensions:
           description: |
@@ -15434,10 +15518,8 @@ components:
           type: array
           items:
             type: string
-          example: [
-              "get-quoteManagement-v5-quote",
-              "post-quoteManagement-v5-quote"
-            ]
+          example:
+            ["get-quoteManagement-v5-quote", "post-quoteManagement-v5-quote"]
         data:
           description: Content of the operation as a JSON object
           type: object
@@ -15481,21 +15563,38 @@ components:
           type: string
           example: "user1221"
     Principal:
-      description: User or API key
+      description: User, API key or automated job
       allOf:
         - oneOf:
-          - $ref: "#/components/schemas/User"
-          - $ref: "#/components/schemas/ApiKey"
+            - $ref: "#/components/schemas/User"
+            - $ref: "#/components/schemas/ApiKey"
+            - $ref: "#/components/schemas/Job"
         - type: object
           required:
             - type
           properties:
             type:
-              description: Identifies whether principal is user or API key
+              description: Identifies whether principal is user, API key or automated job.
               type: string
               enum:
                 - user
                 - apiKey
+                - job
+    Job:
+      description: Automated job
+      type: object
+      title: Job
+      required:
+        - id
+        - name
+      properties:
+        id:
+          description: Job identifier
+          type: string
+        name:
+          description: Job name
+          type: string
+          example: auto-cleaning job
     ReferencedPackage:
       description: Package reference
       type: object
@@ -15550,8 +15649,8 @@ components:
       title: SearchResultOperation
       allOf:
         - oneOf:
-          - $ref: "#/components/schemas/RestOperation"
-          - $ref: "#/components/schemas/GraphQLOperation"
+            - $ref: "#/components/schemas/RestOperation"
+            - $ref: "#/components/schemas/GraphQLOperation"
         - type: object
           required:
             - packageId
@@ -15940,14 +16039,14 @@ components:
           description: Operation summary/title.
           type: string
         apiType:
-        #  description: Type of the API.
-        #  type: string
-        #  enum:
-        #    - rest
-        #    - kafka
-        #    - grpc
-        #    - graphql
-        #    - protobuf
+          #  description: Type of the API.
+          #  type: string
+          #  enum:
+          #    - rest
+          #    - kafka
+          #    - grpc
+          #    - graphql
+          #    - protobuf
           $ref: "#/components/schemas/ApiType"
         dataHash:
           description: Operation hash.
@@ -16304,7 +16403,7 @@ components:
           description: Date on which business metric was collected.
           type: string
           format: date
-          example: '2023-12-31'
+          example: "2023-12-31"
         username:
           description: Name of the user that has been counted for a specific metric.
           type: string
@@ -16382,7 +16481,7 @@ components:
                   description: Url of the Git repository.
                   type: string
                   format: URI
-                  example: 'https://<git_group_link>/apihub-registry'
+                  example: "https://<git_group_link>/apihub-registry"
                 labels:
                   description: List of version labels.
                   type: array
@@ -16392,18 +16491,18 @@ components:
                 cloudName:
                   description: Name of the cloud for publication from Agent.
                   type: string
-                  example: 'k8s-apps2'
+                  example: "k8s-apps2"
                 cloudUrl:
                   description: Full address of the cloud from Agent.
                   type: string
                   format: URI
-                  example: 'https://k8s-apps2.k8s.sdntest.qubership.org'
+                  example: "https://k8s-apps2.k8s.sdntest.qubership.org"
                 namespace:
                   description: Namespace of Agent's publication.
                   type: string
-                  example: 'cloudQSS-release2'
+                  example: "cloudQSS-release2"
             refs:
-              description:  |
+              description: |
                 Detailed data about referenced versions for current package version.
               type: array
               items:
@@ -16426,7 +16525,7 @@ components:
                     type: string
                     example: "QS.CloudQSS.CPQ.CORE"
                   parentVersion:
-                    description:  |
+                    description: |
                       Referenced parent version.
                       The mask <version>@<revision> may be used to link with a specific revision.
                       If the @revision is not provided, the latest version's revision will be used.
@@ -16610,8 +16709,7 @@ components:
                           type: array
                           items:
                             type: string
-                          example:
-                            ["a", "b"]
+                          example: ["a", "b"]
                   fromCache:
                     description: True if the changes were retrieved from BE (not calculated)
                     type: boolean
@@ -16659,7 +16757,15 @@ components:
                           type: array
                           items:
                             type: string
-                          example: ["paths", "/quoteManagement/v5/quote", "get", "parameters", "0", "description"]
+                          example:
+                            [
+                              "paths",
+                              "/quoteManagement/v5/quote",
+                              "get",
+                              "parameters",
+                              "0",
+                              "description",
+                            ]
                         description:
                           description: >-
                             Human-readable description of point of change.
@@ -16768,7 +16874,15 @@ components:
                               type: array
                               items:
                                 type: string
-                              example: ["paths", "/quoteManagement/v5/quote", "get", "parameters", "0", "description"]
+                              example:
+                                [
+                                  "paths",
+                                  "/quoteManagement/v5/quote",
+                                  "get",
+                                  "parameters",
+                                  "0",
+                                  "description",
+                                ]
                             description:
                               description: Human-readable description of deprecated item.
                               type: string
@@ -16786,12 +16900,12 @@ components:
                         description: Metadata content depend on apiType.
                         oneOf:
                           - allOf:
-                            - $ref: "#/components/schemas/RestOperationMeta"
-                            - type: object
-                              properties:
-                                originalPath:
-                                  description: "Operation path as it presented in initial documentation file"
-                                  type: string
+                              - $ref: "#/components/schemas/RestOperationMeta"
+                              - type: object
+                                properties:
+                                  originalPath:
+                                    description: "Operation path as it presented in initial documentation file"
+                                    type: string
                           - $ref: "#/components/schemas/GraphQLOperationMeta"
                       searchScopes:
                         description: Scopes for search indexes.
@@ -16819,7 +16933,7 @@ components:
         - title: Build result for build
           description: Build result for buildType = build
           type: object
-          required: 
+          required:
             - info.json
             - documents.json
           properties:
@@ -16863,7 +16977,7 @@ components:
                   type: string
                 validationRulesSeverity:
                   type: object
-                  description: Configuration for validation rules severity levels          
+                  description: Configuration for validation rules severity levels
                   readOnly: true
                   properties:
                     brokenRefs:
@@ -16891,7 +17005,7 @@ components:
                       description: Url of the Git repository.
                       type: string
                       format: URI
-                      example: 'https://<git_group_link>/apihub-registry'
+                      example: "https://<git_group_link>/apihub-registry"
                     labels:
                       description: List of version labels.
                       type: array
@@ -16901,7 +17015,7 @@ components:
                     cloudName:
                       description: Name of the cloud for publication from Agent.
                       type: string
-                      example: 'k8s-apps2'
+                      example: "k8s-apps2"
                     cloudUrl:
                       description: Full address of the cloud from Agent.
                       type: string
@@ -16912,7 +17026,7 @@ components:
                       type: string
                       example: "cloudQSS-release2"
                 refs:
-                  description:  |
+                  description: |
                     Detailed data about referenced versions for current package version.
                   type: array
                   items:
@@ -16935,7 +17049,7 @@ components:
                         type: string
                         example: "QS.CloudQSS.CPQ.CORE"
                       parentVersion:
-                        description:  |
+                        description: |
                           Referenced parent version.
                           The mask <version>@<revision> may be used to link with a specific revision.
                           If the @revision is not provided, the latest version's revision will be used.
@@ -17075,38 +17189,37 @@ components:
                               $ref: "#/components/schemas/ChangeSummary"
                             numberOfImpactedOperations:
                               allOf:
-                                - $ref: '#/components/schemas/ChangeSummary'
+                                - $ref: "#/components/schemas/ChangeSummary"
                                 - type: object
                                   description: Number of operations impacted by each severety type.
                             apiAudienceTransitions:
-                                  type: array
-                                  description: Shows transitions of operations' apiAudience value (compared to the previous release version) and number of operations in which this transition occurred. The array contains only records of transitions that actually occurred in operations.
-                                  items:
-                                    type: object
-                                    properties:
-                                      currentAudience:
-                                        type: string
-                                        description: Current apiAudience value (currentAudience must not be equal to previousAudience) 
-                                        enum:
-                                          - internal
-                                          - external
-                                          - unknown
-                                      previousAudience:
-                                        type: string
-                                        description: Previous apiAudience value
-                                        enum:
-                                          - internal
-                                          - external
-                                          - unknown
-                                      operationsCount:
-                                        type: number
-                                        description: Number of operations in which the apiAudience was changed from previousAudience to currentAudience
+                              type: array
+                              description: Shows transitions of operations' apiAudience value (compared to the previous release version) and number of operations in which this transition occurred. The array contains only records of transitions that actually occurred in operations.
+                              items:
+                                type: object
+                                properties:
+                                  currentAudience:
+                                    type: string
+                                    description: Current apiAudience value (currentAudience must not be equal to previousAudience)
+                                    enum:
+                                      - internal
+                                      - external
+                                      - unknown
+                                  previousAudience:
+                                    type: string
+                                    description: Previous apiAudience value
+                                    enum:
+                                      - internal
+                                      - external
+                                      - unknown
+                                  operationsCount:
+                                    type: number
+                                    description: Number of operations in which the apiAudience was changed from previousAudience to currentAudience
                             tags:
                               type: array
                               items:
                                 type: string
-                              example:
-                                ["a", "b"]
+                              example: ["a", "b"]
                       fromCache:
                         description: True if the changes were retrieved from BE (not calculated)
                         type: boolean
@@ -17200,11 +17313,11 @@ components:
                             additionalProperties:
                               type: string
                             example:
-                              all: "Quote Snapshot V6 Performs full text search ofQuotes Statistics By Phrase fullTextSearchStatistics searchPhrase offset int32 limit int32 fields 200 OK application/json quote anonymousCustomerData assignTo The name of the user/team to whom the Quote is assigned cancellationReason The entity that represents common information about a customer's request cancellationReasonDescription The reason (from the free text field) why the Quote has been cancelled contactMedium A list of contact mediums (ContactMedium [*]). Indicates the contact medium that could be used to contact the party deliveryMethod Id of the Delivery Method (from the Delivery Method list) for Quote description Description of the Quote extendedParameters additionalProperties The attribute contains additional parameters of the Quote The attribute contains additional parameters of the Quote Map<String,List<String>> The attribute contains additional parameters of the Quote externalRefs Represents a reference to an external object id Unique identifier of the Quote name Quote name quoteDate Date and time when the Quote was created date-time quoteTotalPrice Represents Quote total price relatedParty A list of related party references (RelatedPartyRef [*]).A related party defines party or party role linked to a specific entity relatedQuote A list of related quotes (RelatedQuote [*]). It represents another revision of the in-flight Quote from the same chain, i.e. in-flight Quote with the same initialBaselineQuoteId value. This class is returned in the API response only in case of enhancedListQuotes API operation is called. It can be empty if there are no other in-flight Quotes in this chain revision Attribute is used to mark in-flight Quote. Increased in case changes are done to the Quote after submission int32 state State of the Quote updatedWhen Date and time when the Quote was updated date-time validFor Quote with reduced scope of attributes quoteItemStatistic Shows the number of Quote's root Quote Items grouped by some criteria(e.g. by Product Offering, Action) action Numbers of root Quote Items grouped by Action count Number of Quote Items for the specific value int32 name Action name Shows the number of Customer's Product Instances for specified criteria (e.g. Product Family, Billing Account and so on) productFamilyId Unique identifier of Product Family productFamilyName Product family name. Name is returned in the default locale. If alternative locale is passed in Accept-language header in the API request the system returns corresponding localized name in the response. productOfferingId Unique identifier of Product Offering productOfferingName Product offering name. Attribute is returned in the response for catalog entities only (product offering). Name is returned in the default locale. If alternative locale is passed in Accept-language header in the API request the system returns corresponding localized name in the response Shows the number of Quote's root Quote Items grouped by some criteria(e.g. by Product Offering, Action) Shows the Quote with a number of root Quote Items 4XX default response application/json;charset=UTF-8;model=errorResponse;version=1 5XX default response application/json;charset=UTF-8;model=errorResponse;version=1 "    
+                              all: "Quote Snapshot V6 Performs full text search ofQuotes Statistics By Phrase fullTextSearchStatistics searchPhrase offset int32 limit int32 fields 200 OK application/json quote anonymousCustomerData assignTo The name of the user/team to whom the Quote is assigned cancellationReason The entity that represents common information about a customer's request cancellationReasonDescription The reason (from the free text field) why the Quote has been cancelled contactMedium A list of contact mediums (ContactMedium [*]). Indicates the contact medium that could be used to contact the party deliveryMethod Id of the Delivery Method (from the Delivery Method list) for Quote description Description of the Quote extendedParameters additionalProperties The attribute contains additional parameters of the Quote The attribute contains additional parameters of the Quote Map<String,List<String>> The attribute contains additional parameters of the Quote externalRefs Represents a reference to an external object id Unique identifier of the Quote name Quote name quoteDate Date and time when the Quote was created date-time quoteTotalPrice Represents Quote total price relatedParty A list of related party references (RelatedPartyRef [*]).A related party defines party or party role linked to a specific entity relatedQuote A list of related quotes (RelatedQuote [*]). It represents another revision of the in-flight Quote from the same chain, i.e. in-flight Quote with the same initialBaselineQuoteId value. This class is returned in the API response only in case of enhancedListQuotes API operation is called. It can be empty if there are no other in-flight Quotes in this chain revision Attribute is used to mark in-flight Quote. Increased in case changes are done to the Quote after submission int32 state State of the Quote updatedWhen Date and time when the Quote was updated date-time validFor Quote with reduced scope of attributes quoteItemStatistic Shows the number of Quote's root Quote Items grouped by some criteria(e.g. by Product Offering, Action) action Numbers of root Quote Items grouped by Action count Number of Quote Items for the specific value int32 name Action name Shows the number of Customer's Product Instances for specified criteria (e.g. Product Family, Billing Account and so on) productFamilyId Unique identifier of Product Family productFamilyName Product family name. Name is returned in the default locale. If alternative locale is passed in Accept-language header in the API request the system returns corresponding localized name in the response. productOfferingId Unique identifier of Product Offering productOfferingName Product offering name. Attribute is returned in the response for catalog entities only (product offering). Name is returned in the default locale. If alternative locale is passed in Accept-language header in the API request the system returns corresponding localized name in the response Shows the number of Quote's root Quote Items grouped by some criteria(e.g. by Product Offering, Action) Shows the Quote with a number of root Quote Items 4XX default response application/json;charset=UTF-8;model=errorResponse;version=1 5XX default response application/json;charset=UTF-8;model=errorResponse;version=1 "
         - title: Build result for changelog
           description: Build result for buildType = changelog
           type: object
-          required: 
+          required:
             - info.json
           properties:
             info.json:
@@ -17263,7 +17376,7 @@ components:
                       description: Url of the Git repository.
                       type: string
                       format: URI
-                      example: 'https://<git_group_link>/apihub-registry'
+                      example: "https://<git_group_link>/apihub-registry"
                     labels:
                       description: List of version labels.
                       type: array
@@ -17273,7 +17386,7 @@ components:
                     cloudName:
                       description: Name of the cloud for publication from Agent.
                       type: string
-                      example: 'k8s-apps2'
+                      example: "k8s-apps2"
                     cloudUrl:
                       description: Full address of the cloud from Agent.
                       type: string
@@ -17330,38 +17443,37 @@ components:
                               $ref: "#/components/schemas/ChangeSummary"
                             numberOfImpactedOperations:
                               allOf:
-                                - $ref: '#/components/schemas/ChangeSummary'
+                                - $ref: "#/components/schemas/ChangeSummary"
                                 - type: object
                                   description: Number of operations impacted by each severety type.
                             apiAudienceTransitions:
-                                  type: array
-                                  description: Shows transitions of operations' apiAudience value (compared to the previous release version) and number of operations in which this transition occurred. The array contains only records of transitions that actually occurred in operations.
-                                  items:
-                                    type: object
-                                    properties:
-                                      currentAudience:
-                                        type: string
-                                        description: Current apiAudience value (currentAudience must not be equal to previousAudience) 
-                                        enum:
-                                          - internal
-                                          - external
-                                          - unknown
-                                      previousAudience:
-                                        type: string
-                                        description: Previous apiAudience value
-                                        enum:
-                                          - internal
-                                          - external
-                                          - unknown
-                                      operationsCount:
-                                        type: number
-                                        description: Number of operations in which the apiAudience was changed from previousAudience to currentAudience
+                              type: array
+                              description: Shows transitions of operations' apiAudience value (compared to the previous release version) and number of operations in which this transition occurred. The array contains only records of transitions that actually occurred in operations.
+                              items:
+                                type: object
+                                properties:
+                                  currentAudience:
+                                    type: string
+                                    description: Current apiAudience value (currentAudience must not be equal to previousAudience)
+                                    enum:
+                                      - internal
+                                      - external
+                                      - unknown
+                                  previousAudience:
+                                    type: string
+                                    description: Previous apiAudience value
+                                    enum:
+                                      - internal
+                                      - external
+                                      - unknown
+                                  operationsCount:
+                                    type: number
+                                    description: Number of operations in which the apiAudience was changed from previousAudience to currentAudience
                             tags:
                               type: array
                               items:
                                 type: string
-                              example:
-                                ["a", "b"]
+                              example: ["a", "b"]
                       fromCache:
                         description: True if the changes were retrieved from BE (not calculated)
                         type: boolean
@@ -17406,7 +17518,7 @@ components:
               - mergedSpecification
               - reducedSourceSpecifications
           type: object
-          required: 
+          required:
             - info.json
           properties:
             info.json:
@@ -17539,10 +17651,10 @@ components:
                 - replace
                 - rename
         - oneOf:
-          - $ref: "#/components/schemas/ChangeAdd"
-          - $ref: "#/components/schemas/ChangeRemove"
-          - $ref: "#/components/schemas/ChangeReplace"
-          - $ref: "#/components/schemas/ChangeRename"
+            - $ref: "#/components/schemas/ChangeAdd"
+            - $ref: "#/components/schemas/ChangeRemove"
+            - $ref: "#/components/schemas/ChangeReplace"
+            - $ref: "#/components/schemas/ChangeRename"
     ChangeAdd:
       type: object
       description: Data of single operation change when change action = add
@@ -17556,9 +17668,16 @@ components:
             type: array
             items:
               anyOf:
-               - type: string
-               - type: integer
-          example: [["components/schemas/Cat/minProperties", "components/schemas/Dog/minProperties"],["/quoteManagement/v5/quote"]]
+                - type: string
+                - type: integer
+          example:
+            [
+              [
+                "components/schemas/Cat/minProperties",
+                "components/schemas/Dog/minProperties",
+              ],
+              ["/quoteManagement/v5/quote"],
+            ]
         currentValueHash:
           type: string
           description: |
@@ -17577,9 +17696,16 @@ components:
             type: array
             items:
               anyOf:
-               - type: string
-               - type: integer
-          example: [["components/schemas/Cat/minProperties", "components/schemas/Dog/minProperties"],["/quoteManagement/v5/quote"]]
+                - type: string
+                - type: integer
+          example:
+            [
+              [
+                "components/schemas/Cat/minProperties",
+                "components/schemas/Dog/minProperties",
+              ],
+              ["/quoteManagement/v5/quote"],
+            ]
         previousValueHash:
           type: string
           description: |
@@ -17598,9 +17724,16 @@ components:
             type: array
             items:
               anyOf:
-               - type: string
-               - type: integer
-          example: [["components/schemas/Cat/minProperties", "components/schemas/Dog/minProperties"],["/quoteManagement/v5/quote"]]
+                - type: string
+                - type: integer
+          example:
+            [
+              [
+                "components/schemas/Cat/minProperties",
+                "components/schemas/Dog/minProperties",
+              ],
+              ["/quoteManagement/v5/quote"],
+            ]
         previousDeclarationJsonPaths:
           description: |
             (below, a document is not considered to be an original document, but a document with one specific operation)\
@@ -17610,9 +17743,16 @@ components:
             type: array
             items:
               anyOf:
-               - type: string
-               - type: integer
-          example: [["components/schemas/Cat/minProperties", "components/schemas/Dog/minProperties"],["/quoteManagement/v5/quote"]]
+                - type: string
+                - type: integer
+          example:
+            [
+              [
+                "components/schemas/Cat/minProperties",
+                "components/schemas/Dog/minProperties",
+              ],
+              ["/quoteManagement/v5/quote"],
+            ]
         previousValueHash:
           type: string
           description: |
@@ -17636,9 +17776,16 @@ components:
             type: array
             items:
               anyOf:
-               - type: string
-               - type: integer
-          example: [["components/schemas/Cat/minProperties", "components/schemas/Dog/minProperties"],["/quoteManagement/v5/quote"]]
+                - type: string
+                - type: integer
+          example:
+            [
+              [
+                "components/schemas/Cat/minProperties",
+                "components/schemas/Dog/minProperties",
+              ],
+              ["/quoteManagement/v5/quote"],
+            ]
         previousDeclarationJsonPaths:
           description: |
             (below, a document is not considered to be an original document, but a document with one specific operation)\
@@ -17648,9 +17795,16 @@ components:
             type: array
             items:
               anyOf:
-               - type: string
-               - type: integer
-          example: [["components/schemas/Cat/minProperties", "components/schemas/Dog/minProperties"],["/quoteManagement/v5/quote"]]
+                - type: string
+                - type: integer
+          example:
+            [
+              [
+                "components/schemas/Cat/minProperties",
+                "components/schemas/Dog/minProperties",
+              ],
+              ["/quoteManagement/v5/quote"],
+            ]
         previousKey:
           type: string
           description: Previous key (name) of the renamed entity.
@@ -17827,7 +17981,8 @@ components:
                 type: string
                 example: "QS.CloudQSS.CPQ.CORE"
               version:
-                description: Referenced package version. I.e. link to another package's version.
+                description:
+                  Referenced package version. I.e. link to another package's version.
                   The mask <version>@<revision> may be used to link with a specific revision.
                   If the @revision is not provided, the latest version's revision will be used.
                 type: string
@@ -17837,7 +17992,7 @@ components:
                 type: string
                 example: "QS.CloudQSS.CPQ.CORE"
               parentVersion:
-                description:  |
+                description: |
                   Required to build reference(dependencies) graph. Allows to specify the parent node version in the graph.
                   The mask <version>@<revision> may be used to link with a specific revision.
                   If the @revision is not provided, the latest version's revision will be used.
@@ -17850,7 +18005,7 @@ components:
                 type: boolean
     PublishBuildConfig:
       type: object
-      description: | 
+      description: |
         Configuration for publication process.\
         Files or/and Refs are **required**.
       required:
@@ -17963,7 +18118,7 @@ components:
           type: string
           example: 2022.3@3
         format:
-          description: | 
+          description: |
             File format for export.\
             * format = html: the export result includes a ZIP file containing interactive HTML for OpenAPI documents (i.e., those with types openapi-3-1, openapi-3-0, or openapi-2-0) and raw files for all other document types.
             * format = yaml/json: the export result includes a ZIP file containing OpenAPI documents in yaml/json format accordingly, and raw files for all other document types.
@@ -18020,7 +18175,7 @@ components:
             specific revision.
           type: string
           example: 2022.3@3
-        documentId: 
+        documentId:
           description: Unique string identifier of document to export. Type of this document must be openapi-3-1 / openapi-3-0 / openapi-2-0.
           type: string
           pattern: "^[a-z0-9-]"
@@ -18068,7 +18223,7 @@ components:
           description: Type of the build process.
           type: string
           enum:
-            - exportRestOperationsGroup        
+            - exportRestOperationsGroup
         packageId:
           description: Package unique identifier (full alias).
           type: string
@@ -18095,7 +18250,7 @@ components:
             - mergedSpecification
         format:
           type: string
-          description: | 
+          description: |
             Format of the exported file.\
             If operationsSpecTransformation = reducedSourceSpecifications, then export result includes a ZIP file containing files in selected format.\ 
             If operationsSpecTransformation = mergedSpecification:
@@ -18313,7 +18468,7 @@ components:
           type: array
           items:
             type: string
-          example: [ "part-of:CloudQSS-CPQBE" ]
+          example: ["part-of:CloudQSS-CPQBE"]
         publishMeta:
           additionalProperties: true
           description: Publish metadata.
