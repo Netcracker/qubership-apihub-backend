@@ -3859,7 +3859,7 @@ func (p publishedRepositoryImpl) deleteVersionRevisions(ctx context.Context, pac
 					break
 				}
 
-				err = p.trackDeletion(tx, packageId, version, revision.Revision, revision.Status, string(view.ATETDeleteRevision))
+				err = p.trackDeletion(tx, packageId, version, revision.Revision, revision.Status, string(view.ATETDeleteRevision), deletedBy)
 				if err != nil {
 					return fmt.Errorf("failed to track revision deletion: %w", err)
 				}
@@ -3885,7 +3885,7 @@ func (p publishedRepositoryImpl) deleteVersionRevisions(ctx context.Context, pac
 				}
 
 				lastRevision := revisions[lastRevisionIndex]
-				err = p.trackDeletion(tx, packageId, version, lastRevision.Revision, lastRevision.Status, string(view.ATETDeleteVersion))
+				err = p.trackDeletion(tx, packageId, version, lastRevision.Revision, lastRevision.Status, string(view.ATETDeleteVersion), deletedBy)
 				if err != nil {
 					return fmt.Errorf("failed to track version deletion: %w", err)
 				}
@@ -3902,19 +3902,18 @@ func (p publishedRepositoryImpl) deleteVersionRevisions(ctx context.Context, pac
 	return deletedCount, nil
 }
 
-func (p publishedRepositoryImpl) trackDeletion(tx *pg.Tx, packageId string, version string, revision int, status string, eventType string) error {
+func (p publishedRepositoryImpl) trackDeletion(tx *pg.Tx, packageId string, version string, revision int, status string, eventType string, deletedBy string) error {
 	dataMap := map[string]interface{}{}
 	dataMap["version"] = version
 	dataMap["revision"] = revision
 	dataMap["status"] = status
-	dataMap["deletedByJob"] = true
 	ent := entity.ActivityTrackingEntity{
 		Id:        uuid.New().String(),
 		Type:      eventType,
 		Data:      dataMap,
 		PackageId: packageId,
 		Date:      time.Now(),
-		UserId:    "auto-cleaning job",
+		UserId:    deletedBy,
 	}
 	_, err := tx.Model(&ent).Insert()
 	if err != nil {

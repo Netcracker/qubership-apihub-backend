@@ -589,10 +589,10 @@ func main() {
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/copy", security.Secure(versionController.CopyVersion)).Methods(http.MethodPost)
 
 	r.HandleFunc("/api/v2/packages/{packageId}/activity", security.Secure(activityTrackingController.GetActivityHistoryForPackage_deprecated)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v3/packages/{packageId}/activity", security.Secure(activityTrackingController.GetActivityHistoryForPackage)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v3/packages/{packageId}/activity", security.Secure(activityTrackingController.GetActivityHistoryForPackage_deprecated_2)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v4/packages/{packageId}/activity", security.Secure(activityTrackingController.GetActivityHistoryForPackage)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/activity", security.Secure(activityTrackingController.GetActivityHistory_deprecated)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v3/activity", security.Secure(activityTrackingController.GetActivityHistory)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v3/activity", security.Secure(activityTrackingController.GetActivityHistory_deprecated_2)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v4/activity", security.Secure(activityTrackingController.GetActivityHistory)).Methods(http.MethodGet)
 
 	r.HandleFunc("/api/v2/agents", security.Secure(agentController.ListAgents)).Methods(http.MethodGet)
