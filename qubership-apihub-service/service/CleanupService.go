@@ -235,13 +235,13 @@ func (j *revisionsCleanupJob) Run() {
 		return
 	}
 
-	deletedItems, errors, err := j.processPackages(ctx, jobId, deleteBefore, deletedItems)
+	deletedItems, processingErrors, err := j.processPackages(ctx, jobId, deleteBefore, deletedItems)
 	if err != nil {
 		_ = j.updateCleanupRun(ctx, jobId, string(view.StatusError), err.Error(), deletedItems)
 		return
 	}
 
-	j.finishCleanupRun(ctx, jobId, errors, deletedItems)
+	j.finishCleanupRun(ctx, jobId, processingErrors, deletedItems)
 }
 
 func (j *revisionsCleanupJob) acquireLock(ctx context.Context, jobId string, cancel context.CancelFunc) bool {
@@ -314,7 +314,7 @@ func (j *revisionsCleanupJob) initializeCleanupRun(ctx context.Context, jobId st
 
 func (j *revisionsCleanupJob) processPackages(ctx context.Context, jobId string, deleteBefore time.Time, deletedItems int) (int, []string, error) {
 	page, limit := 0, 100
-	errors := []string{}
+	processingErrors := []string{}
 
 	for {
 		select {
@@ -324,7 +324,7 @@ func (j *revisionsCleanupJob) processPackages(ctx context.Context, jobId string,
 				errorMessage = "timeout"
 			}
 			log.Warnf("Revisions cleanup job %s interrupted - %s", jobId, errorMessage)
-			return deletedItems, errors, fmt.Errorf("job interrupted - %s", errorMessage)
+			return deletedItems, processingErrors, fmt.Errorf("job interrupted - %s", errorMessage)
 		default:
 		}
 
@@ -340,7 +340,7 @@ func (j *revisionsCleanupJob) processPackages(ctx context.Context, jobId string,
 		packages, err := j.publishedRepository.GetFilteredPackagesWithOffset(ctx, getPackageListReq, "")
 		if err != nil {
 			log.Errorf("Failed to get packages for revisions cleanup %s: %s", jobId, err.Error())
-			return deletedItems, errors, fmt.Errorf("failed to get packages: %s", err.Error())
+			return deletedItems, processingErrors, fmt.Errorf("failed to get packages: %s", err.Error())
 		}
 
 		if len(packages) == 0 {
@@ -357,15 +357,15 @@ func (j *revisionsCleanupJob) processPackages(ctx context.Context, jobId string,
 					errorMessage = "timeout"
 				}
 				log.Warnf("Revisions cleanup job %s interrupted during package processing - %s", jobId, errorMessage)
-				return deletedItems, errors, fmt.Errorf("job interrupted - %s", errorMessage)
+				return deletedItems, processingErrors, fmt.Errorf("job interrupted - %s", errorMessage)
 			default:
 			}
 
 			log.Debugf("[revisions cleanup] Processing package %d/%d: %s", idx+1, len(packages), pkg.Id)
 			count, err := j.publishedRepository.DeletePackageRevisionsBeforeDate(ctx, pkg.Id, deleteBefore, j.deleteLastRevision, j.deleteReleaseRevision, "job_revisions_cleanup|"+jobId)
 			if err != nil {
-				log.Errorf("Failed to delete revisions of package %s during revisions cleanup %s: %v", pkg.Id, jobId, err)
-				errors = append(errors, fmt.Sprintf("package %s: %s", pkg.Id, err.Error()))
+				log.Warnf("Failed to delete revisions of package %s during revisions cleanup %s: %v", pkg.Id, jobId, err)
+				processingErrors = append(processingErrors, fmt.Sprintf("package %s: %s", pkg.Id, err.Error()))
 			}
 			deletedItems += count
 		}
@@ -374,7 +374,7 @@ func (j *revisionsCleanupJob) processPackages(ctx context.Context, jobId string,
 		page++
 	}
 
-	return deletedItems, errors, nil
+	return deletedItems, processingErrors, nil
 }
 
 func (j *revisionsCleanupJob) isMigrationRunning() bool {
