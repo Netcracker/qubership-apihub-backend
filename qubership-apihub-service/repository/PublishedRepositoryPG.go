@@ -2979,6 +2979,34 @@ func (p publishedRepositoryImpl) GetFilteredPackagesWithOffset(searchReq view.Pa
 	return result, nil
 }
 
+func (p publishedRepositoryImpl) GetFilteredPackagesIncludingDeleted(searchReq view.PackageListReq, userId string) ([]entity.PackageEntity, error) {
+	var result []entity.PackageEntity
+	query := p.cp.GetConnection().Model(&result)
+
+	query.Order("name ASC").
+		Offset(searchReq.Offset).
+		Limit(searchReq.Limit)
+
+	if searchReq.ParentId != "" {
+		if searchReq.ShowAllDescendants {
+			query.Where("package_group.id ilike ?", searchReq.ParentId+".%")
+		} else {
+			query.Where("parent_id = ?", searchReq.ParentId)
+		}
+	}
+
+	if len(searchReq.Kind) != 0 {
+		query.Where("kind in (?)", pg.In(searchReq.Kind))
+	}
+
+	err := query.Select()
+	if err != nil {
+		return nil, err
+	}
+	
+	return result, nil
+}
+
 func (p publishedRepositoryImpl) GetPackageForServiceName(serviceName string) (*entity.PackageEntity, error) {
 	result := new(entity.PackageEntity)
 	err := p.cp.GetConnection().Model(result).
