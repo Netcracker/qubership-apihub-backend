@@ -34,6 +34,7 @@ type PackageService interface {
 	CreatePackage(ctx context.SecurityContext, packg view.SimplePackage) (*view.SimplePackage, error)
 	GetPackage(ctx context.SecurityContext, id string, withParents bool) (*view.SimplePackage, error)
 	GetPackagesList(ctx context.SecurityContext, req view.PackageListReq) (*view.Packages, error)
+	GetPackagesListIncludingDeleted(ctx context.SecurityContext, req view.PackageListReq) (*view.Packages, error)
 	UpdatePackage(ctx context.SecurityContext, packg *view.PatchPackageReq, packageId string) (*view.SimplePackage, error)
 	DeletePackage(ctx context.SecurityContext, id string) error
 	FavorPackage(ctx context.SecurityContext, id string) error
@@ -418,6 +419,72 @@ func (p packageServiceImpl) GetPackagesList(ctx context.SecurityContext, searchR
 		searchReq.Offset = searchReq.Offset + searchReq.Limit
 		searchReq.Limit = skipped
 		extraPackages, err := p.GetPackagesList(ctx, searchReq)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, extraPackages.Packages...)
+	}
+
+	return &view.Packages{Packages: result}, nil
+}
+
+func (p packageServiceImpl) GetPackagesListIncludingDeleted(ctx context.SecurityContext, searchReq view.PackageListReq) (*view.Packages, error) {
+	var err error
+	result := make([]view.PackagesInfo, 0)
+	var packages []entity.PackageEntity
+	skipped := 0
+	if len(searchReq.Kind) == 0 {
+		searchReq.Kind = []string{entity.KIND_WORKSPACE}
+	}
+	
+	packages, err = p.publishedRepo.GetFilteredPackagesIncludingDeleted(searchReq, ctx.GetUserId())
+	if err != nil {
+		log.Error("Failed to get packages: ", err.Error())
+		return nil, err
+	}
+	
+	for _, ent := range packages {
+		var parents []view.ParentPackageInfo = nil
+		if searchReq.ShowParents {
+			parents, err = p.getParents(ent.Id)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		permissions, err := p.roleService.GetPermissionsForPackage(ctx, ent.Id)
+		if err != nil {
+			return nil, err
+		}
+		if !utils.SliceContains(permissions, string(view.ReadPermission)) {
+			skipped++
+			continue
+		}
+
+		var lastReleaseVersionDetails *view.VersionDetails
+		if searchReq.LastReleaseVersionDetails {
+			defaultReleaseVersion := ent.DefaultReleaseVersion
+			if defaultReleaseVersion == "" {
+				defaultReleaseVersion, err = p.versionService.GetDefaultVersion(ent.Id)
+				if err != nil {
+					return nil, err
+				}
+			}
+			if defaultReleaseVersion != "" {
+				lastReleaseVersionDetails, err = p.versionService.GetVersionDetails(ent.Id, defaultReleaseVersion)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+
+		packagesInfo := entity.MakePackagesInfo(&ent, lastReleaseVersionDetails, parents, isFavorite, permissions)
+		result = append(result, *packagesInfo)
+	}
+	if skipped != 0 {
+		searchReq.Offset = searchReq.Offset + searchReq.Limit
+		searchReq.Limit = skipped
+		extraPackages, err := p.GetPackagesListIncludingDeleted(ctx, searchReq)
 		if err != nil {
 			return nil, err
 		}
