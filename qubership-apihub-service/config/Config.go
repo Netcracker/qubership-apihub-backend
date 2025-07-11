@@ -41,7 +41,7 @@ type SecurityConfig struct {
 }
 
 type JwtConfig struct {
-	PrivateKey              Base64DecodedString `validate:"required" sensitive:"true"`
+	PrivateKey              Base64DecodedString `validate:"required,min=1" sensitive:"true"`
 	AccessTokenDurationSec  int                 `validate:"gt=600"`
 	RefreshTokenDurationSec int                 `validate:"gtfield=AccessTokenDurationSec"`
 }
@@ -50,9 +50,9 @@ type ExternalIdentityProviderConfig struct {
 	Id                string `validate:"required"`
 	DisplayName       string
 	ImageSvg          string
-	Protocol          idp.AuthProtocol `validate:"required,oneof=saml oidc"`
-	SamlConfiguration *SamlConfig      `validate:"required_if=Protocol saml,dive"`
-	OidcConfiguration *OidcConfig      `validate:"required_if=Protocol oidc,dive"`
+	Protocol          idp.AuthProtocol `validate:"required,oneof=SAML OIDC"`
+	SamlConfiguration *SamlConfig      `validate:"required_if=Protocol SAML"`
+	OidcConfiguration *OidcConfig      `validate:"required_if=Protocol OIDC"`
 }
 
 type SamlConfig struct {
@@ -94,9 +94,9 @@ type BusinessParameters struct {
 	ExternalLinks             []string
 	DefaultWorkspaceId        string
 	ReleaseVersionPattern     string
-	PublishArchiveSizeLimitMb int `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
-	PublishFileSizeLimitMb    int `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
-	BranchContentSizeLimitMb  int `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
+	PublishArchiveSizeLimitMb int    `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
+	PublishFileSizeLimitMb    int    `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
+	BranchContentSizeLimitMb  int    `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
 	SystemNotification        string //TODO: replace with db impl
 	FailBuildOnBrokenRefs     bool
 }
