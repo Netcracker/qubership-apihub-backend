@@ -31,9 +31,9 @@ import (
 )
 
 const (
-	GIT_BRANCH                   = "GIT_BRANCH"
-	GIT_HASH                     = "GIT_HASH"
-	APIHUB_YAML_CONFIG_FILE_PATH = "APIHUB_YAML_CONFIG_FILE_PATH"
+	GIT_BRANCH           = "GIT_BRANCH"
+	GIT_HASH             = "GIT_HASH"
+	APIHUB_CONFIG_FOLDER = "APIHUB_CONFIG_FOLDER"
 
 	LocalIDPId = "local-idp"
 	bytesInMb  = 1048576
@@ -92,7 +92,7 @@ type SystemInfoService interface {
 	IsLegacySAML() bool
 	GetAuthConfig() idp.AuthConfig
 	GetOlricConfig() config.OlricConfig
-	GetYamlConfigFilePath() string
+	GetConfigFolder() string
 }
 
 func (g systemInfoServiceImpl) GetCredsFromEnv() *view.DbCredentials {
@@ -143,7 +143,7 @@ func (g systemInfoServiceImpl) GetSystemInfo() *view.SystemInfo {
 func (g *systemInfoServiceImpl) Init() error {
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
-	viper.AddConfigPath(g.GetYamlConfigFilePath())
+	viper.AddConfigPath(g.GetConfigFolder())
 	g.setDefaults()
 
 	if err := viper.ReadInConfig(); err != nil {
@@ -220,8 +220,8 @@ func (g systemInfoServiceImpl) setDefaults() {
 	viper.SetDefault("olric.replicaCount", 1)
 }
 
-func (g systemInfoServiceImpl) GetYamlConfigFilePath() string {
-	return os.Getenv(APIHUB_YAML_CONFIG_FILE_PATH)
+func (g systemInfoServiceImpl) GetConfigFolder() string {
+	return os.Getenv(APIHUB_CONFIG_FOLDER)
 }
 
 func (g systemInfoServiceImpl) postProcessConfig() {

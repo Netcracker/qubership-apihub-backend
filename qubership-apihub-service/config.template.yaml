@@ -103,7 +103,7 @@ zeroDayConfiguration:
 technicalParameters:
   # Optional; Base path for binary and static files, default value: .; Example: /tmp
   basePath: '.'
-  # Optional; Backend version; If not set, default value: 0.0.0; Example: 0.0.0
+  # Optional; Backend version; If not set, default value: unknown; Example: 0.0.0
   backendVersion: '0.0.0'
   # Optional; Listen address for APIHUB backend, can be used to avoid port conflicts in case of run on bare metall; If not set, default value: :8080; Example: :8080
   listenAddress: ':8080'
