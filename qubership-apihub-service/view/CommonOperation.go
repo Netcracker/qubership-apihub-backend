@@ -151,6 +151,12 @@ type SingleOperationChangeCommon struct {
 	Scope       string `json:"scope,omitempty"`
 }
 
+type OperationInfo struct {
+	ApiType 	   string 		 `json:"apiType"`
+	OperationCount int 		     `json:"operationCount"`
+	ChangeSummary  ChangeSummary `json:"changeSummary,omitempty"`
+}
+
 func GetSingleOperationChangeCommon(change interface{}) SingleOperationChangeCommon {
 	if change != nil {
 		if val, ok := change.(SingleOperationChangeAdd); ok {

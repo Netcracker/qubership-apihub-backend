@@ -118,6 +118,24 @@ type PackagesInfo struct {
 	ReleaseVersionPattern     string              `json:"releaseVersionPattern,omitempty"`
 }
 
+type PackagesListInfo struct {
+	Id              string            `json:"packageId"`
+	Name            string            `json:"name"`
+	ServiceName     string            `json:"serviceName,omitempty"`
+	ParentGroupName string            `json:"parentGroupName,omitempty"`
+	CreatedAt       *time.Time        `json:"createdAt"`
+	DeletedAt       *time.Time        `json:"deletedAt"`
+	Versions        []PackageVersions `json:"versions,omitempty"`
+}
+
+type PackageVersions struct {
+	Version         string          `json:"version"`
+	PreviousVersion string          `json:"previousVersion,omitempty"`
+	Status          string          `json:"status"`
+	PublishedAt     *time.Time      `json:"publishedAt,omitempty"`
+	OperationInfo   []OperationInfo `json:"operationInfo,omitempty"`
+}
+
 type ParentPackageInfo struct {
 	Id                string `json:"packageId"`
 	Alias             string `json:"alias"`
