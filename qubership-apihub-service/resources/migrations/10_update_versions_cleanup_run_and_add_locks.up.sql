@@ -2,9 +2,9 @@ ALTER TABLE versions_cleanup_run
 ALTER COLUMN package_id DROP NOT NULL;
 
 ALTER TABLE versions_cleanup_run
-ADD COLUMN instance_id uuid;
+ADD COLUMN IF NOT EXISTS instance_id uuid;
 
-CREATE TABLE locks (
+CREATE TABLE IF NOT EXISTS locks (
     name VARCHAR PRIMARY KEY,
     instance_id VARCHAR NOT NULL,
     acquired_at TIMESTAMP WITHOUT TIME ZONE NOT NULL,
