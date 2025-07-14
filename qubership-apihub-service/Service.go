@@ -290,7 +290,7 @@ func main() {
 
 	operationGroupService := service.NewOperationGroupService(operationRepository, publishedRepository, exportRepository, packageVersionEnrichmentService, activityTrackingService)
 	versionService := service.NewVersionService(gitClientProvider, projectRepository, favoritesRepository, publishedRepository, publishedService, operationRepository, exportRepository, operationService, activityTrackingService, systemInfoService, packageVersionEnrichmentService, portalService, versionCleanupRepository, operationGroupService)
-	packageService := service.NewPackageService(gitClientProvider, projectRepository, favoritesRepository, publishedRepository, versionService, roleService, activityTrackingService, operationGroupService, usersRepository, ptHandler, systemInfoService)
+	packageService := service.NewPackageService(gitClientProvider, projectRepository, favoritesRepository, publishedRepository, operationRepository, versionService, roleService, activityTrackingService, operationGroupService, usersRepository, ptHandler, systemInfoService)
 
 	logsService := service.NewLogsService()
 	internalWebsocketService := service.NewInternalWebsocketService(wsLoadBalancer, olricProvider)
@@ -476,6 +476,7 @@ func main() {
 	r.HandleFunc("/api/v2/packages/{packageId}", security.Secure(packageController.GetPackage)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/status", security.Secure(packageController.GetPackageStatus)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages", security.Secure(packageController.GetPackagesList)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/packagesSummary", security.Secure(packageController.GetPackagesListIncludingDeleted)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/publish/availableStatuses", security.Secure(packageController.GetAvailableVersionStatusesForPublish)).Methods(http.MethodGet)
 
 	r.HandleFunc("/api/v2/packages/{packageId}/apiKeys", security.Secure(apihubApiKeyController.GetApiKeys_deprecated)).Methods(http.MethodGet)

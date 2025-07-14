@@ -34,7 +34,7 @@ type PackageService interface {
 	CreatePackage(ctx context.SecurityContext, packg view.SimplePackage) (*view.SimplePackage, error)
 	GetPackage(ctx context.SecurityContext, id string, withParents bool) (*view.SimplePackage, error)
 	GetPackagesList(ctx context.SecurityContext, req view.PackageListReq) (*view.Packages, error)
-	GetPackagesListIncludingDeleted(ctx context.SecurityContext, req view.PackageListReq) (*view.Packages, error)
+	GetPackagesListIncludingDeleted(ctx context.SecurityContext, req view.PackageListReq) (*view.PackagesList, error)
 	UpdatePackage(ctx context.SecurityContext, packg *view.PatchPackageReq, packageId string) (*view.SimplePackage, error)
 	DeletePackage(ctx context.SecurityContext, id string) error
 	FavorPackage(ctx context.SecurityContext, id string) error
@@ -51,6 +51,7 @@ func NewPackageService(gitClientProvider GitClientProvider,
 	repo repository.PrjGrpIntRepository,
 	favoritesRepo repository.FavoritesRepository,
 	publishedRepo repository.PublishedRepository,
+	operationRepo repository.OperationRepository,
 	versionService VersionService,
 	roleService RoleService,
 	atService ActivityTrackingService,
@@ -63,6 +64,7 @@ func NewPackageService(gitClientProvider GitClientProvider,
 		pRepo:                 repo,
 		favoritesRepo:         favoritesRepo,
 		publishedRepo:         publishedRepo,
+		operationRepo:         operationRepo,
 		versionService:        versionService,
 		roleService:           roleService,
 		atService:             atService,
@@ -78,6 +80,7 @@ type packageServiceImpl struct {
 	pRepo                 repository.PrjGrpIntRepository
 	favoritesRepo         repository.FavoritesRepository
 	publishedRepo         repository.PublishedRepository
+	operationRepo         repository.OperationRepository
 	versionService        VersionService
 	roleService           RoleService
 	atService             ActivityTrackingService
@@ -428,31 +431,32 @@ func (p packageServiceImpl) GetPackagesList(ctx context.SecurityContext, searchR
 	return &view.Packages{Packages: result}, nil
 }
 
-func (p packageServiceImpl) GetPackagesListIncludingDeleted(ctx context.SecurityContext, searchReq view.PackageListReq) (*view.Packages, error) {
+func (p packageServiceImpl) GetPackagesListIncludingDeleted(ctx context.SecurityContext, searchReq view.PackageListReq) (*view.PackagesList, error) {
 	var err error
-	result := make([]view.PackagesInfo, 0)
+	packagesList := make([]*view.PackagesListInfo, 0)
+
 	var packages []entity.PackageEntity
 	skipped := 0
 	if len(searchReq.Kind) == 0 {
 		searchReq.Kind = []string{entity.KIND_WORKSPACE}
 	}
-	
+
 	packages, err = p.publishedRepo.GetFilteredPackagesIncludingDeleted(searchReq, ctx.GetUserId())
 	if err != nil {
 		log.Error("Failed to get packages: ", err.Error())
 		return nil, err
 	}
-	
-	for _, ent := range packages {
+
+	for _, pkg := range packages {
+		versionsList := make([]*view.PackageVersions, 0)
+
 		var parents []view.ParentPackageInfo = nil
-		if searchReq.ShowParents {
-			parents, err = p.getParentsIncludingDeleted(ent.Id)
-			if err != nil {
-				return nil, err
-			}
+		parents, err = p.getParentsIncludingDeleted(pkg.Id)
+		if err != nil {
+			return nil, err
 		}
 
-		permissions, err := p.roleService.GetPermissionsForPackage(ctx, ent.Id)
+		permissions, err := p.roleService.GetPermissionsForPackage(ctx, pkg.Id)
 		if err != nil {
 			return nil, err
 		}
@@ -461,26 +465,44 @@ func (p packageServiceImpl) GetPackagesListIncludingDeleted(ctx context.Security
 			continue
 		}
 
-		var lastReleaseVersionDetails *view.VersionDetails
-		if searchReq.LastReleaseVersionDetails {
-			defaultReleaseVersion := ent.DefaultReleaseVersion
-			if defaultReleaseVersion == "" {
-				defaultReleaseVersion, err = p.versionService.GetDefaultVersion(ent.Id)
-				if err != nil {
-					return nil, err
-				}
-			}
-			if defaultReleaseVersion != "" {
-				lastReleaseVersionDetails, err = p.versionService.GetVersionDetails(ent.Id, defaultReleaseVersion)
-				if err != nil {
-					return nil, err
-				}
-			}
+		searchReq := entity.PublishedVersionSearchQueryEntity{
+			PackageId: pkg.Id,
+			Status:    string(view.Release),
 		}
 
-		packagesInfo := entity.MakePackagesInfo(&ent, lastReleaseVersionDetails, parents, isFavorite, permissions)
-		result = append(result, *packagesInfo)
+		versions, err := p.publishedRepo.GetPackageVersionsListIncludingDeleted(searchReq)
+		if err != nil {
+			// TODO: fix this logic
+			log.Error("Failed to get versions: ", err.Error())
+			continue
+		}
+
+		for _, ver := range versions {
+
+			operationTypes, err := p.operationRepo.GetOperationsTypeCountIncludingDeleted(pkg.Id, ver.Version, ver.Revision)
+			if err != nil {
+				// TODO: fix this logic
+				log.Error("Failed to get operation type counts: ", err.Error())
+				continue
+			}
+
+			changeSummary, err := p.versionService.GetVersionChangeSummaryIncludingDeleted(pkg.Id, ver.Version, ver.Revision)
+			if err != nil {
+				// TODO: fix this logic
+				log.Error("Failed to get version change summary: ", err.Error())
+				continue
+			}
+
+			versionsListInfo := entity.MakeVersionsListInfo(pkg, ver, operationTypes, changeSummary)
+			versionsList = append(versionsList, versionsListInfo)
+
+		}
+
+		packagesListInfo := entity.MakePackagesListInfo(pkg, parents, versionsList)
+		packagesList = append(packagesList, packagesListInfo)
+
 	}
+
 	if skipped != 0 {
 		searchReq.Offset = searchReq.Offset + searchReq.Limit
 		searchReq.Limit = skipped
@@ -488,10 +510,10 @@ func (p packageServiceImpl) GetPackagesListIncludingDeleted(ctx context.Security
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, extraPackages.Packages...)
+		packagesList = append(packagesList, extraPackages.Packages...)
 	}
 
-	return &view.Packages{Packages: result}, nil
+	return &view.PackagesList{Packages: packagesList}, nil
 }
 
 func (p packageServiceImpl) UpdatePackage(ctx context.SecurityContext, packg *view.PatchPackageReq, packageId string) (*view.SimplePackage, error) {
