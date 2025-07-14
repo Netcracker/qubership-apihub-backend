@@ -38,6 +38,7 @@ type OperationRepository interface {
 	SearchForOperations_deprecated(searchQuery *entity.OperationSearchQuery) ([]entity.OperationSearchResult_deprecated, error)
 	SearchForOperations(searchQuery *entity.OperationSearchQuery) ([]entity.OperationSearchResult, error)
 	GetOperationsTypeCount(packageId string, version string, revision int) ([]entity.OperationsTypeCountEntity, error)
+	GetOperationsTypeCountIncludingDeleted(packageId string, version string, revision int) ([]entity.OperationsTypeCountEntity, error)
 	GetOperationsTypeDataHashes(packageId string, version string, revision int) ([]entity.OperationsTypeDataHashEntity, error)
 	GetOperationDeprecatedItems(packageId string, version string, revision int, operationType string, operationId string) (*entity.OperationRichEntity, error)
 	GetDeprecatedOperationsSummary(packageId string, version string, revision int) ([]entity.DeprecatedOperationsSummaryEntity, error)
@@ -1262,6 +1263,47 @@ func (o operationRepositoryImpl) GetOperationsTypeCount(packageId string, versio
 		view.NoBwcApiKind,
 		view.ApiAudienceInternal,
 		view.ApiAudienceUnknown)
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func (o operationRepositoryImpl) GetOperationsTypeCountIncludingDeleted(packageId string, version string, revision int) ([]entity.OperationsTypeCountEntity, error) {
+	var result []entity.OperationsTypeCountEntity
+	operationsTypeCountQuery := `
+	with versions as(
+        select s.reference_id as package_id, s.reference_version as version, s.reference_revision as revision
+        from published_version_reference s
+		inner join published_version pv
+		on pv.package_id = s.reference_id
+		and pv.version = s.reference_version
+		and pv.revision = s.reference_revision
+        where s.package_id = ?
+        and s.version = ?
+        and s.revision = ?
+        and s.excluded = false
+        union
+        select ? as package_id, ? as version, ? as revision
+    ),
+	op_count as (
+		select type, count(operation_id) cnt from operation o, versions v
+		where o.package_id = v.package_id
+		and o.version = v.version
+		and o.revision = v.revision
+		group by type
+	)
+	select oc.type as type,
+	coalesce(oc.cnt, 0) as operations_count;
+	`
+	_, err := o.cp.GetConnection().Query(&result,
+		operationsTypeCountQuery,
+		packageId, version, revision,
+		packageId, version, revision)
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return nil, nil
