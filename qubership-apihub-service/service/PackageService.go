@@ -446,7 +446,7 @@ func (p packageServiceImpl) GetPackagesListIncludingDeleted(ctx context.Security
 	for _, ent := range packages {
 		var parents []view.ParentPackageInfo = nil
 		if searchReq.ShowParents {
-			parents, err = p.getParents(ent.Id)
+			parents, err = p.getParentsIncludingDeleted(ent.Id)
 			if err != nil {
 				return nil, err
 			}
@@ -816,6 +816,18 @@ func (p packageServiceImpl) GetPackageStatus(id string) (*view.Status, error) {
 
 func (p packageServiceImpl) getParents(packageId string) ([]view.ParentPackageInfo, error) {
 	parents, err := p.publishedRepo.GetParentsForPackage(packageId)
+	if err != nil {
+		return nil, err
+	}
+	var result []view.ParentPackageInfo
+	for _, grp := range parents {
+		result = append(result, *entity.MakePackageParentView(&grp))
+	}
+	return result, err
+}
+
+func (p packageServiceImpl) getParentsIncludingDeleted(packageId string) ([]view.ParentPackageInfo, error) {
+	parents, err := p.publishedRepo.GetParentsForPackageIncludingDeleted(packageId)
 	if err != nil {
 		return nil, err
 	}
