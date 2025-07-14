@@ -56,6 +56,7 @@ type VersionService interface {
 	GetVersionValidationProblems(packageId string, versionName string) (*view.VersionValidationProblems, error)
 	GetDefaultVersion(packageId string) (string, error)
 	GetVersionDetails(packageId string, versionName string) (*view.VersionDetails, error)
+	GetVersionChangeSummaryIncludingDeleted(packageId string, versionName string, revision int) ([]view.OperationType, error)
 	GetVersionReferences(packageId string, versionName string, filterReq view.VersionReferencesReq) (*view.VersionReferences, error) //deprecated
 	GetVersionReferencesV3(packageId string, versionName string) (*view.VersionReferencesV3, error)
 	SearchForPackages(searchReq view.SearchQueryReq) (*view.SearchResult, error)
@@ -845,6 +846,56 @@ func (v versionServiceImpl) GetPackageVersionContent(packageId string, version s
 	versionContent.OperationTypes = versionOperationTypes
 
 	return versionContent, nil
+}
+
+func (v versionServiceImpl) GetVersionChangeSummaryIncludingDeleted(packageId string, versionName string, revision int) ([]view.OperationType, error) {
+	versionEnt, err := v.publishedRepo.GetVersionByRevisionIncludingDeleted(packageId, versionName, revision)
+	if err != nil {
+		return nil, err
+	}
+	if versionEnt == nil {
+		return nil, nil
+	}
+	previousPackageId := versionEnt.PreviousVersionPackageId
+	if previousPackageId == "" {
+		previousPackageId = versionEnt.PackageId
+	}
+	if versionEnt.PreviousVersion == "" {
+		return nil, nil
+	}
+	previousVersionEnt, err := v.publishedRepo.GetVersionIncludingDeleted(previousPackageId, versionEnt.PreviousVersion)
+	if err != nil {
+		return nil, err
+	}
+	if previousVersionEnt == nil {
+		return nil, nil
+	}
+	comparisonId := view.MakeVersionComparisonId(
+		versionEnt.PackageId, versionEnt.Version, versionEnt.Revision,
+		previousVersionEnt.PackageId, previousVersionEnt.Version, previousVersionEnt.Revision,
+	)
+	versionComparison, err := v.publishedRepo.GetVersionComparison(comparisonId)
+	if err != nil {
+		return nil, err
+	}
+	if versionComparison == nil {
+		return nil, nil
+	}
+	
+	versionOperationTypes := make([]view.OperationType, 0)
+	if len(versionComparison.Refs) > 0 {
+		versionComparisons, err := v.publishedRepo.GetVersionRefsComparisons(comparisonId)
+		if err != nil {
+			return nil, err
+		}
+		for _, comparison := range versionComparisons {
+			versionOperationTypes = append(versionOperationTypes, comparison.OperationTypes...)
+		}
+	} else {
+		versionOperationTypes = append(versionOperationTypes, versionComparison.OperationTypes...)
+	}
+
+	return versionOperationTypes, nil
 }
 
 func (v versionServiceImpl) getVersionOperationTypes_deprecated(versionEnt *entity.ReadonlyPublishedVersionEntity_deprecated, includeSummary bool, includeOperations bool) ([]view.VersionOperationType, error) {
