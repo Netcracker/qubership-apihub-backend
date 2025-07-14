@@ -31,11 +31,16 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+type jobType string
+
 const (
 	//TODO: what is the appropriate timeout?
 	cleanupJobTimeout     = 48 * time.Hour
 	maxErrorMessageLength = 1000
 	sharedLockName        = "cleanup_job_lock"
+
+	jobTypeRevisions   jobType = "revisions"
+	jobTypeComparisons jobType = "comparisons"
 )
 
 type CleanupService interface {
@@ -170,13 +175,13 @@ func (c cleanupServiceImpl) CreateRevisionsCleanupJob(publishedRepository reposi
 			lockService:         lockService,
 			instanceId:          instanceId,
 			ttl:                 ttl,
-			jobType:             "revisions",
+			jobType:             jobTypeRevisions,
 		},
 		versionCleanupRepository: versionCleanupRepository,
 		deleteLastRevision:       deleteLastRevision,
 		deleteReleaseRevision:    deleteReleaseRevision,
 	}
-	return c.addCleanupJob(job, schedule)
+	return c.addCleanupJob(job, schedule, jobTypeRevisions)
 }
 
 func (c cleanupServiceImpl) CreateComparisonsCleanupJob(publishedRepo repository.PublishedRepository, migrationRepository mRepository.MigrationRunRepository, comparisonCleanupRepo repository.ComparisonCleanupRepository, lockService LockService, instanceId string, schedule string, ttl int) error {
@@ -188,14 +193,14 @@ func (c cleanupServiceImpl) CreateComparisonsCleanupJob(publishedRepo repository
 			lockService:         lockService,
 			instanceId:          instanceId,
 			ttl:                 ttl,
-			jobType:             "comparisons",
+			jobType:             jobTypeComparisons,
 		},
 		comparisonCleanupRepo: comparisonCleanupRepo,
 	}
-	return c.addCleanupJob(job, schedule)
+	return c.addCleanupJob(job, schedule, jobTypeComparisons)
 }
 
-func (c cleanupServiceImpl) addCleanupJob(job cron.Job, schedule string) error {
+func (c cleanupServiceImpl) addCleanupJob(job cron.Job, schedule string, jobType jobType) error {
 	if len(c.cron.Entries()) == 0 {
 		location, err := time.LoadLocation("")
 		if err != nil {
@@ -207,10 +212,10 @@ func (c cleanupServiceImpl) addCleanupJob(job cron.Job, schedule string) error {
 	wrappedJob := cron.NewChain(cron.SkipIfStillRunning(cron.DefaultLogger)).Then(job)
 	_, err := c.cron.AddJob(schedule, wrappedJob)
 	if err != nil {
-		log.Warnf("Cleanup job wasn't added for schedule - %s. With error - %s", schedule, err)
+		log.Warnf("%s cleanup job wasn't added for schedule - %s. With error - %s", jobType, schedule, err)
 		return err
 	}
-	log.Infof("Cleanup job was created with schedule - %s", schedule)
+	log.Infof("%s cleanup job was created with schedule - %s", jobType, schedule)
 
 	return nil
 }
@@ -222,7 +227,7 @@ type baseCleanupJob struct {
 	lockService         LockService
 	instanceId          string
 	ttl                 int
-	jobType             string
+	jobType             jobType
 }
 
 func (j *baseCleanupJob) isMigrationRunning() bool {
@@ -496,13 +501,13 @@ func (j *comparisonsCleanupJob) Run() {
 		return
 	}
 
-	deletedItems, errors, err := j.processComparisons(ctx, jobId, deleteBefore, deletedItems)
+	deletedItems, processingErrors, err := j.processComparisons(ctx, jobId, deleteBefore, deletedItems)
 	if err != nil {
 		_ = j.updateCleanupRun(ctx, jobId, string(view.StatusError), err.Error(), deletedItems)
 		return
 	}
 
-	j.finishCleanupRun(ctx, jobId, errors, deletedItems)
+	j.finishCleanupRun(ctx, jobId, processingErrors, deletedItems)
 }
 
 func (j *comparisonsCleanupJob) initializeCleanupRun(ctx context.Context, jobId string, deleteBefore time.Time) error {

@@ -19,11 +19,9 @@ import (
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/db"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
-	"github.com/go-pg/pg/v10"
 )
 
 type ComparisonCleanupRepository interface {
-	GetComparisonCleanupRun(id string) (*entity.ComparisonCleanupEntity, error)
 	StoreComparisonCleanupRun(ctx context.Context, entity entity.ComparisonCleanupEntity) error
 	UpdateComparisonCleanupRun(ctx context.Context, runId string, status string, details string, deletedItems int) error
 }
@@ -34,18 +32,6 @@ func NewComparisonCleanupRepository(cp db.ConnectionProvider) ComparisonCleanupR
 
 type comparisonCleanupRepositoryImpl struct {
 	cp db.ConnectionProvider
-}
-
-func (c comparisonCleanupRepositoryImpl) GetComparisonCleanupRun(id string) (*entity.ComparisonCleanupEntity, error) {
-	var ent *entity.ComparisonCleanupEntity
-	err := c.cp.GetConnection().Model(ent).Where("run_id = ?", id).First()
-	if err != nil {
-		if err == pg.ErrNoRows {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return ent, nil
 }
 
 func (c comparisonCleanupRepositoryImpl) StoreComparisonCleanupRun(ctx context.Context, entity entity.ComparisonCleanupEntity) error {
