@@ -1298,7 +1298,8 @@ func (o operationRepositoryImpl) GetOperationsTypeCountIncludingDeleted(packageI
 		group by type
 	)
 	select oc.type as type,
-	coalesce(oc.cnt, 0) as operations_count;
+	coalesce(oc.cnt, 0) as operations_count
+	from op_count oc;
 	`
 	_, err := o.cp.GetConnection().Query(&result,
 		operationsTypeCountQuery,
