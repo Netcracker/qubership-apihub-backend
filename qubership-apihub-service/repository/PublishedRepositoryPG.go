@@ -2248,12 +2248,6 @@ func (p publishedRepositoryImpl) GetPackageVersionsListIncludingDeleted(searchQu
 	if searchQuery.Status != "" {
 		searchQuery.Status = "%" + utils.LikeEscaped(searchQuery.Status) + "%"
 	}
-	if searchQuery.SortBy == "" {
-		searchQuery.SortBy = entity.GetVersionSortByPG(view.VersionSortByCreatedAt)
-	}
-	if searchQuery.SortOrder == "" {
-		searchQuery.SortOrder = entity.GetVersionSortOrderPG(view.VersionSortOrderDesc)
-	}
 	
 	query := `
 		select pv.*, get_latest_revision(coalesce(pv.previous_version_package_id,pv.package_id), pv.previous_version) as previous_version_revision,
@@ -2273,13 +2267,11 @@ func (p publishedRepositoryImpl) GetPackageVersionsListIncludingDeleted(searchQu
 		left join user_data usr on usr.user_id = pv.created_by
 		left join apihub_api_keys apikey on apikey.id = pv.created_by
 		and (?status = '' or pv.status ilike ?status)
-		order by pv.%s %s
-		limit ?limit
-		offset ?offset
+		order by pv.published_at desc
 	`
 	
 	_, err := p.cp.GetConnection().Model(&searchQuery).
-		Query(&ents, fmt.Sprintf(query, searchQuery.SortBy, searchQuery.SortOrder))
+		Query(&ents, query)
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return nil, nil
