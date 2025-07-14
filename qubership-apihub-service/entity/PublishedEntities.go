@@ -739,6 +739,50 @@ func MakePackagesInfo(entity *PackageEntity, defaultVersionDetails *view.Version
 	return &packageInfo
 }
 
+func MakePackagesListInfo(entity PackageEntity, parents []view.ParentPackageInfo, versionsList []*view.PackageVersions) *view.PackagesListInfo {
+	var parentGroupName string
+	if len(parents) > 0 {
+		parentGroupName = parents[len(parents)-1].Name
+	}
+
+	packageListInfo := view.PackagesListInfo{
+		Id:              entity.Id,
+		Name:            entity.Name,
+		ServiceName:     entity.ServiceName,
+		ParentGroupName: parentGroupName,
+		CreatedAt:       entity.CreatedAt,
+		DeletedAt:       entity.DeletedAt,
+		Versions:        versionsList,
+	}
+
+	return &packageListInfo
+}
+
+func MakeVersionsListInfo(entity PackageEntity, versions PackageVersionRevisionEntity, operationTypes []OperationsTypeCountEntity, changeSummary []view.OperationType) *view.PackageVersions {
+	operationInfoList := make([]view.OperationInfo, 0)
+	for _, ot := range operationTypes {
+		for _, cs := range changeSummary {
+			if ot.ApiType == cs.ApiType {
+				operationInfoList = append(operationInfoList, view.OperationInfo{
+					ApiType:        ot.ApiType,
+					OperationCount: ot.OperationsCount,
+					ChangeSummary:  cs.ChangesSummary,
+				})
+			}
+		}
+	}
+
+	packageVersionsInfo := view.PackageVersions{
+		Version:         versions.Version,
+		PreviousVersion: versions.PreviousVersion,
+		Status:          versions.Status,
+		PublishedAt:     &versions.PublishedAt,
+		OperationInfo:   operationInfoList,
+	}
+
+	return &packageVersionsInfo
+}
+
 func MakePackageView(packageEntity *PackageEntity, isFavorite bool, groups []view.Group) *view.Package {
 	if groups == nil {
 		groups = make([]view.Group, 0)

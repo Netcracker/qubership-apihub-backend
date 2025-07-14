@@ -40,6 +40,7 @@ type PackageController interface {
 	GetPackage(w http.ResponseWriter, r *http.Request)
 	GetPackageStatus(w http.ResponseWriter, r *http.Request)
 	GetPackagesList(w http.ResponseWriter, r *http.Request)
+	GetPackagesListIncludingDeleted(w http.ResponseWriter, r *http.Request)
 	GetAvailableVersionStatusesForPublish(w http.ResponseWriter, r *http.Request)
 	RecalculateOperationGroups(w http.ResponseWriter, r *http.Request)
 	CalculateOperationGroups(w http.ResponseWriter, r *http.Request)
