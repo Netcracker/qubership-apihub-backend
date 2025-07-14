@@ -58,7 +58,6 @@ import (
 	prefixed "github.com/x-cray/logrus-prefixed-formatter"
 )
 
-//TODO: do we need to move it to config?
 func init() {
 	logFilePath := os.Getenv("LOG_FILE_PATH") //Example: /logs/apihub.log
 	var mw io.Writer

@@ -221,7 +221,12 @@ func (g systemInfoServiceImpl) setDefaults() {
 }
 
 func (g systemInfoServiceImpl) GetConfigFolder() string {
-	return os.Getenv(APIHUB_CONFIG_FOLDER)
+	folder := os.Getenv(APIHUB_CONFIG_FOLDER)
+	if folder == "" {
+		log.Warn("APIHUB_CONFIG_FOLDER is not set, using default value: '.'")
+		folder = "."
+	}
+	return folder
 }
 
 func (g systemInfoServiceImpl) postProcessConfig() {
