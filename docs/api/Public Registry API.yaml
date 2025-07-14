@@ -1420,6 +1420,20 @@ paths:
                                 isPrefixGroup:
                                   type: boolean
                                   description: true - if the group created automatically via restGroupingPrefix.
+                            - type: object
+                              title: ParamsForDeleteRevision
+                              description: |
+                                params for delete_revision event
+                              required:
+                                - version
+                                - status
+                              properties:
+                                version:
+                                  description: Package version name with revision. The <version>@<revision> format is used.
+                                  type: string
+                                  example: "4@2"
+                                status:
+                                  $ref: "#/components/schemas/VersionStatusEnum"
         "401":
           description: Unauthorized
           content:
@@ -2871,6 +2885,20 @@ paths:
                                   enum:
                                     - rest
                                     - graphql
+                            - type: object
+                              title: ParamsForDeleteRevision
+                              description: |
+                                params for delete_revision event
+                              required:
+                                - version
+                                - status
+                              properties:
+                                version:
+                                  description: Package version name with revision. The <version>@<revision> format is used.
+                                  type: string
+                                  example: "4@2"
+                                status:
+                                  $ref: "#/components/schemas/VersionStatusEnum"
         "301":
           description: Moved Permanently
           headers:
