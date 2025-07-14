@@ -277,6 +277,7 @@ func (p publishedRepositoryImpl) GetReadonlyVersion_deprecated(packageId string,
 	}
 	return result, nil
 }
+
 func (p publishedRepositoryImpl) GetReadonlyVersion(packageId string, versionName string) (*entity.PackageVersionRevisionEntity, error) {
 	getPackage, errGetPackage := p.GetPackage(packageId)
 	if errGetPackage != nil {
@@ -303,6 +304,43 @@ func (p publishedRepositoryImpl) GetReadonlyVersion(packageId string, versionNam
 	  and ((? = 0 and pv.revision = get_latest_revision(?,?)) or
 		   (? != 0 and pv.revision = ?))
 	  and pv.deleted_at is null
+	limit 1
+	`
+	_, err = p.cp.GetConnection().QueryOne(result, query, packageId, version, revision, packageId, version, revision, revision)
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return result, nil
+}
+
+func (p publishedRepositoryImpl) GetReadonlyVersionIncludingDeleted(packageId string, versionName string) (*entity.PackageVersionRevisionEntity, error) {
+	getPackage, errGetPackage := p.GetPackageIncludingDeleted(packageId)
+	if errGetPackage != nil {
+		return nil, errGetPackage
+	}
+	if getPackage == nil {
+		return nil, nil
+	}
+	result := new(entity.PackageVersionRevisionEntity)
+	version, revision, err := SplitVersionRevision(versionName)
+	if err != nil {
+		return nil, err
+	}
+	query := `
+	select pv.*,get_latest_revision(coalesce(pv.previous_version_package_id,pv.package_id),pv.previous_version) as previous_version_revision,
+	    usr.name as prl_usr_name, usr.email as prl_usr_email, usr.avatar_url as prl_usr_avatar_url,
+		apikey.id as prl_apikey_id, apikey.name as prl_apikey_name,
+		case when coalesce(usr.name, apikey.name) is null then pv.created_by else usr.user_id end prl_usr_id
+		from published_version as pv
+	    left join user_data usr on usr.user_id = pv.created_by
+	    left join apihub_api_keys apikey on apikey.id = pv.created_by
+	where pv.package_id = ?
+	  and pv.version = ?
+	  and ((? = 0 and pv.revision = get_latest_revision(?,?)) or
+		   (? != 0 and pv.revision = ?))
 	limit 1
 	`
 	_, err = p.cp.GetConnection().QueryOne(result, query, packageId, version, revision, packageId, version, revision, revision)
@@ -405,6 +443,23 @@ func (p publishedRepositoryImpl) GetVersionByRevision(packageId string, versionN
 		Where("version = ?", versionName).
 		Where("revision = ?", revision).
 		Where("deleted_at is ?", nil).
+		First()
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func (p publishedRepositoryImpl) GetVersionByRevisionIncludingDeleted(packageId string, versionName string, revision int) (*entity.PublishedVersionEntity, error) {
+	result := new(entity.PublishedVersionEntity)
+	err := p.cp.GetConnection().Model(result).
+		Where("package_id = ?", packageId).
+		Where("version = ?", versionName).
+		Where("revision = ?", revision).
 		First()
 	if err != nil {
 		if err == pg.ErrNoRows {
