@@ -123,13 +123,13 @@ type PackagesList struct {
 }
 
 type PackagesListInfo struct {
-	Id              string            `json:"packageId"`
-	Name            string            `json:"name"`
-	ServiceName     string            `json:"serviceName,omitempty"`
-	ParentGroupName string            `json:"parentGroupName,omitempty"`
-	CreatedAt       time.Time        `json:"createdAt"`
-	DeletedAt       *time.Time        `json:"deletedAt"`
-	Versions        []PackageVersions `json:"versions,omitempty"`
+	Id              string             `json:"packageId"`
+	Name            string             `json:"name"`
+	ServiceName     string             `json:"serviceName,omitempty"`
+	ParentGroupName string             `json:"parentGroupName,omitempty"`
+	CreatedAt       time.Time          `json:"createdAt"`
+	DeletedAt       *time.Time         `json:"deletedAt,omitempty"`
+	Versions        []*PackageVersions `json:"versions,omitempty"`
 }
 
 type PackageVersions struct {
