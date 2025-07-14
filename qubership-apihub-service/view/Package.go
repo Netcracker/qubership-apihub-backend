@@ -118,12 +118,16 @@ type PackagesInfo struct {
 	ReleaseVersionPattern     string              `json:"releaseVersionPattern,omitempty"`
 }
 
+type PackagesList struct {
+	Packages []*PackagesListInfo `json:"packages"`
+}
+
 type PackagesListInfo struct {
 	Id              string            `json:"packageId"`
 	Name            string            `json:"name"`
 	ServiceName     string            `json:"serviceName,omitempty"`
 	ParentGroupName string            `json:"parentGroupName,omitempty"`
-	CreatedAt       *time.Time        `json:"createdAt"`
+	CreatedAt       time.Time        `json:"createdAt"`
 	DeletedAt       *time.Time        `json:"deletedAt"`
 	Versions        []PackageVersions `json:"versions,omitempty"`
 }
