@@ -2118,6 +2118,7 @@ func (p publishedRepositoryImpl) GetReadonlyPackageVersionsWithLimit_deprecated(
 
 	return ents, nil
 }
+
 func (p publishedRepositoryImpl) GetReadonlyPackageVersionsWithLimit(searchQuery entity.PublishedVersionSearchQueryEntity, checkRevisions bool) ([]entity.PackageVersionRevisionEntity, error) {
 	var ents []entity.PackageVersionRevisionEntity
 	if searchQuery.TextFilter != "" {
@@ -2236,6 +2237,54 @@ func (p publishedRepositoryImpl) GetReadonlyPackageVersionsWithLimit(searchQuery
 			}
 			return nil, err
 		}
+	}
+
+	return ents, nil
+}
+
+func (p publishedRepositoryImpl) GetPackageVersionsListIncludingDeleted(searchQuery entity.PublishedVersionSearchQueryEntity) ([]entity.PackageVersionRevisionEntity, error) {
+	var ents []entity.PackageVersionRevisionEntity
+
+	if searchQuery.Status != "" {
+		searchQuery.Status = "%" + utils.LikeEscaped(searchQuery.Status) + "%"
+	}
+	if searchQuery.SortBy == "" {
+		searchQuery.SortBy = entity.GetVersionSortByPG(view.VersionSortByCreatedAt)
+	}
+	if searchQuery.SortOrder == "" {
+		searchQuery.SortOrder = entity.GetVersionSortOrderPG(view.VersionSortOrderDesc)
+	}
+	
+	query := `
+		select pv.*, get_latest_revision(coalesce(pv.previous_version_package_id,pv.package_id), pv.previous_version) as previous_version_revision,
+				usr.name as prl_usr_name, usr.email as prl_usr_email, usr.avatar_url as prl_usr_avatar_url,
+				apikey.id as prl_apikey_id, apikey.name as prl_apikey_name,
+				case when coalesce(usr.name, apikey.name) is null then pv.created_by else usr.user_id end prl_usr_id
+				from published_version pv
+		inner join (
+			select package_id, version, max(revision) as revision
+				from published_version
+				where (package_id = ?package_id)
+				group by package_id, version
+		) mx
+		on pv.package_id = mx.package_id
+		and pv.version = mx.version
+		and pv.revision = mx.revision
+		left join user_data usr on usr.user_id = pv.created_by
+		left join apihub_api_keys apikey on apikey.id = pv.created_by
+		and (?status = '' or pv.status ilike ?status)
+		order by pv.%s %s
+		limit ?limit
+		offset ?offset
+	`
+	
+	_, err := p.cp.GetConnection().Model(&searchQuery).
+		Query(&ents, fmt.Sprintf(query, searchQuery.SortBy, searchQuery.SortOrder))
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
 	}
 
 	return ents, nil
