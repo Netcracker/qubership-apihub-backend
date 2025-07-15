@@ -168,6 +168,7 @@ type PackageListReq struct {
 	ServiceName               string
 	ShowAllDescendants        bool
 	Ids                       []string
+	Status					  string
 }
 
 type PatchPackageReq struct {

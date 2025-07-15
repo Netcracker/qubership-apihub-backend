@@ -478,7 +478,11 @@ func (p packageServiceImpl) GetPackagesListIncludingDeleted(ctx context.Security
 		}
 
 		for _, ver := range versions {
-
+			
+			if ver.Status != "" && (ver.Status != searchReq.Status) {
+				continue
+			}
+			
 			operationTypes, err := p.operationRepo.GetOperationsTypeCountIncludingDeleted(pkg.Id, ver.Version, ver.Revision)
 			if err != nil {
 				// TODO: fix this logic
