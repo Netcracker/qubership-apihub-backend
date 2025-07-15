@@ -90,20 +90,17 @@ security:
 
 # Section with zero-day settings
 zeroDayConfiguration:
-  #TODO: need to provide requirements for the value of accessToken
-  # Mandatory; Default system access token (any string). The token will be provisioned automatically during startup; If not set, default value: ""; Example: access-token-12345
-  accessToken: 'access-token-12345'
-  # Optional; Default local admin user login. If set - this admin user will be created automatically.; If not set, default value: ""; Example: admin@example.com
+  # Mandatory; Default system access token (any string, minimum 30 characters). The token will be provisioned automatically during startup; If not set, default value: ""; Example: access-token-12345-67890-abcdef-ghijklmnop
+  accessToken: 'access-token-12345-67890-abcdef-ghijklmnop'
+  # Mandatory; Default local admin user login. If set - this admin user will be created automatically.; If not set, default value: ""; Example: admin@example.com
   adminEmail: 'admin@example.com'
-  # Optional; Default local admin user password; If not set, default value: ""; Example: admin-password
+  # Mandatory; Default local admin user password; If not set, default value: ""; Example: admin-password
   adminPassword: 'admin-password'
 
 # Section with technical parameters
 technicalParameters:
   # Optional; Base path for binary and static files, default value: .; Example: /tmp
   basePath: '.'
-  # Optional; Backend version; If not set, default value: unknown; Example: 0.0.0
-  backendVersion: '0.0.0'
   # Optional; Listen address for APIHUB backend, can be used to avoid port conflicts in case of run on bare metall; If not set, default value: :8080; Example: :8080
   listenAddress: ':8080'
 

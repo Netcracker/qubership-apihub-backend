@@ -83,8 +83,8 @@ type SystemInfoService interface {
 	GetExternalLinks() []string
 	GetDefaultWorkspaceId() string
 	GetAllowedHosts() []string
-	GetZeroDayAdminCreds() (string, string, error)
-	GetSystemApiKey() (string, error)
+	GetZeroDayAdminCreds() (string, string)
+	GetSystemApiKey() string
 	GetEditorDisabled() bool
 	FailBuildOnBrokenRefs() bool
 	GetAccessTokenDurationSec() int
@@ -253,16 +253,14 @@ func (g systemInfoServiceImpl) postProcessConfig() {
 	}
 }
 func (g systemInfoServiceImpl) setBackendVersion() {
-	version := g.config.TechnicalParameters.BackendVersion
-	if version == "" {
-		gitBranch := os.Getenv(GIT_BRANCH)
-		gitHash := os.Getenv(GIT_HASH)
-		version = gitBranch + "." + gitHash
-		if version == "" {
-			version = "unknown"
-		}
+	gitBranch := os.Getenv(GIT_BRANCH)
+	gitHash := os.Getenv(GIT_HASH)
+
+	if gitBranch == "" && gitHash == "" {
+		g.config.TechnicalParameters.BackendVersion = "unknown"
+	} else {
+		g.config.TechnicalParameters.BackendVersion = gitBranch + "." + gitHash
 	}
-	g.config.TechnicalParameters.BackendVersion = version
 }
 
 func (g systemInfoServiceImpl) GetBasePath() string {
@@ -425,23 +423,12 @@ func (g systemInfoServiceImpl) GetAllowedHosts() []string {
 	return g.config.Security.AllowedHostsForProxy
 }
 
-// TODO: discuss it
-func (g systemInfoServiceImpl) GetZeroDayAdminCreds() (string, string, error) {
-	email := g.config.ZeroDayConfiguration.AdminEmail
-	password := g.config.ZeroDayConfiguration.AdminPassword
-	if email == "" || password == "" {
-		return "", "", fmt.Errorf("some zero day admin params('zeroDayConfiguration.adminEmail' or 'zeroDayConfiguration.adminPassword') are empty or not set")
-	}
-	return email, password, nil
+func (g systemInfoServiceImpl) GetZeroDayAdminCreds() (string, string) {
+	return g.config.ZeroDayConfiguration.AdminEmail, g.config.ZeroDayConfiguration.AdminPassword
 }
 
-// TODO: discuss it
-func (g systemInfoServiceImpl) GetSystemApiKey() (string, error) {
-	apiKey := g.config.ZeroDayConfiguration.AccessToken
-	if apiKey == "" {
-		return "", fmt.Errorf("system api key param 'zeroDayConfiguration.accessToken' is empty or not set")
-	}
-	return apiKey, nil
+func (g systemInfoServiceImpl) GetSystemApiKey() string {
+	return g.config.ZeroDayConfiguration.AccessToken
 }
 
 func (g systemInfoServiceImpl) GetEditorDisabled() bool {

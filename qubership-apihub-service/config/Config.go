@@ -77,9 +77,9 @@ type LdapConfig struct {
 }
 
 type ZeroDayConfig struct {
-	AccessToken   string `validate:"required" sensitive:"true"`
-	AdminEmail    string
-	AdminPassword string `sensitive:"true"`
+	AccessToken   string `validate:"required,min=30" sensitive:"true"`
+	AdminEmail    string `validate:"required"`
+	AdminPassword string `validate:"required" sensitive:"true"`
 }
 
 type TechnicalParameters struct {
