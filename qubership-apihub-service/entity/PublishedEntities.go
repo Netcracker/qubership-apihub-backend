@@ -774,7 +774,7 @@ func MakeVersionsListInfo(entity PackageEntity, versions PackageVersionRevisionE
 
 	packageVersionsInfo := view.PackageVersions{
 		Version:         view.MakeVersionRefKey(versions.Version, versions.Revision),
-		PreviousVersion: versions.PreviousVersion,
+		PreviousVersion: view.MakeVersionRefKey(versions.PreviousVersion, versions.PreviousVersionRevision),
 		Status:          versions.Status,
 		PublishedAt:     &versions.PublishedAt,
 		OperationInfo:   operationInfoList,
