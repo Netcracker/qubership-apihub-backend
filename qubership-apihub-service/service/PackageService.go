@@ -441,6 +441,7 @@ func (p packageServiceImpl) GetPackagesListIncludingDeleted(ctx context.Security
 		searchReq.Kind = []string{entity.KIND_WORKSPACE}
 	}
 
+	// Get packages list including deleted ones
 	packages, err = p.publishedRepo.GetFilteredPackagesIncludingDeleted(searchReq, ctx.GetUserId())
 	if err != nil {
 		log.Error("Failed to get packages: ", err.Error())
@@ -450,6 +451,7 @@ func (p packageServiceImpl) GetPackagesListIncludingDeleted(ctx context.Security
 	for _, pkg := range packages {
 		versionsList := make([]*view.PackageVersions, 0)
 
+		// Get parents for package - for purpose of extracting group name of the package
 		var parents []view.ParentPackageInfo = nil
 		parents, err = p.getParentsIncludingDeleted(pkg.Id)
 		if err != nil {
@@ -465,34 +467,32 @@ func (p packageServiceImpl) GetPackagesListIncludingDeleted(ctx context.Security
 			continue
 		}
 
-		searchReq := entity.PublishedVersionSearchQueryEntity{
+		// Get package releases including deleted packages
+		versionSearchReq := entity.PublishedVersionSearchQueryEntity{
 			PackageId: pkg.Id,
-			Status:    string(view.Release),
 		}
-
-		versions, err := p.publishedRepo.GetPackageVersionsListIncludingDeleted(searchReq)
+		versions, err := p.publishedRepo.GetPackageVersionsListIncludingDeleted(versionSearchReq)
 		if err != nil {
-			// TODO: fix this logic
 			log.Error("Failed to get versions: ", err.Error())
 			continue
 		}
 
 		for _, ver := range versions {
-			
-			if ver.Status != "" && (ver.Status != searchReq.Status) {
+
+			if searchReq.Status != "" && (searchReq.Status != ver.Status) {
 				continue
 			}
 			
+			// Get operation count and api type for each release
 			operationTypes, err := p.operationRepo.GetOperationsTypeCountIncludingDeleted(pkg.Id, ver.Version, ver.Revision)
 			if err != nil {
-				// TODO: fix this logic
 				log.Error("Failed to get operation type counts: ", err.Error())
 				continue
 			}
 
+			// Get change summary for release
 			changeSummary, err := p.versionService.GetVersionChangeSummaryIncludingDeleted(pkg.Id, ver.Version, ver.Revision)
 			if err != nil {
-				// TODO: fix this logic
 				log.Error("Failed to get version change summary: ", err.Error())
 				continue
 			}
