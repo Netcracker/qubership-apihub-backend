@@ -476,7 +476,7 @@ func main() {
 	r.HandleFunc("/api/v2/packages/{packageId}", security.Secure(packageController.GetPackage)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/status", security.Secure(packageController.GetPackageStatus)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages", security.Secure(packageController.GetPackagesList)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v1/packagesSummary", security.Secure(packageController.GetPackagesListIncludingDeleted)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/packages/summary", security.Secure(packageController.GetPackagesListIncludingDeleted)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/publish/availableStatuses", security.Secure(packageController.GetAvailableVersionStatusesForPublish)).Methods(http.MethodGet)
 
 	r.HandleFunc("/api/v2/packages/{packageId}/apiKeys", security.Secure(apihubApiKeyController.GetApiKeys_deprecated)).Methods(http.MethodGet)
