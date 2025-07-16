@@ -17,11 +17,12 @@ package service
 import (
 	"encoding/base64"
 	"fmt"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
-	"github.com/coreos/go-oidc/v3/oidc"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
+	"github.com/coreos/go-oidc/v3/oidc"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	"github.com/google/uuid"
@@ -81,25 +82,27 @@ const (
 	APIHUB_SYSTEM_API_KEY                      = "APIHUB_ACCESS_TOKEN"
 	EDITOR_DISABLED                            = "EDITOR_DISABLED"
 	FAIL_BUILDS_ON_BROKEN_REFS                 = "FAIL_BUILDS_ON_BROKEN_REFS"
-	ACCESS_TOKEN_DURATION_SEC              = "JWT_ACCESS_TOKEN_DURATION_SEC"
-	REFRESH_TOKEN_DURATION_SEC             = "JWT_REFRESH_TOKEN_DURATION_SEC"
-	EXTERNAL_SAML_IDP_DISPLAY_NAME         = "EXTERNAL_SAML_IDP_DISPLAY_NAME"
-	EXTERNAL_SAML_IDP_IMAGE_SVG            = "EXTERNAL_SAML_IDP_IMAGE_SVG"
-	AUTO_LOGIN                             = "AUTO_LOGIN"
-	AUTH_CONFIG                            = "AUTH_CONFIG"
-	OIDC_PROVIDER_URL                      = "OIDC_PROVIDER_URL"
-	OIDC_CLIENT_ID                         = "OIDC_CLIENT_ID"
-	OIDC_CLIENT_SECRET                     = "OIDC_CLIENT_SECRET"
-	EXTERNAL_OIDC_IDP_DISPLAY_NAME         = "EXTERNAL_OIDC_IDP_DISPLAY_NAME"
-	EXTERNAL_OIDC_IDP_IMAGE_SVG            = "EXTERNAL_OIDC_IDP_IMAGE_SVG"
+	ACCESS_TOKEN_DURATION_SEC                  = "JWT_ACCESS_TOKEN_DURATION_SEC"
+	REFRESH_TOKEN_DURATION_SEC                 = "JWT_REFRESH_TOKEN_DURATION_SEC"
+	EXTERNAL_SAML_IDP_DISPLAY_NAME             = "EXTERNAL_SAML_IDP_DISPLAY_NAME"
+	EXTERNAL_SAML_IDP_IMAGE_SVG                = "EXTERNAL_SAML_IDP_IMAGE_SVG"
+	AUTO_LOGIN                                 = "AUTO_LOGIN"
+	AUTH_CONFIG                                = "AUTH_CONFIG"
+	OIDC_PROVIDER_URL                          = "OIDC_PROVIDER_URL"
+	OIDC_CLIENT_ID                             = "OIDC_CLIENT_ID"
+	OIDC_CLIENT_SECRET                         = "OIDC_CLIENT_SECRET"
+	EXTERNAL_OIDC_IDP_DISPLAY_NAME             = "EXTERNAL_OIDC_IDP_DISPLAY_NAME"
+	EXTERNAL_OIDC_IDP_IMAGE_SVG                = "EXTERNAL_OIDC_IDP_IMAGE_SVG"
 	GIT_BRANCH                                 = "GIT_BRANCH"
 	GIT_HASH                                   = "GIT_HASH"
-	LEGACY_SAML                            = "LEGACY_SAML"
+	LEGACY_SAML                                = "LEGACY_SAML"
 	REVISIONS_CLEANUP_SCHEDULE                 = "REVISIONS_CLEANUP_SCHEDULE"
 	REVISIONS_CLEANUP_DELETE_LAST_REVISION     = "REVISIONS_CLEANUP_DELETE_LAST_REVISION"
 	REVISIONS_CLEANUP_DELETE_RELEASE_REVISIONS = "REVISIONS_CLEANUP_DELETE_RELEASE_REVISIONS"
 	REVISIONS_TTL_DAYS                         = "REVISIONS_TTL_DAYS"
 	INSTANCE_ID                                = "INSTANCE_ID"
+	COMPARISONS_CLEANUP_SCHEDULE               = "COMPARISONS_CLEANUP_SCHEDULE"
+	COMPARISONS_TTL_DAYS                       = "COMPARISONS_TTL_DAYS"
 
 	LocalIDPId             = "local-idp"
 	ExternalSAMLProviderId = "external-saml-idp"
@@ -168,6 +171,8 @@ type SystemInfoService interface {
 	GetRevisionsCleanupDeleteLastRevision() bool
 	GetRevisionsCleanupDeleteReleaseRevisions() bool
 	GetRevisionsTTLDays() int
+	GetComparisonCleanupSchedule() string
+	GetComparisonsTTLDays() int
 }
 
 func (g systemInfoServiceImpl) GetCredsFromEnv() *view.DbCredentials {
@@ -282,6 +287,8 @@ func (g systemInfoServiceImpl) Init() error {
 	g.setRevisionsCleanupDeleteReleaseRevisions()
 	g.setRevisionsTTLDays()
 	g.setInstanceId()
+	g.setComparisonsCleanupSchedule()
+	g.setComparisonsTTLDays()
 
 	return nil
 }
@@ -1142,4 +1149,29 @@ func (g systemInfoServiceImpl) setInstanceId() {
 
 func (g systemInfoServiceImpl) GetInstanceId() string {
 	return g.systemInfoMap[INSTANCE_ID].(string)
+}
+
+func (g systemInfoServiceImpl) setComparisonsCleanupSchedule() {
+	g.systemInfoMap[COMPARISONS_CLEANUP_SCHEDULE] = "0 23 * * 0" //TODO: what a schedule should be?
+}
+
+func (g systemInfoServiceImpl) GetComparisonCleanupSchedule() string {
+	return g.systemInfoMap[COMPARISONS_CLEANUP_SCHEDULE].(string)
+}
+
+func (g systemInfoServiceImpl) setComparisonsTTLDays() {
+	envVal := os.Getenv(COMPARISONS_TTL_DAYS)
+	if envVal == "" {
+		envVal = "30"
+	}
+	val, err := strconv.Atoi(envVal)
+	if err != nil {
+		log.Errorf("failed to parse %v env value: %v. Value by default - 30", COMPARISONS_TTL_DAYS, err.Error())
+		val = 30
+	}
+	g.systemInfoMap[COMPARISONS_TTL_DAYS] = val
+}
+
+func (g systemInfoServiceImpl) GetComparisonsTTLDays() int {
+	return g.systemInfoMap[COMPARISONS_TTL_DAYS].(int)
 }

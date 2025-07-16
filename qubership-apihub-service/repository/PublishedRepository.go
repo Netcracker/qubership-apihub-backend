@@ -100,6 +100,8 @@ type PublishedRepository interface {
 
 	GetVersionComparison(comparisonId string) (*entity.VersionComparisonEntity, error)
 	GetVersionRefsComparisons(comparisonId string) ([]entity.VersionComparisonEntity, error)
+	GetVersionComparisonsCleanupCandidates(ctx context.Context, limit int, offset int) ([]entity.VersionComparisonCleanupCandidateEntity, error)
+	DeleteVersionComparison(ctx context.Context, comparisonId string) (bool, error)
 	SaveVersionChanges(packageInfo view.PackageInfoFile, publishId string, operationComparisons []*entity.OperationComparisonEntity, versionComparisons []*entity.VersionComparisonEntity, versionComparisonsFromCache []string) error
 	GetLatestRevision(packageId, version string) (int, error)
 

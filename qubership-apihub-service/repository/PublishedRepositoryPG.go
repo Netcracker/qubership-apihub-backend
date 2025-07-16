@@ -4007,3 +4007,76 @@ func (p publishedRepositoryImpl) clearAdHocComparisons(tx *pg.Tx, packageId stri
 
 	return nil
 }
+
+func (p publishedRepositoryImpl) GetVersionComparisonsCleanupCandidates(ctx context.Context, limit int, offset int) ([]entity.VersionComparisonCleanupCandidateEntity, error) {
+	var candidates []entity.VersionComparisonCleanupCandidateEntity
+
+	_, err := p.cp.GetConnection().QueryContext(ctx, &candidates, `
+			SELECT 
+				vc.comparison_id,
+				vc.package_id,
+				vc.version,
+				vc.revision,
+				vc.previous_package_id,
+				vc.previous_version,
+				vc.previous_revision,
+				vc.last_active,
+				pv.package_id IS NULL AS revision_not_published,
+				pv.previous_version AS actual_previous_version,
+				COALESCE(pv.previous_version_package_id, pv.package_id) AS actual_previous_package_id,
+				(SELECT MAX(revision) 
+					FROM published_version 
+					WHERE package_id = vc.previous_package_id 
+					AND version = vc.previous_version) AS previous_max_revision
+			FROM version_comparison vc
+			LEFT JOIN published_version pv ON 
+				pv.package_id = vc.package_id AND 
+				pv.version = vc.version AND
+				pv.revision = vc.revision
+			ORDER BY vc.last_active ASC
+			LIMIT ?
+			OFFSET ?
+	`, limit, offset)
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return []entity.VersionComparisonCleanupCandidateEntity{}, nil
+		}	
+		return nil, fmt.Errorf("failed to get cleanup candidates: %w", err)
+	}
+
+	return candidates, nil
+}
+
+func (p publishedRepositoryImpl) DeleteVersionComparison(ctx context.Context, comparisonId string) (bool, error) {
+	var deleted bool
+
+	err := p.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
+		result, err := tx.ExecContext(ctx, `
+			DELETE FROM version_comparison
+			WHERE comparison_id = ?
+			AND NOT EXISTS (
+    			SELECT 1 
+    			FROM version_comparison
+    			WHERE ? = ANY(refs)
+			)
+		`, comparisonId, comparisonId)
+		if err != nil {
+			return fmt.Errorf("failed to check and delete comparison %s: %w", comparisonId, err)
+		}
+
+		if result.RowsAffected() > 0 {
+			log.Tracef("[comparisons cleanup] Deleted comparison %s", comparisonId)
+			deleted = true
+		} else {
+			log.Tracef("[comparisons cleanup] Skipped comparison %s (referenced or already deleted)", comparisonId)
+			deleted = false
+		}
+
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+
+	return deleted, nil
+}

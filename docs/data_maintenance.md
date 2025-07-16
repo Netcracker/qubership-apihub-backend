@@ -65,3 +65,29 @@ When both `REVISIONS_CLEANUP_DELETE_LAST_REVISION=true` and `REVISIONS_CLEANUP_D
 - Never deletes revisions referenced by dashboards
 
 > **WARNING**: Delete All mode is not recommended for use with short TTL and should only be used with recent database backups. The job in this mode can potentially delete all published versions in the system if the TTL is too short.
+
+## Ad-hoc comparisons TTL
+
+APIHUB backend implements an automatic cleanup mechanism for version/operation comparisons to reduce database size and migration size. The system runs a scheduled job that removes old and irrelevant comparisons, primarily focusing on "ad-hoc" comparisons that are created for temporary analysis.
+
+### Configuration
+
+The comparisons cleanup job is configured through an environment variable:
+
+| Environment Variable | Default Value | Description |
+|---------------------|---------------|-------------|
+| `COMPARISONS_TTL_DAYS` | `30` | Number of days to keep ad-hoc comparisons before they become eligible for deletion. |
+
+Note that it is not possible to configure the job schedule; it starts every Sunday at 11:00 PM.
+
+### How job works
+
+The comparisons cleanup job performs the following steps:
+
+1. Checks if any migrations are running - if so, it skips execution to avoid conflicts.
+2. Iterates through all version comparisons in the system.
+3. For each comparison, it checks for several deletion criteria. A comparison is deleted if any of the following are true:
+   - It is an ad-hoc comparison older than the configured TTL. An ad-hoc comparison is one that was created between two arbitrary versions, not as part of a version's changelog.
+   - It is an outdated changelog comparison, meaning it does not point to the latest revision of the previous version.
+   - It is a comparison for a revision that no longer exists.
+4. Deletes eligible version comparisons and related operation comparisons.
