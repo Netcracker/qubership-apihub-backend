@@ -59,7 +59,7 @@ Run [`generate_jwt_pkey.sh`](generate_jwt_pkey.sh), it will generate file jwt_pr
 
 #### APIHUB BE configuration
 
-The configuration of the backend is implemented via a configuration file(config.yaml), for the full configuration please refer to [the template file](../../qubership-apihub-service/config.template.yaml).
+Backend configuration is implemented via a configuration file(config.yaml), for the full configuration please refer to [the template file](../../qubership-apihub-service/config.template.yaml).
 
 Use the `APIHUB_CONFIG_FOLDER` environment variable to specify the path to the configuration file, default value `.`. 
 
