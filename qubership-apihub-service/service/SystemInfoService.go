@@ -95,7 +95,7 @@ type SystemInfoService interface {
 	GetConfigFolder() string
 }
 
-func (g systemInfoServiceImpl) GetCredsFromEnv() *view.DbCredentials {
+func (g *systemInfoServiceImpl) GetCredsFromEnv() *view.DbCredentials {
 	return &view.DbCredentials{
 		Host:     g.GetPGHost(),
 		Port:     g.GetPGPort(),
@@ -105,7 +105,7 @@ func (g systemInfoServiceImpl) GetCredsFromEnv() *view.DbCredentials {
 	}
 }
 
-func (s systemInfoServiceImpl) GetMinioStorageCreds() *view.MinioStorageCreds {
+func (s *systemInfoServiceImpl) GetMinioStorageCreds() *view.MinioStorageCreds {
 	return &view.MinioStorageCreds{
 		BucketName:           s.GetMinioBucketName(),
 		IsActive:             s.IsMinioStorageActive(),
@@ -131,7 +131,7 @@ type systemInfoServiceImpl struct {
 	authConfig idp.AuthConfig
 }
 
-func (g systemInfoServiceImpl) GetSystemInfo() *view.SystemInfo {
+func (g *systemInfoServiceImpl) GetSystemInfo() *view.SystemInfo {
 	return &view.SystemInfo{
 		BackendVersion: g.GetBackendVersion(),
 		ProductionMode: g.IsProductionMode(),
@@ -188,7 +188,7 @@ func base64EncodedStringDecodeHook() mapstructure.DecodeHookFunc {
 	}
 }
 
-func (g systemInfoServiceImpl) setDefaults() {
+func (g *systemInfoServiceImpl) setDefaults() {
 	viper.SetDefault("database.host", "localhost")
 	viper.SetDefault("database.port", 5432)
 	viper.SetDefault("database.name", "apihub")
@@ -220,7 +220,7 @@ func (g systemInfoServiceImpl) setDefaults() {
 	viper.SetDefault("olric.replicaCount", 1)
 }
 
-func (g systemInfoServiceImpl) GetConfigFolder() string {
+func (g *systemInfoServiceImpl) GetConfigFolder() string {
 	folder := os.Getenv(APIHUB_CONFIG_FOLDER)
 	if folder == "" {
 		log.Warn("APIHUB_CONFIG_FOLDER is not set, using default value: '.'")
@@ -229,7 +229,7 @@ func (g systemInfoServiceImpl) GetConfigFolder() string {
 	return folder
 }
 
-func (g systemInfoServiceImpl) postProcessConfig() {
+func (g *systemInfoServiceImpl) postProcessConfig() {
 	g.setBackendVersion()
 
 	//TODO: do we really need to log errors about empty LDAP params or printing of the full config is enough?
@@ -252,7 +252,7 @@ func (g systemInfoServiceImpl) postProcessConfig() {
 		log.Error("config value 'security.ldap.searchBase' is not set or empty")
 	}
 }
-func (g systemInfoServiceImpl) setBackendVersion() {
+func (g *systemInfoServiceImpl) setBackendVersion() {
 	gitBranch := os.Getenv(GIT_BRANCH)
 	gitHash := os.Getenv(GIT_HASH)
 
@@ -263,204 +263,204 @@ func (g systemInfoServiceImpl) setBackendVersion() {
 	}
 }
 
-func (g systemInfoServiceImpl) GetBasePath() string {
+func (g *systemInfoServiceImpl) GetBasePath() string {
 	return g.config.TechnicalParameters.BasePath
 }
 
-func (g systemInfoServiceImpl) GetJwtPrivateKey() []byte {
+func (g *systemInfoServiceImpl) GetJwtPrivateKey() []byte {
 	return g.config.Security.Jwt.PrivateKey
 }
 
-func (g systemInfoServiceImpl) IsProductionMode() bool {
+func (g *systemInfoServiceImpl) IsProductionMode() bool {
 	return g.config.Security.ProductionMode
 }
 
-func (g systemInfoServiceImpl) GetBackendVersion() string {
+func (g *systemInfoServiceImpl) GetBackendVersion() string {
 	return g.config.TechnicalParameters.BackendVersion
 }
 
-func (g systemInfoServiceImpl) GetGitlabUrl() string {
+func (g *systemInfoServiceImpl) GetGitlabUrl() string {
 	return g.config.Editor.GitlabUrl
 }
 
-func (g systemInfoServiceImpl) GetListenAddress() string {
+func (g *systemInfoServiceImpl) GetListenAddress() string {
 	return g.config.TechnicalParameters.ListenAddress
 }
 
-func (g systemInfoServiceImpl) GetAllowedOrigins() []string {
+func (g *systemInfoServiceImpl) GetAllowedOrigins() []string {
 	return g.config.Security.AllowedOrigins
 }
 
-func (g systemInfoServiceImpl) GetPGHost() string {
+func (g *systemInfoServiceImpl) GetPGHost() string {
 	return g.config.Database.Host
 }
 
-func (g systemInfoServiceImpl) GetPGPort() int {
+func (g *systemInfoServiceImpl) GetPGPort() int {
 	return g.config.Database.Port
 }
 
-func (g systemInfoServiceImpl) GetPGDB() string {
+func (g *systemInfoServiceImpl) GetPGDB() string {
 	return g.config.Database.Name
 }
 
-func (g systemInfoServiceImpl) GetPGUser() string {
+func (g *systemInfoServiceImpl) GetPGUser() string {
 	return g.config.Database.Username
 }
 
-func (g systemInfoServiceImpl) GetPGPassword() string {
+func (g *systemInfoServiceImpl) GetPGPassword() string {
 	return g.config.Database.Password
 }
 
-func (g systemInfoServiceImpl) GetClientID() string {
+func (g *systemInfoServiceImpl) GetClientID() string {
 	return g.config.Editor.ClientId
 }
 
-func (g systemInfoServiceImpl) GetClientSecret() string {
+func (g *systemInfoServiceImpl) GetClientSecret() string {
 	return g.config.Editor.ClientSecret
 }
 
-func (g systemInfoServiceImpl) GetAPIHubUrl() string {
+func (g *systemInfoServiceImpl) GetAPIHubUrl() string {
 	return g.config.Security.ApihubExternalUrl
 }
 
-func (g systemInfoServiceImpl) GetPublishArchiveSizeLimitMB() int64 {
+func (g *systemInfoServiceImpl) GetPublishArchiveSizeLimitMB() int64 {
 	return int64(g.config.BusinessParameters.PublishArchiveSizeLimitMb * bytesInMb)
 }
 
-func (g systemInfoServiceImpl) GetBranchContentSizeLimitMB() int64 {
+func (g *systemInfoServiceImpl) GetBranchContentSizeLimitMB() int64 {
 	return int64(g.config.BusinessParameters.BranchContentSizeLimitMb * bytesInMb)
 }
 
-func (g systemInfoServiceImpl) GetPublishFileSizeLimitMB() int64 {
+func (g *systemInfoServiceImpl) GetPublishFileSizeLimitMB() int64 {
 	return int64(g.config.BusinessParameters.PublishFileSizeLimitMb * bytesInMb)
 }
 
-func (g systemInfoServiceImpl) GetReleaseVersionPattern() string {
+func (g *systemInfoServiceImpl) GetReleaseVersionPattern() string {
 	return g.config.BusinessParameters.ReleaseVersionPattern
 }
 
-func (g systemInfoServiceImpl) GetLdapServer() string {
+func (g *systemInfoServiceImpl) GetLdapServer() string {
 	return g.config.Security.Ldap.Server
 }
 
-func (g systemInfoServiceImpl) GetLdapUser() string {
+func (g *systemInfoServiceImpl) GetLdapUser() string {
 	return g.config.Security.Ldap.User
 }
 
-func (g systemInfoServiceImpl) GetLdapUserPassword() string {
+func (g *systemInfoServiceImpl) GetLdapUserPassword() string {
 	return g.config.Security.Ldap.Password
 }
 
-func (g systemInfoServiceImpl) GetLdapBaseDN() string {
+func (g *systemInfoServiceImpl) GetLdapBaseDN() string {
 	return g.config.Security.Ldap.BaseDN
 }
 
-func (g systemInfoServiceImpl) GetLdapOrganizationUnit() string {
+func (g *systemInfoServiceImpl) GetLdapOrganizationUnit() string {
 	return g.config.Security.Ldap.OrganizationUnit
 }
 
-func (g systemInfoServiceImpl) GetLdapSearchBase() string {
+func (g *systemInfoServiceImpl) GetLdapSearchBase() string {
 	return g.config.Security.Ldap.SearchBase
 }
 
-func (g systemInfoServiceImpl) getSystemNotification() string {
+func (g *systemInfoServiceImpl) getSystemNotification() string {
 	return g.config.BusinessParameters.SystemNotification
 }
 
-func (g systemInfoServiceImpl) GetBuildsCleanupSchedule() string {
+func (g *systemInfoServiceImpl) GetBuildsCleanupSchedule() string {
 	return g.config.TechnicalParameters.BuildsCleanupSchedule
 }
 
-func (s systemInfoServiceImpl) InsecureProxyEnabled() bool {
+func (s *systemInfoServiceImpl) InsecureProxyEnabled() bool {
 	return s.config.Security.InsecureProxy
 }
 
-func (g systemInfoServiceImpl) GetMetricsGetterSchedule() string {
+func (g *systemInfoServiceImpl) GetMetricsGetterSchedule() string {
 	return g.config.TechnicalParameters.MetricsGetterSchedule
 }
 
-func (s systemInfoServiceImpl) MonitoringEnabled() bool {
+func (s *systemInfoServiceImpl) MonitoringEnabled() bool {
 	return s.config.Monitoring.Enabled
 }
 
-func (g systemInfoServiceImpl) GetMinioAccessKeyId() string {
+func (g *systemInfoServiceImpl) GetMinioAccessKeyId() string {
 	return g.config.S3Storage.Username
 }
 
-func (g systemInfoServiceImpl) GetMinioSecretAccessKey() string {
+func (g *systemInfoServiceImpl) GetMinioSecretAccessKey() string {
 	return g.config.S3Storage.Password
 }
 
-func (g systemInfoServiceImpl) GetMinioCrt() string {
+func (g *systemInfoServiceImpl) GetMinioCrt() string {
 	return g.config.S3Storage.Crt
 }
 
-func (g systemInfoServiceImpl) GetMinioEndpoint() string {
+func (g *systemInfoServiceImpl) GetMinioEndpoint() string {
 	return g.config.S3Storage.Url
 }
 
-func (g systemInfoServiceImpl) GetMinioBucketName() string {
+func (g *systemInfoServiceImpl) GetMinioBucketName() string {
 	return g.config.S3Storage.BucketName
 }
 
-func (g systemInfoServiceImpl) IsMinioStorageActive() bool {
+func (g *systemInfoServiceImpl) IsMinioStorageActive() bool {
 	return g.config.S3Storage.Enabled
 }
 
-func (g systemInfoServiceImpl) IsMinioStoreOnlyBuildResult() bool {
+func (g *systemInfoServiceImpl) IsMinioStoreOnlyBuildResult() bool {
 	return g.config.S3Storage.StoreOnlyBuildResult
 }
 
-func (g systemInfoServiceImpl) GetExternalLinks() []string {
+func (g *systemInfoServiceImpl) GetExternalLinks() []string {
 	return g.config.BusinessParameters.ExternalLinks
 }
 
-func (g systemInfoServiceImpl) GetDefaultWorkspaceId() string {
+func (g *systemInfoServiceImpl) GetDefaultWorkspaceId() string {
 	return g.config.BusinessParameters.DefaultWorkspaceId
 }
 
-func (g systemInfoServiceImpl) GetAllowedHosts() []string {
+func (g *systemInfoServiceImpl) GetAllowedHosts() []string {
 	return g.config.Security.AllowedHostsForProxy
 }
 
-func (g systemInfoServiceImpl) GetZeroDayAdminCreds() (string, string) {
+func (g *systemInfoServiceImpl) GetZeroDayAdminCreds() (string, string) {
 	return g.config.ZeroDayConfiguration.AdminEmail, g.config.ZeroDayConfiguration.AdminPassword
 }
 
-func (g systemInfoServiceImpl) GetSystemApiKey() string {
+func (g *systemInfoServiceImpl) GetSystemApiKey() string {
 	return g.config.ZeroDayConfiguration.AccessToken
 }
 
-func (g systemInfoServiceImpl) GetEditorDisabled() bool {
+func (g *systemInfoServiceImpl) GetEditorDisabled() bool {
 	return g.config.Editor.Disabled
 }
 
-func (g systemInfoServiceImpl) FailBuildOnBrokenRefs() bool {
+func (g *systemInfoServiceImpl) FailBuildOnBrokenRefs() bool {
 	return g.config.BusinessParameters.FailBuildOnBrokenRefs
 }
 
-func (g systemInfoServiceImpl) GetAccessTokenDurationSec() int {
+func (g *systemInfoServiceImpl) GetAccessTokenDurationSec() int {
 	return g.config.Security.Jwt.AccessTokenDurationSec
 }
 
-func (g systemInfoServiceImpl) GetRefreshTokenDurationSec() int {
+func (g *systemInfoServiceImpl) GetRefreshTokenDurationSec() int {
 	return g.config.Security.Jwt.RefreshTokenDurationSec
 }
 
-func (g systemInfoServiceImpl) IsLegacySAML() bool {
+func (g *systemInfoServiceImpl) IsLegacySAML() bool {
 	return g.config.Security.LegacySaml
 }
 
-func (g systemInfoServiceImpl) GetAuthConfig() idp.AuthConfig {
+func (g *systemInfoServiceImpl) GetAuthConfig() idp.AuthConfig {
 	return g.authConfig
 }
 
-func (g systemInfoServiceImpl) GetOlricConfig() config.OlricConfig {
+func (g *systemInfoServiceImpl) GetOlricConfig() config.OlricConfig {
 	return g.config.Olric
 }
 
 // all IDP initialization should be done in this method only
-func (g systemInfoServiceImpl) buildAuthConfig() (idp.AuthConfig, error) {
+func (g *systemInfoServiceImpl) buildAuthConfig() (idp.AuthConfig, error) {
 	var authConfig idp.AuthConfig
 	firstSAMLProvider := true
 	for _, provider := range g.config.Security.ExternalIdentityProviders {
