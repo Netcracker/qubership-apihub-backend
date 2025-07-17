@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
+	"github.com/google/uuid"
 
 	"sync"
 
@@ -62,6 +63,7 @@ func (t *publishNotificationServiceImpl) SendNotification(packageId string, vers
 	}
 
 	msg := view.PublishNotification{
+		EventId:   uuid.NewString(),
 		PackageId: packageId,
 		Version:   version,
 		Revision:  revision,
