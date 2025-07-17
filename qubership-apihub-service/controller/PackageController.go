@@ -343,12 +343,6 @@ func (p packageControllerImpl) GetPackagesListIncludingDeleted(w http.ResponseWr
 	var err error
 	parentId := r.URL.Query().Get("parentId")
 	versionStatus := r.URL.Query().Get("versionStatus")
-	kind, customErr := getListFromParam(r, "kind")
-	if customErr != nil {
-		utils.RespondWithCustomError(w, customErr)
-		return
-	}
-
 	limit, customError := getLimitQueryParam(r)
 	if customError != nil {
 		utils.RespondWithCustomError(w, customError)
@@ -370,28 +364,11 @@ func (p packageControllerImpl) GetPackagesListIncludingDeleted(w http.ResponseWr
 		}
 	}
 
-	showAllDescendants := false
-	if r.URL.Query().Get("showAllDescendants") != "" {
-		showAllDescendants, err = strconv.ParseBool(r.URL.Query().Get("showAllDescendants"))
-		if err != nil {
-			utils.RespondWithCustomError(w, &exception.CustomError{
-				Status:  http.StatusBadRequest,
-				Code:    exception.IncorrectParamType,
-				Message: exception.IncorrectParamTypeMsg,
-				Params:  map[string]interface{}{"param": "showAllDescendants", "type": "boolean"},
-				Debug:   err.Error(),
-			})
-			return
-		}
-	}
-
 	packageListReq := view.PackageListReq{
-		Kind:               kind,
-		ParentId:           parentId,
-		ShowAllDescendants: showAllDescendants,
-		Status:             versionStatus,
-		Limit:              limit,
-		Offset:             limit * page,
+		ParentId: parentId,
+		Status:   versionStatus,
+		Limit:    limit,
+		Offset:   limit * page,
 	}
 
 	packages, err := p.packageService.GetPackagesListIncludingDeleted(context.Create(r), packageListReq)

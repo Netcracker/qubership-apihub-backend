@@ -437,9 +437,6 @@ func (p packageServiceImpl) GetPackagesListIncludingDeleted(ctx context.Security
 
 	var packages []entity.PackageEntity
 	skipped := 0
-	if len(searchReq.Kind) == 0 {
-		searchReq.Kind = []string{entity.KIND_WORKSPACE}
-	}
 
 	// Get packages list including deleted ones
 	packages, err = p.publishedRepo.GetFilteredPackagesIncludingDeleted(searchReq, ctx.GetUserId())
@@ -482,7 +479,7 @@ func (p packageServiceImpl) GetPackagesListIncludingDeleted(ctx context.Security
 			if searchReq.Status != "" && (searchReq.Status != ver.Status) {
 				continue
 			}
-			
+
 			// Get operation count and api type for each release
 			operationTypes, err := p.operationRepo.GetOperationsTypeCountIncludingDeleted(pkg.Id, ver.Version, ver.Revision)
 			if err != nil {

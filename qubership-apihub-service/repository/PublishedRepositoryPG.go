@@ -2248,7 +2248,7 @@ func (p publishedRepositoryImpl) GetPackageVersionsListIncludingDeleted(searchQu
 	if searchQuery.Status != "" {
 		searchQuery.Status = "%" + utils.LikeEscaped(searchQuery.Status) + "%"
 	}
-	
+
 	query := `
 		select pv.*, get_latest_revision(coalesce(pv.previous_version_package_id,pv.package_id), pv.previous_version) as previous_version_revision,
 				usr.name as prl_usr_name, usr.email as prl_usr_email, usr.avatar_url as prl_usr_avatar_url,
@@ -2269,7 +2269,7 @@ func (p publishedRepositoryImpl) GetPackageVersionsListIncludingDeleted(searchQu
 		and (?status = '' or pv.status ilike ?status)
 		order by pv.published_at desc
 	`
-	
+
 	_, err := p.cp.GetConnection().Model(&searchQuery).
 		Query(&ents, query)
 	if err != nil {
@@ -3104,22 +3104,16 @@ func (p publishedRepositoryImpl) GetFilteredPackagesIncludingDeleted(searchReq v
 		Limit(searchReq.Limit)
 
 	if searchReq.ParentId != "" {
-		if searchReq.ShowAllDescendants {
-			query.Where("package_group.id ilike ?", searchReq.ParentId+".%")
-		} else {
-			query.Where("parent_id = ?", searchReq.ParentId)
-		}
+		query.Where("package_group.id ilike ?", searchReq.ParentId+".%")
 	}
 
-	if len(searchReq.Kind) != 0 {
-		query.Where("kind in (?)", pg.In(searchReq.Kind))
-	}
+	query.Where("kind in (?)", pg.In([]string{entity.KIND_PACKAGE}))
 
 	err := query.Select()
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return result, nil
 }
 
