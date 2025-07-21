@@ -17,6 +17,7 @@ type Config struct {
 	S3Storage            S3Config
 	Editor               EditorConfig
 	Olric                OlricConfig
+	Cleanup              CleanupConfig
 }
 
 type DatabaseConfig struct {
@@ -83,10 +84,10 @@ type ZeroDayConfig struct {
 }
 
 type TechnicalParameters struct {
+	InstanceId            string
 	BasePath              string
 	BackendVersion        string
 	ListenAddress         string `validate:"required"`
-	BuildsCleanupSchedule string
 	MetricsGetterSchedule string
 }
 
@@ -126,6 +127,28 @@ type OlricConfig struct {
 	DiscoveryMode string
 	ReplicaCount  int
 	Namespace     string
+}
+
+type CleanupConfig struct {
+	Revisions RevisionsCleanupConfig
+	Comparisons ComparisonsCleanupConfig
+	Builds BuildsCleanupConfig
+}
+
+type RevisionsCleanupConfig struct {
+	Schedule string
+	DeleteLastRevision bool
+	DeleteReleaseRevisions bool
+	TTLDays int
+}
+
+type ComparisonsCleanupConfig struct {
+	Schedule string
+	TTLDays int
+}
+
+type BuildsCleanupConfig struct {
+	Schedule string
 }
 
 type Base64DecodedString []byte

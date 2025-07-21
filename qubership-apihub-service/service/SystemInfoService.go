@@ -27,6 +27,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
+	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -93,6 +94,13 @@ type SystemInfoService interface {
 	GetAuthConfig() idp.AuthConfig
 	GetOlricConfig() config.OlricConfig
 	GetConfigFolder() string
+	GetInstanceId() string
+	GetRevisionsCleanupSchedule() string
+	GetRevisionsCleanupDeleteLastRevision() bool
+	GetRevisionsCleanupDeleteReleaseRevisions() bool
+	GetRevisionsTTLDays() int
+	GetComparisonCleanupSchedule() string
+	GetComparisonsTTLDays() int
 }
 
 func (g *systemInfoServiceImpl) GetCredsFromEnv() *view.DbCredentials {
@@ -204,7 +212,6 @@ func (g *systemInfoServiceImpl) setDefaults() {
 	viper.SetDefault("security.autoLogin", false)
 	viper.SetDefault("technicalParameters.basePath", ".")
 	viper.SetDefault("technicalParameters.listenAddress", ":8080")
-	viper.SetDefault("technicalParameters.buildsCleanupSchedule", "0 1 * * 0") // at 01:00 AM on Sunday
 	viper.SetDefault("technicalParameters.metricsGetterSchedule", "* * * * *") // every minute
 	viper.SetDefault("businessParameters.publishArchiveSizeLimitMb", 50)
 	viper.SetDefault("businessParameters.publishFileSizeLimitMb", 15)
@@ -218,6 +225,13 @@ func (g *systemInfoServiceImpl) setDefaults() {
 	viper.SetDefault("editor.disabled", true)
 	viper.SetDefault("olric.discoveryMode", "local")
 	viper.SetDefault("olric.replicaCount", 1)
+	viper.SetDefault("cleanup.builds.schedule", "0 1 * * 0") // at 01:00 AM on Sunday
+	viper.SetDefault("cleanup.revisions.schedule", "0 1 * * 6") // at 01:00 AM on Saturday
+	viper.SetDefault("cleanup.revisions.deleteLastRevision", false)
+	viper.SetDefault("cleanup.revisions.deleteReleaseRevisions", false)
+	viper.SetDefault("cleanup.revisions.ttlDays", 365)
+	viper.SetDefault("cleanup.comparisons.schedule", "0 23 * * 0") // at 11:00 PM on Sunday
+	viper.SetDefault("cleanup.comparisons.ttlDays", 30)
 }
 
 func (g *systemInfoServiceImpl) GetConfigFolder() string {
@@ -231,6 +245,7 @@ func (g *systemInfoServiceImpl) GetConfigFolder() string {
 
 func (g *systemInfoServiceImpl) postProcessConfig() {
 	g.setBackendVersion()
+	g.setInstanceId()
 
 	//TODO: do we really need to log errors about empty LDAP params or printing of the full config is enough?
 	if g.config.Security.Ldap.Server == "" {
@@ -261,6 +276,12 @@ func (g *systemInfoServiceImpl) setBackendVersion() {
 	} else {
 		g.config.TechnicalParameters.BackendVersion = gitBranch + "." + gitHash
 	}
+}
+
+func (g *systemInfoServiceImpl) setInstanceId() {
+	instanceId := uuid.New().String()
+	log.Infof("Instance ID: %s", instanceId)
+	g.config.TechnicalParameters.InstanceId = instanceId
 }
 
 func (g *systemInfoServiceImpl) GetBasePath() string {
@@ -368,7 +389,7 @@ func (g *systemInfoServiceImpl) getSystemNotification() string {
 }
 
 func (g *systemInfoServiceImpl) GetBuildsCleanupSchedule() string {
-	return g.config.TechnicalParameters.BuildsCleanupSchedule
+	return g.config.Cleanup.Builds.Schedule
 }
 
 func (s *systemInfoServiceImpl) InsecureProxyEnabled() bool {
@@ -538,4 +559,32 @@ func (g *systemInfoServiceImpl) buildAuthConfig() (idp.AuthConfig, error) {
 	}
 
 	return authConfig, nil
+}
+
+func (g systemInfoServiceImpl) GetRevisionsCleanupSchedule() string {
+	return g.config.Cleanup.Revisions.Schedule
+}
+
+func (g systemInfoServiceImpl) GetRevisionsCleanupDeleteLastRevision() bool {
+	return g.config.Cleanup.Revisions.DeleteLastRevision
+}
+
+func (g systemInfoServiceImpl) GetRevisionsCleanupDeleteReleaseRevisions() bool {
+	return g.config.Cleanup.Revisions.DeleteReleaseRevisions
+}
+
+func (g systemInfoServiceImpl) GetRevisionsTTLDays() int {
+	return g.config.Cleanup.Revisions.TTLDays
+}
+
+func (g systemInfoServiceImpl) GetInstanceId() string {
+	return g.config.TechnicalParameters.InstanceId
+}
+
+func (g systemInfoServiceImpl) GetComparisonCleanupSchedule() string {
+	return g.config.Cleanup.Comparisons.Schedule
+}
+
+func (g systemInfoServiceImpl) GetComparisonsTTLDays() int {
+	return g.config.Cleanup.Comparisons.TTLDays
 }
