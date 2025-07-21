@@ -242,6 +242,8 @@ func main() {
 
 	exportRepository := repository.NewExportRepository(cp)
 
+	systemStatsRepository := repository.NewSystemStatsRepository(cp)
+
 	olricProvider, err := cache.NewOlricProvider()
 	if err != nil {
 		log.Error("Failed to create olricProvider: " + err.Error())
@@ -330,6 +332,7 @@ func main() {
 	personalAccessTokenService := service.NewPersonalAccessTokenService(personalAccessTokenRepository, userService, roleService)
 
 	tokenRevocationService := service.NewTokenRevocationService(olricProvider, systemInfoService.GetRefreshTokenDurationSec())
+	systemStatsService := service.NewSystemStatsService(systemStatsRepository)
 
 	idpManager, err := providers.NewIDPManager(systemInfoService.GetAuthConfig(), systemInfoService.GetAllowedHosts(), systemInfoService.IsProductionMode(), userService)
 	if err != nil {
@@ -384,6 +387,7 @@ func main() {
 	gitHookController := controller.NewGitHookController(gitHookService)
 	personalAccessTokenController := controller.NewPersonalAccessTokenController(personalAccessTokenService)
 	packageExportConfigController := controller.NewPackageExportConfigController(roleService, packageExportConfigService, ptHandler)
+	systemStatsController := controller.NewSystemStatsController(systemStatsService, roleService)
 
 	if !systemInfoService.GetEditorDisabled() {
 		r.HandleFunc("/api/v1/integrations/{integrationId}/apikey", security.Secure(integrationsController.GetUserApiKeyStatus)).Methods(http.MethodGet)
@@ -632,6 +636,8 @@ func main() {
 	r.HandleFunc("/api/v2/admin/transition/move/{id}", security.Secure(transitionController.GetMoveStatus)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/admin/transition/activity", security.Secure(transitionController.ListActivities)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/admin/transition", security.Secure(transitionController.ListPackageTransitions)).Methods(http.MethodGet)
+
+	r.HandleFunc("/api/v2/admin/system/stats", security.Secure(systemStatsController.GetSystemStats)).Methods(http.MethodGet)
 
 	r.HandleFunc("/api/v2/compare", security.Secure(comparisonController.CompareTwoVersions)).Methods(http.MethodPost)
 
