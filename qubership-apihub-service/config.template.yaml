@@ -163,3 +163,23 @@ olric:
   replicaCount: 1
   # Optional; Namespace for Olric discovery. If not set, default value: ""; Example: apihub
   namespace: 'apihub'
+
+# Section with cleanup jobs configuration
+cleanup:
+  revisions:
+    # Optional; Schedule for the revisions cleanup job. If not set, default value: "0 1 * * 6"; Example: "* * * * *"
+    schedule: '0 1 * * 6'
+    # Optional; If set to true, the revisions cleanup job will delete the last revision of the version. Otherwise, such revisions are skipped; If not set, default value: false; Example: true
+    deleteLastRevision: false
+    # Optional; If set to true, the revisions cleanup job will delete revisions with a 'release' status. Otherwise, such revisions are skipped; If not set, default value: false; Example: true
+    deleteReleaseRevisions: false
+    # Optional; Number of days to keep revisions before cleanup; If not set, default value: 365; Example: 180
+    ttlDays: 365
+  comparisons:
+    # Optional; Schedule for the comparisons cleanup job. If not set, default value: "0 23 * * 0"; Example: "* * * * *"
+    schedule: '0 23 * * 0'
+    # Optional; Number of days to keep ad-hoc comparisons before cleanup; If not set, default value: 30; Example: 180
+    ttlDays: 30
+  builds:
+    # Optional; Schedule for the builds cleanup job. If not set, default value: "0 1 * * 0"; Example: "* * * * *"
+    schedule: '0 1 * * 0'
