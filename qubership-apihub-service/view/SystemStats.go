@@ -27,6 +27,8 @@ type BusinessEntitiesCount struct {
 	DeletedGroups      int `json:"deletedGroups"`
 	Packages           int `json:"packages"`
 	DeletedPackages    int `json:"deletedPackages"`
+	Dashboards         int `json:"dashboards"`
+	DeletedDashboards  int `json:"deletedDashboards"`
 	Revisions          int `json:"revisions"`
 	DeletedRevisions   int `json:"deletedRevisions"`
 	Documents          int `json:"documents"`

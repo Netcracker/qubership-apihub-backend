@@ -23,6 +23,8 @@ type PackageGroupCountsEntity struct {
 	DeletedGroups     int `pg:"deleted_groups"`
 	Packages          int `pg:"packages"`
 	DeletedPackages   int `pg:"deleted_packages"`
+	Dashboards        int `pg:"dashboards"`
+	DeletedDashboards int `pg:"deleted_dashboards"`
 }
 
 type RevisionsCountEntity struct {

@@ -121,6 +121,8 @@ func (s *systemStatsServiceImpl) GetSystemStats(ctx context.Context) (*view.Syst
 		DeletedGroups:      packageGroupCounts.DeletedGroups,
 		Packages:           packageGroupCounts.Packages,
 		DeletedPackages:    packageGroupCounts.DeletedPackages,
+		Dashboards:         packageGroupCounts.Dashboards,
+		DeletedDashboards:  packageGroupCounts.DeletedDashboards,
 		Revisions:          revisionsCount.Revisions,
 		DeletedRevisions:   revisionsCount.DeletedRevisions,
 		Documents:          documentsCount,

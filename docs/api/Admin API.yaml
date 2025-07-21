@@ -441,6 +441,12 @@ components:
             deletedPackages:
               type: integer
               description: Number of deleted packages
+            dashboards:
+              type: integer
+              description: Number of dashboards
+            deletedDashboards:
+              type: integer
+              description: Number of deleted dashboards
             revisions:
               type: integer
               description: Number of revisions

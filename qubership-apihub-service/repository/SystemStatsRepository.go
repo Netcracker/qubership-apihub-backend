@@ -50,7 +50,9 @@ func (s *systemStatsRepositoryImpl) GetPackageGroupCounts(ctx context.Context) (
 			COUNT(*) FILTER (WHERE kind = 'group' AND deleted_at IS NULL) AS groups,
 			COUNT(*) FILTER (WHERE kind = 'group' AND deleted_at IS NOT NULL) AS deleted_groups,
 			COUNT(*) FILTER (WHERE kind = 'package' AND deleted_at IS NULL) AS packages,
-			COUNT(*) FILTER (WHERE kind = 'package' AND deleted_at IS NOT NULL) AS deleted_packages
+			COUNT(*) FILTER (WHERE kind = 'package' AND deleted_at IS NOT NULL) AS deleted_packages,
+			COUNT(*) FILTER (WHERE kind = 'dashboard' AND deleted_at IS NULL) AS dashboards,
+			COUNT(*) FILTER (WHERE kind = 'dashboard' AND deleted_at IS NOT NULL) AS deleted_dashboards
 		FROM package_group
 	`
 
