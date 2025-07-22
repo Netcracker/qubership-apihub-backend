@@ -38,6 +38,7 @@ type VersionController interface {
 	GetPackageVersionContent(w http.ResponseWriter, r *http.Request)
 	GetPackageVersionsList_deprecated(w http.ResponseWriter, r *http.Request)
 	GetPackageVersionsList(w http.ResponseWriter, r *http.Request)
+	GetDeletedPackageVersionsList(w http.ResponseWriter, r *http.Request)
 	DeleteVersion(w http.ResponseWriter, r *http.Request)
 	PatchVersion(w http.ResponseWriter, r *http.Request)
 	GetVersionedContentFileRaw(w http.ResponseWriter, r *http.Request)
@@ -578,6 +579,7 @@ func (v versionControllerImpl) GetPackageVersionsList_deprecated(w http.Response
 	}
 	utils.RespondWithJson(w, http.StatusOK, versions)
 }
+
 func (v versionControllerImpl) GetPackageVersionsList(w http.ResponseWriter, r *http.Request) {
 	var err error
 
@@ -660,6 +662,78 @@ func (v versionControllerImpl) GetPackageVersionsList(w http.ResponseWriter, r *
 	versions, err := v.versionService.GetPackageVersionsView(versionListReq)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, v.ptHandler, packageId, "Failed to get package versions", err)
+		return
+	}
+	utils.RespondWithJson(w, http.StatusOK, versions)
+}
+
+func (v versionControllerImpl) GetDeletedPackageVersionsList(w http.ResponseWriter, r *http.Request) {
+	var err error
+
+	packageId := getStringParam(r, "packageId")
+	ctx := context.Create(r)
+	sufficientPrivileges, err := v.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
+	if err != nil {
+		handlePkgRedirectOrRespondWithError(w, r, v.ptHandler, packageId, "Failed to check user privileges", err)
+		return
+	}
+	if !sufficientPrivileges {
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusForbidden,
+			Code:    exception.InsufficientPrivileges,
+			Message: exception.InsufficientPrivilegesMsg,
+		})
+		return
+	}
+	status := r.URL.Query().Get("status")
+
+	limit, customError := getLimitQueryParam(r)
+	if customError != nil {
+		utils.RespondWithCustomError(w, customError)
+		return
+	}
+
+	page := 0
+	if r.URL.Query().Get("page") != "" {
+		page, err = strconv.Atoi(r.URL.Query().Get("page"))
+		if err != nil {
+			utils.RespondWithCustomError(w, &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.IncorrectParamType,
+				Message: exception.IncorrectParamTypeMsg,
+				Params:  map[string]interface{}{"param": "page", "type": "int"},
+				Debug:   err.Error(),
+			})
+			return
+		}
+	}
+
+	checkRevisions := false
+	if r.URL.Query().Get("checkRevisions") != "" {
+		checkRevisions, err = strconv.ParseBool(r.URL.Query().Get("checkRevisions"))
+		if err != nil {
+			utils.RespondWithCustomError(w, &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.IncorrectParamType,
+				Message: exception.IncorrectParamTypeMsg,
+				Params:  map[string]interface{}{"param": "checkRevisions", "type": "boolean"},
+				Debug:   err.Error(),
+			})
+			return
+		}
+	}
+
+	versionListReq := view.VersionListReq{
+		PackageId:      packageId,
+		Status:         status,
+		Limit:          limit,
+		Page:           page,
+		CheckRevisions: checkRevisions,
+	}
+
+	versions, err := v.versionService.GetDeletedPackageVersions(versionListReq)
+	if err != nil {
+		handlePkgRedirectOrRespondWithError(w, r, v.ptHandler, packageId, "Failed to get deleted package versions", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusOK, versions)

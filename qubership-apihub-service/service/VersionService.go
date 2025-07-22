@@ -45,6 +45,7 @@ type VersionService interface {
 	GetPackageVersionContent(packageId string, versionName string, includeSummary bool, includeOperations bool, includeGroups bool) (*view.VersionContent, error)
 	GetPackageVersionsView_deprecated(req view.VersionListReq) (*view.PublishedVersionsView_deprecated_v2, error)
 	GetPackageVersionsView(req view.VersionListReq) (*view.PublishedVersionsView, error)
+	GetDeletedPackageVersions(req view.VersionListReq) (*view.PublishedVersionsView, error)
 	DeleteVersion(ctx context.SecurityContext, packageId string, versionName string) error
 	PatchVersion(ctx context.SecurityContext, packageId string, versionName string, status *string, versionLabels *[]string) (*view.VersionContent, error)
 	GetLatestContentDataBySlug(packageId string, versionName string, slug string) (*view.PublishedContent, *view.ContentData, error)
@@ -738,6 +739,41 @@ func (v versionServiceImpl) GetPackageVersionsView(req view.VersionListReq) (*vi
 	}
 	return &view.PublishedVersionsView{Versions: versions}, nil
 }
+
+func (v versionServiceImpl) GetDeletedPackageVersions(req view.VersionListReq) (*view.PublishedVersionsView, error) {
+	packageEnt, err := v.publishedRepo.GetPackageIncludingDeleted(req.PackageId)
+	if err != nil {
+		return nil, err
+	}
+	if packageEnt == nil {
+		return nil, &exception.CustomError{
+			Status:  http.StatusNotFound,
+			Code:    exception.PackageNotFound,
+			Message: exception.PackageNotFoundMsg,
+			Params:  map[string]interface{}{"packageId": req.PackageId},
+		}
+	}
+	
+	versions := make([]view.PublishedVersionListView, 0)
+	searchQueryReq := entity.PublishedVersionSearchQueryEntity{
+		PackageId:  req.PackageId,
+		Status:     req.Status,
+		Limit:      req.Limit,
+		Offset:     req.Page * req.Limit,
+	}
+	ents, err := v.publishedRepo.GetDeletedPackageVersions(searchQueryReq, req.CheckRevisions)
+	if err != nil {
+		return nil, err
+	}
+	
+	for _, ent := range ents {
+		version := entity.MakeReadonlyPublishedVersionListView2(&ent)
+		versions = append(versions, *version)
+	}
+	
+	return &view.PublishedVersionsView{Versions: versions}, nil
+}
+
 func (v versionServiceImpl) GetPackageVersionContent_deprecated(packageId string, version string, includeSummary bool, includeOperations bool, includeGroups bool) (*view.VersionContent_deprecated, error) {
 	versionEnt, err := v.publishedRepo.GetReadonlyVersion_deprecated(packageId, version)
 	if err != nil {
