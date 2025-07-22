@@ -84,11 +84,13 @@ type PublishedRepository interface {
 	GetAllPackageGroups(name string, onlyFavorite bool, userId string) ([]entity.PackageFavEntity, error)
 	GetParentPackageGroups(id string) ([]entity.PackageEntity, error)
 	GetParentsForPackage(id string) ([]entity.PackageEntity, error)
+	GetParentsForDeletedPackage(id string) ([]entity.PackageEntity, error)
 	UpdatePackage(ent *entity.PackageEntity) (*entity.PackageEntity, error)
 	DeletePackage(id string, userId string) error
 	GetPackageGroupsByName(name string) ([]entity.PackageEntity, error)
 	GetFilteredPackages(filter string, parentId string) ([]entity.PackageEntity, error)
 	GetFilteredPackagesWithOffset(ctx context.Context, searchReq view.PackageListReq, userId string) ([]entity.PackageEntity, error)
+	GetFilteredDeletedPackages(ctx context.Context, searchReq view.PackageListReq, userId string) ([]entity.PackageEntity, error)
 	GetPackageForServiceName(serviceName string) (*entity.PackageEntity, error)
 	GetVersionValidationChanges(packageId string, versionName string, revision int) (*entity.PublishedVersionValidationEntity, error)
 	GetVersionValidationProblems(packageId string, versionName string, revision int) (*entity.PublishedVersionValidationEntity, error)

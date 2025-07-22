@@ -2747,6 +2747,26 @@ func (p publishedRepositoryImpl) GetParentsForPackage(id string) ([]entity.Packa
 	return result, nil
 }
 
+func (p publishedRepositoryImpl) GetParentsForDeletedPackage(id string) ([]entity.PackageEntity, error) {
+	var parentIds []string
+	var result []entity.PackageEntity
+
+	parentIds = utils.GetParentPackageIds(id)
+	if len(parentIds) == 0 {
+		return result, nil
+	}
+
+	err := p.cp.GetConnection().Model(&result).
+		ColumnExpr("package_group.*").
+		Join("JOIN UNNEST(?::text[]) WITH ORDINALITY t(id, ord) USING (id)", pg.Array(parentIds)).
+		Order("t.ord").
+		Select()
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func (p publishedRepositoryImpl) UpdatePackage(ent *entity.PackageEntity) (*entity.PackageEntity, error) {
 	ctx := context.Background()
 
@@ -2976,6 +2996,35 @@ func (p publishedRepositoryImpl) GetFilteredPackagesWithOffset(ctx context.Conte
 	}
 	if len(searchReq.Ids) > 0 {
 		query.Where("id in (?)", pg.In(searchReq.Ids))
+	}
+
+	err := query.Select()
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (p publishedRepositoryImpl) GetFilteredDeletedPackages(ctx context.Context, searchReq view.PackageListReq, userId string) ([]entity.PackageEntity, error) {
+	var result []entity.PackageEntity
+	
+	query := p.cp.GetConnection().ModelContext(ctx, &result).
+		Where("deleted_at is not ?", nil)
+	
+		query.Order("name ASC").
+		Offset(searchReq.Offset).
+		Limit(searchReq.Limit)
+
+	if searchReq.ParentId != "" && searchReq.ParentId != "*" {
+		if searchReq.ShowAllDescendants {
+			query.Where("package_group.id ilike ?", searchReq.ParentId+".%")
+		} else {
+			query.Where("parent_id = ?", searchReq.ParentId)
+		}
+	}
+
+	if len(searchReq.Kind) != 0 {
+		query.Where("kind in (?)", pg.In(searchReq.Kind))
 	}
 
 	err := query.Select()
