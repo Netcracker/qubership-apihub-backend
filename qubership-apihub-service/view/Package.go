@@ -100,6 +100,10 @@ type Packages struct {
 	Packages []PackagesInfo `json:"packages"`
 }
 
+type DeletedPackages struct {
+	Packages []DeletedPackagesInfo `json:"packages"`
+}
+
 type PackagesInfo struct {
 	Id                        string              `json:"packageId"`
 	Alias                     string              `json:"alias"`
@@ -116,6 +120,22 @@ type PackagesInfo struct {
 	LastReleaseVersionDetails *VersionDetails     `json:"lastReleaseVersionDetails,omitempty"`
 	RestGroupingPrefix        string              `json:"restGroupingPrefix,omitempty"`
 	ReleaseVersionPattern     string              `json:"releaseVersionPattern,omitempty"`
+}
+
+type DeletedPackagesInfo struct {
+	Id                    string              `json:"packageId"`
+	Alias                 string              `json:"alias"`
+	ParentId              string              `json:"parentId"`
+	Kind                  string              `json:"kind"`
+	Name                  string              `json:"name"`
+	Description           string              `json:"description,omitempty"`
+	ServiceName           string              `json:"serviceName,omitempty"`
+	Parents               []ParentPackageInfo `json:"parents,omitempty"`
+	DefaultRole           string              `json:"defaultRole,omitempty"`
+	RestGroupingPrefix    string              `json:"restGroupingPrefix,omitempty"`
+	ReleaseVersionPattern string              `json:"releaseVersionPattern,omitempty"`
+	CreatedAt             time.Time           `json:"createdAt,omitempty"`
+	DeletedAt             time.Time           `json:"deletedAt,omitempty"`
 }
 
 type ParentPackageInfo struct {
