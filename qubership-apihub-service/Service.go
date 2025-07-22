@@ -677,6 +677,8 @@ func main() {
 	r.HandleFunc("/api/v1/export", security.Secure(exportController.StartAsyncExport)).Methods(http.MethodPost)
 	r.HandleFunc("/api/v1/export/{exportId}/status", security.Secure(exportController.GetAsyncExportStatus)).Methods(http.MethodGet)
 
+	r.HandleFunc("/api/v1/deleted/packages", security.Secure(packageController.GetDeletedPackagesList)).Methods(http.MethodGet)
+
 	//debug + cleanup
 	if !systemInfoService.GetSystemInfo().ProductionMode {
 		if !systemInfoService.GetEditorDisabled() {

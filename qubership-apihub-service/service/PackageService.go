@@ -35,6 +35,7 @@ type PackageService interface {
 	CreatePackage(ctx context.SecurityContext, packg view.SimplePackage) (*view.SimplePackage, error)
 	GetPackage(ctx context.SecurityContext, id string, withParents bool) (*view.SimplePackage, error)
 	GetPackagesList(ctx context.SecurityContext, req view.PackageListReq) (*view.Packages, error)
+	GetDeletedPackagesList(ctx context.SecurityContext, req view.PackageListReq) (*view.DeletedPackages, error)
 	UpdatePackage(ctx context.SecurityContext, packg *view.PatchPackageReq, packageId string) (*view.SimplePackage, error)
 	DeletePackage(ctx context.SecurityContext, id string) error
 	FavorPackage(ctx context.SecurityContext, id string) error
@@ -428,6 +429,56 @@ func (p packageServiceImpl) GetPackagesList(ctx context.SecurityContext, searchR
 	return &view.Packages{Packages: result}, nil
 }
 
+func (p packageServiceImpl) GetDeletedPackagesList(ctx context.SecurityContext, searchReq view.PackageListReq) (*view.DeletedPackages, error) {
+	var err error
+	result := make([]view.DeletedPackagesInfo, 0)
+	var entities []entity.PackageEntity
+	skipped := 0
+	if len(searchReq.Kind) == 0 {
+		searchReq.Kind = []string{entity.KIND_WORKSPACE}
+	}
+	entities, err = p.publishedRepo.GetFilteredDeletedPackages(stdctx.Background(), searchReq, ctx.GetUserId())
+	if err != nil {
+		return nil, err
+	}
+	if err != nil {
+		log.Error("Failed to get deleted packages: ", err.Error())
+		return nil, err
+	}
+	for _, ent := range entities {
+		var parents []view.ParentPackageInfo = nil
+		if searchReq.ShowParents {
+			parents, err = p.getParentsForDeletedPackage(ent.Id)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		permissions, err := p.roleService.GetPermissionsForPackage(ctx, ent.Id)
+		if err != nil {
+			return nil, err
+		}
+		if !utils.SliceContains(permissions, string(view.ReadPermission)) {
+			skipped++
+			continue
+		}
+
+		packagesInfo := entity.MakeDeletedPackagesInfo(&ent, parents, permissions)
+		result = append(result, *packagesInfo)
+	}
+	if skipped != 0 {
+		searchReq.Offset = searchReq.Offset + searchReq.Limit
+		searchReq.Limit = skipped
+		extraPackages, err := p.GetDeletedPackagesList(ctx, searchReq)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, extraPackages.Packages...)
+	}
+
+	return &view.DeletedPackages{Packages: result}, nil
+}
+
 func (p packageServiceImpl) UpdatePackage(ctx context.SecurityContext, packg *view.PatchPackageReq, packageId string) (*view.SimplePackage, error) {
 	existingEnt, err := p.publishedRepo.GetPackage(packageId)
 	if err != nil {
@@ -750,6 +801,18 @@ func (p packageServiceImpl) GetPackageStatus(id string) (*view.Status, error) {
 
 func (p packageServiceImpl) getParents(packageId string) ([]view.ParentPackageInfo, error) {
 	parents, err := p.publishedRepo.GetParentsForPackage(packageId)
+	if err != nil {
+		return nil, err
+	}
+	var result []view.ParentPackageInfo
+	for _, grp := range parents {
+		result = append(result, *entity.MakePackageParentView(&grp))
+	}
+	return result, err
+}
+
+func (p packageServiceImpl) getParentsForDeletedPackage(packageId string) ([]view.ParentPackageInfo, error) {
+	parents, err := p.publishedRepo.GetParentsForDeletedPackage(packageId)
 	if err != nil {
 		return nil, err
 	}
