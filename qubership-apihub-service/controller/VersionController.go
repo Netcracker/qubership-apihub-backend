@@ -709,27 +709,11 @@ func (v versionControllerImpl) GetDeletedPackageVersionsList(w http.ResponseWrit
 		}
 	}
 
-	checkRevisions := false
-	if r.URL.Query().Get("checkRevisions") != "" {
-		checkRevisions, err = strconv.ParseBool(r.URL.Query().Get("checkRevisions"))
-		if err != nil {
-			utils.RespondWithCustomError(w, &exception.CustomError{
-				Status:  http.StatusBadRequest,
-				Code:    exception.IncorrectParamType,
-				Message: exception.IncorrectParamTypeMsg,
-				Params:  map[string]interface{}{"param": "checkRevisions", "type": "boolean"},
-				Debug:   err.Error(),
-			})
-			return
-		}
-	}
-
 	versionListReq := view.VersionListReq{
 		PackageId:      packageId,
 		Status:         status,
 		Limit:          limit,
 		Page:           page,
-		CheckRevisions: checkRevisions,
 	}
 
 	versions, err := v.versionService.GetDeletedPackageVersions(versionListReq)

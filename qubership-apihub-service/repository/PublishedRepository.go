@@ -62,7 +62,7 @@ type PublishedRepository interface {
 	GetPackageVersionsWithLimit(searchQuery entity.PublishedVersionSearchQueryEntity, checkRevisions bool) ([]entity.PublishedVersionEntity, error)
 	GetReadonlyPackageVersionsWithLimit_deprecated(searchQuery entity.PublishedVersionSearchQueryEntity, checkRevisions bool) ([]entity.ReadonlyPublishedVersionEntity_deprecated, error)
 	GetReadonlyPackageVersionsWithLimit(searchQuery entity.PublishedVersionSearchQueryEntity, checkRevisions bool) ([]entity.PackageVersionRevisionEntity, error)
-	GetDeletedPackageVersions(searchQuery entity.PublishedVersionSearchQueryEntity, checkRevisions bool) ([]entity.PackageVersionRevisionEntity, error)
+	GetDeletedPackageVersions(searchQuery entity.PublishedVersionSearchQueryEntity) ([]entity.PackageVersionRevisionEntity, error)
 	GetLastVersions(ids []string) ([]entity.PublishedVersionEntity, error)
 	GetLastVersion(id string) (*entity.PublishedVersionEntity, error)
 	GetDefaultVersion(packageId string, status string) (*entity.PublishedVersionEntity, error)

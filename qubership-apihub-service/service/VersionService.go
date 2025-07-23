@@ -762,7 +762,7 @@ func (v versionServiceImpl) GetDeletedPackageVersions(req view.VersionListReq) (
 		Limit:      req.Limit,
 		Offset:     req.Page * req.Limit,
 	}
-	ents, err := v.publishedRepo.GetDeletedPackageVersions(searchQueryReq, req.CheckRevisions)
+	ents, err := v.publishedRepo.GetDeletedPackageVersions(searchQueryReq)
 	if err != nil {
 		return nil, err
 	}
