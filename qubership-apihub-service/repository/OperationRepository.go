@@ -38,6 +38,7 @@ type OperationRepository interface {
 	SearchForOperations_deprecated(searchQuery *entity.OperationSearchQuery) ([]entity.OperationSearchResult_deprecated, error)
 	SearchForOperations(searchQuery *entity.OperationSearchQuery) ([]entity.OperationSearchResult, error)
 	GetOperationsTypeCount(packageId string, version string, revision int) ([]entity.OperationsTypeCountEntity, error)
+	GetDeletedPackageOperationsTypeCount(packageId string, version string, revision int) ([]entity.OperationsTypeCountEntity, error)
 	GetOperationsTypeDataHashes(packageId string, version string, revision int) ([]entity.OperationsTypeDataHashEntity, error)
 	GetOperationDeprecatedItems(packageId string, version string, revision int, operationType string, operationId string) (*entity.OperationRichEntity, error)
 	GetDeprecatedOperationsSummary(packageId string, version string, revision int) ([]entity.DeprecatedOperationsSummaryEntity, error)
@@ -1200,6 +1201,89 @@ func (o operationRepositoryImpl) GetOperationsTypeCount(packageId string, versio
 		and pv.version = s.reference_version
 		and pv.revision = s.reference_revision
 		and pv.deleted_at is null
+        where s.package_id = ?
+        and s.version = ?
+        and s.revision = ?
+        and s.excluded = false
+        union
+        select ? as package_id, ? as version, ? as revision
+    ),
+    depr_count as (
+		select type, count(operation_id) cnt from operation o, versions v
+		where deprecated = true
+		and o.package_id = v.package_id
+		and o.version = v.version
+		and o.revision = v.revision
+		group by type
+	),
+	op_count as (
+		select type, count(operation_id) cnt from operation o, versions v
+		where o.package_id = v.package_id
+		and o.version = v.version
+		and o.revision = v.revision
+		group by type
+	),
+	no_bwc_count as (
+		select type, count(operation_id) cnt from operation o, versions v
+		where o.package_id = v.package_id
+		and o.version = v.version
+		and o.revision = v.revision
+		and o.kind = ?
+		group by type
+	),
+	audience_count as (
+		select type, api_audience, count(operation_id) cnt from operation o, versions v
+		where o.package_id = v.package_id
+		and o.version = v.version
+		and o.revision = v.revision
+		group by type, api_audience
+	)
+	select oc.type as type,
+	coalesce(oc.cnt, 0) as operations_count,
+	coalesce(dc.cnt, 0) as deprecated_count,
+	coalesce(nbc.cnt, 0) as no_bwc_count,
+	coalesce(ioc.cnt, 0) as internal_count,
+	coalesce(uoc.cnt, 0) as unknown_count
+	from op_count oc
+	full outer join depr_count dc
+	on oc.type = dc.type
+	full outer join no_bwc_count nbc
+	on oc.type = nbc.type
+	full outer join audience_count ioc
+	on oc.type = ioc.type
+	and ioc.api_audience = ?
+	full outer join audience_count uoc
+	on oc.type = uoc.type
+	and uoc.api_audience = ?;
+	`
+	_, err := o.cp.GetConnection().Query(&result,
+		operationsTypeCountQuery,
+		packageId, version, revision,
+		packageId, version, revision,
+		view.NoBwcApiKind,
+		view.ApiAudienceInternal,
+		view.ApiAudienceUnknown)
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func (o operationRepositoryImpl) GetDeletedPackageOperationsTypeCount(packageId string, version string, revision int) ([]entity.OperationsTypeCountEntity, error) {
+	var result []entity.OperationsTypeCountEntity
+	operationsTypeCountQuery := `
+	with versions as(
+        select s.reference_id as package_id, s.reference_version as version, s.reference_revision as revision
+        from published_version_reference s
+		inner join published_version pv
+		on pv.package_id = s.reference_id
+		and pv.version = s.reference_version
+		and pv.revision = s.reference_revision
+		and pv.deleted_at is not null
         where s.package_id = ?
         and s.version = ?
         and s.revision = ?

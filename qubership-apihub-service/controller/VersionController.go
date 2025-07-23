@@ -36,6 +36,7 @@ import (
 type VersionController interface {
 	GetPackageVersionContent_deprecated(w http.ResponseWriter, r *http.Request)
 	GetPackageVersionContent(w http.ResponseWriter, r *http.Request)
+	GetDeletedPackageVersionContent(w http.ResponseWriter, r *http.Request)
 	GetPackageVersionsList_deprecated(w http.ResponseWriter, r *http.Request)
 	GetPackageVersionsList(w http.ResponseWriter, r *http.Request)
 	GetDeletedPackageVersionsList(w http.ResponseWriter, r *http.Request)
@@ -903,6 +904,48 @@ func (v versionControllerImpl) GetPackageVersionContent(w http.ResponseWriter, r
 	content, err := v.versionService.GetPackageVersionContent(packageId, version, includeSummary, includeOperations, includeGroups)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, v.ptHandler, packageId, "Failed to get package version content", err)
+		return
+	}
+
+	utils.RespondWithJson(w, http.StatusOK, content)
+}
+
+func (v versionControllerImpl) GetDeletedPackageVersionContent(w http.ResponseWriter, r *http.Request) {
+	var err error
+	packageId := getStringParam(r, "packageId")
+	ctx := context.Create(r)
+	sufficientPrivileges, err := v.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
+	if err != nil {
+		handlePkgRedirectOrRespondWithError(w, r, v.ptHandler, packageId, "Failed to check user privileges", err)
+		return
+	}
+	if !sufficientPrivileges {
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusForbidden,
+			Code:    exception.InsufficientPrivileges,
+			Message: exception.InsufficientPrivilegesMsg,
+		})
+		return
+	}
+
+	version, err := getUnescapedStringParam(r, "version")
+	if err != nil {
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidURLEscape,
+			Message: exception.InvalidURLEscapeMsg,
+			Params:  map[string]interface{}{"param": "version"},
+			Debug:   err.Error(),
+		})
+		return
+	}
+
+	// Is this necessary?
+	// v.monitoringService.AddVersionOpenCount(packageId, version)
+
+	content, err := v.versionService.GetDeletedPackageVersionContent(packageId, version)
+	if err != nil {
+		handlePkgRedirectOrRespondWithError(w, r, v.ptHandler, packageId, "Failed to get deleted package version content", err)
 		return
 	}
 
