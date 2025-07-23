@@ -28,6 +28,7 @@ type PublishedRepository interface {
 	GetVersion(packageId string, versionName string) (*entity.PublishedVersionEntity, error)
 	GetReadonlyVersion_deprecated(packageId string, versionName string) (*entity.ReadonlyPublishedVersionEntity_deprecated, error)
 	GetReadonlyVersion(packageId string, versionName string) (*entity.PackageVersionRevisionEntity, error)
+	GetDeletedPackageVersion(packageId string, versionName string) (*entity.PackageVersionRevisionEntity, error)
 	GetVersionByRevision(packageId string, versionName string, revision int) (*entity.PublishedVersionEntity, error)
 	GetVersionIncludingDeleted(packageId string, versionName string) (*entity.PublishedVersionEntity, error)
 	IsPublished(packageId string, branchName string) (bool, error)
@@ -107,6 +108,7 @@ type PublishedRepository interface {
 	DeleteVersionComparison(ctx context.Context, comparisonId string) (bool, error)
 	SaveVersionChanges(packageInfo view.PackageInfoFile, publishId string, operationComparisons []*entity.OperationComparisonEntity, versionComparisons []*entity.VersionComparisonEntity, versionComparisonsFromCache []string) error
 	GetLatestRevision(packageId, version string) (int, error)
+	GetDeletedPackageLatestRevision(packageId, version string) (int, error)
 
 	GetVersionRevisionContentForDocumentsTransformation(packageId string, version string, revision int,
 		searchQuery entity.ContentForDocumentsTransformationSearchQueryEntity) ([]entity.PublishedContentWithDataEntity, error)
