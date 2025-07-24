@@ -81,8 +81,7 @@ func (j jwtValidatorImpl) parseAndValidate(token string) (claims.Standard, auth.
 		return claims.Standard{}, nil, err
 	}
 
-	id := string([]byte(info.GetID()))
-	if j.IsTokenRevoked(id, time.Time(*c.IssuedAt).Unix()) {
+	if j.IsTokenRevoked(info.GetID(), time.Time(*c.IssuedAt).Unix()) {
 		return claims.Standard{}, nil, fmt.Errorf("token is revoked")
 	}
 
