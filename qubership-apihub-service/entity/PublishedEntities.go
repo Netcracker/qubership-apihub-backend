@@ -734,6 +734,7 @@ func MakePackagesInfo(entity *PackageEntity, defaultVersionDetails *view.Version
 		LastReleaseVersionDetails: defaultVersionDetails,
 		RestGroupingPrefix:        entity.RestGroupingPrefix,
 		ReleaseVersionPattern:     entity.ReleaseVersionPattern,
+		CreatedAt:                 entity.CreatedAt,
 	}
 
 	return &packageInfo

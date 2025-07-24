@@ -923,6 +923,7 @@ func (v versionServiceImpl) GetDeletedPackageVersionContent(packageId string, ve
 		PackageId:                versionEnt.PackageId,
 		Version:                  view.MakeVersionRefKey(versionEnt.Version, versionEnt.Revision),
 		RevisionsCount:           latestRevision,
+		ApiProcessorVersion:      versionEnt.Metadata.GetBuilderVersion(),
 	}
 
 	versionOperationTypes, err := v.getDeletedPackageVersionOperationTypes(versionEnt)
