@@ -329,6 +329,17 @@ func (p packageControllerImpl) GetPackagesList(w http.ResponseWriter, r *http.Re
 }
 
 func (p packageControllerImpl) GetDeletedPackagesList(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Create(r)
+	sufficientPrivileges := p.roleService.IsSysadm(ctx)
+	if !sufficientPrivileges {
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusForbidden,
+			Code:    exception.InsufficientPrivileges,
+			Message: exception.InsufficientPrivilegesMsg,
+		})
+		return
+	}
+	
 	var err error
 	parentId := r.URL.Query().Get("parentId")
 	kind, customErr := getListFromParam(r, "kind")

@@ -669,16 +669,25 @@ func (v versionControllerImpl) GetPackageVersionsList(w http.ResponseWriter, r *
 }
 
 func (v versionControllerImpl) GetDeletedPackageVersionsList(w http.ResponseWriter, r *http.Request) {
-	var err error
-
-	packageId := getStringParam(r, "packageId")
 	ctx := context.Create(r)
-	sufficientPrivileges, err := v.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
+	sufficientPrivileges := v.roleService.IsSysadm(ctx)
+	if !sufficientPrivileges {
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusForbidden,
+			Code:    exception.InsufficientPrivileges,
+			Message: exception.InsufficientPrivilegesMsg,
+		})
+		return
+	}
+	
+	var err error
+	packageId := getStringParam(r, "packageId")
+	sufficientPackagePrivileges, err := v.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, v.ptHandler, packageId, "Failed to check user privileges", err)
 		return
 	}
-	if !sufficientPrivileges {
+	if !sufficientPackagePrivileges {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
@@ -895,15 +904,25 @@ func (v versionControllerImpl) GetPackageVersionContent(w http.ResponseWriter, r
 }
 
 func (v versionControllerImpl) GetDeletedPackageVersionContent(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Create(r)
+	sufficientPrivileges := v.roleService.IsSysadm(ctx)
+	if !sufficientPrivileges {
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusForbidden,
+			Code:    exception.InsufficientPrivileges,
+			Message: exception.InsufficientPrivilegesMsg,
+		})
+		return
+	}
+	
 	var err error
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
-	sufficientPrivileges, err := v.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
+	sufficientPackagePrivileges, err := v.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, v.ptHandler, packageId, "Failed to check user privileges", err)
 		return
 	}
-	if !sufficientPrivileges {
+	if !sufficientPackagePrivileges {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
