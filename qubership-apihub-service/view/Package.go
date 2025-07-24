@@ -144,7 +144,7 @@ type ParentPackageInfo struct {
 	ParentId          string `json:"parentId"`
 	Kind              string `json:"kind"`
 	Name              string `json:"name"`
-	ImageUrl          string `json:"imageUrl"`
+	ImageUrl          string `json:"imageUrl,omitempty"`
 	HasReadPermission *bool  `json:"hasReadPermission,omitempty"`
 }
 

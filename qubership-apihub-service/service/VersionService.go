@@ -754,24 +754,24 @@ func (v versionServiceImpl) GetDeletedPackageVersions(req view.VersionListReq) (
 			Params:  map[string]interface{}{"packageId": req.PackageId},
 		}
 	}
-	
+
 	versions := make([]view.PublishedVersionListView, 0)
 	searchQueryReq := entity.PublishedVersionSearchQueryEntity{
-		PackageId:  req.PackageId,
-		Status:     req.Status,
-		Limit:      req.Limit,
-		Offset:     req.Page * req.Limit,
+		PackageId: req.PackageId,
+		Status:    req.Status,
+		Limit:     req.Limit,
+		Offset:    req.Page * req.Limit,
 	}
 	ents, err := v.publishedRepo.GetDeletedPackageVersions(searchQueryReq)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	for _, ent := range ents {
 		version := entity.MakeReadonlyPublishedVersionListView2(&ent)
 		versions = append(versions, *version)
 	}
-	
+
 	return &view.PublishedVersionsView{Versions: versions}, nil
 }
 
@@ -923,14 +923,13 @@ func (v versionServiceImpl) GetDeletedPackageVersionContent(packageId string, ve
 		PackageId:                versionEnt.PackageId,
 		Version:                  view.MakeVersionRefKey(versionEnt.Version, versionEnt.Revision),
 		RevisionsCount:           latestRevision,
-		ApiProcessorVersion:      versionEnt.Metadata.GetBuilderVersion(),
 	}
 
 	versionOperationTypes, err := v.getDeletedPackageVersionOperationTypes(versionEnt)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	versionContent.OperationTypes = versionOperationTypes
 
 	return versionContent, nil
@@ -1271,12 +1270,12 @@ func (v versionServiceImpl) getVersionOperationTypes(versionEnt *entity.PackageV
 func (v versionServiceImpl) getDeletedPackageVersionOperationTypes(versionEnt *entity.PackageVersionRevisionEntity) ([]view.VersionOperationType, error) {
 	zeroInt := 0
 	versionSummaryMap := make(map[string]*view.VersionOperationType, 0)
-	
+
 	operationsCountEnts, err := v.operationRepo.GetDeletedPackageOperationsTypeCount(versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	for _, opCount := range operationsCountEnts {
 		apiType, _ := view.ParseApiType(opCount.ApiType)
 		if apiType == "" {
@@ -1335,8 +1334,8 @@ func (v versionServiceImpl) getDeletedPackageVersionOperationTypes(versionEnt *e
 
 					} else {
 						versionSummaryMap[ot.ApiType] = &view.VersionOperationType{
-							ApiType:                    ot.ApiType,
-							ChangesSummary:             &changeSummary,
+							ApiType:                         ot.ApiType,
+							ChangesSummary:                  &changeSummary,
 							OperationsCount:                 &zeroInt,
 							DeprecatedCount:                 &zeroInt,
 							NoBwcOperationsCount:            &zeroInt,
@@ -1370,8 +1369,8 @@ func (v versionServiceImpl) getDeletedPackageVersionOperationTypes(versionEnt *e
 								}
 							} else {
 								versionSummaryMap[ot.ApiType] = &view.VersionOperationType{
-									ApiType:                    ot.ApiType,
-									ChangesSummary:             &changeSummary,
+									ApiType:                         ot.ApiType,
+									ChangesSummary:                  &changeSummary,
 									OperationsCount:                 &zeroInt,
 									DeprecatedCount:                 &zeroInt,
 									NoBwcOperationsCount:            &zeroInt,
