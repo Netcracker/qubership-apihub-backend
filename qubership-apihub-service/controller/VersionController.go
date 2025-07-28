@@ -660,7 +660,7 @@ func (v versionControllerImpl) GetPackageVersionsList(w http.ResponseWriter, r *
 		SortOrder:      sortOrder,
 	}
 
-	versions, err := v.versionService.GetPackageVersionsView(versionListReq)
+	versions, err := v.versionService.GetPackageVersionsView(versionListReq, false)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, v.ptHandler, packageId, "Failed to get package versions", err)
 		return
@@ -725,7 +725,7 @@ func (v versionControllerImpl) GetDeletedPackageVersionsList(w http.ResponseWrit
 		Page:           page,
 	}
 
-	versions, err := v.versionService.GetDeletedPackageVersions(versionListReq)
+	versions, err := v.versionService.GetPackageVersionsView(versionListReq, true)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, v.ptHandler, packageId, "Failed to get deleted package versions", err)
 		return

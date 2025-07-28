@@ -45,8 +45,8 @@ type VersionService interface {
 	GetPackageVersionContent(packageId string, versionName string, includeSummary bool, includeOperations bool, includeGroups bool) (*view.VersionContent, error)
 	GetDeletedPackageVersionContent(packageId string, versionName string) (*view.VersionContent, error)
 	GetPackageVersionsView_deprecated(req view.VersionListReq) (*view.PublishedVersionsView_deprecated_v2, error)
-	GetPackageVersionsView(req view.VersionListReq) (*view.PublishedVersionsView, error)
-	GetDeletedPackageVersions(req view.VersionListReq) (*view.PublishedVersionsView, error)
+	GetPackageVersionsView(req view.VersionListReq, showOnlyDeleted bool) (*view.PublishedVersionsView, error)
+	// GetDeletedPackageVersions(req view.VersionListReq) (*view.PublishedVersionsView, error)
 	DeleteVersion(ctx context.SecurityContext, packageId string, versionName string) error
 	PatchVersion(ctx context.SecurityContext, packageId string, versionName string, status *string, versionLabels *[]string) (*view.VersionContent, error)
 	GetLatestContentDataBySlug(packageId string, versionName string, slug string) (*view.PublishedContent, *view.ContentData, error)
@@ -459,7 +459,7 @@ func (v versionServiceImpl) GetVersionReferencesV3(packageId string, versionName
 }
 
 func (v versionServiceImpl) getParents(packageId string) ([]view.ParentPackageInfo, error) {
-	parents, err := v.publishedRepo.GetParentsForPackage(packageId)
+	parents, err := v.publishedRepo.GetParentsForPackage(packageId, false)
 	if err != nil {
 		return nil, err
 	}
@@ -687,8 +687,14 @@ func (v versionServiceImpl) GetPackageVersionsView_deprecated(req view.VersionLi
 	return &view.PublishedVersionsView_deprecated_v2{Versions: versions}, nil
 }
 
-func (v versionServiceImpl) GetPackageVersionsView(req view.VersionListReq) (*view.PublishedVersionsView, error) {
-	packageEnt, err := v.publishedRepo.GetPackage(req.PackageId)
+func (v versionServiceImpl) GetPackageVersionsView(req view.VersionListReq, showOnlyDeleted bool) (*view.PublishedVersionsView, error) {
+	var packageEnt *entity.PackageEntity
+	var err error
+	if showOnlyDeleted {
+		packageEnt, err = v.publishedRepo.GetPackageIncludingDeleted(req.PackageId)
+	} else {
+		packageEnt, err = v.publishedRepo.GetPackage(req.PackageId)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -700,6 +706,7 @@ func (v versionServiceImpl) GetPackageVersionsView(req view.VersionListReq) (*vi
 			Params:  map[string]interface{}{"packageId": req.PackageId},
 		}
 	}
+	
 	versions := make([]view.PublishedVersionListView, 0)
 	versionSortByPG := entity.GetVersionSortByPG(req.SortBy)
 	if versionSortByPG == "" {
@@ -730,7 +737,7 @@ func (v versionServiceImpl) GetPackageVersionsView(req view.VersionListReq) (*vi
 		Limit:      req.Limit,
 		Offset:     req.Page * req.Limit,
 	}
-	ents, err := v.publishedRepo.GetReadonlyPackageVersionsWithLimit(searchQueryReq, req.CheckRevisions)
+	ents, err := v.publishedRepo.GetReadonlyPackageVersionsWithLimit(searchQueryReq, req.CheckRevisions, showOnlyDeleted)
 	if err != nil {
 		return nil, err
 	}
@@ -741,39 +748,39 @@ func (v versionServiceImpl) GetPackageVersionsView(req view.VersionListReq) (*vi
 	return &view.PublishedVersionsView{Versions: versions}, nil
 }
 
-func (v versionServiceImpl) GetDeletedPackageVersions(req view.VersionListReq) (*view.PublishedVersionsView, error) {
-	packageEnt, err := v.publishedRepo.GetPackageIncludingDeleted(req.PackageId)
-	if err != nil {
-		return nil, err
-	}
-	if packageEnt == nil {
-		return nil, &exception.CustomError{
-			Status:  http.StatusNotFound,
-			Code:    exception.PackageNotFound,
-			Message: exception.PackageNotFoundMsg,
-			Params:  map[string]interface{}{"packageId": req.PackageId},
-		}
-	}
+// func (v versionServiceImpl) GetDeletedPackageVersions(req view.VersionListReq) (*view.PublishedVersionsView, error) {
+// 	packageEnt, err := v.publishedRepo.GetPackageIncludingDeleted(req.PackageId)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	if packageEnt == nil {
+// 		return nil, &exception.CustomError{
+// 			Status:  http.StatusNotFound,
+// 			Code:    exception.PackageNotFound,
+// 			Message: exception.PackageNotFoundMsg,
+// 			Params:  map[string]interface{}{"packageId": req.PackageId},
+// 		}
+// 	}
 
-	versions := make([]view.PublishedVersionListView, 0)
-	searchQueryReq := entity.PublishedVersionSearchQueryEntity{
-		PackageId: req.PackageId,
-		Status:    req.Status,
-		Limit:     req.Limit,
-		Offset:    req.Page * req.Limit,
-	}
-	ents, err := v.publishedRepo.GetDeletedPackageVersions(searchQueryReq)
-	if err != nil {
-		return nil, err
-	}
+// 	versions := make([]view.PublishedVersionListView, 0)
+// 	searchQueryReq := entity.PublishedVersionSearchQueryEntity{
+// 		PackageId: req.PackageId,
+// 		Status:    req.Status,
+// 		Limit:     req.Limit,
+// 		Offset:    req.Page * req.Limit,
+// 	}
+// 	ents, err := v.publishedRepo.GetDeletedPackageVersions(searchQueryReq)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	for _, ent := range ents {
-		version := entity.MakeReadonlyPublishedVersionListView2(&ent)
-		versions = append(versions, *version)
-	}
+// 	for _, ent := range ents {
+// 		version := entity.MakeReadonlyPublishedVersionListView2(&ent)
+// 		versions = append(versions, *version)
+// 	}
 
-	return &view.PublishedVersionsView{Versions: versions}, nil
-}
+// 	return &view.PublishedVersionsView{Versions: versions}, nil
+// }
 
 func (v versionServiceImpl) GetPackageVersionContent_deprecated(packageId string, version string, includeSummary bool, includeOperations bool, includeGroups bool) (*view.VersionContent_deprecated, error) {
 	versionEnt, err := v.publishedRepo.GetReadonlyVersion_deprecated(packageId, version)
