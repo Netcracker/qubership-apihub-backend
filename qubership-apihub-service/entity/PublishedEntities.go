@@ -710,7 +710,7 @@ func MakeSimplePackageView(entity *PackageEntity, parents []view.ParentPackageIn
 	}
 }
 
-func MakePackagesInfo(entity *PackageEntity, defaultVersionDetails *view.VersionDetails, parents []view.ParentPackageInfo, isFavorite bool, userPermissions []string) *view.PackagesInfo {
+func MakePackagesInfo(entity *PackageEntity, defaultVersionDetails *view.VersionDetails, parents []view.ParentPackageInfo, isFavorite bool, userPermissions []string, showOnlyDeleted bool) *view.PackagesInfo {
 	var parentsRes []view.ParentPackageInfo
 	if parents == nil {
 		parentsRes = make([]view.ParentPackageInfo, 0)
@@ -719,53 +719,58 @@ func MakePackagesInfo(entity *PackageEntity, defaultVersionDetails *view.Version
 	}
 
 	packageInfo := view.PackagesInfo{
-		Id:                        entity.Id,
-		ParentId:                  entity.ParentId,
-		Name:                      entity.Name,
-		Alias:                     entity.Alias,
-		ImageUrl:                  entity.ImageUrl,
-		Parents:                   parentsRes,
-		IsFavorite:                isFavorite,
-		ServiceName:               entity.ServiceName,
-		Description:               entity.Description,
-		Kind:                      entity.Kind,
-		DefaultRole:               entity.DefaultRole,
-		UserPermissions:           userPermissions,
-		LastReleaseVersionDetails: defaultVersionDetails,
-		RestGroupingPrefix:        entity.RestGroupingPrefix,
-		ReleaseVersionPattern:     entity.ReleaseVersionPattern,
-		CreatedAt:                 entity.CreatedAt,
-	}
-
-	return &packageInfo
-}
-
-func MakeDeletedPackagesInfo(entity *PackageEntity, parents []view.ParentPackageInfo, userPermissions []string) *view.DeletedPackagesInfo {
-	var parentsRes []view.ParentPackageInfo
-	if parents == nil {
-		parentsRes = make([]view.ParentPackageInfo, 0)
-	} else {
-		parentsRes = parents
-	}
-
-	packageInfo := view.DeletedPackagesInfo{
 		Id:                    entity.Id,
-		Alias:                 entity.Alias,
 		ParentId:              entity.ParentId,
-		Kind:                  entity.Kind,
 		Name:                  entity.Name,
-		Description:           entity.Description,
-		ServiceName:           entity.ServiceName,
+		Alias:                 entity.Alias,
 		Parents:               parentsRes,
+		ServiceName:           entity.ServiceName,
+		Description:           entity.Description,
+		Kind:                  entity.Kind,
 		DefaultRole:           entity.DefaultRole,
-		ReleaseVersionPattern: entity.ReleaseVersionPattern,
 		RestGroupingPrefix:    entity.RestGroupingPrefix,
+		ReleaseVersionPattern: entity.ReleaseVersionPattern,
 		CreatedAt:             entity.CreatedAt,
-		DeletedAt:             *entity.DeletedAt,
+	}
+
+	if !showOnlyDeleted {
+		packageInfo.ImageUrl = entity.ImageUrl
+		packageInfo.IsFavorite = isFavorite
+		packageInfo.UserPermissions = userPermissions
+		packageInfo.LastReleaseVersionDetails = defaultVersionDetails
+	} else {
+		packageInfo.DeletedAt = *entity.DeletedAt
 	}
 
 	return &packageInfo
 }
+
+// func MakeDeletedPackagesInfo(entity *PackageEntity, parents []view.ParentPackageInfo, userPermissions []string) *view.DeletedPackagesInfo {
+// 	var parentsRes []view.ParentPackageInfo
+// 	if parents == nil {
+// 		parentsRes = make([]view.ParentPackageInfo, 0)
+// 	} else {
+// 		parentsRes = parents
+// 	}
+
+// 	packageInfo := view.DeletedPackagesInfo{
+// 		Id:                    entity.Id,
+// 		Alias:                 entity.Alias,
+// 		ParentId:              entity.ParentId,
+// 		Kind:                  entity.Kind,
+// 		Name:                  entity.Name,
+// 		Description:           entity.Description,
+// 		ServiceName:           entity.ServiceName,
+// 		Parents:               parentsRes,
+// 		DefaultRole:           entity.DefaultRole,
+// 		ReleaseVersionPattern: entity.ReleaseVersionPattern,
+// 		RestGroupingPrefix:    entity.RestGroupingPrefix,
+// 		CreatedAt:             entity.CreatedAt,
+// 		DeletedAt:             *entity.DeletedAt,
+// 	}
+
+// 	return &packageInfo
+// }
 
 func MakePackageView(packageEntity *PackageEntity, isFavorite bool, groups []view.Group) *view.Package {
 	if groups == nil {

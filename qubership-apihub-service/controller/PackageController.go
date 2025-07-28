@@ -319,7 +319,7 @@ func (p packageControllerImpl) GetPackagesList(w http.ResponseWriter, r *http.Re
 		ShowAllDescendants:        showAllDescendants,
 	}
 
-	packages, err := p.packageService.GetPackagesList(context.Create(r), packageListReq)
+	packages, err := p.packageService.GetPackagesList(context.Create(r), packageListReq, false)
 
 	if err != nil {
 		utils.RespondWithError(w, "Failed to get packages", err)
@@ -339,7 +339,7 @@ func (p packageControllerImpl) GetDeletedPackagesList(w http.ResponseWriter, r *
 		})
 		return
 	}
-	
+
 	var err error
 	parentId := r.URL.Query().Get("parentId")
 	kind, customErr := getListFromParam(r, "kind")
@@ -400,15 +400,15 @@ func (p packageControllerImpl) GetDeletedPackagesList(w http.ResponseWriter, r *
 	}
 
 	packageListReq := view.PackageListReq{
-		Kind:                      kind,
-		Limit:                     limit,
-		Offset:                    limit * page,
-		ParentId:                  parentId,
-		ShowParents:               showParents,
-		ShowAllDescendants:        showAllDescendants,
+		Kind:               kind,
+		Limit:              limit,
+		Offset:             limit * page,
+		ParentId:           parentId,
+		ShowParents:        showParents,
+		ShowAllDescendants: showAllDescendants,
 	}
 
-	packages, err := p.packageService.GetDeletedPackagesList(context.Create(r), packageListReq)
+	packages, err := p.packageService.GetPackagesList(context.Create(r), packageListReq, true)
 
 	if err != nil {
 		utils.RespondWithError(w, "Failed to get packages", err)
