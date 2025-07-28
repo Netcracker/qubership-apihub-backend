@@ -235,12 +235,17 @@ func main() {
 	activityTrackingRepository := repository.NewActivityTrackingRepository(cp)
 
 	versionCleanupRepository := repository.NewVersionCleanupRepository(cp)
+	comparisonCleanupRepository := repository.NewComparisonCleanupRepository(cp)
 
 	personalAccessTokenRepository := repository.NewPersonalAccessTokenRepository(cp)
 
 	packageExportConfigRepository := repository.NewPackageExportConfigRepository(cp)
 
 	exportRepository := repository.NewExportRepository(cp)
+
+	systemStatsRepository := repository.NewSystemStatsRepository(cp)
+	
+	lockRepo := repository.NewLockRepository(cp)
 
 	olricProvider, err := cache.NewOlricProvider()
 	if err != nil {
@@ -271,7 +276,16 @@ func main() {
 
 	templateService := service.NewTemplateService()
 
+	lockService := service.NewLockService(lockRepo, systemInfoService.GetInstanceId())
+
 	cleanupService := service.NewCleanupService(cp)
+	if err := cleanupService.CreateRevisionsCleanupJob(publishedRepository, migrationRunRepository, versionCleanupRepository, lockService, systemInfoService.GetInstanceId(), systemInfoService.GetRevisionsCleanupSchedule(), systemInfoService.GetRevisionsCleanupDeleteLastRevision(), systemInfoService.GetRevisionsCleanupDeleteReleaseRevisions(), systemInfoService.GetRevisionsTTLDays()); err != nil {
+		log.Error("Failed to start revisions cleaning job" + err.Error())
+	}
+	if err := cleanupService.CreateComparisonsCleanupJob(publishedRepository, migrationRunRepository, comparisonCleanupRepository, lockService, systemInfoService.GetInstanceId(), systemInfoService.GetComparisonCleanupSchedule(), systemInfoService.GetComparisonsTTLDays()); err != nil {
+		log.Error("Failed to start comparisons cleaning job" + err.Error())
+	}
+
 	monitoringService := service.NewMonitoringService(cp)
 	packageVersionEnrichmentService := service.NewPackageVersionEnrichmentService(publishedRepository)
 	activityTrackingService := service.NewActivityTrackingService(activityTrackingRepository, publishedRepository, userService)
@@ -331,6 +345,7 @@ func main() {
 	personalAccessTokenService := service.NewPersonalAccessTokenService(personalAccessTokenRepository, userService, roleService)
 
 	tokenRevocationService := service.NewTokenRevocationService(olricProvider, systemInfoService.GetRefreshTokenDurationSec())
+	systemStatsService := service.NewSystemStatsService(systemStatsRepository)
 
 	idpManager, err := providers.NewIDPManager(systemInfoService.GetAuthConfig(), systemInfoService.GetAllowedHosts(), systemInfoService.IsProductionMode(), userService)
 	if err != nil {
@@ -385,6 +400,7 @@ func main() {
 	gitHookController := controller.NewGitHookController(gitHookService)
 	personalAccessTokenController := controller.NewPersonalAccessTokenController(personalAccessTokenService)
 	packageExportConfigController := controller.NewPackageExportConfigController(roleService, packageExportConfigService, ptHandler)
+	systemStatsController := controller.NewSystemStatsController(systemStatsService, roleService)
 
 	if !systemInfoService.GetEditorDisabled() {
 		r.HandleFunc("/api/v1/integrations/{integrationId}/apikey", security.Secure(integrationsController.GetUserApiKeyStatus)).Methods(http.MethodGet)
@@ -578,10 +594,10 @@ func main() {
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/copy", security.Secure(versionController.CopyVersion)).Methods(http.MethodPost)
 
 	r.HandleFunc("/api/v2/packages/{packageId}/activity", security.Secure(activityTrackingController.GetActivityHistoryForPackage_deprecated)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v3/packages/{packageId}/activity", security.Secure(activityTrackingController.GetActivityHistoryForPackage)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v3/packages/{packageId}/activity", security.Secure(activityTrackingController.GetActivityHistoryForPackage_deprecated_2)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v4/packages/{packageId}/activity", security.Secure(activityTrackingController.GetActivityHistoryForPackage)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/activity", security.Secure(activityTrackingController.GetActivityHistory_deprecated)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v3/activity", security.Secure(activityTrackingController.GetActivityHistory)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v3/activity", security.Secure(activityTrackingController.GetActivityHistory_deprecated_2)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v4/activity", security.Secure(activityTrackingController.GetActivityHistory)).Methods(http.MethodGet)
 
 	r.HandleFunc("/api/v2/agents", security.Secure(agentController.ListAgents)).Methods(http.MethodGet)
@@ -633,6 +649,8 @@ func main() {
 	r.HandleFunc("/api/v2/admin/transition/move/{id}", security.Secure(transitionController.GetMoveStatus)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/admin/transition/activity", security.Secure(transitionController.ListActivities)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/admin/transition", security.Secure(transitionController.ListPackageTransitions)).Methods(http.MethodGet)
+
+	r.HandleFunc("/api/v2/admin/system/stats", security.Secure(systemStatsController.GetSystemStats)).Methods(http.MethodGet)
 
 	r.HandleFunc("/api/v2/compare", security.Secure(comparisonController.CompareTwoVersions)).Methods(http.MethodPost)
 

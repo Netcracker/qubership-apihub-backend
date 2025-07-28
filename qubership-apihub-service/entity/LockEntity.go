@@ -12,24 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package view
+package entity
 
-type PrincipalUserView struct {
-	PrincipalType PrincipalType `json:"type"`
-	User
+import (
+	"time"
+)
+
+type LockEntity struct {
+	tableName struct{} `pg:"locks"`
+
+	Name       string    `pg:"name, pk, type:varchar"`
+	InstanceId string    `pg:"instance_id, type:varchar, notnull"`
+	AcquiredAt time.Time `pg:"acquired_at, type:timestamp without time zone, notnull"`
+	ExpiresAt  time.Time `pg:"expires_at, type:timestamp without time zone, notnull"`
+	Version    int64     `pg:"version, type:bigint, notnull, default:1"`
 }
-type PrincipalApiKeyView struct {
-	PrincipalType PrincipalType `json:"type"`
-	ApiKey
-}
-
-type PrincipalJobView struct {
-	PrincipalType PrincipalType `json:"type"`
-	Job
-}
-
-type PrincipalType string
-
-const PTUser PrincipalType = "user"
-const PTApiKey PrincipalType = "apiKey"
-const PTJob PrincipalType = "job"
