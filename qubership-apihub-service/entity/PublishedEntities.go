@@ -745,33 +745,6 @@ func MakePackagesInfo(entity *PackageEntity, defaultVersionDetails *view.Version
 	return &packageInfo
 }
 
-// func MakeDeletedPackagesInfo(entity *PackageEntity, parents []view.ParentPackageInfo, userPermissions []string) *view.DeletedPackagesInfo {
-// 	var parentsRes []view.ParentPackageInfo
-// 	if parents == nil {
-// 		parentsRes = make([]view.ParentPackageInfo, 0)
-// 	} else {
-// 		parentsRes = parents
-// 	}
-
-// 	packageInfo := view.DeletedPackagesInfo{
-// 		Id:                    entity.Id,
-// 		Alias:                 entity.Alias,
-// 		ParentId:              entity.ParentId,
-// 		Kind:                  entity.Kind,
-// 		Name:                  entity.Name,
-// 		Description:           entity.Description,
-// 		ServiceName:           entity.ServiceName,
-// 		Parents:               parentsRes,
-// 		DefaultRole:           entity.DefaultRole,
-// 		ReleaseVersionPattern: entity.ReleaseVersionPattern,
-// 		RestGroupingPrefix:    entity.RestGroupingPrefix,
-// 		CreatedAt:             entity.CreatedAt,
-// 		DeletedAt:             *entity.DeletedAt,
-// 	}
-
-// 	return &packageInfo
-// }
-
 func MakePackageView(packageEntity *PackageEntity, isFavorite bool, groups []view.Group) *view.Package {
 	if groups == nil {
 		groups = make([]view.Group, 0)

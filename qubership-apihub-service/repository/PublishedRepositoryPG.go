@@ -356,44 +356,6 @@ func (p publishedRepositoryImpl) GetReadonlyVersion(packageId string, versionNam
 	return result, nil
 }
 
-// func (p publishedRepositoryImpl) GetDeletedPackageVersion(packageId string, versionName string) (*entity.PackageVersionRevisionEntity, error) {
-// 	getPackage, errGetPackage := p.GetPackageIncludingDeleted(packageId)
-// 	if errGetPackage != nil {
-// 		return nil, errGetPackage
-// 	}
-// 	if getPackage == nil {
-// 		return nil, nil
-// 	}
-// 	result := new(entity.PackageVersionRevisionEntity)
-// 	version, revision, err := SplitVersionRevision(versionName)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	query := `
-// 	select pv.*,get_latest_revision(coalesce(pv.previous_version_package_id,pv.package_id),pv.previous_version) as previous_version_revision,
-// 	    usr.name as prl_usr_name, usr.email as prl_usr_email, usr.avatar_url as prl_usr_avatar_url,
-// 		apikey.id as prl_apikey_id, apikey.name as prl_apikey_name,
-// 		case when coalesce(usr.name, apikey.name)  is null then pv.created_by else usr.user_id end prl_usr_id
-// 		from published_version as pv
-// 	    left join user_data usr on usr.user_id = pv.created_by
-// 	    left join apihub_api_keys apikey on apikey.id = pv.created_by
-// 	where pv.package_id = ?
-// 	  and pv.version = ?
-// 	  and ((? = 0 and pv.revision = get_latest_revision(?,?)) or
-// 		   (? != 0 and pv.revision = ?))
-// 	  and pv.deleted_at is not null
-// 	limit 1
-// 	`
-// 	_, err = p.cp.GetConnection().QueryOne(result, query, packageId, version, revision, packageId, version, revision, revision)
-// 	if err != nil {
-// 		if err == pg.ErrNoRows {
-// 			return nil, nil
-// 		}
-// 		return nil, err
-// 	}
-// 	return result, nil
-// }
-
 func (p publishedRepositoryImpl) GetRichPackageVersion(packageId string, version string) (*entity.PackageVersionRichEntity, error) {
 	result := new(entity.PackageVersionRichEntity)
 	version, revision, err := SplitVersionRevision(version)
@@ -2271,47 +2233,6 @@ func (p publishedRepositoryImpl) GetReadonlyPackageVersionsWithLimit(searchQuery
 
 	return ents, nil
 }
-
-// func (p publishedRepositoryImpl) GetDeletedPackageVersions(searchQuery entity.PublishedVersionSearchQueryEntity) ([]entity.PackageVersionRevisionEntity, error) {
-// 	var ents []entity.PackageVersionRevisionEntity
-
-// 	if searchQuery.Status != "" {
-// 		searchQuery.Status = "%" + utils.LikeEscaped(searchQuery.Status) + "%"
-// 	}
-
-// 	query := `
-// 		select pv.*, get_latest_revision(coalesce(pv.previous_version_package_id,pv.package_id), pv.previous_version) as previous_version_revision,
-// 				usr.name as prl_usr_name, usr.email as prl_usr_email, usr.avatar_url as prl_usr_avatar_url,
-// 				apikey.id as prl_apikey_id, apikey.name as prl_apikey_name,
-// 				case when coalesce(usr.name, apikey.name) is null then pv.created_by else usr.user_id end prl_usr_id
-// 				from published_version pv
-// 		inner join (
-// 						select package_id, version, max(revision) as revision
-// 							from published_version
-// 							where (package_id = ?package_id)
-// 							group by package_id, version
-// 					) mx
-// 		on pv.package_id = mx.package_id
-// 		and pv.version = mx.version
-// 		and pv.revision = mx.revision
-// 		left join user_data usr on usr.user_id = pv.created_by
-// 		left join apihub_api_keys apikey on apikey.id = pv.created_by
-// 		and (?status = '' or pv.status ilike ?status)
-// 		and pv.deleted_at is not null
-// 		limit ?limit
-// 		offset ?offset
-// 	`
-// 	_, err := p.cp.GetConnection().Model(&searchQuery).
-// 		Query(&ents, fmt.Sprintf(query))
-// 	if err != nil {
-// 		if err == pg.ErrNoRows {
-// 			return nil, nil
-// 		}
-// 		return nil, err
-// 	}
-
-// 	return ents, nil
-// }
 
 // GetVersionRefs deprecated
 func (p publishedRepositoryImpl) GetVersionRefs(searchQuery entity.PackageVersionSearchQueryEntity) ([]entity.PackageVersionPublishedReference, error) {
