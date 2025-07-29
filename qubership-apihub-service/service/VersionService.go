@@ -709,7 +709,7 @@ func (v versionServiceImpl) GetPackageVersionsView(req view.VersionListReq, show
 
 	versions := make([]view.PublishedVersionListView, 0)
 	versionSortByPG := entity.GetVersionSortByPG(req.SortBy)
-	if versionSortByPG == "" {
+	if versionSortByPG == "" && !showOnlyDeleted {
 		return nil, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidParameterValue,
@@ -718,7 +718,7 @@ func (v versionServiceImpl) GetPackageVersionsView(req view.VersionListReq, show
 		}
 	}
 	versionSortOrderPG := entity.GetVersionSortOrderPG(req.SortOrder)
-	if versionSortOrderPG == "" {
+	if versionSortOrderPG == "" && !showOnlyDeleted {
 		return nil, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidParameterValue,
