@@ -111,12 +111,12 @@ type PackagesInfo struct {
 	Kind                      string              `json:"kind"`
 	Name                      string              `json:"name"`
 	Description               string              `json:"description"`
-	IsFavorite                bool                `json:"isFavorite"`
+	IsFavorite                bool                `json:"isFavorite,omitempty"`
 	ServiceName               string              `json:"serviceName,omitempty"`
-	ImageUrl                  string              `json:"imageUrl"`
+	ImageUrl                  string              `json:"imageUrl,omitempty"`
 	Parents                   []ParentPackageInfo `json:"parents"`
 	DefaultRole               string              `json:"defaultRole"`
-	UserPermissions           []string            `json:"permissions"`
+	UserPermissions           []string            `json:"permissions,omitempty"`
 	LastReleaseVersionDetails *VersionDetails     `json:"lastReleaseVersionDetails,omitempty"`
 	RestGroupingPrefix        string              `json:"restGroupingPrefix,omitempty"`
 	ReleaseVersionPattern     string              `json:"releaseVersionPattern,omitempty"`
