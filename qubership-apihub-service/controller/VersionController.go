@@ -894,7 +894,7 @@ func (v versionControllerImpl) GetPackageVersionContent(w http.ResponseWriter, r
 	}
 	v.monitoringService.AddVersionOpenCount(packageId, version)
 
-	content, err := v.versionService.GetPackageVersionContent(packageId, version, includeSummary, includeOperations, includeGroups)
+	content, err := v.versionService.GetPackageVersionContent(packageId, version, includeSummary, includeOperations, includeGroups, false)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, v.ptHandler, packageId, "Failed to get package version content", err)
 		return
@@ -946,7 +946,7 @@ func (v versionControllerImpl) GetDeletedPackageVersionContent(w http.ResponseWr
 	// Is this necessary?
 	// v.monitoringService.AddVersionOpenCount(packageId, version)
 
-	content, err := v.versionService.GetDeletedPackageVersionContent(packageId, version)
+	content, err := v.versionService.GetPackageVersionContent(packageId, version, true, false, false, true)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, v.ptHandler, packageId, "Failed to get deleted package version content", err)
 		return

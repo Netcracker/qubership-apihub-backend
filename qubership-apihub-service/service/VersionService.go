@@ -42,8 +42,8 @@ type VersionService interface {
 	SetBuildService(buildService BuildService)
 
 	GetPackageVersionContent_deprecated(packageId string, versionName string, includeSummary bool, includeOperations bool, includeGroups bool) (*view.VersionContent_deprecated, error)
-	GetPackageVersionContent(packageId string, versionName string, includeSummary bool, includeOperations bool, includeGroups bool) (*view.VersionContent, error)
-	GetDeletedPackageVersionContent(packageId string, versionName string) (*view.VersionContent, error)
+	GetPackageVersionContent(packageId string, versionName string, includeSummary bool, includeOperations bool, includeGroups bool, showOnlyDeleted bool) (*view.VersionContent, error)
+	// GetDeletedPackageVersionContent(packageId string, versionName string) (*view.VersionContent, error)
 	GetPackageVersionsView_deprecated(req view.VersionListReq) (*view.PublishedVersionsView_deprecated_v2, error)
 	GetPackageVersionsView(req view.VersionListReq, showOnlyDeleted bool) (*view.PublishedVersionsView, error)
 	// GetDeletedPackageVersions(req view.VersionListReq) (*view.PublishedVersionsView, error)
@@ -616,7 +616,7 @@ func (v versionServiceImpl) PatchVersion(ctx context.SecurityContext, packageId 
 		return nil, err
 	}
 
-	result, err := v.GetPackageVersionContent(packageId, versionEnt.Version, true, false, false)
+	result, err := v.GetPackageVersionContent(packageId, versionEnt.Version, true, false, false, false)
 	if err != nil {
 		return nil, err
 	}
@@ -706,7 +706,7 @@ func (v versionServiceImpl) GetPackageVersionsView(req view.VersionListReq, show
 			Params:  map[string]interface{}{"packageId": req.PackageId},
 		}
 	}
-	
+
 	versions := make([]view.PublishedVersionListView, 0)
 	versionSortByPG := entity.GetVersionSortByPG(req.SortBy)
 	if versionSortByPG == "" {
@@ -837,8 +837,8 @@ func (v versionServiceImpl) GetPackageVersionContent_deprecated(packageId string
 	return versionContent, nil
 }
 
-func (v versionServiceImpl) GetPackageVersionContent(packageId string, version string, includeSummary bool, includeOperations bool, includeGroups bool) (*view.VersionContent, error) {
-	versionEnt, err := v.publishedRepo.GetReadonlyVersion(packageId, version)
+func (v versionServiceImpl) GetPackageVersionContent(packageId string, version string, includeSummary bool, includeOperations bool, includeGroups bool, showOnlyDeleted bool) (*view.VersionContent, error) {
+	versionEnt, err := v.publishedRepo.GetReadonlyVersion(packageId, version, showOnlyDeleted)
 	if err != nil {
 		return nil, err
 	}
@@ -851,7 +851,13 @@ func (v versionServiceImpl) GetPackageVersionContent(packageId string, version s
 		}
 	}
 
-	latestRevision, err := v.publishedRepo.GetLatestRevision(versionEnt.PackageId, versionEnt.Version)
+	var latestRevision int
+	if showOnlyDeleted {
+		latestRevision, err = v.publishedRepo.GetDeletedPackageLatestRevision(versionEnt.PackageId, versionEnt.Version)
+	} else {
+		latestRevision, err = v.publishedRepo.GetLatestRevision(versionEnt.PackageId, versionEnt.Version)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -863,6 +869,7 @@ func (v versionServiceImpl) GetPackageVersionContent(packageId string, version s
 			Params:  map[string]interface{}{"version": version, "packageId": packageId},
 		}
 	}
+
 	versionContent := &view.VersionContent{
 		PublishedAt:              versionEnt.PublishedAt,
 		PublishedBy:              *entity.MakePrincipalView(&versionEnt.PrincipalEntity),
@@ -877,7 +884,7 @@ func (v versionServiceImpl) GetPackageVersionContent(packageId string, version s
 		ApiProcessorVersion:      versionEnt.Metadata.GetBuilderVersion(),
 	}
 
-	versionOperationTypes, err := v.getVersionOperationTypes(versionEnt, includeSummary, includeOperations)
+	versionOperationTypes, err := v.getVersionOperationTypes(versionEnt, includeSummary, includeOperations, showOnlyDeleted)
 	if err != nil {
 		return nil, err
 	}
@@ -893,55 +900,55 @@ func (v versionServiceImpl) GetPackageVersionContent(packageId string, version s
 	return versionContent, nil
 }
 
-func (v versionServiceImpl) GetDeletedPackageVersionContent(packageId string, version string) (*view.VersionContent, error) {
-	versionEnt, err := v.publishedRepo.GetDeletedPackageVersion(packageId, version)
-	if err != nil {
-		return nil, err
-	}
-	if versionEnt == nil {
-		return nil, &exception.CustomError{
-			Status:  http.StatusNotFound,
-			Code:    exception.PublishedPackageVersionNotFound,
-			Message: exception.PublishedPackageVersionNotFoundMsg,
-			Params:  map[string]interface{}{"version": version, "packageId": packageId},
-		}
-	}
+// func (v versionServiceImpl) GetDeletedPackageVersionContent(packageId string, version string) (*view.VersionContent, error) {
+// 	versionEnt, err := v.publishedRepo.GetDeletedPackageVersion(packageId, version)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	if versionEnt == nil {
+// 		return nil, &exception.CustomError{
+// 			Status:  http.StatusNotFound,
+// 			Code:    exception.PublishedPackageVersionNotFound,
+// 			Message: exception.PublishedPackageVersionNotFoundMsg,
+// 			Params:  map[string]interface{}{"version": version, "packageId": packageId},
+// 		}
+// 	}
 
-	latestRevision, err := v.publishedRepo.GetDeletedPackageLatestRevision(versionEnt.PackageId, versionEnt.Version)
-	if err != nil {
-		return nil, err
-	}
-	if latestRevision == 0 {
-		return nil, &exception.CustomError{
-			Status:  http.StatusNotFound,
-			Code:    exception.PublishedPackageVersionNotFound,
-			Message: exception.PublishedPackageVersionNotFoundMsg,
-			Params:  map[string]interface{}{"version": version, "packageId": packageId},
-		}
-	}
-	versionContent := &view.VersionContent{
-		PublishedAt:              versionEnt.PublishedAt,
-		PublishedBy:              *entity.MakePrincipalView(&versionEnt.PrincipalEntity),
-		PreviousVersion:          view.MakeVersionRefKey(versionEnt.PreviousVersion, versionEnt.PreviousVersionRevision),
-		PreviousVersionPackageId: versionEnt.PreviousVersionPackageId,
-		VersionLabels:            versionEnt.Labels,
-		Status:                   versionEnt.Status,
-		NotLatestRevision:        versionEnt.Revision != latestRevision,
-		PackageId:                versionEnt.PackageId,
-		Version:                  view.MakeVersionRefKey(versionEnt.Version, versionEnt.Revision),
-		RevisionsCount:           latestRevision,
-		ApiProcessorVersion:      versionEnt.Metadata.GetBuilderVersion(),
-	}
+// 	latestRevision, err := v.publishedRepo.GetDeletedPackageLatestRevision(versionEnt.PackageId, versionEnt.Version)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	if latestRevision == 0 {
+// 		return nil, &exception.CustomError{
+// 			Status:  http.StatusNotFound,
+// 			Code:    exception.PublishedPackageVersionNotFound,
+// 			Message: exception.PublishedPackageVersionNotFoundMsg,
+// 			Params:  map[string]interface{}{"version": version, "packageId": packageId},
+// 		}
+// 	}
+// 	versionContent := &view.VersionContent{
+// 		PublishedAt:              versionEnt.PublishedAt,
+// 		PublishedBy:              *entity.MakePrincipalView(&versionEnt.PrincipalEntity),
+// 		PreviousVersion:          view.MakeVersionRefKey(versionEnt.PreviousVersion, versionEnt.PreviousVersionRevision),
+// 		PreviousVersionPackageId: versionEnt.PreviousVersionPackageId,
+// 		VersionLabels:            versionEnt.Labels,
+// 		Status:                   versionEnt.Status,
+// 		NotLatestRevision:        versionEnt.Revision != latestRevision,
+// 		PackageId:                versionEnt.PackageId,
+// 		Version:                  view.MakeVersionRefKey(versionEnt.Version, versionEnt.Revision),
+// 		RevisionsCount:           latestRevision,
+// 		ApiProcessorVersion:      versionEnt.Metadata.GetBuilderVersion(),
+// 	}
 
-	versionOperationTypes, err := v.getDeletedPackageVersionOperationTypes(versionEnt)
-	if err != nil {
-		return nil, err
-	}
+// 	versionOperationTypes, err := v.getDeletedPackageVersionOperationTypes(versionEnt)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	versionContent.OperationTypes = versionOperationTypes
+// 	versionContent.OperationTypes = versionOperationTypes
 
-	return versionContent, nil
-}
+// 	return versionContent, nil
+// }
 
 func (v versionServiceImpl) getVersionOperationTypes_deprecated(versionEnt *entity.ReadonlyPublishedVersionEntity_deprecated, includeSummary bool, includeOperations bool) ([]view.VersionOperationType, error) {
 	if !includeSummary && !includeOperations {
@@ -949,7 +956,7 @@ func (v versionServiceImpl) getVersionOperationTypes_deprecated(versionEnt *enti
 	}
 	versionSummaryMap := make(map[string]*view.VersionOperationType, 0)
 	if includeSummary {
-		operationsCountEnts, err := v.operationRepo.GetOperationsTypeCount(versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
+		operationsCountEnts, err := v.operationRepo.GetOperationsTypeCount(versionEnt.PackageId, versionEnt.Version, versionEnt.Revision, false)
 		if err != nil {
 			return nil, err
 		}
@@ -1071,14 +1078,14 @@ func (v versionServiceImpl) getVersionOperationTypes_deprecated(versionEnt *enti
 	return versionOperationTypes, nil
 }
 
-func (v versionServiceImpl) getVersionOperationTypes(versionEnt *entity.PackageVersionRevisionEntity, includeSummary bool, includeOperations bool) ([]view.VersionOperationType, error) {
+func (v versionServiceImpl) getVersionOperationTypes(versionEnt *entity.PackageVersionRevisionEntity, includeSummary bool, includeOperations bool, showOnlyDeleted bool) ([]view.VersionOperationType, error) {
 	if !includeSummary && !includeOperations {
 		return nil, nil
 	}
 	zeroInt := 0
 	versionSummaryMap := make(map[string]*view.VersionOperationType, 0)
 	if includeSummary {
-		operationsCountEnts, err := v.operationRepo.GetOperationsTypeCount(versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
+		operationsCountEnts, err := v.operationRepo.GetOperationsTypeCount(versionEnt.PackageId, versionEnt.Version, versionEnt.Revision, showOnlyDeleted)
 		if err != nil {
 			return nil, err
 		}
@@ -1115,7 +1122,14 @@ func (v versionServiceImpl) getVersionOperationTypes(versionEnt *entity.PackageV
 			if previousPackageId == "" {
 				previousPackageId = versionEnt.PackageId
 			}
-			previousVersionEnt, err := v.publishedRepo.GetVersion(previousPackageId, versionEnt.PreviousVersion)
+
+			var previousVersionEnt *entity.PublishedVersionEntity
+			if showOnlyDeleted {
+				previousVersionEnt, err = v.publishedRepo.GetVersionIncludingDeleted(previousPackageId, versionEnt.PreviousVersion)
+			} else {
+				previousVersionEnt, err = v.publishedRepo.GetVersion(previousPackageId, versionEnt.PreviousVersion)
+			}
+
 			if err != nil {
 				return nil, err
 			}
@@ -1275,131 +1289,131 @@ func (v versionServiceImpl) getVersionOperationTypes(versionEnt *entity.PackageV
 	return versionOperationTypes, nil
 }
 
-func (v versionServiceImpl) getDeletedPackageVersionOperationTypes(versionEnt *entity.PackageVersionRevisionEntity) ([]view.VersionOperationType, error) {
-	zeroInt := 0
-	versionSummaryMap := make(map[string]*view.VersionOperationType, 0)
+// func (v versionServiceImpl) getDeletedPackageVersionOperationTypes(versionEnt *entity.PackageVersionRevisionEntity) ([]view.VersionOperationType, error) {
+// 	zeroInt := 0
+// 	versionSummaryMap := make(map[string]*view.VersionOperationType, 0)
 
-	operationsCountEnts, err := v.operationRepo.GetDeletedPackageOperationsTypeCount(versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
-	if err != nil {
-		return nil, err
-	}
+// 	operationsCountEnts, err := v.operationRepo.GetDeletedPackageOperationsTypeCount(versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	for _, opCount := range operationsCountEnts {
-		apiType, _ := view.ParseApiType(opCount.ApiType)
-		if apiType == "" {
-			continue
-		}
-		operationCount := opCount.OperationsCount
-		deprecatedCount := opCount.DeprecatedCount
-		noBwcOperationsCount := opCount.NoBwcOperationsCount
-		internalAudienceOperationsCount := opCount.InternalAudienceOperationsCount
-		unknownAudienceOperationsCount := opCount.UnknownAudienceOperationsCount
-		if versionApiTypeSummary, exists := versionSummaryMap[opCount.ApiType]; exists {
-			versionApiTypeSummary.OperationsCount = &operationCount
-			versionApiTypeSummary.DeprecatedCount = &deprecatedCount
-			versionApiTypeSummary.NoBwcOperationsCount = &noBwcOperationsCount
-			versionApiTypeSummary.InternalAudienceOperationsCount = &internalAudienceOperationsCount
-			versionApiTypeSummary.UnknownAudienceOperationsCount = &unknownAudienceOperationsCount
+// 	for _, opCount := range operationsCountEnts {
+// 		apiType, _ := view.ParseApiType(opCount.ApiType)
+// 		if apiType == "" {
+// 			continue
+// 		}
+// 		operationCount := opCount.OperationsCount
+// 		deprecatedCount := opCount.DeprecatedCount
+// 		noBwcOperationsCount := opCount.NoBwcOperationsCount
+// 		internalAudienceOperationsCount := opCount.InternalAudienceOperationsCount
+// 		unknownAudienceOperationsCount := opCount.UnknownAudienceOperationsCount
+// 		if versionApiTypeSummary, exists := versionSummaryMap[opCount.ApiType]; exists {
+// 			versionApiTypeSummary.OperationsCount = &operationCount
+// 			versionApiTypeSummary.DeprecatedCount = &deprecatedCount
+// 			versionApiTypeSummary.NoBwcOperationsCount = &noBwcOperationsCount
+// 			versionApiTypeSummary.InternalAudienceOperationsCount = &internalAudienceOperationsCount
+// 			versionApiTypeSummary.UnknownAudienceOperationsCount = &unknownAudienceOperationsCount
 
-		} else {
-			versionSummaryMap[opCount.ApiType] = &view.VersionOperationType{
-				ApiType:                         opCount.ApiType,
-				OperationsCount:                 &operationCount,
-				DeprecatedCount:                 &deprecatedCount,
-				NoBwcOperationsCount:            &noBwcOperationsCount,
-				InternalAudienceOperationsCount: &internalAudienceOperationsCount,
-				UnknownAudienceOperationsCount:  &unknownAudienceOperationsCount,
-			}
-		}
-	}
+// 		} else {
+// 			versionSummaryMap[opCount.ApiType] = &view.VersionOperationType{
+// 				ApiType:                         opCount.ApiType,
+// 				OperationsCount:                 &operationCount,
+// 				DeprecatedCount:                 &deprecatedCount,
+// 				NoBwcOperationsCount:            &noBwcOperationsCount,
+// 				InternalAudienceOperationsCount: &internalAudienceOperationsCount,
+// 				UnknownAudienceOperationsCount:  &unknownAudienceOperationsCount,
+// 			}
+// 		}
+// 	}
 
-	if versionEnt.PreviousVersion != "" {
-		previousPackageId := versionEnt.PreviousVersionPackageId
-		if previousPackageId == "" {
-			previousPackageId = versionEnt.PackageId
-		}
-		previousVersionEnt, err := v.publishedRepo.GetVersionIncludingDeleted(previousPackageId, versionEnt.PreviousVersion)
-		if err != nil {
-			return nil, err
-		}
-		if previousVersionEnt != nil {
-			comparisonId := view.MakeVersionComparisonId(
-				versionEnt.PackageId, versionEnt.Version, versionEnt.Revision,
-				previousVersionEnt.PackageId, previousVersionEnt.Version, previousVersionEnt.Revision)
-			versionComparison, err := v.publishedRepo.GetVersionComparison(comparisonId)
-			if err != nil {
-				return nil, err
-			}
-			if versionComparison != nil {
-				for _, ot := range versionComparison.OperationTypes {
-					apiType, _ := view.ParseApiType(ot.ApiType)
-					if apiType == "" {
-						continue
-					}
-					changeSummary := ot.ChangesSummary
-					if versionApiTypeSummary, exists := versionSummaryMap[ot.ApiType]; exists {
-						versionApiTypeSummary.ChangesSummary = &changeSummary
+// 	if versionEnt.PreviousVersion != "" {
+// 		previousPackageId := versionEnt.PreviousVersionPackageId
+// 		if previousPackageId == "" {
+// 			previousPackageId = versionEnt.PackageId
+// 		}
+// 		previousVersionEnt, err := v.publishedRepo.GetVersionIncludingDeleted(previousPackageId, versionEnt.PreviousVersion)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 		if previousVersionEnt != nil {
+// 			comparisonId := view.MakeVersionComparisonId(
+// 				versionEnt.PackageId, versionEnt.Version, versionEnt.Revision,
+// 				previousVersionEnt.PackageId, previousVersionEnt.Version, previousVersionEnt.Revision)
+// 			versionComparison, err := v.publishedRepo.GetVersionComparison(comparisonId)
+// 			if err != nil {
+// 				return nil, err
+// 			}
+// 			if versionComparison != nil {
+// 				for _, ot := range versionComparison.OperationTypes {
+// 					apiType, _ := view.ParseApiType(ot.ApiType)
+// 					if apiType == "" {
+// 						continue
+// 					}
+// 					changeSummary := ot.ChangesSummary
+// 					if versionApiTypeSummary, exists := versionSummaryMap[ot.ApiType]; exists {
+// 						versionApiTypeSummary.ChangesSummary = &changeSummary
 
-					} else {
-						versionSummaryMap[ot.ApiType] = &view.VersionOperationType{
-							ApiType:                         ot.ApiType,
-							ChangesSummary:                  &changeSummary,
-							OperationsCount:                 &zeroInt,
-							DeprecatedCount:                 &zeroInt,
-							NoBwcOperationsCount:            &zeroInt,
-							InternalAudienceOperationsCount: &zeroInt,
-							UnknownAudienceOperationsCount:  &zeroInt,
-						}
-					}
-				}
-				if len(versionComparison.Refs) > 0 {
-					refsComparisons, err := v.publishedRepo.GetVersionRefsComparisons(comparisonId)
-					if err != nil {
-						return nil, err
-					}
-					for _, comparison := range refsComparisons {
-						for _, ot := range comparison.OperationTypes {
-							apiType, _ := view.ParseApiType(ot.ApiType)
-							if apiType == "" {
-								continue
-							}
-							changeSummary := ot.ChangesSummary
-							if versionApiTypeSummary, exists := versionSummaryMap[ot.ApiType]; exists {
-								if versionApiTypeSummary.ChangesSummary != nil {
-									versionApiTypeSummary.ChangesSummary.Breaking += changeSummary.Breaking
-									versionApiTypeSummary.ChangesSummary.SemiBreaking += changeSummary.SemiBreaking
-									versionApiTypeSummary.ChangesSummary.Deprecated += changeSummary.Deprecated
-									versionApiTypeSummary.ChangesSummary.NonBreaking += changeSummary.NonBreaking
-									versionApiTypeSummary.ChangesSummary.Annotation += changeSummary.Annotation
-									versionApiTypeSummary.ChangesSummary.Unclassified += changeSummary.Unclassified
-								} else {
-									versionApiTypeSummary.ChangesSummary = &changeSummary
-								}
-							} else {
-								versionSummaryMap[ot.ApiType] = &view.VersionOperationType{
-									ApiType:                         ot.ApiType,
-									ChangesSummary:                  &changeSummary,
-									OperationsCount:                 &zeroInt,
-									DeprecatedCount:                 &zeroInt,
-									NoBwcOperationsCount:            &zeroInt,
-									InternalAudienceOperationsCount: &zeroInt,
-									UnknownAudienceOperationsCount:  &zeroInt,
-								}
-							}
-						}
-					}
-				}
+// 					} else {
+// 						versionSummaryMap[ot.ApiType] = &view.VersionOperationType{
+// 							ApiType:                         ot.ApiType,
+// 							ChangesSummary:                  &changeSummary,
+// 							OperationsCount:                 &zeroInt,
+// 							DeprecatedCount:                 &zeroInt,
+// 							NoBwcOperationsCount:            &zeroInt,
+// 							InternalAudienceOperationsCount: &zeroInt,
+// 							UnknownAudienceOperationsCount:  &zeroInt,
+// 						}
+// 					}
+// 				}
+// 				if len(versionComparison.Refs) > 0 {
+// 					refsComparisons, err := v.publishedRepo.GetVersionRefsComparisons(comparisonId)
+// 					if err != nil {
+// 						return nil, err
+// 					}
+// 					for _, comparison := range refsComparisons {
+// 						for _, ot := range comparison.OperationTypes {
+// 							apiType, _ := view.ParseApiType(ot.ApiType)
+// 							if apiType == "" {
+// 								continue
+// 							}
+// 							changeSummary := ot.ChangesSummary
+// 							if versionApiTypeSummary, exists := versionSummaryMap[ot.ApiType]; exists {
+// 								if versionApiTypeSummary.ChangesSummary != nil {
+// 									versionApiTypeSummary.ChangesSummary.Breaking += changeSummary.Breaking
+// 									versionApiTypeSummary.ChangesSummary.SemiBreaking += changeSummary.SemiBreaking
+// 									versionApiTypeSummary.ChangesSummary.Deprecated += changeSummary.Deprecated
+// 									versionApiTypeSummary.ChangesSummary.NonBreaking += changeSummary.NonBreaking
+// 									versionApiTypeSummary.ChangesSummary.Annotation += changeSummary.Annotation
+// 									versionApiTypeSummary.ChangesSummary.Unclassified += changeSummary.Unclassified
+// 								} else {
+// 									versionApiTypeSummary.ChangesSummary = &changeSummary
+// 								}
+// 							} else {
+// 								versionSummaryMap[ot.ApiType] = &view.VersionOperationType{
+// 									ApiType:                         ot.ApiType,
+// 									ChangesSummary:                  &changeSummary,
+// 									OperationsCount:                 &zeroInt,
+// 									DeprecatedCount:                 &zeroInt,
+// 									NoBwcOperationsCount:            &zeroInt,
+// 									InternalAudienceOperationsCount: &zeroInt,
+// 									UnknownAudienceOperationsCount:  &zeroInt,
+// 								}
+// 							}
+// 						}
+// 					}
+// 				}
 
-			}
-		}
-	}
+// 			}
+// 		}
+// 	}
 
-	versionOperationTypes := make([]view.VersionOperationType, 0)
-	for _, v := range versionSummaryMap {
-		versionOperationTypes = append(versionOperationTypes, *v)
-	}
-	return versionOperationTypes, nil
-}
+// 	versionOperationTypes := make([]view.VersionOperationType, 0)
+// 	for _, v := range versionSummaryMap {
+// 		versionOperationTypes = append(versionOperationTypes, *v)
+// 	}
+// 	return versionOperationTypes, nil
+// }
 
 func (v versionServiceImpl) getVersionOperationGroups_deprecated(versionEnt *entity.ReadonlyPublishedVersionEntity_deprecated) ([]view.VersionOperationGroup, error) {
 	operationGroupEntities, err := v.operationRepo.GetVersionOperationGroups(versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
