@@ -1284,7 +1284,20 @@ func (v versionServiceImpl) getVersionOperationTypes(versionEnt *entity.PackageV
 	}
 	versionOperationTypes := make([]view.VersionOperationType, 0)
 	for _, v := range versionSummaryMap {
-		versionOperationTypes = append(versionOperationTypes, *v)
+		newOpType := view.VersionOperationType{
+			ApiType:                         v.ApiType,
+			ChangesSummary:                  v.ChangesSummary,
+			OperationsCount:                 v.OperationsCount,
+			DeprecatedCount:                 v.DeprecatedCount,
+			NoBwcOperationsCount:            v.NoBwcOperationsCount,
+			InternalAudienceOperationsCount: v.InternalAudienceOperationsCount,
+			UnknownAudienceOperationsCount:  v.UnknownAudienceOperationsCount,
+		}
+		if !showOnlyDeleted {
+			newOpType.ApiAudienceTransitions = v.ApiAudienceTransitions
+			newOpType.NumberOfImpactedOperations = v.NumberOfImpactedOperations
+		}
+		versionOperationTypes = append(versionOperationTypes, newOpType)
 	}
 	return versionOperationTypes, nil
 }
