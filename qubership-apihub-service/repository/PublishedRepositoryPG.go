@@ -2794,26 +2794,6 @@ func (p publishedRepositoryImpl) GetParentsForPackage(id string, includeDeleted 
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetParentsForDeletedPackage(id string) ([]entity.PackageEntity, error) {
-	var parentIds []string
-	var result []entity.PackageEntity
-
-	parentIds = utils.GetParentPackageIds(id)
-	if len(parentIds) == 0 {
-		return result, nil
-	}
-
-	err := p.cp.GetConnection().Model(&result).
-		ColumnExpr("package_group.*").
-		Join("JOIN UNNEST(?::text[]) WITH ORDINALITY t(id, ord) USING (id)", pg.Array(parentIds)).
-		Order("t.ord").
-		Select()
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
 func (p publishedRepositoryImpl) UpdatePackage(ent *entity.PackageEntity) (*entity.PackageEntity, error) {
 	ctx := context.Background()
 

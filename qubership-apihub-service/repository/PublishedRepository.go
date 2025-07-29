@@ -84,7 +84,6 @@ type PublishedRepository interface {
 	GetAllPackageGroups(name string, onlyFavorite bool, userId string) ([]entity.PackageFavEntity, error)
 	GetParentPackageGroups(id string) ([]entity.PackageEntity, error)
 	GetParentsForPackage(id string, includeDeleted bool) ([]entity.PackageEntity, error)
-	GetParentsForDeletedPackage(id string) ([]entity.PackageEntity, error)
 	UpdatePackage(ent *entity.PackageEntity) (*entity.PackageEntity, error)
 	DeletePackage(id string, userId string) error
 	GetPackageGroupsByName(name string) ([]entity.PackageEntity, error)
