@@ -117,7 +117,7 @@ type PackagesInfo struct {
 	RestGroupingPrefix        string              `json:"restGroupingPrefix,omitempty"`
 	ReleaseVersionPattern     string              `json:"releaseVersionPattern,omitempty"`
 	CreatedAt                 time.Time           `json:"createdAt,omitempty"`
-	DeletedAt                 time.Time           `json:"deletedAt,omitempty"`
+	DeletedAt                 *time.Time          `json:"deletedAt,omitempty"`
 }
 
 type ParentPackageInfo struct {

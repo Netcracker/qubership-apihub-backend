@@ -738,8 +738,9 @@ func MakePackagesInfo(entity *PackageEntity, defaultVersionDetails *view.Version
 		packageInfo.IsFavorite = isFavorite
 		packageInfo.UserPermissions = userPermissions
 		packageInfo.LastReleaseVersionDetails = defaultVersionDetails
+		packageInfo.DeletedAt = nil
 	} else {
-		packageInfo.DeletedAt = *entity.DeletedAt
+		packageInfo.DeletedAt = entity.DeletedAt
 	}
 
 	return &packageInfo
