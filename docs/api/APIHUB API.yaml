@@ -2953,6 +2953,10 @@ components:
         externalLinks:
           - User guide|https://www.example.com/guide
           - Support team|https://www.example.com/support]
+        extensions:
+          - name: linter
+            baseUrl: https://www.example.com
+            pathPrefix: api-linter
     BranchNotFound:
       description: Branch not found by ID. Response for the 404 error
       value:
