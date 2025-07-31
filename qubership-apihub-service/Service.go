@@ -825,3 +825,4 @@ func makeServer(systemInfoService service.SystemInfoService, r *mux.Router) *htt
 		ReadTimeout:  30 * time.Second,
 	}
 }
+
