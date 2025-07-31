@@ -2213,8 +2213,8 @@ func (p publishedRepositoryImpl) GetReadonlyPackageVersionsWithLimit(searchQuery
 			and pv.revision = mx.revision
 			left join user_data usr on usr.user_id = pv.created_by
 			left join apihub_api_keys apikey on apikey.id = pv.created_by
-			where (?status = '' or pv.status ilike ?status)
 			and (?text_filter = '' or pv.version ilike ?text_filter OR EXISTS(SELECT 1 FROM unnest(pv.labels) as label WHERE label ILIKE ?text_filter))
+			where (?status = '' or pv.status ilike ?status)
 			and (?label = '' or ?label = any(pv.labels))
 			and pv.deleted_at is %s null
 			order by pv.%s %s
