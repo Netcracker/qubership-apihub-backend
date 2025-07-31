@@ -19,11 +19,13 @@ import (
 )
 
 type SystemInfo struct {
-	BackendVersion      string   `json:"backendVersion"`
-	ProductionMode      bool     `json:"productionMode"`
-	Notification        string   `json:"notification,omitempty"`
-	ExternalLinks       []string `json:"externalLinks"`
-	MigrationInProgress bool     `json:"migrationInProgress"`
+	BackendVersion      string      `json:"backendVersion"`
+	ProductionMode      bool        `json:"productionMode"`
+	Notification        string      `json:"notification,omitempty"`
+	ExternalLinks       []string    `json:"externalLinks"`
+	MigrationInProgress bool        `json:"migrationInProgress"`
+	LinterEnabled       bool        `json:"linterEnabled"` // TODO: need to make more generic, like a list of extensions
+	Extensions          []Extension `json:"extensions"`
 }
 
 type SystemConfigurationInfo_deprecated struct {
@@ -35,4 +37,10 @@ type SystemConfigurationInfo_deprecated struct {
 type SystemConfigurationInfo struct {
 	DefaultWorkspaceId string         `json:"defaultWorkspaceId"`
 	AuthConfig         idp.AuthConfig `json:"authConfig"`
+}
+
+type Extension struct {
+	Name       string `json:"name" validate:"required"`
+	BaseUrl    string `json:"baseUrl" validate:"required"`
+	PathPrefix string `json:"pathPrefix" validate:"required"`
 }

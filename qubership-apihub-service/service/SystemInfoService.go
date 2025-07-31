@@ -145,6 +145,7 @@ func (g *systemInfoServiceImpl) GetSystemInfo() *view.SystemInfo {
 		ProductionMode: g.IsProductionMode(),
 		Notification:   g.getSystemNotification(),
 		ExternalLinks:  g.GetExternalLinks(),
+		Extensions:     g.GetExtensions(),
 	}
 }
 
@@ -225,7 +226,7 @@ func (g *systemInfoServiceImpl) setDefaults() {
 	viper.SetDefault("editor.disabled", true)
 	viper.SetDefault("olric.discoveryMode", "local")
 	viper.SetDefault("olric.replicaCount", 1)
-	viper.SetDefault("cleanup.builds.schedule", "0 1 * * 0") // at 01:00 AM on Sunday
+	viper.SetDefault("cleanup.builds.schedule", "0 1 * * 0")    // at 01:00 AM on Sunday
 	viper.SetDefault("cleanup.revisions.schedule", "0 1 * * 6") // at 01:00 AM on Saturday
 	viper.SetDefault("cleanup.revisions.deleteLastRevision", false)
 	viper.SetDefault("cleanup.revisions.deleteReleaseRevisions", false)
@@ -587,4 +588,11 @@ func (g systemInfoServiceImpl) GetComparisonCleanupSchedule() string {
 
 func (g systemInfoServiceImpl) GetComparisonsTTLDays() int {
 	return g.config.Cleanup.Comparisons.TTLDays
+}
+
+func (g systemInfoServiceImpl) GetExtensions() []view.Extension {
+	if len(g.config.Extensions) == 0 {
+		return make([]view.Extension, 0)
+	}
+	return g.config.Extensions
 }

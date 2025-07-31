@@ -28,3 +28,5 @@ jwt_private_key
 *.patch
 
 .DS_Store
+
+qubership-apihub-service/local_config/config.yaml

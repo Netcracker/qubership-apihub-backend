@@ -28,11 +28,11 @@ security:
   # Optional; Set to true to enable apihub playground work without authtorization. Dangerous. Not recommended; If not set, default value: false; Example: true
   insecureProxy: false
   # Optional; Allowed list of hosts that are accepted for proxy(playground) requests.; If not set, default value: []; Example: [example.com]
-  allowedHostsForProxy: 
+  allowedHostsForProxy:
     - example.com
     - localhost
   # Optional; Allows to set extra allowed origins to CORS header. Used for FE debugging. Should be empty on prod envs.; If not set, default value: []; Example: [https://localhost:5137]
-  allowedOrigins: 
+  allowedOrigins:
     - https://localhost:5137
   # Optional; Enables automatic login with the configured identity provider instead of showing the APIHUB login page; If not set, default value: false; Example: true
   autoLogin: false
@@ -48,15 +48,15 @@ security:
       imageSvg: ''
       # Mandatory; Protocol for external identity provider; If not set, default value: ""; Example: SAML
       protocol: 'SAML'
-      # Optional; SAML configuration for external identity provider, required if protocol is 'SAML'; If not set, default value: ""; Example: 
+      # Optional; SAML configuration for external identity provider, required if protocol is 'SAML'; If not set, default value: ""; Example:
       samlConfiguration:
         # Optional; SAML metadata URL. Required for SAML configuration; If not set, default value: ""; Example: https://idp.example.com/FederationMetadata/2007-06/FederationMetadata.xml
         metadataUrl: ''
         # Optional; SAML server certificate, base64 encoded. Required for SAML configuration; If not set, default value: ""; Example: LS0tLS1CRUdJTi...
-        certificate: '' 
+        certificate: ''
         # Optional; SAML server private key, base64 encoded. Required for SAML configuration; If not set, default value: ""; Example: LS0tLS1CRUdJTi...
         privateKey: ''
-    # Mandatory; ID for external identity provider; If not set, default value: ""; Example: external-oidc-idp   
+    # Mandatory; ID for external identity provider; If not set, default value: ""; Example: external-oidc-idp
     - id: 'external-oidc-idp'
       # Optional; Display name for external OIDC identity provider; If not set, default value: ""; Example: External Identity Provider
       displayName: 'test'
@@ -64,7 +64,7 @@ security:
       imageSvg: ''
       # Mandatory; Protocol for external identity provider; If not set, default value: ""; Example: OIDC
       protocol: 'OIDC'
-      # Optional; OIDC configuration for external identity provider, required if protocol is 'OIDC'; If not set, default value: ""; Example: 
+      # Optional; OIDC configuration for external identity provider, required if protocol is 'OIDC'; If not set, default value: ""; Example:
       oidcConfiguration:
         # Optional; OIDC identity provider URL. Required for OIDC configuration; If not set, default value: ""; Example: https://idp.example.com/realms/apihub
         providerUrl: ''
@@ -107,7 +107,7 @@ technicalParameters:
 # Section with various parameters related to APIHUB business logic
 businessParameters:
   # Optional; Links to be shown under (i) button in UI; If not set, default value: []; Example: [https://example.com]
-  externalLinks: 
+  externalLinks:
     - https://example.com
   # Optional; Default workspace ID for Agent UI; If not set, default value: ""; Example: QS
   defaultWorkspaceId: 'QS'
@@ -155,7 +155,7 @@ editor:
   clientId: ''
   clientSecret: ''
 
-# Section with Olric configuration.
+# Section with Olric(distributed cache and pub-sub) configuration.
 olric:
   # Optional; Discovery mode for Olric. If not set, default value: local; Example: local
   discoveryMode: 'local'
@@ -183,3 +183,9 @@ cleanup:
   builds:
     # Optional; Schedule for the builds cleanup job. If not set, default value: "0 1 * * 0"; Example: "* * * * *"
     schedule: '0 1 * * 0'
+
+# List of enabled extension services
+#extensions:
+#  - name: linter
+#    baseUrl: http://example.com
+#    pathPrefix: api-linter

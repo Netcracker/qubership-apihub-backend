@@ -43,5 +43,7 @@ func (g systemInfoControllerImpl) GetSystemInfo(w http.ResponseWriter, r *http.R
 	}
 	systemInfo := g.service.GetSystemInfo()
 	systemInfo.MigrationInProgress = migrationInProgress
+	systemInfo.LinterEnabled = true // FIXME: need to parametrize!!!
+
 	utils.RespondWithJson(w, http.StatusOK, systemInfo)
 }
