@@ -173,9 +173,9 @@ type PublishedShortVersionEntity struct {
 type PublishedVersionKeyEntity struct {
 	tableName struct{} `pg:"published_version,discard_unknown_columns"`
 
-	PackageId string `pg:"package_id, pk, type:varchar"`
-	Version   string `pg:"version, pk, type:varchar"`
-	Revision  int    `pg:"revision, pk, type:integer"`
+	PackageId string `pg:"package_id, pk, type:varchar" json:"packageId"`
+	Version   string `pg:"version, pk, type:varchar" json:"version"`
+	Revision  int    `pg:"revision, pk, type:integer" json:"revision"`
 }
 
 type PublishedContentEntity struct {

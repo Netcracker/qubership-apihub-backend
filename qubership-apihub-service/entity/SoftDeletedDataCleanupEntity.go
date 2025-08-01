@@ -32,40 +32,42 @@ type SoftDeletedDataCleanupEntity struct {
 }
 
 type DeletedItemsStats struct {
-	Packages                        []string
-	PackageRevisions                []PublishedVersionKeyEntity
-	ActivityTracking                int
-	ApiKeys                         []ApihubApiKeyEntity
-	Builds                          int
-	BuildDepends                    int
-	BuildResults                    int
-	BuildSources                    int
-	BuilderNotifications            int
-	FavoritePackages                int
-	MigratedVersions                int
-	Operations                      int
-	OperationGroups                 int
-	GroupedOperations               int
-	OperationOpenCounts             int
-	PackageExportConfigs            int
-	PackageMembersRoles             []PackageMemberRoleEntity
-	PackageServices                 []PackageService
-	PackageTransitions              int
-	PublishedData                   int
-	PublishedDocumentOpenCounts     int
-	PublishedSources                int
-	PublishedVersionOpenCounts      int
-	PublishedVersionReferences      int
-	PublishedVersionRevisionContent int
-	PublishedVersionValidation      int
-	SharedUrlInfo                   int
-	TransformedContentData          int
-	TotalRecords                    int
+	Packages                        []string                    `json:"packages"`
+	PackageRevisions                []PublishedVersionKeyEntity `json:"packageRevisions"`
+	ActivityTracking                int                         `json:"activityTracking"`
+	ApiKeys                         []ApihubApiKeyEntity        `json:"apiKeys"`
+	Builds                          int                         `json:"builds"`
+	BuildDepends                    int                         `json:"buildDepends"`
+	BuildResults                    int                         `json:"buildResults"`
+	BuildSources                    int                         `json:"buildSources"`
+	BuilderNotifications            int                         `json:"builderNotifications"`
+	FavoritePackages                int                         `json:"favoritePackages"`
+	MigratedVersions                int                         `json:"migratedVersions"`
+	Operations                      int                         `json:"operations"`
+	OperationGroups                 int                         `json:"operationGroups"`
+	GroupedOperations               int                         `json:"groupedOperations"`
+	OperationOpenCounts             int                         `json:"operationOpenCounts"`
+	PackageExportConfigs            int                         `json:"packageExportConfigs"`
+	PackageMembersRoles             []PackageMemberRoleEntity   `json:"packageMembersRoles"`
+	PackageServices                 []PackageService            `json:"packageServices"`
+	PackageTransitions              int                         `json:"packageTransitions"`
+	PublishedData                   int                         `json:"publishedData"`
+	PublishedDocumentOpenCounts     int                         `json:"publishedDocumentOpenCounts"`
+	PublishedSources                int                         `json:"publishedSources"`
+	PublishedVersionOpenCounts      int                         `json:"publishedVersionOpenCounts"`
+	PublishedVersionReferences      int                         `json:"publishedVersionReferences"`
+	PublishedVersionRevisionContent int                         `json:"publishedVersionRevisionContent"`
+	PublishedVersionValidation      int                         `json:"publishedVersionValidation"`
+	SharedUrlInfo                   int                         `json:"sharedUrlInfo"`
+	TransformedContentData          int                         `json:"transformedContentData"`
+	TotalRecords                    int                         `json:"totalRecords"`
 }
 
 type PackageService struct {
-	PackageId   string `pg:"package_id"`
-	ServiceName string `pg:"service_name"`
+	tableName struct{} `pg:"package_service"`
+
+	PackageId   string `pg:"package_id" json:"packageId"`
+	ServiceName string `pg:"service_name" json:"serviceName"`
 }
 
 func (d *DeletedItemsStats) CalculateTotal() {
