@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: APIHUB system administrators API
   description: |
-    The API is for system administrators only. 
+    The API is for system administrators only.
   license:
     name: qubership
     url: https://qubership.org
@@ -24,9 +24,14 @@ servers:
         default: apihub
 security:
   - BearerAuth: []
+  - CookieAuth: []
 tags:
   - name: Transition
     description: Operations to move packages
+  - name: System
+    description: System operations
+  - name: Admin
+    description: APIs for technical administration.
 
 paths:
   "/api/v2/admin/transition/move":
@@ -38,6 +43,7 @@ paths:
       operationId: movePackage
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       requestBody:
         description: Package coordinates
@@ -46,10 +52,10 @@ paths:
             schema:
               type: object
               properties:
-                from: 
+                from:
                   type: string
                   description: package id that needs to be moved
-                to: 
+                to:
                   type: string
                   description: destination package id
                 overwriteHistory:
@@ -119,6 +125,7 @@ paths:
       operationId: getMoveStatus
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - name: id
@@ -174,6 +181,7 @@ paths:
       operationId: listActivities
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       parameters:
         - name: offset
@@ -236,6 +244,7 @@ paths:
       operationId: listPackageTransitions
       security:
         - BearerAuth: []
+        - CookieAuth: []
         - api-key: []
       responses:
         "200":
@@ -280,6 +289,106 @@ paths:
               examples:
                 InternalServerError:
                   $ref: "#/components/examples/InternalServerError"
+  /api/v2/admin/system/stats:
+    get:
+      tags:
+        - System
+      summary: Get system statistics
+      description: |
+        Retrieves system-wide statistics including business entities count, build statistics, and database size information.
+      operationId: getSystemStats
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+        - api-key: []
+      responses:
+        "200":
+          description: System statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemStats"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  /api/v1/globalConfiguration:
+    patch:
+      tags:
+        - Admin
+      summary: Update global configuration parameters
+      description: >
+        Update global configuration parameters.
+        * If the parameter is not transmitted in request - its value stays
+        unchanged.
+      operationId: patchGlobalConfigurationParameters
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+        - api-key: []
+      requestBody:
+        description: Global configuration update parameters
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                versionPattern:
+                  type: string
+                  description: >
+                    Regular expression pattern for validating version names.
+                    Must be a valid regex.
+                  example: ^[A-Za-z0-9_.~\-]+$
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigurationParameters'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   schemas:
     ErrorResponse:
@@ -311,42 +420,168 @@ components:
     TransitionStatus:
       type: object
       properties:
-        id: 
+        id:
           type: string
           description: Move operation id
-        trType: 
+        trType:
           type: string
           description: Transition type
-        fromId: 
+        fromId:
           type: string
           description: Source package id
-        toId: 
+        toId:
           type: string
           description: Destination package id
-        status: 
+        status:
           type: string
           description: Operation status
-        startedBy: 
+        startedBy:
           type: string
           description: User who started the operation
-        startedAt: 
+        startedAt:
           type: string
           description: Time when the operation was started
-        finishedAt: 
+        finishedAt:
           type: string
           description: Time when the operation was finished
-        progressPercent: 
+        progressPercent:
           type: integer
           format: int32
           description: Percent of complete. Values 0-100
-        affectedObjects: 
+        affectedObjects:
           type: integer
           format: int32
           description: Number of affected rows in DB
-        completedSerialNumber: 
+        completedSerialNumber:
           type: integer
           format: int32
           description: Serial number of completed transition
+    BuildsCount:
+      type: object
+      description: Statistics for a specific build type
+      properties:
+        notStarted:
+          type: integer
+          description: Number of builds not started
+        running:
+          type: integer
+          description: Number of builds currently running
+        failedLastWeek:
+          type: integer
+          description: Number of builds that failed in the last week
+        succeedLastWeek:
+          type: integer
+          description: Number of builds that succeeded in the last week
+        restartsLastWeek:
+          type: integer
+          description: Number of builds that were restarted in the last week
+    SystemStats:
+      type: object
+      description: System-wide statistics
+      properties:
+        businessEntities:
+          type: object
+          description: Counts of various business entities in the system
+          properties:
+            workspaces:
+              type: integer
+              description: Number of workspaces
+            deletedWorkspaces:
+              type: integer
+              description: Number of deleted workspaces
+            groups:
+              type: integer
+              description: Number of groups
+            deletedGroups:
+              type: integer
+              description: Number of deleted groups
+            packages:
+              type: integer
+              description: Number of packages
+            deletedPackages:
+              type: integer
+              description: Number of deleted packages
+            dashboards:
+              type: integer
+              description: Number of dashboards
+            deletedDashboards:
+              type: integer
+              description: Number of deleted dashboards
+            revisions:
+              type: integer
+              description: Number of revisions
+            deletedRevisions:
+              type: integer
+              description: Number of deleted revisions
+            documents:
+              type: integer
+              description: Number of documents
+            operations:
+              type: integer
+              description: Number of operations
+            versionComparisons:
+              type: integer
+              description: Number of version comparisons
+        builds:
+          type: object
+          description: |
+            Statistics about builds by build type.
+          properties:
+            build:
+              $ref: "#/components/schemas/BuildsCount"
+            changelog:
+              $ref: "#/components/schemas/BuildsCount"
+            documentGroup:
+              $ref: "#/components/schemas/BuildsCount"
+            exportRestDocument:
+              $ref: "#/components/schemas/BuildsCount"
+            exportRestOperationsGroup:
+              $ref: "#/components/schemas/BuildsCount"
+            exportVersion:
+              $ref: "#/components/schemas/BuildsCount"
+            mergedSpecification:
+              $ref: "#/components/schemas/BuildsCount"
+            reducedSourceSpecifications:
+              $ref: "#/components/schemas/BuildsCount"
+        databaseSize:
+          type: array
+          description: Information about database table sizes
+          items:
+            type: object
+            properties:
+              tableName:
+                type: string
+                description: Name of the database table
+              rowEstimate:
+                type: number
+                format: float
+                description: Estimated number of rows in the table
+              totalSize:
+                type: string
+                description: Total size of the table including all related data
+              indexSize:
+                type: string
+                description: Size of the table's indexes
+              toastSize:
+                type: string
+                description: Size of the table's TOAST data
+              tableSize:
+                type: string
+                description: Size of the actual table data
+              totalSizeShare:
+                type: number
+                format: float
+                description: Proportion of the total database size that this table uses
+    ConfigurationParameters:
+      description: Global configuration parameters 
+      type: object
+      properties:
+        versionPattern:
+          type: string
+          description: >
+            Regular expression pattern used for validating version names. Used
+            globally across the system.
+          example: ^[A-Za-z0-9_.~\-]+$
   examples:
     IncorrectInputParameters:
       description: Incorrect input parameters
@@ -367,6 +602,11 @@ components:
       description: Bearer token authentication. Default secutity scheme for API usage.
       scheme: bearer
       bearerFormat: JWT
+    CookieAuth:
+      type: apiKey
+      in: cookie
+      name: apihub-access-token
+      description: Authentication via the `apihub-access-token` cookie.
     api-key:
       type: apiKey
       description: Api-key authentication.
