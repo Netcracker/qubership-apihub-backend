@@ -102,7 +102,11 @@ const (
 	REVISIONS_TTL_DAYS                         = "REVISIONS_TTL_DAYS"
 	INSTANCE_ID                                = "INSTANCE_ID"
 	COMPARISONS_CLEANUP_SCHEDULE               = "COMPARISONS_CLEANUP_SCHEDULE"
+	COMPARISONS_CLEANUP_TIMEOUT_MIN            = "COMPARISONS_CLEANUP_TIMEOUT_MIN"
 	COMPARISONS_TTL_DAYS                       = "COMPARISONS_TTL_DAYS"
+	SOFT_DELETED_DATA_CLEANUP_SCHEDULE         = "SOFT_DELETED_DATA_CLEANUP_SCHEDULE"
+	SOFT_DELETED_DATA_CLEANUP_TIMEOUT_MIN      = "SOFT_DELETED_DATA_CLEANUP_TIMEOUT_MIN"
+	SOFT_DELETED_DATA_TTL_DAYS                 = "SOFT_DELETED_DATA_TTL_DAYS"
 
 	LocalIDPId             = "local-idp"
 	ExternalSAMLProviderId = "external-saml-idp"
@@ -172,7 +176,11 @@ type SystemInfoService interface {
 	GetRevisionsCleanupDeleteReleaseRevisions() bool
 	GetRevisionsTTLDays() int
 	GetComparisonCleanupSchedule() string
+	GetComparisonCleanupTimeout() int
 	GetComparisonsTTLDays() int
+	GetSoftDeletedDataCleanupSchedule() string
+	GetSoftDeletedDataCleanupTimeout() int
+	GetSoftDeletedDataTTLDays() int
 }
 
 func (g systemInfoServiceImpl) GetCredsFromEnv() *view.DbCredentials {
@@ -288,7 +296,11 @@ func (g systemInfoServiceImpl) Init() error {
 	g.setRevisionsTTLDays()
 	g.setInstanceId()
 	g.setComparisonsCleanupSchedule()
+	g.setComparisonsCleanupTimeout()
 	g.setComparisonsTTLDays()
+	g.setSoftDeletedDataCleanupSchedule()
+	g.setSoftDeletedCleanupTimeout()
+	g.setSoftDeletedDataTTLDays()
 
 	return nil
 }
@@ -1083,7 +1095,11 @@ func (g systemInfoServiceImpl) GetAuthConfig() idp.AuthConfig {
 }
 
 func (g systemInfoServiceImpl) setRevisionsCleanupSchedule() {
-	g.systemInfoMap[REVISIONS_CLEANUP_SCHEDULE] = "0 1 * * 6" // at 01:00 AM on Saturday
+	envVal := os.Getenv(REVISIONS_CLEANUP_SCHEDULE)
+	if envVal == "" {
+		envVal = "0 21 * * 0" // at 9:00 PM on Sunday
+	}
+	g.systemInfoMap[REVISIONS_CLEANUP_SCHEDULE] = envVal
 }
 
 func (g systemInfoServiceImpl) GetRevisionsCleanupSchedule() string {
@@ -1152,11 +1168,32 @@ func (g systemInfoServiceImpl) GetInstanceId() string {
 }
 
 func (g systemInfoServiceImpl) setComparisonsCleanupSchedule() {
-	g.systemInfoMap[COMPARISONS_CLEANUP_SCHEDULE] = "0 23 * * 0" //TODO: what a schedule should be?
+	envVal := os.Getenv(COMPARISONS_CLEANUP_SCHEDULE)
+	if envVal == "" {
+		envVal = "0 5 * * 0" //at 5:00 AM on Sunday
+	}
+	g.systemInfoMap[COMPARISONS_CLEANUP_SCHEDULE] = envVal
 }
 
 func (g systemInfoServiceImpl) GetComparisonCleanupSchedule() string {
 	return g.systemInfoMap[COMPARISONS_CLEANUP_SCHEDULE].(string)
+}
+
+func (g systemInfoServiceImpl) setComparisonsCleanupTimeout() {
+	envVal := os.Getenv(COMPARISONS_CLEANUP_TIMEOUT_MIN)
+	if envVal == "" {
+		envVal = "720" //12 hours
+	}
+	val, err := strconv.Atoi(envVal)
+	if err != nil {
+		log.Errorf("failed to parse %v env value: %v. Value by default - 720", COMPARISONS_CLEANUP_TIMEOUT_MIN, err.Error())
+		val = 720
+	}
+	g.systemInfoMap[COMPARISONS_CLEANUP_TIMEOUT_MIN] = val
+}
+
+func (g systemInfoServiceImpl) GetComparisonCleanupTimeout() int {
+	return g.systemInfoMap[COMPARISONS_CLEANUP_TIMEOUT_MIN].(int)
 }
 
 func (g systemInfoServiceImpl) setComparisonsTTLDays() {
@@ -1174,4 +1211,50 @@ func (g systemInfoServiceImpl) setComparisonsTTLDays() {
 
 func (g systemInfoServiceImpl) GetComparisonsTTLDays() int {
 	return g.systemInfoMap[COMPARISONS_TTL_DAYS].(int)
+}
+
+func (g systemInfoServiceImpl) setSoftDeletedDataCleanupSchedule() {
+	envVal := os.Getenv(SOFT_DELETED_DATA_CLEANUP_SCHEDULE)
+	if envVal == "" {
+		envVal = "0 22 * * 5" //at 10 PM on Friday
+	}
+	g.systemInfoMap[SOFT_DELETED_DATA_CLEANUP_SCHEDULE] = envVal
+}
+
+func (g systemInfoServiceImpl) GetSoftDeletedDataCleanupSchedule() string {
+	return g.systemInfoMap[SOFT_DELETED_DATA_CLEANUP_SCHEDULE].(string)
+}
+
+func (g systemInfoServiceImpl) setSoftDeletedCleanupTimeout() {
+	envVal := os.Getenv(SOFT_DELETED_DATA_CLEANUP_TIMEOUT_MIN)
+	if envVal == "" {
+		envVal = "1440" //24 hours
+	}
+	val, err := strconv.Atoi(envVal)
+	if err != nil {
+		log.Errorf("failed to parse %v env value: %v. Value by default - 1440", SOFT_DELETED_DATA_CLEANUP_TIMEOUT_MIN, err.Error())
+		val = 1440
+	}
+	g.systemInfoMap[SOFT_DELETED_DATA_CLEANUP_TIMEOUT_MIN] = val
+}
+
+func (g systemInfoServiceImpl) GetSoftDeletedDataCleanupTimeout() int {
+	return g.systemInfoMap[SOFT_DELETED_DATA_CLEANUP_TIMEOUT_MIN].(int)
+}
+
+func (g systemInfoServiceImpl) setSoftDeletedDataTTLDays() {
+	envVal := os.Getenv(SOFT_DELETED_DATA_TTL_DAYS)
+	if envVal == "" {
+		envVal = "730" // 2 years
+	}
+	val, err := strconv.Atoi(envVal)
+	if err != nil {
+		log.Errorf("failed to parse %v env value: %v. Value by default - 365", SOFT_DELETED_DATA_TTL_DAYS, err.Error())
+		val = 730
+	}
+	g.systemInfoMap[SOFT_DELETED_DATA_TTL_DAYS] = val
+}
+
+func (g systemInfoServiceImpl) GetSoftDeletedDataTTLDays() int {
+	return g.systemInfoMap[SOFT_DELETED_DATA_TTL_DAYS].(int)
 }

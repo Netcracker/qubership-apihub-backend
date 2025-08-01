@@ -170,6 +170,14 @@ type PublishedShortVersionEntity struct {
 	PublishedAt time.Time `pg:"published_at, type:timestamp without time zone"`
 }
 
+type PublishedVersionKeyEntity struct {
+	tableName struct{} `pg:"published_version,discard_unknown_columns"`
+
+	PackageId string `pg:"package_id, pk, type:varchar"`
+	Version   string `pg:"version, pk, type:varchar"`
+	Revision  int    `pg:"revision, pk, type:integer"`
+}
+
 type PublishedContentEntity struct {
 	tableName struct{} `pg:"published_version_revision_content, alias:published_version_revision_content"`
 	// TODO: not sure about pk
