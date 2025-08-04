@@ -4100,12 +4100,14 @@ func (p publishedRepositoryImpl) DeleteSoftDeletedPackagesBeforeDate(ctx context
 		if len(packageIds) == 0 {
 			return nil
 		}
+		log.Debugf("[soft deleted data cleanup] Found %d packages to delete in current batch", len(packageIds))
 
 		err = p.countRelatedDataForPackagesTx(ctx, tx, packageIds, &deletedItemsStats)
 		if err != nil {
 			return fmt.Errorf("failed to count package related data: %w", err)
 		}
 
+		log.Trace("[soft deleted data cleanup] Deleting related API keys for packages")
 		deleteApiKeysQuery := `
 			DELETE FROM apihub_api_keys
 			WHERE package_id IN (?)`
@@ -4114,6 +4116,7 @@ func (p publishedRepositoryImpl) DeleteSoftDeletedPackagesBeforeDate(ctx context
 			return fmt.Errorf("failed to delete related API keys: %w", err)
 		}
 
+		log.Trace("[soft deleted data cleanup] Deleting package transitions for packages")
 		deletePackageTransitionsQuery := `
 			DELETE FROM package_transition
 			WHERE new_package_id IN (?)`
@@ -4122,6 +4125,7 @@ func (p publishedRepositoryImpl) DeleteSoftDeletedPackagesBeforeDate(ctx context
 			return fmt.Errorf("failed to delete related package transitions: %w", err)
 		}
 
+		log.Tracef("[soft deleted data cleanup] Deleting packages: %v", packageIds)
 		deletePackagesQuery := `
 			DELETE FROM package_group
 			WHERE id IN (?)`
@@ -4151,7 +4155,7 @@ func (p publishedRepositoryImpl) DeleteSoftDeletedPackagesBeforeDate(ctx context
 		if err != nil {
 			return fmt.Errorf("failed to update cleanup run state: %w", err)
 		}
-		log.Debugf("[deleted data cleanup] Deleted %v packages with %d total cascade records",
+		log.Debugf("[soft deleted data cleanup] Deleted %v packages with %d total cascade records",
 			deletedItemsStats.Packages, deletedItemsStats.TotalRecords-len(deletedItemsStats.Packages))
 
 		return nil
@@ -4174,12 +4178,13 @@ func (p publishedRepositoryImpl) DeleteSoftDeletedPackageRevisionsBeforeDate(ctx
 		var revisionKeys []entity.PublishedVersionKeyEntity
 		_, err := tx.QueryContext(ctx, &revisionKeys, geRevisionKeysQuery, beforeDate, batchSize)
 		if err != nil {
-			return fmt.Errorf("failed to get expired version keys: %w", err)
+			return fmt.Errorf("failed to get revision keys: %w", err)
 		}
 
 		if len(revisionKeys) == 0 {
 			return nil
 		}
+		log.Debugf("[soft deleted data cleanup] Found %d package revisions to delete in current batch", len(revisionKeys))
 
 		valuesClause, args := buildRevisionKeysValuesClause(revisionKeys)
 
@@ -4188,10 +4193,11 @@ func (p publishedRepositoryImpl) DeleteSoftDeletedPackageRevisionsBeforeDate(ctx
 			return fmt.Errorf("failed to count related data: %w", err)
 		}
 
+		log.Tracef("[soft deleted data cleanup] Deleting package revisions: %+v", revisionKeys)
 		deleteQuery := `DELETE FROM published_version WHERE (package_id, version, revision) IN (` + valuesClause + `)`
 		_, err = tx.ExecContext(ctx, deleteQuery, args...)
 		if err != nil {
-			return fmt.Errorf("failed to delete expired versions: %w", err)
+			return fmt.Errorf("failed to delete package revisions: %w", err)
 		}
 
 		deletedItemsStats.PackageRevisions = revisionKeys
@@ -4216,7 +4222,7 @@ func (p publishedRepositoryImpl) DeleteSoftDeletedPackageRevisionsBeforeDate(ctx
 			return fmt.Errorf("failed to update cleanup run state: %w", err)
 		}
 
-		log.Debugf("[deleted data cleanup] Deleted %+v package revisions with %d total cascade records",
+		log.Debugf("[soft deleted data cleanup] Deleted %+v package revisions with %d total cascade records",
 			deletedItemsStats.PackageRevisions, deletedItemsStats.TotalRecords-len(deletedItemsStats.PackageRevisions))
 
 		return nil

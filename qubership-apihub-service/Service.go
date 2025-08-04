@@ -245,7 +245,7 @@ func main() {
 
 	systemStatsRepository := repository.NewSystemStatsRepository(cp)
 
-	deletedDataCleanupRepository := repository.NewDeletedDataCleanupRepository(cp)
+	deletedDataCleanupRepository := repository.NewSoftDeletedDataCleanupRepository(cp)
 
 	lockRepo := repository.NewLockRepository(cp)
 

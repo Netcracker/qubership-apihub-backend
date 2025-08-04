@@ -774,7 +774,7 @@ type softDeletedDataCleanupJob struct {
 func (j *softDeletedDataCleanupJob) Run() {
 	jobId := uuid.New().String()
 
-	vacuumTimeout := 6 * time.Hour
+	vacuumTimeout := 1 * time.Minute           //TODO: remove after testing
 	parentTimeout := j.timeout + vacuumTimeout //an extended timeout is required to hold the lock for the entire duration of the job; the configured timeout is used for the main stage of the job, and an additional timeout is applied for performing VACUUM FULL on the affected tables
 	parentCtx, parentCancel := context.WithTimeout(context.Background(), parentTimeout)
 	defer parentCancel()
