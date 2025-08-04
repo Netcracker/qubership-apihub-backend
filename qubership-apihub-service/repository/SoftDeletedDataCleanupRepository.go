@@ -74,8 +74,6 @@ func (d softDeletedDataCleanupRepositoryImpl) VacuumAffectedTables(ctx context.C
 
 	var vacuumErrors []string
 
-	time.Sleep(time.Minute * 2) //TODO: remove after testing
-
 	if cleanupEntity.DeletedItems != nil && cleanupEntity.DeletedItems.TotalRecords > 0 {
 		deletedItems := cleanupEntity.DeletedItems
 		if len(deletedItems.Packages) > 0 {
