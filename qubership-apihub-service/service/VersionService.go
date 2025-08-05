@@ -696,7 +696,10 @@ func (v versionServiceImpl) GetPackageVersionsView(req view.VersionListReq, show
 	if err != nil {
 		return nil, err
 	}
-	if packageEnt == nil {
+
+	// When invoked from ListDeletedPackageVersions API -
+	// If package deletedAt field is nil, then "package not found" error is returned
+	if packageEnt == nil || (showOnlyDeleted && packageEnt.DeletedAt == nil) {
 		return nil, &exception.CustomError{
 			Status:  http.StatusNotFound,
 			Code:    exception.PackageNotFound,
