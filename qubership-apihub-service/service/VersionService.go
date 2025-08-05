@@ -707,6 +707,9 @@ func (v versionServiceImpl) GetPackageVersionsView(req view.VersionListReq, show
 
 	versions := make([]view.PublishedVersionListView, 0)
 	versionSortByPG := entity.GetVersionSortByPG(req.SortBy)
+	
+	// sortBy and sortOrder are not request params for GetDeletedPackageVersions API -
+	// Hence, they needs not be validated when the GetDeletedPackageVersions API is invoked.
 	if versionSortByPG == "" && !showOnlyDeleted {
 		return nil, &exception.CustomError{
 			Status:  http.StatusBadRequest,
