@@ -1228,12 +1228,12 @@ func (g systemInfoServiceImpl) GetSoftDeletedDataCleanupSchedule() string {
 func (g systemInfoServiceImpl) setSoftDeletedCleanupTimeout() {
 	envVal := os.Getenv(SOFT_DELETED_DATA_CLEANUP_TIMEOUT_MIN)
 	if envVal == "" {
-		envVal = "1440" //24 hours
+		envVal = "1200" //20 hours
 	}
 	val, err := strconv.Atoi(envVal)
 	if err != nil {
-		log.Errorf("failed to parse %v env value: %v. Value by default - 1440", SOFT_DELETED_DATA_CLEANUP_TIMEOUT_MIN, err.Error())
-		val = 1440
+		log.Errorf("failed to parse %v env value: %v. Value by default - 1200", SOFT_DELETED_DATA_CLEANUP_TIMEOUT_MIN, err.Error())
+		val = 1200
 	}
 	g.systemInfoMap[SOFT_DELETED_DATA_CLEANUP_TIMEOUT_MIN] = val
 }

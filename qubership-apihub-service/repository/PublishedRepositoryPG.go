@@ -4155,8 +4155,8 @@ func (p publishedRepositoryImpl) DeleteSoftDeletedPackagesBeforeDate(ctx context
 		if err != nil {
 			return fmt.Errorf("failed to update cleanup run state: %w", err)
 		}
-		log.Debugf("[soft deleted data cleanup] Deleted %v packages with %d total cascade records",
-			deletedItemsStats.Packages, deletedItemsStats.TotalRecords-len(deletedItemsStats.Packages))
+		log.Debugf("[soft deleted data cleanup] Deleted %d packages with %d total cascade records: %v",
+			len(deletedItemsStats.Packages), deletedItemsStats.TotalRecords-len(deletedItemsStats.Packages), deletedItemsStats.Packages)
 
 		return nil
 	})
@@ -4193,7 +4193,7 @@ func (p publishedRepositoryImpl) DeleteSoftDeletedPackageRevisionsBeforeDate(ctx
 			return fmt.Errorf("failed to count related data: %w", err)
 		}
 
-		log.Tracef("[soft deleted data cleanup] Deleting package revisions: %+v", revisionKeys)
+		log.Tracef("[soft deleted data cleanup] Deleting package revisions: %v", revisionKeys)
 		deleteQuery := `DELETE FROM published_version WHERE (package_id, version, revision) IN (` + valuesClause + `)`
 		_, err = tx.ExecContext(ctx, deleteQuery, args...)
 		if err != nil {
@@ -4222,8 +4222,8 @@ func (p publishedRepositoryImpl) DeleteSoftDeletedPackageRevisionsBeforeDate(ctx
 			return fmt.Errorf("failed to update cleanup run state: %w", err)
 		}
 
-		log.Debugf("[soft deleted data cleanup] Deleted %+v package revisions with %d total cascade records",
-			deletedItemsStats.PackageRevisions, deletedItemsStats.TotalRecords-len(deletedItemsStats.PackageRevisions))
+		log.Debugf("[soft deleted data cleanup] Deleted %d package revisions with %d total cascade records: %v",
+			len(deletedItemsStats.PackageRevisions), deletedItemsStats.TotalRecords-len(deletedItemsStats.PackageRevisions), deletedItemsStats.PackageRevisions)
 
 		return nil
 	})

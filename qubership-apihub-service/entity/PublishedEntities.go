@@ -15,6 +15,7 @@
 package entity
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -176,6 +177,10 @@ type PublishedVersionKeyEntity struct {
 	PackageId string `pg:"package_id, pk, type:varchar" json:"packageId"`
 	Version   string `pg:"version, pk, type:varchar" json:"version"`
 	Revision  int    `pg:"revision, pk, type:integer" json:"revision"`
+}
+
+func (e PublishedVersionKeyEntity) String() string {
+	return fmt.Sprintf("{packageId:%s version:%s revision:%d}", e.PackageId, e.Version, e.Revision)
 }
 
 type PublishedContentEntity struct {

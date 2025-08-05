@@ -561,16 +561,16 @@ func (j *comparisonsCleanupJob) Run() {
 	deletedItems := 0
 
 	vacuumTimeout := 3 * time.Hour
-	parentTimeout := j.timeout + vacuumTimeout //an extended timeout is required to hold the lock for the entire duration of the job; the configured timeout is used for the main stage of the job, and an additional timeout is applied for performing VACUUM FULL on the affected tables
-	parentCtx, parentCancel := context.WithTimeout(context.Background(), parentTimeout)
-	defer parentCancel()
+	jobTimeout := j.timeout + vacuumTimeout //an extended timeout is required to hold the lock for the entire duration of the job; the configured timeout is used for the main stage of the job, and an additional timeout is applied for performing VACUUM FULL on the affected tables
+	jobCtx, jobCancel := context.WithTimeout(context.Background(), jobTimeout)
+	defer jobCancel()
 
 	defer func() {
 		if err := recover(); err != nil {
 			errorMsg := fmt.Sprintf("Comparison cleanup job %s failed with panic: %v", jobId, err)
 			log.Errorf("%s", errorMsg)
 			finishedAt := time.Now()
-			_ = j.updateCleanupRun(parentCtx, jobId, statusError, errorMsg, deletedItems, &finishedAt)
+			_ = j.updateCleanupRun(jobCtx, jobId, statusError, errorMsg, deletedItems, &finishedAt)
 		}
 	}()
 
@@ -580,22 +580,21 @@ func (j *comparisonsCleanupJob) Run() {
 
 	log.Infof("Starting comparison cleanup job %s with TTL %d days, cleanup timeout %v", jobId, j.ttl, j.timeout)
 
-	if !j.acquireLock(parentCtx, jobId, parentCancel) {
+	if !j.acquireLock(jobCtx, jobId, jobCancel) {
 		return
 	}
-	defer j.releaseLock(parentCtx)
+	defer j.releaseLock(jobCtx)
 
 	deleteBefore := time.Now().AddDate(0, 0, -j.ttl)
 	log.Debugf("[comparisons cleanup] Will delete comparisons older than %s (TTL: %d days)", deleteBefore, j.ttl)
-	if err := j.initializeCleanupRun(parentCtx, jobId, deleteBefore); err != nil {
+	if err := j.initializeCleanupRun(jobCtx, jobId, deleteBefore); err != nil {
 		return
 	}
 
-	cleanupCtx, cleanupCancel := context.WithTimeout(parentCtx, j.timeout)
-	processingErrors, cleanupErr := j.processComparisons(cleanupCtx, jobId, deleteBefore, &deletedItems)
-	cleanupCancel()
-
+	cleanupCtx, cleanupCancel := context.WithTimeout(jobCtx, j.timeout)
+	defer cleanupCancel()
 	isTimeout := false
+	processingErrors, cleanupErr := j.processComparisons(cleanupCtx, jobId, deleteBefore, &deletedItems)
 	if cleanupErr != nil {
 		log.Warnf("Cleanup phase completed with error, but continuing to vacuum: %v", cleanupErr)
 		processingErrors = append(processingErrors, fmt.Sprintf("cleanup stopped: %s", cleanupErr.Error()))
@@ -604,10 +603,10 @@ func (j *comparisonsCleanupJob) Run() {
 		}
 	}
 
-	vacuumCtx, vacuumCancel := context.WithTimeout(parentCtx, vacuumTimeout)
+	vacuumCtx, vacuumCancel := context.WithTimeout(jobCtx, vacuumTimeout)
+	defer vacuumCancel()
 	log.Debugf("Starting vacuum of comparison tables")
 	vacuumErr := j.comparisonCleanupRepo.VacuumComparisonTables(vacuumCtx)
-	vacuumCancel()
 	if vacuumErr != nil {
 		log.Warnf("Failed to vacuum comparison tables during cleanup %s: %v", jobId, vacuumErr)
 		processingErrors = append(processingErrors, vacuumErr.Error())
@@ -617,7 +616,7 @@ func (j *comparisonsCleanupJob) Run() {
 	}
 	log.Debug("Vacuum of comparison tables completed successfully")
 
-	j.finishCleanupRun(parentCtx, jobId, processingErrors, deletedItems, isTimeout)
+	j.finishCleanupRun(jobCtx, jobId, processingErrors, deletedItems, isTimeout)
 }
 
 func (j *comparisonsCleanupJob) initializeCleanupRun(ctx context.Context, jobId string, deleteBefore time.Time) error {
@@ -775,16 +774,16 @@ func (j *softDeletedDataCleanupJob) Run() {
 	jobId := uuid.New().String()
 
 	vacuumTimeout := 6 * time.Hour
-	parentTimeout := j.timeout + vacuumTimeout //an extended timeout is required to hold the lock for the entire duration of the job; the configured timeout is used for the main stage of the job, and an additional timeout is applied for performing VACUUM FULL on the affected tables
-	parentCtx, parentCancel := context.WithTimeout(context.Background(), parentTimeout)
-	defer parentCancel()
+	jobTimeout := j.timeout + vacuumTimeout //an extended timeout is required to hold the lock for the entire duration of the job; the configured timeout is used for the main stage of the job, and an additional timeout is applied for performing VACUUM FULL on the affected tables
+	jobCtx, jobCancel := context.WithTimeout(context.Background(), jobTimeout)
+	defer jobCancel()
 
 	defer func() {
 		if err := recover(); err != nil {
 			errorMsg := fmt.Sprintf("Soft deleted data cleanup job %s failed with panic: %v", jobId, err)
 			log.Errorf("%s", errorMsg)
 			finishedAt := time.Now()
-			_ = j.updateCleanupRun(parentCtx, jobId, statusError, errorMsg, &finishedAt)
+			_ = j.updateCleanupRun(jobCtx, jobId, statusError, errorMsg, &finishedAt)
 		}
 	}()
 
@@ -794,22 +793,21 @@ func (j *softDeletedDataCleanupJob) Run() {
 
 	log.Infof("Starting soft deleted data cleanup job %s with TTL %d days, cleanup timeout %v", jobId, j.ttl, j.timeout)
 
-	if !j.acquireLock(parentCtx, jobId, parentCancel) {
+	if !j.acquireLock(jobCtx, jobId, jobCancel) {
 		return
 	}
-	defer j.releaseLock(parentCtx)
+	defer j.releaseLock(jobCtx)
 	log.Debugf("Successfully acquired distributed lock for soft deleted data cleanup job %s", jobId)
 
 	deleteBefore := time.Now().AddDate(0, 0, -j.ttl)
-	if err := j.initializeCleanupRun(parentCtx, jobId, deleteBefore); err != nil {
+	if err := j.initializeCleanupRun(jobCtx, jobId, deleteBefore); err != nil {
 		return
 	}
 
-	cleanupCtx, cleanupCancel := context.WithTimeout(parentCtx, j.timeout)
-	processingErrors, cleanupErr := j.processDeletedDataCleanup(cleanupCtx, jobId, deleteBefore)
-	cleanupCancel()
-
+	cleanupCtx, cleanupCancel := context.WithTimeout(jobCtx, j.timeout)
+	defer cleanupCancel()
 	isTimeout := false
+	processingErrors, cleanupErr := j.processDeletedDataCleanup(cleanupCtx, jobId, deleteBefore)
 	if cleanupErr != nil {
 		log.Warnf("Cleanup phase for job %s completed with error, but continuing to vacuum: %v", jobId, cleanupErr)
 		processingErrors = append(processingErrors, fmt.Sprintf("cleanup stopped: %s", cleanupErr.Error()))
@@ -821,11 +819,10 @@ func (j *softDeletedDataCleanupJob) Run() {
 		log.Debugf("Cleanup phase for job %s completed successfully", jobId)
 	}
 
-	vacuumCtx, vacuumCancel := context.WithTimeout(parentCtx, vacuumTimeout)
+	vacuumCtx, vacuumCancel := context.WithTimeout(jobCtx, vacuumTimeout)
+	defer vacuumCancel()
 	log.Debugf("Starting vacuum phase for job %s with timeout %v", jobId, vacuumTimeout)
 	vacuumErr := j.deletedDataCleanupRepo.VacuumAffectedTables(vacuumCtx, jobId)
-	vacuumCancel()
-
 	if vacuumErr != nil {
 		log.Warnf("Vacuum phase failed for job %s: %v", jobId, vacuumErr)
 		processingErrors = append(processingErrors, vacuumErr.Error())
@@ -837,7 +834,7 @@ func (j *softDeletedDataCleanupJob) Run() {
 		log.Debugf("Vacuum phase for job %s completed successfully", jobId)
 	}
 
-	j.finishCleanupRun(parentCtx, jobId, processingErrors, isTimeout)
+	j.finishCleanupRun(jobCtx, jobId, processingErrors, isTimeout)
 }
 
 func (j *softDeletedDataCleanupJob) initializeCleanupRun(ctx context.Context, jobId string, deleteBefore time.Time) error {
