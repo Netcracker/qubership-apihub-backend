@@ -338,8 +338,7 @@ paths:
       summary: Update global configuration parameters
       description: >
         Update global configuration parameters.
-        * If the parameter is not transmitted in request - its value stays
-        unchanged.
+          * If the parameter is not transmitted in request - its value stays unchanged.
       operationId: patchGlobalConfigurationParameters
       security:
         - BearerAuth: []
