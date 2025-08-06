@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/base64"
 	"fmt"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
 )
@@ -18,6 +19,7 @@ type Config struct {
 	Editor               EditorConfig
 	Olric                OlricConfig
 	Cleanup              CleanupConfig
+	Extensions           []view.Extension
 }
 
 type DatabaseConfig struct {
@@ -130,21 +132,21 @@ type OlricConfig struct {
 }
 
 type CleanupConfig struct {
-	Revisions RevisionsCleanupConfig
+	Revisions   RevisionsCleanupConfig
 	Comparisons ComparisonsCleanupConfig
-	Builds BuildsCleanupConfig
+	Builds      BuildsCleanupConfig
 }
 
 type RevisionsCleanupConfig struct {
-	Schedule string
-	DeleteLastRevision bool
+	Schedule               string
+	DeleteLastRevision     bool
 	DeleteReleaseRevisions bool
-	TTLDays int
+	TTLDays                int
 }
 
 type ComparisonsCleanupConfig struct {
 	Schedule string
-	TTLDays int
+	TTLDays  int
 }
 
 type BuildsCleanupConfig struct {
