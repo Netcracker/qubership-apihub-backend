@@ -24,7 +24,7 @@ type SystemInfo struct {
 	Notification        string      `json:"notification,omitempty"`
 	ExternalLinks       []string    `json:"externalLinks"`
 	MigrationInProgress bool        `json:"migrationInProgress"`
-	LinterEnabled       bool        `json:"linterEnabled"` // TODO: need to make more generic, like a list of extensions
+	LinterEnabled       bool        `json:"linterEnabled"` // TODO: remove, replaced with Extensions
 	Extensions          []Extension `json:"extensions"`
 }
 
