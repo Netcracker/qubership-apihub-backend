@@ -16,10 +16,11 @@ package controller
 
 import (
 	"encoding/json"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 
 	"strings"
 
@@ -145,8 +146,13 @@ func (c fileWSControllerImpl) TestSendMessageToWebsocket(w http.ResponseWriter, 
 	fileId := url.PathEscape(r.URL.Query().Get("fileId"))
 	token := r.URL.Query().Get("token")
 
-	defer r.Body.Close()
-	body, err := ioutil.ReadAll(r.Body)
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Errorf("Failed to close request body: %v", err)
+		}
+	}()
+
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,

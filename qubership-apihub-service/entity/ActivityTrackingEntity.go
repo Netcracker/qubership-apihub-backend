@@ -22,8 +22,6 @@ import (
 )
 
 type ActivityTrackingEntity struct {
-	tableName struct{} `pg:"activity_tracking"`
-
 	Id        string                 `pg:"id, pk, type:varchar"`
 	Type      string                 `pg:"e_type, type:varchar"`
 	Data      map[string]interface{} `pg:"data, type:jsonb"`
@@ -33,8 +31,6 @@ type ActivityTrackingEntity struct {
 }
 
 type EnrichedActivityTrackingEntity_deprecated struct {
-	tableName struct{} `pg:"select:activity_tracking,alias:at"`
-
 	ActivityTrackingEntity
 	PackageName       string `pg:"pkg_name, type:varchar"`
 	PackageKind       string `pg:"pkg_kind, type:varchar"`
@@ -43,8 +39,6 @@ type EnrichedActivityTrackingEntity_deprecated struct {
 }
 
 type EnrichedActivityTrackingEntity struct {
-	tableName struct{} `pg:"select:activity_tracking,alias:at"`
-
 	ActivityTrackingEntity
 	PrincipalEntity
 	PackageName       string `pg:"pkg_name, type:varchar"`

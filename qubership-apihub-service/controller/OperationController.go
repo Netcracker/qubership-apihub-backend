@@ -15,10 +15,11 @@
 package controller
 
 import (
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"net/http"
 	"net/url"
 	"strconv"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
@@ -730,7 +731,7 @@ func (o operationControllerImpl) GetOperationsChanges_deprecated(w http.Response
 			return
 		}
 	}
-	tags := make([]string, 0)
+	var tags []string
 	var customErr *exception.CustomError
 	if !emptyTag {
 		tags, customErr = getListFromParam(r, "tag")
@@ -764,7 +765,7 @@ func (o operationControllerImpl) GetOperationsChanges_deprecated(w http.Response
 		return
 	}
 
-	severities := make([]string, 0)
+	var severities []string
 	severities, customErr = getListFromParam(r, "severity")
 	if customErr != nil {
 		utils.RespondWithCustomError(w, customErr)
@@ -910,7 +911,7 @@ func (o operationControllerImpl) GetOperationsChanges(w http.ResponseWriter, r *
 			return
 		}
 	}
-	tags := make([]string, 0)
+	var tags []string
 	var customErr *exception.CustomError
 	if !emptyTag {
 		tags, customErr = getListFromParam(r, "tag")
@@ -944,7 +945,7 @@ func (o operationControllerImpl) GetOperationsChanges(w http.ResponseWriter, r *
 		return
 	}
 
-	severities := make([]string, 0)
+	var severities []string
 	severities, customErr = getListFromParam(r, "severity")
 	if customErr != nil {
 		utils.RespondWithCustomError(w, customErr)
@@ -1066,7 +1067,6 @@ func (o operationControllerImpl) GetDeprecatedOperationsList(w http.ResponseWrit
 		return
 	}
 
-	tags := make([]string, 0)
 	tags, customErr := getListFromParam(r, "tag")
 	if customErr != nil {
 		utils.RespondWithCustomError(w, customErr)

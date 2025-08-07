@@ -2,6 +2,9 @@ package service
 
 import (
 	"fmt"
+	"net/http"
+	"time"
+
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/archive"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
@@ -10,8 +13,6 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service/validation"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	log "github.com/sirupsen/logrus"
-	"net/http"
-	"time"
 )
 
 type ExportService interface {
@@ -80,7 +81,7 @@ func (e exportServiceImpl) StartVersionExport(ctx context.SecurityContext, req v
 		AllowedOasExtensions: allowedOasExtensions,
 	}
 
-	buildId, config, err := e.buildService.CreateBuildWithoutDependencies(config, false, "")
+	buildId, _, err := e.buildService.CreateBuildWithoutDependencies(config, false, "")
 	if err != nil {
 		return "", fmt.Errorf("failed to create build %s: %w", req.PackageId, err)
 	}
@@ -115,7 +116,7 @@ func (e exportServiceImpl) StartOASDocExport(ctx context.SecurityContext, req vi
 		AllowedOasExtensions: allowedOasExtensions,
 	}
 
-	buildId, config, err := e.buildService.CreateBuildWithoutDependencies(config, false, "")
+	buildId, _, err := e.buildService.CreateBuildWithoutDependencies(config, false, "")
 	if err != nil {
 		return "", fmt.Errorf("failed to create build %s: %w", req.PackageId, err)
 	}
@@ -150,7 +151,7 @@ func (e exportServiceImpl) StartRESTOpGroupExport(ctx context.SecurityContext, r
 		OperationsSpecTransformation: req.OperationsSpecTransformation,
 		Format:                       req.Format,
 	}
-	
+
 	exportId, _, err := e.buildService.CreateBuildWithoutDependencies(buildConfig, false, "")
 	if err != nil {
 		return "", err

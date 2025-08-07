@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -81,7 +80,7 @@ type versionControllerImpl struct {
 
 func (v versionControllerImpl) SharePublishedFile(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
@@ -142,7 +141,9 @@ func (v versionControllerImpl) GetSharedContentFile(w http.ResponseWriter, r *ht
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", attachmentFileName))
 	w.Header().Set("Content-Type", "text/plain") // For frontend it's convenient to get all types as plain text
 	w.WriteHeader(http.StatusOK)
-	w.Write(contentData)
+	if _, err := w.Write(contentData); err != nil {
+		log.Errorf("failed to write content data: %v", err)
+	}
 }
 
 // deprecated
@@ -385,7 +386,7 @@ func (v versionControllerImpl) PatchVersion(w http.ResponseWriter, r *http.Reque
 	}
 
 	defer r.Body.Close()
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
@@ -875,7 +876,9 @@ func (v versionControllerImpl) GetVersionedContentFileRaw(w http.ResponseWriter,
 	w.Header().Set("Content-Type", contentData.DataType)
 	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", content.Name))
 	w.WriteHeader(http.StatusOK)
-	w.Write(contentData.Data)
+	if _, err := w.Write(contentData.Data); err != nil {
+		log.Errorf("failed to write content data: %v", err)
+	}
 }
 
 func (v versionControllerImpl) GetVersionChanges(w http.ResponseWriter, r *http.Request) {
@@ -1245,7 +1248,7 @@ func (v versionControllerImpl) DeleteVersionsRecursively(w http.ResponseWriter, 
 	}
 
 	defer r.Body.Close()
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
@@ -1616,5 +1619,7 @@ func (v versionControllerImpl) GetCSVDashboardPublishReport(w http.ResponseWrite
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=publish_report_%v.csv", time.Now().Format("2006-01-02 15-04-05")))
 	w.Header().Set("Expires", "0")
 	w.WriteHeader(http.StatusOK)
-	w.Write(publishReport)
+	if _, err := w.Write(publishReport); err != nil {
+		log.Errorf("failed to write publish report: %v", err)
+	}
 }

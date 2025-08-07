@@ -16,7 +16,7 @@ package controller
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -61,8 +61,8 @@ func (t operationsMigrationControllerImpl) StartOpsMigration(w http.ResponseWrit
 		return
 	}
 
-	defer r.Body.Close()
-	body, err := ioutil.ReadAll(r.Body)
+	defer func() { _ = r.Body.Close() }()
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,

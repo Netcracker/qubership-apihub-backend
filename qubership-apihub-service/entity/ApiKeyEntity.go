@@ -21,8 +21,6 @@ import (
 )
 
 type ApiKeyEntity struct {
-	tableName struct{} `pg:"user_integration"`
-
 	Integration           view.GitIntegrationType `pg:"integration_type, pk, type:varchar"`
 	UserId                string                  `pg:"user_id, pk, type:varchar"`
 	AccessToken           string                  `pg:"key, type:varchar"`

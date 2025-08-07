@@ -16,7 +16,7 @@ package archive
 
 import (
 	"archive/zip"
-	"io/ioutil"
+	"io"
 )
 
 func ReadZipFile(zf *zip.File) ([]byte, error) {
@@ -24,8 +24,10 @@ func ReadZipFile(zf *zip.File) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
-	return ioutil.ReadAll(f)
+	defer func() {
+		_ = f.Close()
+	}()
+	return io.ReadAll(f)
 }
 
 func AddFileToZip(zw *zip.Writer, name string, content []byte) error {

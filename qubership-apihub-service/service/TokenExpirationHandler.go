@@ -115,7 +115,11 @@ func (t *tokenExpirationHandlerImpl) TokenExpired(userId string, integrationType
 			Message: fmt.Sprintf("Failed to refresh gitlab access token: gitlab refresh request failed: %v", err),
 		}
 	}
-	defer response.Body.Close()
+	defer func() {
+		if err := response.Body.Close(); err != nil {
+			log.Errorf("failed to close response body: %v", err)
+		}
+	}()
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
 		return "", nil, &exception.CustomError{

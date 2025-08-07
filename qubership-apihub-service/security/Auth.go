@@ -20,8 +20,9 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"net/http"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -31,6 +32,7 @@ import (
 	"github.com/shaj13/libcache"
 	_ "github.com/shaj13/libcache/fifo"
 	_ "github.com/shaj13/libcache/lru"
+	log "github.com/sirupsen/logrus"
 
 	"time"
 )
@@ -118,10 +120,17 @@ func CreateLocalUserToken_deprecated(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, _ := json.Marshal(userView)
+	response, err := json.Marshal(userView)
+	if err != nil {
+		log.Errorf("failed to marshal user token: %v", err)
+		http.Error(w, "failed to marshal response", http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write(response)
+	if _, err = w.Write(response); err != nil {
+		log.Errorf("failed to write user token response: %v", err)
+	}
 }
 
 func CreateTokenForUser_deprecated(dbUser view.User) (*UserView, error) {

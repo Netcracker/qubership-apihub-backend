@@ -17,7 +17,7 @@ package controller
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -69,8 +69,8 @@ func (a agentControllerImpl) ProcessAgentSignal(w http.ResponseWriter, r *http.R
 		})
 		return
 	}
-	defer r.Body.Close()
-	body, err := ioutil.ReadAll(r.Body)
+	defer func() { _ = r.Body.Close() }()
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,

@@ -339,7 +339,11 @@ func (o operationGroupControllerImpl) CreateOperationGroup_deprecated(w http.Res
 		return
 	}
 
-	defer r.Body.Close()
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Errorf("failed to close request body: %v", err)
+		}
+	}()
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
@@ -644,7 +648,11 @@ func (o operationGroupControllerImpl) ReplaceOperationGroup_deprecated(w http.Re
 		return
 	}
 
-	defer r.Body.Close()
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Errorf("failed to close request body: %v", err)
+		}
+	}()
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
@@ -896,7 +904,11 @@ func (o operationGroupControllerImpl) UpdateOperationGroup_deprecated(w http.Res
 		return
 	}
 
-	defer r.Body.Close()
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Errorf("failed to close request body: %v", err)
+		}
+	}()
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
@@ -1160,8 +1172,9 @@ func (o operationGroupControllerImpl) GetGroupExportTemplate(w http.ResponseWrit
 	}
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%v", templateFilename))
-	w.WriteHeader(http.StatusOK)
-	w.Write(template)
+	if _, err := w.Write(template); err != nil {
+		log.Errorf("Failed to write template: %v", err)
+	}
 }
 
 func (o operationGroupControllerImpl) StartOperationGroupPublish(w http.ResponseWriter, r *http.Request) {
@@ -1225,7 +1238,11 @@ func (o operationGroupControllerImpl) StartOperationGroupPublish(w http.Response
 		return
 	}
 
-	defer r.Body.Close()
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Errorf("failed to close request body: %v", err)
+		}
+	}()
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{

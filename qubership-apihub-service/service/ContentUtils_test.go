@@ -168,9 +168,7 @@ func TestNormalizationOfFilePath(t *testing.T) {
 		}
 	}
 
-	paths = append([]string{}, "/"+initFilePath+"/")
-	paths = append([]string{}, "./"+initFilePath+"/")
-	paths = append([]string{}, ""+initFilePath+"/")
+	paths = []string{"/" + initFilePath + "/", "./" + initFilePath + "/", "" + initFilePath + "/"}
 
 	for _, path := range paths {
 		normFileId := utils.NormalizeFilePath(path)

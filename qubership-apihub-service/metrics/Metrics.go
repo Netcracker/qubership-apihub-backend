@@ -110,14 +110,21 @@ var NumberOfBuildRetries = prometheus.NewGaugeVec(
 )
 
 func RegisterAllPrometheusApplicationMetrics() {
-	prometheus.Register(TotalRequests)
-	prometheus.Register(HttpDuration)
-	prometheus.Register(WSBranchEditSessionCount)
-	prometheus.Register(WSFileEditSessionCount)
-	prometheus.Register(BuildRunningStatusQueueSize)
-	prometheus.Register(BuildNoneStatusQueueSize)
-	prometheus.Register(FailedBuildCount)
-	prometheus.Register(MaxBuildTime)
-	prometheus.Register(AvgBuildTime)
-	prometheus.Register(NumberOfBuildRetries)
+	collectors := []prometheus.Collector{
+		TotalRequests,
+		WSBranchEditSessionCount,
+		WSFileEditSessionCount,
+		BuildRunningStatusQueueSize,
+		BuildNoneStatusQueueSize,
+		FailedBuildCount,
+		MaxBuildTime,
+		AvgBuildTime,
+		NumberOfBuildRetries,
+	}
+
+	for _, collector := range collectors {
+		if err := prometheus.Register(collector); err != nil {
+			panic(err)
+		}
+	}
 }

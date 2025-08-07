@@ -59,10 +59,6 @@ import (
 )
 
 func init() {
-	basePath := os.Getenv("BASE_PATH")
-	if basePath == "" {
-		basePath = "."
-	}
 	logFilePath := os.Getenv("LOG_FILE_PATH") //Example: /logs/apihub.log
 	var mw io.Writer
 	if logFilePath != "" {
@@ -138,7 +134,6 @@ func main() {
 		_ = initSrv.ListenAndServe()
 		log.Debugf("Init srv closed")
 		initSrvStoppedChan <- true
-		close(initSrvStoppedChan)
 	}(initSrvStoppedChan)
 
 	go func(migrationReadyChan chan bool) { // Do not use safe async here to enable panic
@@ -179,7 +174,7 @@ func main() {
 	}()
 
 	wg.Wait()
-	_ = <-initSrvStoppedChan // wait for the init srv to stop to avoid multiple servers started race condition
+	<-initSrvStoppedChan // wait for the init srv to stop to avoid multiple servers started race condition
 	log.Infof("Migration step passed, continue initialization")
 
 	gitIntegrationRepository, err := repository.NewGitIntegrationRepositoryPG(cp)

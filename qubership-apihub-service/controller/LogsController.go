@@ -17,9 +17,10 @@ package controller
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
-	"io/ioutil"
+	"io"
 	"net/http"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	log "github.com/sirupsen/logrus"
@@ -47,8 +48,13 @@ type logsControllerImpl struct {
 }
 
 func (l logsControllerImpl) StoreLogs(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
-	body, err := ioutil.ReadAll(r.Body)
+	defer func() {
+		err := r.Body.Close()
+		if err != nil {
+			log.Errorf("failed to close request body: %v", err)
+		}
+	}()
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
@@ -74,7 +80,12 @@ func (l logsControllerImpl) StoreLogs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (l logsControllerImpl) SetLogLevel(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
+	defer func() {
+		err := r.Body.Close()
+		if err != nil {
+			log.Errorf("failed to close request body: %v", err)
+		}
+	}()
 	ctx := context.Create(r)
 	sufficientPrivileges := l.roleService.IsSysadm(ctx)
 	if !sufficientPrivileges {
@@ -85,7 +96,7 @@ func (l logsControllerImpl) SetLogLevel(w http.ResponseWriter, r *http.Request) 
 		})
 		return
 	}
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
@@ -132,5 +143,8 @@ func (l logsControllerImpl) CheckLogLevel(w http.ResponseWriter, r *http.Request
 	log.Info("Info level is enabled")
 	log.Debug("Debug level is enabled")
 	log.Trace("Trace level is enabled")
-	w.Write([]byte(fmt.Sprintf("Current log level is '%s'. See logs for details", log.GetLevel())))
+	_, err := fmt.Fprintf(w, "Current log level is '%s'. See logs for details", log.GetLevel())
+	if err != nil {
+		log.Errorf("Failed to write log level response: %v", err)
+	}
 }

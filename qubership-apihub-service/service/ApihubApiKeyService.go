@@ -472,7 +472,7 @@ func (t apihubApiKeyServiceImpl) CreateApiKey(ctx context.SecurityContext, packa
 		return nil, err
 	}
 	for _, existingApiKeyEntity := range existingApiKeyEntities {
-		if existingApiKeyEntity.DeletedAt == nil && existingApiKeyEntity.ApihubApiKeyEntity.Name == name {
+		if existingApiKeyEntity.DeletedAt == nil && existingApiKeyEntity.Name == name {
 			return nil, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.ApiKeyNameDuplicate,
@@ -829,7 +829,7 @@ func (t apihubApiKeyServiceImpl) CreateSystemApiKey() error {
 		}
 		for _, existingApiKeyEntity := range existingApiKeyEntities {
 			if existingApiKeyEntity.DeletedAt == nil &&
-				existingApiKeyEntity.ApihubApiKeyEntity.Name == apiKeyName &&
+				existingApiKeyEntity.Name == apiKeyName &&
 				existingApiKeyEntity.Id != apihubApiKeyEntity.Id {
 				err = t.RevokePackageApiKey(context.CreateFromId(adminUser.Id), existingApiKeyEntity.Id, packageId)
 				if err != nil {

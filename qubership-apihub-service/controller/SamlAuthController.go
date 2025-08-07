@@ -17,6 +17,9 @@ package controller
 import (
 	"encoding/base64"
 	"encoding/json"
+	"net/http"
+	"net/url"
+
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
@@ -26,8 +29,6 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	"github.com/crewjam/saml/samlsp"
 	log "github.com/sirupsen/logrus"
-	"net/http"
-	"net/url"
 )
 
 type SamlAuthController interface {
@@ -98,7 +99,10 @@ func (a *authenticationControllerImpl) setUserViewCookie(w http.ResponseWriter, 
 	})
 	//TODO: remove after IDP reconfiguration
 	if a.systemInfoService.IsLegacySAML() {
-		security.SetAuthTokenCookies(w, user, "/login/sso/saml")
+		err = security.SetAuthTokenCookies(w, user, "/login/sso/saml")
+		if err != nil {
+			return err
+		}
 	}
 	log.Debugf("Auth user result object: %+v", userView)
 

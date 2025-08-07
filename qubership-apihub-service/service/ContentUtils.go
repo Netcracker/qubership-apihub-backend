@@ -222,7 +222,9 @@ var openapi31JsonRegexp = regexp.MustCompile(`3.1.*`)
 
 func getJsonContentInfo(data *[]byte) (view.ShortcutType, string) {
 	var contentJson jsonMap
-	json.Unmarshal(*data, &contentJson)
+	if err := json.Unmarshal(*data, &contentJson); err != nil {
+		return view.Unknown, ""
+	}
 
 	contentType := view.Unknown
 	contentTitle := ""
@@ -355,36 +357,6 @@ func equalStringSets(first []string, second []string) bool {
 
 func convertEol(data []byte) []byte {
 	convertedData := string(data)
-	convertedData = strings.Replace(convertedData, "\r\n", "\n", -1)
+	convertedData = strings.ReplaceAll(convertedData, "\r\n", "\n")
 	return []byte(convertedData)
-}
-
-// replaces any {variable} with {*}
-func normalizeEndpointPath(path string) string {
-	if strings.IndexByte(path, '{') < 0 {
-		return path
-	}
-	var result strings.Builder
-	var isVariable bool
-
-	result.Grow(len(path))
-
-	for _, char := range path {
-		if isVariable {
-			if char == '}' {
-				//variable end
-				isVariable = false
-
-				result.WriteRune('*')
-				result.WriteRune('}')
-			}
-			continue
-		}
-		if char == '{' {
-			//variable start
-			isVariable = true
-		}
-		result.WriteRune(char)
-	}
-	return result.String()
 }

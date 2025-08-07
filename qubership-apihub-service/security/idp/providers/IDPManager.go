@@ -21,6 +21,11 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
+	"net/http"
+	"net/url"
+	"os"
+	"time"
+
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -29,10 +34,6 @@ import (
 	dsig "github.com/russellhaering/goxmldsig"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"
-	"net/http"
-	"net/url"
-	"os"
-	"time"
 )
 
 func NewIDPManager(authConfig idp.AuthConfig, allowedHosts []string, productionMode bool, userService service.UserService) (idp.Manager, error) {
@@ -129,66 +130,64 @@ func CreateSAMLInstance(idpId string, samlConfig *idp.SAMLConfiguration) (*samls
 		log.Error("SAML configuration is invalid")
 		return nil, fmt.Errorf("SAML configuration is invalid")
 	}
-	var err error
-	crt, err := os.CreateTemp("", "apihub.cert")
-	if err != nil {
-		log.Errorf("Apihub.cert temp file wasn't created. Error - %s", err.Error())
-		return nil, err
-	}
+
 	decodeSamlCert, err := base64.StdEncoding.DecodeString(samlConfig.Certificate)
 	if err != nil {
 		return nil, err
 	}
-
-	_, err = crt.WriteString(string(decodeSamlCert))
-
+	crt, err := os.CreateTemp("", "apihub.cert")
 	if err != nil {
-		log.Errorf("SAML_CRT error - %s", err)
-		return nil, err
+		return nil, fmt.Errorf("apihub.cert temp file wasn't created: %w", err)
+	}
+	defer func(name string) {
+		if err := os.Remove(name); err != nil {
+			log.Warnf("failed to remove temporary file %s: %v", name, err)
+		}
+	}(crt.Name())
+
+	if _, err := crt.Write(decodeSamlCert); err != nil {
+		return nil, fmt.Errorf("SAML_CRT write error: %w", err)
+	}
+	if err := crt.Close(); err != nil {
+		return nil, fmt.Errorf("SAML_CRT close error: %w", err)
 	}
 
-	key, err := os.CreateTemp("", "apihub.key")
-	if err != nil {
-		log.Errorf("Apihub.key temp file wasn't created. Error - %s", err.Error())
-		return nil, err
-	}
 	decodePrivateKey, err := base64.StdEncoding.DecodeString(samlConfig.PrivateKey)
 	if err != nil {
 		return nil, err
 	}
-
-	_, err = key.WriteString(string(decodePrivateKey))
-
+	key, err := os.CreateTemp("", "apihub.key")
 	if err != nil {
-		log.Errorf("SAML_KEY error - %s", err)
-		return nil, err
+		return nil, fmt.Errorf("apihub.key temp file wasn't created: %w", err)
 	}
-
-	defer key.Close()
-	defer crt.Close()
-	defer os.Remove(key.Name())
-	defer os.Remove(crt.Name())
+	defer func(name string) {
+		if err := os.Remove(name); err != nil {
+			log.Warnf("failed to remove temporary file %s: %v", name, err)
+		}
+	}(key.Name())
+	if _, err := key.Write(decodePrivateKey); err != nil {
+		return nil, fmt.Errorf("SAML_KEY write error: %w", err)
+	}
+	if err := key.Close(); err != nil {
+		return nil, fmt.Errorf("SAML_KEY close error: %w", err)
+	}
 
 	keyPair, err := tls.LoadX509KeyPair(crt.Name(), key.Name())
 	if err != nil {
-		log.Errorf("keyPair error - %s", err)
-		return nil, err
+		return nil, fmt.Errorf("keyPair error: %w", err)
 	}
 
 	keyPair.Leaf, err = x509.ParseCertificate(keyPair.Certificate[0])
 	if err != nil {
-		log.Errorf("keyPair.Leaf error - %s", err)
-		return nil, err
+		return nil, fmt.Errorf("keyPair.Leaf error: %w", err)
 	}
 	metadataUrl := samlConfig.IDPMetadataURL
 	if metadataUrl == "" {
-		log.Error("metadataUrl env is empty")
-		return nil, err
+		return nil, fmt.Errorf("metadataUrl env is empty")
 	}
 	idpMetadataURL, err := url.Parse(metadataUrl)
 	if err != nil {
-		log.Errorf("idpMetadataURL error - %s", err)
-		return nil, err
+		return nil, fmt.Errorf("idpMetadataURL error: %w", err)
 	}
 
 	tr := http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
@@ -196,18 +195,15 @@ func CreateSAMLInstance(idpId string, samlConfig *idp.SAMLConfiguration) (*samls
 	idpMetadata, err := samlsp.FetchMetadata(context.Background(), &cl, *idpMetadataURL)
 
 	if err != nil {
-		log.Errorf("idpMetadata error - %s", err)
-		return nil, err
+		return nil, fmt.Errorf("idpMetadata error: %w", err)
 	}
 	rootURLPath := samlConfig.RootURL
 	if rootURLPath == "" {
-		log.Error("rootURLPath env is empty")
 		return nil, fmt.Errorf("rootURLPath env is empty")
 	}
 	rootURL, err := url.Parse(rootURLPath)
 	if err != nil {
-		log.Errorf("rootURL error - %s", err)
-		return nil, err
+		return nil, fmt.Errorf("rootURL error: %w", err)
 	}
 
 	samlSP, err := samlsp.New(samlsp.Options{
@@ -218,8 +214,7 @@ func CreateSAMLInstance(idpId string, samlConfig *idp.SAMLConfiguration) (*samls
 		EntityID:    rootURL.Path,
 	})
 	if err != nil {
-		log.Errorf("New saml instanse wasn't created. Error -%s", err.Error())
-		return nil, err
+		return nil, fmt.Errorf("new saml instanse wasn't created: %w", err)
 	}
 
 	samlSP.ServiceProvider.SignatureMethod = dsig.RSASHA256SignatureMethod

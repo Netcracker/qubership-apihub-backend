@@ -17,7 +17,7 @@ type ServerDoc struct {
 // Sending the derived ops to connected clients is the caller's responsibility.
 func (s *ServerDoc) Recv(rev int, ops Ops) (Ops, error) {
 	if rev < 0 || len(s.History) < rev {
-		return nil, fmt.Errorf("Revision not in history")
+		return nil, fmt.Errorf("revision not in history")
 	}
 	var err error
 	// transform ops against all operations that happened since rev

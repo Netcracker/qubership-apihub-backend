@@ -78,7 +78,7 @@ func (s integrationsServiceImpl) ListBranchesAndTags(ctx context.SecurityContext
 	for _, name := range branchNames {
 		branches = append(branches, view.GitBranch{Name: name})
 	}
-	tags, err := gitClient.GetRepoTags(goCtx, repoId, filter, -1)
+	tags, _ := gitClient.GetRepoTags(goCtx, repoId, filter, -1)
 	for _, name := range tags {
 		branches = append(branches, view.GitBranch{Name: name})
 	}

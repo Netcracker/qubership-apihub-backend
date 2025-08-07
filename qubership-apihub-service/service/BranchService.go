@@ -321,18 +321,25 @@ func (b branchServiceImpl) getBranchContentFromRepositoyArchive(ctx goctx.Contex
 	if err != nil {
 		return nil, err
 	}
-	defer os.Remove(tempFilePath)
+	defer func() {
+		_ = os.Remove(tempFilePath)
+	}()
 	err = gitClient.WriteCommitArchive(ctx, project.Integration.RepositoryId, currentCommit, gitRepoFile, "zip")
 	if err != nil {
+		_ = gitRepoFile.Close()
 		return nil, err
 	}
-	defer gitRepoFile.Close()
+	if err := gitRepoFile.Close(); err != nil {
+		return nil, err
+	}
 
 	zipReader, err := zip.OpenReader(tempFilePath)
 	if err != nil {
 		return nil, err
 	}
-	defer zipReader.Close()
+	defer func() {
+		_ = zipReader.Close()
+	}()
 
 	//validation was added based on security scan results to avoid resource exhaustion
 	if len(zipReader.File) > maxZipArchiveFiles {

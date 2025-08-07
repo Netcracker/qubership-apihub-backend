@@ -16,7 +16,7 @@ package controller
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -49,8 +49,12 @@ type groupControllerImpl struct {
 }
 
 func (g groupControllerImpl) AddGroup(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
-	body, err := ioutil.ReadAll(r.Body)
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Errorf("Failed to close request body: %v", err)
+		}
+	}()
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,

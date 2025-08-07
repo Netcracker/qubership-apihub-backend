@@ -64,7 +64,7 @@ func NewGitlabOauthClient(gitlabUrl, accessToken string, userId string, tokenRev
 			if err != nil {
 				return nil, err
 			}
-			version, _, err = client.Version.GetVersion()
+			_, _, err = client.Version.GetVersion()
 		}
 
 		if tokenIsRevoked(err) {
@@ -111,7 +111,7 @@ func (c gitlabClientImpl) SearchRepositories(ctx context.Context, search string,
 
 	isGitUrl := isGitRepoUrl(search)
 	if isGitUrl {
-		gitRepoCoordinates, err = parseGitRepoUrl(search)
+		gitRepoCoordinates, _ = parseGitRepoUrl(search)
 	} else {
 		gitRepoCoordinates = &GitRepoCoordinates{
 			name: search,
@@ -597,8 +597,7 @@ func (c gitlabClientImpl) ListDirectory(ctx context.Context, projectId string, b
 			viewNodes = append(viewNodes, *toViewNode(node))
 			itemsLeft--
 		}
-		options.ListOptions.Page = options.ListOptions.Page + 1
-
+		options.Page = options.Page + 1
 	}
 
 	return viewNodes, nil
@@ -627,7 +626,7 @@ func (c gitlabClientImpl) ListDirectoryFilesRecursive(ctx context.Context, proje
 	files := make([]string, 0)
 
 	options.ListOptions = gitlab.ListOptions{Page: 1, PerPage: 100}
-	for options.ListOptions.Page != 0 {
+	for options.Page != 0 {
 		ctx, cancel := context.WithTimeout(ctx, DefaultContextTimeout)
 		defer cancel()
 		nodes, response, err := c.client.Repositories.ListTree(projectId, &options, gitlab.WithContext(ctx))
@@ -657,7 +656,7 @@ func (c gitlabClientImpl) ListDirectoryFilesRecursive(ctx context.Context, proje
 			fileId := node.Path
 			files = append(files, fileId)
 		}
-		options.ListOptions.Page = response.NextPage
+		options.Page = response.NextPage
 	}
 	return files, nil
 }
@@ -719,7 +718,7 @@ func (c gitlabClientImpl) GetRepoBranches(ctx context.Context, projectId string,
 		}
 		return nil, nil, err
 	}
-	if branches == nil || len(branches) == 0 {
+	if len(branches) == 0 {
 		log.Debugf("No branches found for project with id %v! search='%s'", projectId, search)
 		return nil, nil, nil
 	}
@@ -1257,7 +1256,7 @@ func (c gitlabClientImpl) GetRepoTags(ctx context.Context, projectId string, sea
 		}
 		return nil, err
 	}
-	if tags == nil || len(tags) == 0 {
+	if len(tags) == 0 {
 		log.Debugf("No tags found for project with id %v! search='%s'", projectId, search)
 		return nil, nil
 	}
@@ -1481,7 +1480,7 @@ type GitRepoCoordinates struct {
 }
 
 func parseGitRepoUrl(url string) (*GitRepoCoordinates, error) {
-	if !(strings.HasPrefix(url, "https://") && strings.HasSuffix(url, ".git")) {
+	if !strings.HasPrefix(url, "https://") || !strings.HasSuffix(url, ".git") {
 		return nil, fmt.Errorf("incorrect https git repo URL provided. Expecting format https://git.domain.com/abc/def.git")
 	}
 
@@ -1517,10 +1516,7 @@ func isGitRepoUrl(str string) bool {
 }
 
 func toViewNode(gitlabNode *gitlab.TreeNode) *view.FileNode {
-	isFolder := false
-	if gitlabNode.Type == "tree" {
-		isFolder = true
-	}
+	isFolder := gitlabNode.Type == "tree"
 
 	return &view.FileNode{Name: gitlabNode.Name, IsFolder: isFolder}
 }
@@ -1572,10 +1568,7 @@ func tokenExpired(err error) bool {
 }
 
 func tokenIsRevoked(err error) bool {
-	if strings.Contains(err.Error(), "Token was revoked") {
-		return true
-	}
-	return false
+	return strings.Contains(err.Error(), "Token was revoked")
 }
 
 func contextDeadlineExceeded(err error) bool {

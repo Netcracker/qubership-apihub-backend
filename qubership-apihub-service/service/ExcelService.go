@@ -191,7 +191,9 @@ func buildDeprecatedOperationsWorkbook(deprecatedOperations *view.Operations, pa
 		columnDefaultWidth: 35,
 	}
 
-	buildCoverPage(report.workbook, packageName, "Deprecated API Operations", versionName, versionStatus)
+	if err = buildCoverPage(report.workbook, packageName, "Deprecated API Operations", versionName, versionStatus); err != nil {
+		return nil, err
+	}
 
 	evenCellStyle := getEvenCellStyle(report.workbook)
 	oddCellStyle := getOddCellStyle(report.workbook)
@@ -395,7 +397,9 @@ func buildOperationsWorkbook(operations *view.Operations, packageName, versionNa
 		columnDefaultWidth: 35,
 	}
 
-	buildCoverPage(report.workbook, packageName, "API Operations", versionName, versionStatus)
+	if err = buildCoverPage(report.workbook, packageName, "API Operations", versionName, versionStatus); err != nil {
+		return nil, err
+	}
 
 	evenCellStyle := getEvenCellStyle(report.workbook)
 	oddCellStyle := getOddCellStyle(report.workbook)
@@ -566,7 +570,8 @@ type ApiChangesReport struct {
 
 func buildApiChangesWorkbook(versionChanges *view.VersionChangesView, packageName, versionName, versionStatus string) (*excelize.File, error) {
 	var err error
-	apiChangesReport, err := excelize.OpenFile(ExcelTemplatePath)
+	var apiChangesReport *excelize.File
+	apiChangesReport, err = excelize.OpenFile(ExcelTemplatePath)
 	defer func() {
 		if err := apiChangesReport.Close(); err != nil {
 			log.Errorf("Failed to close excel template file: %v", err.Error())
@@ -585,9 +590,12 @@ func buildApiChangesWorkbook(versionChanges *view.VersionChangesView, packageNam
 
 	reportName := fmt.Sprintf("API changes between versions %s and %s", versionChanges.PreviousVersion, versionName)
 
-	buildCoverPage(report.workbook, packageName, reportName, versionName, versionStatus)
+	if err = buildCoverPage(report.workbook, packageName, reportName, versionName, versionStatus); err != nil {
+		return nil, err
+	}
 
 	var cellsValues map[string]interface{}
+	cellsValues = make(map[string]interface{})
 	report.firstSheetIndex, err = report.workbook.NewSheet(view.SummarySheetName)
 	if err != nil {
 		return nil, err
@@ -1341,6 +1349,11 @@ func getSummaryHeaderStyle(file *excelize.File) (style int) {
 func buildCoverPage(file *excelize.File, packageName, reportName, packageVersion, packageVersionStatus string) error {
 	var err error
 
+	err = file.SetColWidth("Cover", "A", "H", 13)
+	if err != nil {
+		return err
+	}
+
 	err = file.AddShape("Cover Page", "B15",
 		&excelize.Shape{
 			Type: "rect",
@@ -1485,17 +1498,13 @@ func (o *OperationsReport) createProtobufSheet() error {
 	if err != nil {
 		return err
 	}
-	err = o.workbook.AutoFilter(view.ProtobufSheetName, fmt.Sprintf("%s:%s", fmt.Sprintf("A%d", headerRowIndex), fmt.Sprintf("I%d", headerRowIndex)), []excelize.AutoFilterOptions{})
-	if err != nil {
-		return err
-	}
+	o.workbook.SetActiveSheet(o.firstSheetIndex)
 	return nil
 }
 
 func (o *DeprecatedOperationsReport) createRestSheet() error {
 	var err error
 	headerRowIndex := 1
-	headerStyle := getHeaderStyle(o.workbook)
 	o.firstSheetIndex, err = o.workbook.NewSheet(view.RestAPISheetName)
 	if err != nil {
 		return err
@@ -1504,6 +1513,7 @@ func (o *DeprecatedOperationsReport) createRestSheet() error {
 	if err != nil {
 		return err
 	}
+	headerStyle := getHeaderStyle(o.workbook)
 	cellsValues := make(map[string]interface{})
 	cellsValues[fmt.Sprintf("A%d", headerRowIndex)] = view.PackageIDColumnName
 	cellsValues[fmt.Sprintf("B%d", headerRowIndex)] = view.PackageNameColumnName
@@ -1525,17 +1535,13 @@ func (o *DeprecatedOperationsReport) createRestSheet() error {
 	if err != nil {
 		return err
 	}
-	err = o.workbook.AutoFilter(view.RestAPISheetName, fmt.Sprintf("%s:%s", fmt.Sprintf("A%d", headerRowIndex), fmt.Sprintf("L%d", headerRowIndex)), []excelize.AutoFilterOptions{})
-	if err != nil {
-		return err
-	}
+	o.workbook.SetActiveSheet(o.firstSheetIndex)
 	return nil
 }
 
 func (o *DeprecatedOperationsReport) createGraphQLSheet() error {
 	var err error
 	headerRowIndex := 1
-	headerStyle := getHeaderStyle(o.workbook)
 	o.firstSheetIndex, err = o.workbook.NewSheet(view.GraphQLSheetName)
 	if err != nil {
 		return err
@@ -1544,6 +1550,7 @@ func (o *DeprecatedOperationsReport) createGraphQLSheet() error {
 	if err != nil {
 		return err
 	}
+	headerStyle := getHeaderStyle(o.workbook)
 	cellsValues := make(map[string]interface{})
 	cellsValues[fmt.Sprintf("A%d", headerRowIndex)] = view.PackageIDColumnName
 	cellsValues[fmt.Sprintf("B%d", headerRowIndex)] = view.PackageNameColumnName
@@ -1565,17 +1572,13 @@ func (o *DeprecatedOperationsReport) createGraphQLSheet() error {
 	if err != nil {
 		return err
 	}
-	err = o.workbook.AutoFilter(view.GraphQLSheetName, fmt.Sprintf("%s:%s", fmt.Sprintf("A%d", headerRowIndex), fmt.Sprintf("L%d", headerRowIndex)), []excelize.AutoFilterOptions{})
-	if err != nil {
-		return err
-	}
+	o.workbook.SetActiveSheet(o.firstSheetIndex)
 	return nil
 }
 
 func (o *DeprecatedOperationsReport) createProtobufSheet() error {
 	var err error
 	headerRowIndex := 1
-	headerStyle := getHeaderStyle(o.workbook)
 	o.firstSheetIndex, err = o.workbook.NewSheet(view.ProtobufSheetName)
 	if err != nil {
 		return err
@@ -1584,6 +1587,7 @@ func (o *DeprecatedOperationsReport) createProtobufSheet() error {
 	if err != nil {
 		return err
 	}
+	headerStyle := getHeaderStyle(o.workbook)
 	cellsValues := make(map[string]interface{})
 	cellsValues[fmt.Sprintf("A%d", headerRowIndex)] = view.PackageIDColumnName
 	cellsValues[fmt.Sprintf("B%d", headerRowIndex)] = view.PackageNameColumnName
@@ -1592,10 +1596,11 @@ func (o *DeprecatedOperationsReport) createProtobufSheet() error {
 	cellsValues[fmt.Sprintf("E%d", headerRowIndex)] = view.OperationTitleColumnName
 	cellsValues[fmt.Sprintf("F%d", headerRowIndex)] = view.OperationTypeColumnName
 	cellsValues[fmt.Sprintf("G%d", headerRowIndex)] = view.OperationMethodColumnName
-	cellsValues[fmt.Sprintf("H%d", headerRowIndex)] = view.KindColumnName
-	cellsValues[fmt.Sprintf("I%d", headerRowIndex)] = view.DeprecatedSinceColumnName
-	cellsValues[fmt.Sprintf("J%d", headerRowIndex)] = view.DeprecatedDescriptionColumnName
-	cellsValues[fmt.Sprintf("K%d", headerRowIndex)] = view.AdditionalInformationColumnName
+	cellsValues[fmt.Sprintf("H%d", headerRowIndex)] = view.TagColumnName
+	cellsValues[fmt.Sprintf("I%d", headerRowIndex)] = view.KindColumnName
+	cellsValues[fmt.Sprintf("J%d", headerRowIndex)] = view.DeprecatedSinceColumnName
+	cellsValues[fmt.Sprintf("K%d", headerRowIndex)] = view.DeprecatedDescriptionColumnName
+	cellsValues[fmt.Sprintf("L%d", headerRowIndex)] = view.AdditionalInformationColumnName
 	err = setCellsValues(o.workbook, view.ProtobufSheetName, cellsValues)
 	if err != nil {
 		return err
@@ -1604,26 +1609,16 @@ func (o *DeprecatedOperationsReport) createProtobufSheet() error {
 	if err != nil {
 		return err
 	}
-	err = o.workbook.AutoFilter(view.ProtobufSheetName, fmt.Sprintf("%s:%s", fmt.Sprintf("A%d", headerRowIndex), fmt.Sprintf("K%d", headerRowIndex)), []excelize.AutoFilterOptions{})
-	if err != nil {
-		return err
-	}
+	o.workbook.SetActiveSheet(o.firstSheetIndex)
 	return nil
 }
 
 func (e excelServiceImpl) getVersionNameForAttachmentName(packageId, version string) (string, error) {
-	latestRevision, err := e.publishedRepo.GetLatestRevision(packageId, version)
+	versionName, err := getVersionNameFromVersionWithRevision(version)
 	if err != nil {
 		return "", err
 	}
-	versionName, versionRevision, err := SplitVersionRevision(version)
-	if err != nil {
-		return "", err
-	}
-	if latestRevision == versionRevision {
-		return versionName, nil
-	}
-	return version, nil
+	return versionName, nil
 }
 
 func getVersionNameFromVersionWithRevision(version string) (string, error) {
@@ -1676,11 +1671,21 @@ func (b *businessMetricsReport) createResultSheet(businessMetrics []view.Busines
 		return err
 	}
 
-	b.workbook.SetColWidth(sheetName, "A", "A", 12)
-	b.workbook.SetColWidth(sheetName, "B", "B", 30)
-	b.workbook.SetColWidth(sheetName, "C", "C", 30)
-	b.workbook.SetColWidth(sheetName, "D", "D", 30)
-	b.workbook.SetColWidth(sheetName, "E", "E", 10)
+	if err = b.workbook.SetColWidth(sheetName, "A", "A", 12); err != nil {
+		return err
+	}
+	if err = b.workbook.SetColWidth(sheetName, "B", "B", 30); err != nil {
+		return err
+	}
+	if err = b.workbook.SetColWidth(sheetName, "C", "C", 30); err != nil {
+		return err
+	}
+	if err = b.workbook.SetColWidth(sheetName, "D", "D", 30); err != nil {
+		return err
+	}
+	if err = b.workbook.SetColWidth(sheetName, "E", "E", 10); err != nil {
+		return err
+	}
 	rowIndex := 2
 	for _, businessMetric := range businessMetrics {
 		cells[fmt.Sprintf("A%d", rowIndex)] = businessMetric.Date

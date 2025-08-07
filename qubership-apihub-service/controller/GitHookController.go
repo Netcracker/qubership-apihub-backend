@@ -17,7 +17,6 @@ package controller
 import (
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"net/http"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
@@ -47,8 +46,12 @@ type gitHookController struct {
 func (c gitHookController) SetGitLabToken(w http.ResponseWriter, r *http.Request) {
 	projectId := getStringParam(r, "projectId")
 	ctx := context.Create(r)
-	defer r.Body.Close()
-	body, err := ioutil.ReadAll(r.Body)
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Errorf("Failed to close request body: %v", err)
+		}
+	}()
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,

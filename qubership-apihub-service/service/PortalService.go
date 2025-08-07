@@ -20,8 +20,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
-	"io/ioutil"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -86,26 +86,26 @@ func (p portalServiceImpl) GenerateInteractivePageForPublishedFile(packageId str
 
 	zw := zip.NewWriter(&zipBuf)
 
-	scriptAssetFile, err := ioutil.ReadFile(p.basePath + scriptAssetPath)
+	scriptAssetFile, err := os.ReadFile(p.basePath + scriptAssetPath)
 	if err != nil {
 		return nil, "", err
 	}
 
-	singlePageAssetFile, err := ioutil.ReadFile(p.basePath + singlePageAssetPath)
+	singlePageAssetFile, err := os.ReadFile(p.basePath + singlePageAssetPath)
 	if err != nil {
 		return nil, "", err
 	}
 
-	lsAssetFile, err := ioutil.ReadFile(p.basePath + lsAssetPath)
+	lsAssetFile, err := os.ReadFile(p.basePath + lsAssetPath)
 	if err != nil {
 		return nil, "", err
 	}
 
-	logoAssetFile, err := ioutil.ReadFile(p.basePath + logoAssetPath)
+	logoAssetFile, err := os.ReadFile(p.basePath + logoAssetPath)
 	if err != nil {
 		return nil, "", err
 	}
-	stylesAssetFile, err := ioutil.ReadFile(p.basePath + stylesAssetPath)
+	stylesAssetFile, err := os.ReadFile(p.basePath + stylesAssetPath)
 	if err != nil {
 		return nil, "", err
 	}
@@ -192,40 +192,40 @@ func (p portalServiceImpl) GenerateInteractivePageForPublishedVersion(packageId 
 		return nil, "", err
 	}
 
-	scriptAssetFile, err := ioutil.ReadFile(p.basePath + scriptAssetPath)
+	scriptAssetFile, err := os.ReadFile(p.basePath + scriptAssetPath)
 	if err != nil {
 		return nil, "", err
 	}
 	scriptAsset := string(scriptAssetFile)
 
-	indexAssetFile, err := ioutil.ReadFile(p.basePath + indexAssetPath)
+	indexAssetFile, err := os.ReadFile(p.basePath + indexAssetPath)
 	if err != nil {
 		return nil, "", err
 	}
 	indexAsset := string(indexAssetFile)
 
-	pageAssetFile, err := ioutil.ReadFile(p.basePath + pageAssetPath)
+	pageAssetFile, err := os.ReadFile(p.basePath + pageAssetPath)
 	if err != nil {
 		return nil, "", err
 	}
 	pageAsset := string(pageAssetFile)
 
-	lsAssetFile, err := ioutil.ReadFile(p.basePath + lsAssetPath)
+	lsAssetFile, err := os.ReadFile(p.basePath + lsAssetPath)
 	if err != nil {
 		return nil, "", err
 	}
 
-	logoAssetFile, err := ioutil.ReadFile(p.basePath + logoAssetPath)
+	logoAssetFile, err := os.ReadFile(p.basePath + logoAssetPath)
 	if err != nil {
 		return nil, "", err
 	}
 
-	stylesAssetFile, err := ioutil.ReadFile(p.basePath + stylesAssetPath)
+	stylesAssetFile, err := os.ReadFile(p.basePath + stylesAssetPath)
 	if err != nil {
 		return nil, "", err
 	}
 
-	mdLibFile, err := ioutil.ReadFile(p.basePath + mdLibPath)
+	mdLibFile, err := os.ReadFile(p.basePath + mdLibPath)
 	if err != nil {
 		return nil, "", err
 	}
@@ -358,40 +358,40 @@ func (p portalServiceImpl) GenerateInteractivePageForTransformedDocuments(packag
 			Params:  map[string]interface{}{"error": err.Error()},
 		}
 	}
-	scriptAssetFile, err := ioutil.ReadFile(p.basePath + scriptAssetPath)
+	scriptAssetFile, err := os.ReadFile(p.basePath + scriptAssetPath)
 	if err != nil {
 		return nil, err
 	}
 	scriptAsset := string(scriptAssetFile)
 
-	indexAssetFile, err := ioutil.ReadFile(p.basePath + indexAssetPath)
+	indexAssetFile, err := os.ReadFile(p.basePath + indexAssetPath)
 	if err != nil {
 		return nil, err
 	}
 	indexAsset := string(indexAssetFile)
 
-	pageAssetFile, err := ioutil.ReadFile(p.basePath + pageAssetPath)
+	pageAssetFile, err := os.ReadFile(p.basePath + pageAssetPath)
 	if err != nil {
 		return nil, err
 	}
 	pageAsset := string(pageAssetFile)
 
-	lsAssetFile, err := ioutil.ReadFile(p.basePath + lsAssetPath)
+	lsAssetFile, err := os.ReadFile(p.basePath + lsAssetPath)
 	if err != nil {
 		return nil, err
 	}
 
-	logoAssetFile, err := ioutil.ReadFile(p.basePath + logoAssetPath)
+	logoAssetFile, err := os.ReadFile(p.basePath + logoAssetPath)
 	if err != nil {
 		return nil, err
 	}
 
-	stylesAssetFile, err := ioutil.ReadFile(p.basePath + stylesAssetPath)
+	stylesAssetFile, err := os.ReadFile(p.basePath + stylesAssetPath)
 	if err != nil {
 		return nil, err
 	}
 
-	mdLibFile, err := ioutil.ReadFile(p.basePath + mdLibPath)
+	mdLibFile, err := os.ReadFile(p.basePath + mdLibPath)
 	if err != nil {
 		return nil, err
 	}
@@ -491,7 +491,7 @@ func isProcessable(file *view.PublishedContent) bool {
 	return isProcessableFileName(file.Name)
 }
 func isProcessableFileName(fileName string) bool {
-	if !(strings.HasSuffix(fileName, ".json") || strings.HasSuffix(fileName, ".yaml") || strings.HasSuffix(fileName, ".yml")) {
+	if !strings.HasSuffix(fileName, ".json") && !strings.HasSuffix(fileName, ".yaml") && !strings.HasSuffix(fileName, ".yml") {
 		return false
 	}
 	// TODO: check content type or not?
@@ -519,7 +519,7 @@ func generatePage(template string, projectName string, version string, fileTitle
 func generateIndex(template string, projectName string, version string, mdJs string, readmeHtml string, fileList []view.FileMetadata, generatedHtmls map[string]bool) string {
 	htmlList := ""
 	for _, file := range fileList {
-		exists, _ := generatedHtmls[file.Slug]
+		exists := generatedHtmls[file.Slug]
 		if exists {
 			htmlList += fmt.Sprintf("  <li><a href=\"%s\">%s</a></li>\n", file.Slug+".html", file.Name)
 		}

@@ -16,9 +16,10 @@ package controller
 
 import (
 	"encoding/json"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
-	"io/ioutil"
+	"io"
 	"net/http"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
@@ -101,8 +102,13 @@ func (c integrationsControllerImpl) SetUserApiKey(w http.ResponseWriter, r *http
 		return
 	}
 
-	defer r.Body.Close()
-	body, err := ioutil.ReadAll(r.Body)
+	defer func() {
+		err := r.Body.Close()
+		if err != nil {
+			log.Errorf("failed to close request body: %v", err)
+		}
+	}()
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,

@@ -16,9 +16,10 @@ package controller
 
 import (
 	"fmt"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"net/http"
 	"net/url"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -113,7 +114,9 @@ func (v publishControllerImpl) GetVersionSources(w http.ResponseWriter, r *http.
 
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.WriteHeader(http.StatusOK)
-	w.Write(srcArchive)
+	if _, err := w.Write(srcArchive); err != nil {
+		log.Errorf("Failed to write srcArchive: %v", err)
+	}
 }
 
 func (v publishControllerImpl) GetPublishedVersionSourceDataConfig(w http.ResponseWriter, r *http.Request) {
@@ -195,7 +198,9 @@ func (v publishControllerImpl) GetSharedContentFile(w http.ResponseWriter, r *ht
 	}
 	w.Header().Set("Content-Type", "text/plain") // For frontend it's convenient to get all types as plain text
 	w.WriteHeader(http.StatusOK)
-	w.Write(contentData)
+	if _, err := w.Write(contentData); err != nil {
+		log.Errorf("Failed to write contentData: %v", err)
+	}
 }
 
 func (v publishControllerImpl) SharePublishedFile(w http.ResponseWriter, r *http.Request) {
@@ -302,7 +307,9 @@ func (v publishControllerImpl) GenerateFileDocumentation(w http.ResponseWriter, 
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write(data)
+	if _, err := w.Write(data); err != nil {
+		log.Errorf("Failed to write data: %v", err)
+	}
 }
 
 func (v publishControllerImpl) GenerateVersionDocumentation(w http.ResponseWriter, r *http.Request) {
@@ -357,5 +364,7 @@ func (v publishControllerImpl) GenerateVersionDocumentation(w http.ResponseWrite
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write(data)
+	if _, err := w.Write(data); err != nil {
+		log.Errorf("Failed to write data: %v", err)
+	}
 }

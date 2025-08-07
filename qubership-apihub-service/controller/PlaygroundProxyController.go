@@ -16,12 +16,13 @@ package controller
 
 import (
 	"crypto/tls"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"io"
 	"net/http"
 	"net/url"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 )
 
 func NewPlaygroundProxyController(systemInfoService service.SystemInfoService) ProxyController {
@@ -77,11 +78,11 @@ func (p *playgroundProxyControllerImpl) Proxy(w http.ResponseWriter, r *http.Req
 		})
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if err := copyHeader(w.Header(), resp.Header); err != nil {
 		utils.RespondWithCustomError(w, err)
 		return
 	}
 	w.WriteHeader(resp.StatusCode)
-	io.Copy(w, resp.Body)
+	_, _ = io.Copy(w, resp.Body)
 }

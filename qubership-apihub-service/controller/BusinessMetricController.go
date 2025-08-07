@@ -16,9 +16,12 @@ package controller
 
 import (
 	"fmt"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"net/http"
 	"strconv"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
@@ -96,8 +99,14 @@ func (b businessMetricControllerImpl) GetBusinessMetrics(w http.ResponseWriter, 
 		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%v"`, filename))
 		w.Header().Set("Content-Transfer-Encoding", "binary")
 		w.Header().Set("Expires", "0")
-		report.Write(w)
-		report.Close()
+		err = report.Write(w)
+		if err != nil {
+			log.Errorf("failed to write business metrics report for parent package id %s: %s", parentPackageId, err.Error())
+		}
+		err = report.Close()
+		if err != nil {
+			log.Errorf("failed to close business metrics report for parent package id %s: %s", parentPackageId, err.Error())
+		}
 		return
 	}
 }

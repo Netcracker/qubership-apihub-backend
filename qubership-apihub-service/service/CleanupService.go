@@ -116,7 +116,7 @@ func (c cleanupServiceImpl) ClearTestData(testId string) error {
 	}
 
 	//clear personal access tokens
-	_, err = c.cp.GetConnection().Model(&entity.PersonaAccessTokenEntity{}).
+	_, _ = c.cp.GetConnection().Model(&entity.PersonaAccessTokenEntity{}).
 		Where("user_id ilike ?", "%"+utils.LikeEscaped(testId)+"%").
 		ForceDelete()
 	//clear table user_data

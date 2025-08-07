@@ -16,10 +16,12 @@ package controller
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
@@ -81,7 +83,9 @@ func (u userControllerImpl) GetUserAvatar(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Disposition", "filename=\""+"image"+"\"")
 	w.Header().Set("Content-Type", "image/png") // TODO: what if avatar is not png?
 	w.Header().Set("Content-Length", string(rune(len(userAvatar.Avatar))))
-	w.Write(userAvatar.Avatar)
+	if _, err := w.Write(userAvatar.Avatar); err != nil {
+		log.Errorf("failed to write user avatar: %v", err)
+	}
 }
 
 func (u userControllerImpl) GetUsers(w http.ResponseWriter, r *http.Request) {
@@ -153,7 +157,7 @@ func (u userControllerImpl) GetUserById(w http.ResponseWriter, r *http.Request) 
 
 func (u userControllerImpl) CreateInternalUser(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,

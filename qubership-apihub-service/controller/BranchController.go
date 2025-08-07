@@ -15,11 +15,11 @@
 package controller
 
 import (
-	"fmt"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"net/http"
 	"net/url"
 	"strconv"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 
@@ -107,7 +107,7 @@ func (b branchControllerImpl) GetProjectBranchDetails(w http.ResponseWriter, r *
 	}
 
 	goCtx := context.CreateContextWithSecurity(r.Context(), context.Create(r))
-	goCtx = context.CreateContextWithStacktrace(goCtx, fmt.Sprintf("GetProjectBranchDetails()"))
+	goCtx = context.CreateContextWithStacktrace(goCtx, "GetProjectBranchDetails()")
 
 	branch, err := b.branchService.GetBranchDetailsEP(goCtx, projectId, branchName, true)
 	if err != nil {
@@ -156,7 +156,7 @@ func (b branchControllerImpl) GetProjectBranchConfigRaw(w http.ResponseWriter, r
 	}
 
 	goCtx := context.CreateContextWithSecurity(r.Context(), context.Create(r))
-	goCtx = context.CreateContextWithStacktrace(goCtx, fmt.Sprintf("GetProjectBranchConfigRaw()"))
+	goCtx = context.CreateContextWithStacktrace(goCtx, "GetProjectBranchConfigRaw()")
 
 	var configRaw []byte
 	if original {
@@ -178,7 +178,7 @@ func (b branchControllerImpl) GetProjectBranchConfigRaw(w http.ResponseWriter, r
 	}
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
-	w.Write(configRaw)
+	_, _ = w.Write(configRaw)
 }
 
 func (b branchControllerImpl) CommitBranchDraftChanges(w http.ResponseWriter, r *http.Request) {
@@ -194,7 +194,11 @@ func (b branchControllerImpl) CommitBranchDraftChanges(w http.ResponseWriter, r 
 		})
 		return
 	}
-	defer r.Body.Close()
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Error("Ошибка при закрытии r.Body: ", err)
+		}
+	}()
 	params, err := getParamsFromBody(r)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
@@ -418,7 +422,11 @@ func (b branchControllerImpl) CloneBranch(w http.ResponseWriter, r *http.Request
 		})
 		return
 	}
-	defer r.Body.Close()
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Error("Ошибка при закрытии r.Body: ", err)
+		}
+	}()
 	params, err := getParamsFromBody(r)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
@@ -451,7 +459,7 @@ func (b branchControllerImpl) CloneBranch(w http.ResponseWriter, r *http.Request
 	}
 
 	goCtx := context.CreateContextWithSecurity(r.Context(), context.Create(r))
-	goCtx = context.CreateContextWithStacktrace(goCtx, fmt.Sprintf("CloneBranch()"))
+	goCtx = context.CreateContextWithStacktrace(goCtx, "CloneBranch()")
 
 	err = b.branchService.CloneBranch(goCtx, projectId, branchName, newBranchName)
 	if err != nil {
@@ -485,7 +493,7 @@ func (b branchControllerImpl) DeleteBranch(w http.ResponseWriter, r *http.Reques
 	}
 
 	goCtx := context.CreateContextWithSecurity(r.Context(), context.Create(r))
-	goCtx = context.CreateContextWithStacktrace(goCtx, fmt.Sprintf("DeleteBranch()"))
+	goCtx = context.CreateContextWithStacktrace(goCtx, "DeleteBranch()")
 
 	err = b.branchService.DeleteBranch(goCtx, projectId, branchName)
 	if err != nil {
@@ -518,7 +526,7 @@ func (b branchControllerImpl) DeleteBranchDraft(w http.ResponseWriter, r *http.R
 	}
 
 	goCtx := context.CreateContextWithSecurity(r.Context(), context.Create(r))
-	goCtx = context.CreateContextWithStacktrace(goCtx, fmt.Sprintf("DeleteBranchDraft()"))
+	goCtx = context.CreateContextWithStacktrace(goCtx, "DeleteBranchDraft()")
 
 	err = b.branchService.ResetBranchDraft(goCtx, projectId, branchName, true)
 	if err != nil {
@@ -552,7 +560,7 @@ func (b branchControllerImpl) GetBranchConflicts(w http.ResponseWriter, r *http.
 	}
 
 	goCtx := context.CreateContextWithSecurity(r.Context(), context.Create(r))
-	goCtx = context.CreateContextWithStacktrace(goCtx, fmt.Sprintf("GetBranchConflicts()"))
+	goCtx = context.CreateContextWithStacktrace(goCtx, "GetBranchConflicts()")
 
 	branchConflicts, err := b.branchService.CalculateBranchConflicts(goCtx, projectId, branchName)
 	if err != nil {

@@ -16,7 +16,7 @@ package controller
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -27,6 +27,7 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
+	log "github.com/sirupsen/logrus"
 )
 
 type ComparisonController interface {
@@ -113,8 +114,12 @@ func (c comparisonControllerImpl) CompareTwoVersions(w http.ResponseWriter, r *h
 		}
 	}
 
-	defer r.Body.Close()
-	body, err := ioutil.ReadAll(r.Body)
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Error("Ошибка при закрытии r.Body: ", err)
+		}
+	}()
+	body, _ := io.ReadAll(r.Body)
 
 	var compareVersionsReq view.CompareVersionsReq
 	err = json.Unmarshal(body, &compareVersionsReq)

@@ -87,6 +87,9 @@ func (b buildResultRepositoryImpl) DeleteBuildResults(buildIds []string) error {
 		deletedRows += result.RowsAffected()
 		return nil
 	})
+	if err != nil {
+		return err
+	}
 
 	if deletedRows > 0 {
 		_, err = b.cp.GetConnection().Exec("vacuum full build_result")

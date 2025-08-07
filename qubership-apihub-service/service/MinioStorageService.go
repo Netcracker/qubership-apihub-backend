@@ -211,7 +211,6 @@ func (m minioStorageServiceImpl) createBucketIfNotExists(ctx context.Context) er
 
 func createMinioClient(creds *view.MinioStorageCreds) *minioClient {
 	client := new(minioClient)
-	var err error
 	tr, err := minio.DefaultTransport(true)
 	if err != nil {
 		log.Warnf("error creating the minio connection: error creating the default transport layer: %v", err)
@@ -231,7 +230,7 @@ func createMinioClient(creds *view.MinioStorageCreds) *minioClient {
 		return client
 	}
 
-	_, err = crt.WriteString(string(decodeSamlCert))
+	_, _ = crt.WriteString(string(decodeSamlCert))
 	rootCAs := mustGetSystemCertPool()
 	data, err := os.ReadFile(crt.Name())
 	if err == nil {

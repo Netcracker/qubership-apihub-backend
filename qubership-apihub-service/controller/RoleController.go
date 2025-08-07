@@ -16,7 +16,7 @@ package controller
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
@@ -24,6 +24,8 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type RoleController interface {
@@ -133,8 +135,12 @@ func (c roleControllerImpl) AddPackageMembers(w http.ResponseWriter, r *http.Req
 		})
 		return
 	}
-	defer r.Body.Close()
-	body, err := ioutil.ReadAll(r.Body)
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Errorf("failed to close request body: %v", err)
+		}
+	}()
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
@@ -199,8 +205,12 @@ func (c roleControllerImpl) UpdatePackageMembers(w http.ResponseWriter, r *http.
 		return
 	}
 
-	defer r.Body.Close()
-	body, err := ioutil.ReadAll(r.Body)
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Errorf("failed to close request body: %v", err)
+		}
+	}()
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
@@ -247,8 +257,12 @@ func (c roleControllerImpl) CreateRole(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	defer r.Body.Close()
-	body, err := ioutil.ReadAll(r.Body)
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Errorf("failed to close request body: %v", err)
+		}
+	}()
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
@@ -315,8 +329,12 @@ func (c roleControllerImpl) UpdateRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	roleId := getStringParam(r, "roleId")
-	defer r.Body.Close()
-	body, err := ioutil.ReadAll(r.Body)
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Errorf("failed to close request body: %v", err)
+		}
+	}()
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
@@ -399,8 +417,12 @@ func (c roleControllerImpl) SetRoleOrder(w http.ResponseWriter, r *http.Request)
 		})
 		return
 	}
-	defer r.Body.Close()
-	body, err := ioutil.ReadAll(r.Body)
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Errorf("failed to close request body: %v", err)
+		}
+	}()
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
@@ -450,8 +472,12 @@ func (c roleControllerImpl) GetAvailableUserPackagePromoteStatuses(w http.Respon
 		return
 	}
 
-	defer r.Body.Close()
-	body, err := ioutil.ReadAll(r.Body)
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Errorf("failed to close request body: %v", err)
+		}
+	}()
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
@@ -494,7 +520,11 @@ func (c roleControllerImpl) TestSetUserSystemRole(w http.ResponseWriter, r *http
 		return
 	}
 
-	defer r.Body.Close()
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Errorf("failed to close request body: %v", err)
+		}
+	}()
 	params, err := getParamsFromBody(r)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{

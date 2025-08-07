@@ -22,6 +22,11 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"time"
+
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
@@ -31,10 +36,6 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"
-	"io"
-	"net/http"
-	"net/url"
-	"time"
 )
 
 const SSOLoginRefreshPathTemplate = "/api/v1/login/sso/%s"
@@ -398,7 +399,12 @@ func (o oidcProvider) downloadAvatar(ctx context.Context, avatarURL string, toke
 		log.Warnf("Failed to download avatar from URL %s: %v", avatarURL, err)
 		return nil
 	}
-	defer resp.Body.Close()
+	defer func() {
+		err := resp.Body.Close()
+		if err != nil {
+			log.Warnf("failed to close response body for avatar url %s: %v", avatarURL, err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		log.Warnf("Failed to download avatar, received status code %d from URL %s",

@@ -17,12 +17,13 @@ package controller
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 
@@ -47,7 +48,7 @@ func getUnescapedStringParam(r *http.Request, p string) (string, error) {
 
 func getParamsFromBody(r *http.Request) (map[string]interface{}, error) {
 	var params map[string]interface{}
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +195,7 @@ func handlePkgRedirectOrRespondWithError(w http.ResponseWriter, r *http.Request,
 				return
 			}
 			if newPkg != "" {
-				path := strings.Replace(r.URL.Path, packageId, newPkg, -1)
+				path := strings.ReplaceAll(r.URL.Path, packageId, newPkg)
 				if r.URL.RawQuery != "" {
 					path += "?" + r.URL.RawQuery
 				}

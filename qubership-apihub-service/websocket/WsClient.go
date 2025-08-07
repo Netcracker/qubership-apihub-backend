@@ -24,6 +24,7 @@ import (
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	ws "github.com/gorilla/websocket"
+	log "github.com/sirupsen/logrus"
 )
 
 type WsClient struct {
@@ -52,7 +53,9 @@ func (c *WsClient) send(payload interface{}) error {
 	defer c.mutex.Unlock()
 	err := c.Connection.WriteJSON(payload)
 	if err != nil {
-		c.Connection.Close()
+		if err := c.Connection.Close(); err != nil {
+			log.Errorf("failed to close ws connection: %v", err)
+		}
 		return fmt.Errorf("failed to send message to sess %s: %s", c.SessionId, err.Error())
 	}
 	return nil

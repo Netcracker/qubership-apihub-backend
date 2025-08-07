@@ -60,7 +60,6 @@ func NewGitClientProvider(configs []client.GitClientConfiguration, repo reposito
 		switch config.Integration {
 		case view.GitlabIntegration:
 			provider.gitlabConfiguration = config
-			break
 		default:
 			return nil, fmt.Errorf("unknown integration type: %s, unable to create client provider", config.Integration)
 		}
@@ -82,13 +81,16 @@ func (p *gitClientProviderImpl) deleteGCRevokedUsersFromCache() {
 	if err != nil {
 		log.Errorf("Failed to create DTopic: %s", err.Error())
 	}
-	p.gcRevokedUsersTopic.AddListener(func(topic olric.DTopicMessage) {
+	_, err = p.gcRevokedUsersTopic.AddListener(func(topic olric.DTopicMessage) {
 		p.userGCMutex.Lock()
 		defer p.userGCMutex.Unlock()
 
 		userId := fmt.Sprintf("%v", topic.Message)
 		p.gitlabClientUserCache.Delete(userId)
 	})
+	if err != nil {
+		log.Errorf("Failed to add listener to DTopic: %s", err.Error())
+	}
 }
 
 type gitClientProviderImpl struct {

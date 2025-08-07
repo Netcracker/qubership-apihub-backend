@@ -21,8 +21,6 @@ import (
 )
 
 type ApihubApiKeyEntity_deprecated struct {
-	tableName struct{} `pg:"apihub_api_keys"`
-
 	Id        string     `pg:"id, pk, type:varchar"`
 	PackageId string     `pg:"package_id, type:varchar"`
 	Name      string     `pg:"name, type:varchar"`
@@ -34,8 +32,6 @@ type ApihubApiKeyEntity_deprecated struct {
 	Roles     []string   `pg:"roles, type:varchar array, array"`
 }
 type ApihubApiKeyEntity struct {
-	tableName struct{} `pg:"apihub_api_keys"`
-
 	Id         string     `pg:"id, pk, type:varchar"`
 	PackageId  string     `pg:"package_id, type:varchar"`
 	Name       string     `pg:"name, type:varchar"`
@@ -49,16 +45,12 @@ type ApihubApiKeyEntity struct {
 }
 
 type ApihubApiKeyUserEntity_deprecated struct {
-	tableName struct{} `pg:"apihub_api_keys, alias:apihub_api_keys"`
-
 	ApihubApiKeyEntity_deprecated
 	UserName      string `pg:"user_name, type:varchar"`
 	UserEmail     string `pg:"user_email, type:varchar"`
 	UserAvatarUrl string `pg:"user_avatar_url, type:varchar"`
 }
 type ApihubApiKeyUserEntity struct {
-	tableName struct{} `pg:"apihub_api_keys, alias:apihub_api_keys"`
-
 	ApihubApiKeyEntity
 	UserName                string `pg:"user_name, type:varchar"`
 	UserEmail               string `pg:"user_email, type:varchar"`
