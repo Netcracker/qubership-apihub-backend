@@ -20,3 +20,5 @@ jobs:
         with:
           configuration-path: ".github/pr-assigner-config.yml"
           shuffle: 2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_ACCESS_TOKEN }}
