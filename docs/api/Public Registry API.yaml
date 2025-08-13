@@ -12521,15 +12521,6 @@ paths:
                                 Parent package and version link. Created by the concatenation of the packageId and version name with At sign.
                               type: string
                               example: QS.CloudQSS.CPQ.Q-TMF@2023.2
-                            includedOperationIds:
-                              description: List of operation IDs contained in the document
-                              type: array
-                              items:
-                                type: string
-                              example: [
-                                "get-quoteManagement-v5-quote",
-                                "post-quoteManagement-v5-quote"
-                              ]
                   packages:
                     description: |
                       A mapped list of the packageId and version name concatenation with At sign to the package objects.
