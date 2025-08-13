@@ -12521,6 +12521,15 @@ paths:
                                 Parent package and version link. Created by the concatenation of the packageId and version name with At sign.
                               type: string
                               example: QS.CloudQSS.CPQ.Q-TMF@2023.2
+                            includedOperationIds:
+                              description: List of operation IDs contained in the document
+                              type: array
+                              items:
+                                type: string
+                              example: [
+                                "get-quoteManagement-v5-quote",
+                                "post-quoteManagement-v5-quote"
+                              ]
                   packages:
                     description: |
                       A mapped list of the packageId and version name concatenation with At sign to the package objects.
@@ -15987,6 +15996,7 @@ components:
       type: object
       required:
         - operationId
+        - documentId
         - title
         - apiType
         - dataHash
@@ -15997,6 +16007,11 @@ components:
           description: Operation unique identifier (slug). Not the same as operationId tag from the OpenAPI file.
           type: string
           example: get-quoteManagement-v5-quote
+        documentId:
+          description: Unique string identifier of the document from which the operation is originated
+          type: string
+          pattern: "^[a-z0-9-]"
+          example: "qitmf-v5-11-json"
         title:
           description: Operation summary/title.
           type: string
