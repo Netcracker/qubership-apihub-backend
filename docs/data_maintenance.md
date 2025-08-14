@@ -27,14 +27,14 @@ conditions.
 
 ### Configuration
 
-The revisions cleanup job is configured through environment variables:
+The revisions cleanup job is configured via configuration properties:
 
-| Environment Variable                         | Default Value | Description                                                                |
-|----------------------------------------------|---------------|----------------------------------------------------------------------------|
-| `REVISIONS_TTL_DAYS`                         | `365`         | Number of days to keep revisions before they become eligible for deletion  |
-| `REVISIONS_CLEANUP_DELETE_LAST_REVISION`     | `false`       | Whether to delete the last revision of a version even if it's the only one |
-| `REVISIONS_CLEANUP_DELETE_RELEASE_REVISIONS` | `false`       | Whether to delete revisions with "release" status                          |
-| `REVISIONS_CLEANUP_SCHEDULE`                 | `0 21 * * 0`  | Cron schedule for the cleanup job (Sunday 9:00 PM by default)              |
+| Configuration property                     | Default value | Description                                                                |
+|--------------------------------------------|---------------|----------------------------------------------------------------------------|
+| `cleanup.revisions.ttlDays`                | `365`         | Number of days to keep revisions before they become eligible for deletion  |
+| `cleanup.revisions.deleteLastRevision`     | `false`       | Whether to delete the last revision of a version even if it's the only one |
+| `cleanup.revisions.deleteReleaseRevisions` | `false`       | Whether to delete revisions with "release" status                          |
+| `cleanup.revisions.schedule`               | `0 21 * * 0`  | Cron schedule for the cleanup job (Sunday 9:00 PM by default)              |
 
 The job timeout is automatically calculated based on the schedule interval to ensure it completes before the next run.
 
@@ -105,13 +105,13 @@ ad-hoc" comparisons that are created for temporary analysis.
 
 ### Configuration
 
-The comparisons cleanup job is configured through environment variables:
+The comparisons cleanup job is configured via configuration properties:
 
-| Environment Variable              | Default Value | Description                                                                                                                                                                                        |
-|-----------------------------------|---------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `COMPARISONS_TTL_DAYS`            | `30`          | Number of days to keep ad-hoc comparisons before they become eligible for deletion                                                                                                                 |
-| `COMPARISONS_CLEANUP_SCHEDULE`    | `0 5 * * 0`   | Cron schedule for the cleanup job (Sunday 5:00 AM by default)                                                                                                                                      |
-| `COMPARISONS_CLEANUP_TIMEOUT_MIN` | `720`         | Maximum execution time for the cleanup in minutes. After the timeout, the job will not be terminated immediately. 'VACUUM FULL' will be performed on the affected tables prior to job termination. |
+| Configuration property               | Default value | Description                                                                                                                                                                                        |
+|--------------------------------------|---------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `cleanup.comparisons.ttlDays`        | `30`          | Number of days to keep ad-hoc comparisons before they become eligible for deletion                                                                                                                 |
+| `cleanup.comparisons.schedule`       | `0 5 * * 0`   | Cron schedule for the cleanup job (Sunday 5:00 AM by default)                                                                                                                                      |
+| `cleanup.comparisons.timeoutMinutes` | `720`         | Maximum execution time for the cleanup in minutes. After the timeout, the job will not be terminated immediately. 'VACUUM FULL' will be performed on the affected tables prior to job termination. |
 
 The job includes a vacuum phase that runs after the main cleanup to optimize affected database tables.
 
@@ -138,13 +138,13 @@ time-to-live (TTL) period.
 
 ### Configuration
 
-The soft deleted data cleanup job is configured through environment variables:
+The soft deleted data cleanup job is configured via configuration properties:
 
-| Environment Variable                    | Default Value | Description                                                                                                                                                                                        |
-|-----------------------------------------|---------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `SOFT_DELETED_DATA_TTL_DAYS`            | `730`         | Number of days to keep soft-deleted data before permanent deletion                                                                                                                                 |
-| `SOFT_DELETED_DATA_CLEANUP_SCHEDULE`    | `0 22 * * 5`  | Cron schedule for the cleanup job (Friday 10:00 PM by default)                                                                                                                                     |
-| `SOFT_DELETED_DATA_CLEANUP_TIMEOUT_MIN` | `1200`        | Maximum execution time for the cleanup in minutes. After the timeout, the job will not be terminated immediately. 'VACUUM FULL' will be performed on the affected tables prior to job termination. |
+| Configuration property                   | Default value | Description                                                                                                                                                                                        |
+|------------------------------------------|---------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `cleanup.softDeletedData.ttlDays`        | `730`         | Number of days to keep soft-deleted data before permanent deletion                                                                                                                                 |
+| `cleanup.softDeletedData.schedule`       | `0 22 * * 5`  | Cron schedule for the cleanup job (Friday 10:00 PM by default)                                                                                                                                     |
+| `cleanup.softDeletedData.timeoutMinutes` | `1200`        | Maximum execution time for the cleanup in minutes. After the timeout, the job will not be terminated immediately. 'VACUUM FULL' will be performed on the affected tables prior to job termination. |
 
 ### How job works
 
@@ -212,14 +212,12 @@ primary record is deleted.
 
 All cleanup jobs run on predefined schedules to avoid conflicts and distribute system load:
 
-| Job type                  | Default schedule | Description        | Day/Time     | Cleanup phase timeout                                  | Vacuum phase timeout       |
-|---------------------------|------------------|--------------------|--------------|--------------------------------------------------------|----------------------------|
-| Revisions Cleanup         | `0 21 * * 0`     | Sunday at 9:00 PM  | Every Sunday | Interval between runs minus one hour                   | —                          |
-| Comparisons Cleanup       | `0 5 * * 0`      | Sunday at 5:00 AM  | Every Sunday | Configured via `COMPARISONS_CLEANUP_TIMEOUT_MIN`       | 3 hours (not configurable) |
-| Soft Deleted Data Cleanup | `0 22 * * 5`     | Friday at 10:00 PM | Every Friday | Configured via `SOFT_DELETED_DATA_CLEANUP_TIMEOUT_MIN` | 6 hours (not configurable) |
-| Builds Cleanup            | `0 1 * * 0`      | Sunday at 1:00 AM  | Every Sunday | —                                                      | —                          |
-
-All schedules use UTC timezone and can be customized via environment variables.
+| Job type                  | Default schedule | Description        | Day/Time     | Cleanup phase timeout                                   | Vacuum phase timeout       |
+|---------------------------|------------------|--------------------|--------------|---------------------------------------------------------|----------------------------|
+| Revisions Cleanup         | `0 21 * * 0`     | Sunday at 9:00 PM  | Every Sunday | Interval between runs minus one hour                    | —                          |
+| Comparisons Cleanup       | `0 5 * * 0`      | Sunday at 5:00 AM  | Every Sunday | Configured via `cleanup.comparisons.timeoutMinutes`     | 3 hours (not configurable) |
+| Soft Deleted Data Cleanup | `0 22 * * 5`     | Friday at 10:00 PM | Every Friday | Configured via `cleanup.softDeletedData.timeoutMinutes` | 6 hours (not configurable) |
+| Builds Cleanup            | `0 1 * * 0`      | Sunday at 1:00 AM  | Every Sunday | —                                                       | —                          |
 
 **Note**: when scheduling `Comparisons Cleanup`, `Soft Deleted Data Cleanup` and `Builds Cleanup` jobs,
 it is important to keep in mind that each job consists of two phases: cleanup and vacuuming of the affected tables.
