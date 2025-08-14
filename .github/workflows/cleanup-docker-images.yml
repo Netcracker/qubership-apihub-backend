@@ -1,6 +1,6 @@
 # Delete old docker images on Branch or Tag deletion
-name: CleanUP Old Docker Images
-run-name: CleanUP for ${{ github.event.ref_type }} '${{ github.event.ref }}' deleted
+name: Cleanup old docker images
+run-name: Cleanup for ${{ github.event.ref_type }} '${{ github.event.ref }}' deleted
 
 on:
   delete:
@@ -11,18 +11,18 @@ env:
   REF_NAME: ${{ github.event.ref }}
 
 jobs:
-  handle_deletion:
+  handle-deletion:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Log Deletion Info
+      - name: Log deletion info
         run: |
           echo "Deleted ${{ github.event.ref_type }}: ${REF_NAME}"
           echo "Deleted by: ${{ github.actor }}"
 
-      - name: Prepare Branch Tag
+      - name: Prepare branch tag
         if: github.event.ref_type == 'branch'
         id: prepare_branch_tag
         run: |
@@ -30,7 +30,7 @@ jobs:
           echo  "BRANCH_TAG=$BRANCH_TAG"
           echo  "BRANCH_TAG=$BRANCH_TAG" >> "$GITHUB_OUTPUT"
 
-      - name: Determine Tags to Delete
+      - name: Determine tags to delete
         id: determine_tags
         run: |
           if [ "${{ github.event.ref_type }}" = "branch" ]; then
@@ -54,7 +54,7 @@ jobs:
           echo "Excluded Tags: dev"
           echo "Dry Run: false"
 
-      - name: Execute Package Cleanup
+      - name: Execute package cleanup
         uses: netcracker/qubership-workflow-hub/actions/container-package-cleanup@main
         with:
           threshold-days: "0"
