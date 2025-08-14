@@ -56,8 +56,6 @@ options:
 
 # result
 
-![build result example](build_result_example.png)
-
 * "info.json" - main file which contains build(future version) parameters and metadata.
 * documents.json - list of documents with metadata
 * operations.json - list of operatrions with metadata

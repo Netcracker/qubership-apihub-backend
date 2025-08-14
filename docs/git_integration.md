@@ -1,3 +1,7 @@
+# Deprecation warning
+
+This feature is deprecated, disabled by default and will be removed from codebase eventually
+
 # (Git) Integration
 "Integration" is an ability to interact with git server.
 Every integration have a constant in view.GitIntegrationType and it's considered as a part of integration key.
@@ -23,7 +27,7 @@ In `gitIntegration` field.
 The value is used by Frontend to identify if user have integration enabled.
 
 If the integration is not enabled yet, Frontend displays wellcome message with green button asking user to establish the integration(connect to gitlab).
-When user clicks the button, FE redirects him to the Gitlab page (through /login/gitlab on Apihub BE) which allows to grant rights to Apihub application(You can check existing applications in your Gitlab profile: https://git.domain.com/-/profile/applications).
+When user clicks the button, FE redirects him to the Gitlab page (through /login/gitlab on Apihub BE) which allows to grant rights to Apihub application(You can check existing applications in your Gitlab profile: https://git.example.com/-/profile/applications).
 If user grants the rights, Apihub application is added to his profile and Gitlab redirects back to Apihub(to /login/gitlab/callback) with new generated token info.
 Then user is redirected back to the original page(typically https://{APIHUB_URL}/editor/) with git integration enabled.
 In scope of this process, the row with credentials is inserted to `user_integration` table.
@@ -67,7 +71,7 @@ In this case Apihub marks the token as revoked
 # Local development
 Since local isntance is not authorized on Gitlab (and it's not possible to do), default connect algorithm will not work(Gitlab will reject the request from local PC).
 But you can deal with the process and establish connection manually:
-* Generate personal access token on gitlab https://git.domain.com/-/profile/personal_access_tokens wiht `api` scope.
+* Generate personal access token on gitlab https://git.example.com/-/profile/personal_access_tokens wiht `api` scope.
 * Insert row to `user_integration` with the token value in `key` column and null `expires_at`.
   Or paste the value to `user_integration` in `key` column and remove `expires_at` if the record exists.
 

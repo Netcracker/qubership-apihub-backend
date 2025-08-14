@@ -17,4 +17,4 @@ permissions:
 
 jobs:
   check-license:
-    uses: netcracker/qubership-workflow-hub/.github/workflows/go-check-license.yaml@v1.0.3
+    uses: netcracker/qubership-workflow-hub/.github/workflows/go-check-license.yaml@v1.0.5
