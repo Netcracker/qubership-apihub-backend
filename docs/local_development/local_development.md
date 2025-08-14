@@ -19,7 +19,7 @@ Run corresponding docker-compose file from /docker-compose/DB folder.
 It will start Postgres DB in docker container with predefined credentials and database. So it's ready to connect from APIHUB BE.
 User `apihub` with password `apihub` and database `apihub` will be created automatically.
 If you use DBeaver you need to connect to PostgreSQL DB first using parameters:
-```
+```TEXT
 Host=localhost
 Username=postgres
 Password=postgres
@@ -33,7 +33,7 @@ Don't forget to check 'Show all databases' to see all DBs.
 docker-compose -f docs/local_development/docker-compose/DB/docker-compose.yml up
 ```
 
-If you have another docker image (usually another DB container from another project) which could intersect with this one then you need to change PostgreSQL port settings and image port mapping in  [`DB/docker-compose.yml`](/docs/local_development/docker-compose/DB/docker-compose.yml). 
+If you have another docker image (usually another DB container from another project) which could intersect with this one then you need to change PostgreSQL port settings and image port mapping in  [`DB/docker-compose.yml`](/docs/local_development/docker-compose/DB/docker-compose.yml).
 Please add two arguments into **command** section ("\-p" and "\<new port number\>") and update port mapping in the **ports** section. Default port number for PostgreSQL is **5432**.
 
 * To run the image please issue a command below:

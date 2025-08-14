@@ -12,7 +12,7 @@ It allows to scale builders(browser, node services) horizontally without changes
 Biold config is a metadata set for an object that will be created during the build.
 
 Example:
-```
+```JSON
 {
     "files": [
         {
@@ -72,14 +72,35 @@ options:
 
 ### Success cases
 
-#### build type = build & client_build=false:
+#### build type = build & client_build=false
 
-publish request -> validation -> save build entity and sources(tables build and build_src ) -> build is in queue (status==none) ->
-build is taken by node service *and bound to builder id* (status=running) -> the build is processed on node service (node service sends keepalives(set build status=running) while the build is running) -> node service sends build status = success with build result data -> builder id is validated -> build result is stored in DB (table build_result) or in minio -> build result is validated -> build result is stored in DB via single transaction -> search indexes calculated asynchronously(somehow)
+publish request ->
+validation ->
+save build entity and sources(tables build and build_src ) ->
+build is in queue (status==none) ->
+build is taken by node service *and bound to builder id* (status=running) ->
+the build is processed on node service (node service sends keepalives(set build status=running) while the build is running) ->
+node service sends build status = success with build result data ->
+builder id is validated ->
+build result is stored in DB (table build_result) or in minio ->
+build result is validated ->
+build result is stored in DB via single transaction ->
+search indexes calculated asynchronously(somehow)
 
-#### build type = build & client_build=true:
+#### build type = build & client_build=true
 
-publish request (with client_build=true and builderId!=null) -> validation -> save build entity and sources(tables build and build_src ) -> the build is bound to the builderId from request and status = running -> buildId is returned to the client -> the build is processed on client (client sends keepalives(set build status=running) while the build is running)-> client sends build status = success with build result data -> builder id is validated -> build result is stored in DB (table build_result) or in minio -> build result is validated -> build result is stored in DB via single transaction -> search indexes calculated asynchronously(somehow)
+publish request (with client_build=true and builderId!=null) ->
+validation ->
+save build entity and sources(tables build and build_src ) ->
+the build is bound to the builderId from request and status = running ->
+buildId is returned to the client ->
+the build is processed on client (client sends keepalives(set build status=running) while the build is running)->
+client sends build status = success with build result data ->
+builder id is validated ->
+build result is stored in DB (table build_result) or in minio ->
+build result is validated ->
+build result is stored in DB via single transaction ->
+search indexes calculated asynchronously(somehow)
 
 #### build type = changelog
 
@@ -89,7 +110,7 @@ almost the same, but only comparisons generated and stored
 
 TODO
 
-### Error cases:
+### Error cases
 
 #### builder is restarted (state is lost)
 
