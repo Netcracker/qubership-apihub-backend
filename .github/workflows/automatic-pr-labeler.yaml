@@ -10,7 +10,7 @@ name: Automatic PR Labeler
 
 on:
   pull_request:
-    branches: [main]
+    branches: [develop]
     types:
       [opened, reopened, synchronize]
 
