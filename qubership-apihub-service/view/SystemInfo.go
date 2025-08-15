@@ -19,13 +19,11 @@ import (
 )
 
 type SystemInfo struct {
-	BackendVersion      string      `json:"backendVersion"`
-	ProductionMode      bool        `json:"productionMode"`
-	Notification        string      `json:"notification,omitempty"`
-	ExternalLinks       []string    `json:"externalLinks"`
-	MigrationInProgress bool        `json:"migrationInProgress"`
-	LinterEnabled       bool        `json:"linterEnabled"` // TODO: remove, replaced with Extensions
-	Extensions          []Extension `json:"extensions"`
+	BackendVersion      string   `json:"backendVersion"`
+	ProductionMode      bool     `json:"productionMode"`
+	Notification        string   `json:"notification,omitempty"`
+	ExternalLinks       []string `json:"externalLinks"`
+	MigrationInProgress bool     `json:"migrationInProgress"`
 }
 
 type SystemConfigurationInfo_deprecated struct {
@@ -37,6 +35,7 @@ type SystemConfigurationInfo_deprecated struct {
 type SystemConfigurationInfo struct {
 	DefaultWorkspaceId string         `json:"defaultWorkspaceId"`
 	AuthConfig         idp.AuthConfig `json:"authConfig"`
+	Extensions         []Extension    `json:"extensions"`
 }
 
 type Extension struct {

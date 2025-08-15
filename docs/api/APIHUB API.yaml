@@ -2772,25 +2772,6 @@ components:
           description: Identifies if migration is currently in progress.
           type: boolean
           default: false
-        extensions:
-          description: List of enabled extension services for apihub
-          type: array
-          items:
-            description: Extension item
-            type: object
-            properties:
-              name:
-                description: Unique name of the extension service
-                type: string
-                example: linter
-              baseUrl:
-                description: URL of the extension service
-                type: string
-                example: http://example.com
-              pathPrefix:
-                description: path for routing
-                type: string
-                example: api-linter
     ValidationParams:
       description: qubership product release custom API validation parameters
       properties:
@@ -2953,10 +2934,6 @@ components:
         externalLinks:
           - User guide|https://www.example.com/guide
           - Support team|https://www.example.com/support]
-        extensions:
-          - name: linter
-            baseUrl: https://www.example.com
-            pathPrefix: api-linter
     BranchNotFound:
       description: Branch not found by ID. Response for the 404 error
       value:

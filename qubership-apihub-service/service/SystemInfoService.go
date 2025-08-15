@@ -101,6 +101,7 @@ type SystemInfoService interface {
 	GetRevisionsTTLDays() int
 	GetComparisonCleanupSchedule() string
 	GetComparisonsTTLDays() int
+	GetExtensions() []view.Extension
 }
 
 func (g *systemInfoServiceImpl) GetCredsFromEnv() *view.DbCredentials {
@@ -145,7 +146,6 @@ func (g *systemInfoServiceImpl) GetSystemInfo() *view.SystemInfo {
 		ProductionMode: g.IsProductionMode(),
 		Notification:   g.getSystemNotification(),
 		ExternalLinks:  g.GetExternalLinks(),
-		Extensions:     g.GetExtensions(),
 	}
 }
 
