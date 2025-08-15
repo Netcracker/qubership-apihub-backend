@@ -16754,6 +16754,7 @@ components:
                     type: object
                     required:
                       - operationId
+                      - documentId
                       - title
                       - apiType
                       - dataHash
@@ -16763,6 +16764,11 @@ components:
                         description: Operation unique identifier (slug). Not the same as operationId tag from the OpenAPI file.
                         type: string
                         example: get-quoteManagement-v5-quote
+                      documentId:
+                        description: Unique string identifier of the document from which the operation is originated
+                        type: string
+                        pattern: "^[a-z0-9-]"
+                        example: "qitmf-v5-11-json"
                       title:
                         description: Operation summary/title.
                         type: string
