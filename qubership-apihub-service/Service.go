@@ -59,10 +59,6 @@ import (
 )
 
 func init() {
-	basePath := os.Getenv("BASE_PATH")
-	if basePath == "" {
-		basePath = "."
-	}
 	logFilePath := os.Getenv("LOG_FILE_PATH") //Example: /logs/apihub.log
 	var mw io.Writer
 	if logFilePath != "" {
@@ -235,6 +231,7 @@ func main() {
 	activityTrackingRepository := repository.NewActivityTrackingRepository(cp)
 
 	versionCleanupRepository := repository.NewVersionCleanupRepository(cp)
+	comparisonCleanupRepository := repository.NewComparisonCleanupRepository(cp)
 
 	personalAccessTokenRepository := repository.NewPersonalAccessTokenRepository(cp)
 
@@ -242,7 +239,13 @@ func main() {
 
 	exportRepository := repository.NewExportRepository(cp)
 
-	olricProvider, err := cache.NewOlricProvider()
+	systemStatsRepository := repository.NewSystemStatsRepository(cp)
+
+	deletedDataCleanupRepository := repository.NewSoftDeletedDataCleanupRepository(cp)
+
+	lockRepo := repository.NewLockRepository(cp)
+
+	olricProvider, err := cache.NewOlricProvider(systemInfoService.GetOlricConfig())
 	if err != nil {
 		log.Error("Failed to create olricProvider: " + err.Error())
 		panic("Failed to create olricProvider: " + err.Error())
@@ -271,7 +274,19 @@ func main() {
 
 	templateService := service.NewTemplateService()
 
+	lockService := service.NewLockService(lockRepo, systemInfoService.GetInstanceId())
+
 	cleanupService := service.NewCleanupService(cp)
+	if err := cleanupService.CreateRevisionsCleanupJob(publishedRepository, migrationRunRepository, versionCleanupRepository, lockService, systemInfoService.GetInstanceId(), systemInfoService.GetRevisionsCleanupSchedule(), systemInfoService.GetRevisionsCleanupDeleteLastRevision(), systemInfoService.GetRevisionsCleanupDeleteReleaseRevisions(), systemInfoService.GetRevisionsTTLDays()); err != nil {
+		log.Error("Failed to start revisions cleaning job" + err.Error())
+	}
+	if err := cleanupService.CreateComparisonsCleanupJob(publishedRepository, migrationRunRepository, comparisonCleanupRepository, lockService, systemInfoService.GetInstanceId(), systemInfoService.GetComparisonCleanupSchedule(), systemInfoService.GetComparisonCleanupTimeout(), systemInfoService.GetComparisonsTTLDays()); err != nil {
+		log.Error("Failed to start comparisons cleaning job" + err.Error())
+	}
+	if err := cleanupService.CreateSoftDeletedDataCleanupJob(publishedRepository, migrationRunRepository, deletedDataCleanupRepository, lockService, systemInfoService.GetInstanceId(), systemInfoService.GetSoftDeletedDataCleanupSchedule(), systemInfoService.GetSoftDeletedDataCleanupTimeout(), systemInfoService.GetSoftDeletedDataTTLDays()); err != nil {
+		log.Error("Failed to start soft deleted data cleaning job" + err.Error())
+	}
+
 	monitoringService := service.NewMonitoringService(cp)
 	packageVersionEnrichmentService := service.NewPackageVersionEnrichmentService(publishedRepository)
 	activityTrackingService := service.NewActivityTrackingService(activityTrackingRepository, publishedRepository, userService)
@@ -330,6 +345,7 @@ func main() {
 	personalAccessTokenService := service.NewPersonalAccessTokenService(personalAccessTokenRepository, userService, roleService)
 
 	tokenRevocationService := service.NewTokenRevocationService(olricProvider, systemInfoService.GetRefreshTokenDurationSec())
+	systemStatsService := service.NewSystemStatsService(systemStatsRepository)
 
 	idpManager, err := providers.NewIDPManager(systemInfoService.GetAuthConfig(), systemInfoService.GetAllowedHosts(), systemInfoService.IsProductionMode(), userService)
 	if err != nil {
@@ -384,6 +400,7 @@ func main() {
 	gitHookController := controller.NewGitHookController(gitHookService)
 	personalAccessTokenController := controller.NewPersonalAccessTokenController(personalAccessTokenService)
 	packageExportConfigController := controller.NewPackageExportConfigController(roleService, packageExportConfigService, ptHandler)
+	systemStatsController := controller.NewSystemStatsController(systemStatsService, roleService)
 
 	if !systemInfoService.GetEditorDisabled() {
 		r.HandleFunc("/api/v1/integrations/{integrationId}/apikey", security.Secure(integrationsController.GetUserApiKeyStatus)).Methods(http.MethodGet)
@@ -573,10 +590,10 @@ func main() {
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/copy", security.Secure(versionController.CopyVersion)).Methods(http.MethodPost)
 
 	r.HandleFunc("/api/v2/packages/{packageId}/activity", security.Secure(activityTrackingController.GetActivityHistoryForPackage_deprecated)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v3/packages/{packageId}/activity", security.Secure(activityTrackingController.GetActivityHistoryForPackage)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v3/packages/{packageId}/activity", security.Secure(activityTrackingController.GetActivityHistoryForPackage_deprecated_2)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v4/packages/{packageId}/activity", security.Secure(activityTrackingController.GetActivityHistoryForPackage)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/activity", security.Secure(activityTrackingController.GetActivityHistory_deprecated)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v3/activity", security.Secure(activityTrackingController.GetActivityHistory)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v3/activity", security.Secure(activityTrackingController.GetActivityHistory_deprecated_2)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v4/activity", security.Secure(activityTrackingController.GetActivityHistory)).Methods(http.MethodGet)
 
 	r.HandleFunc("/api/v2/agents", security.Secure(agentController.ListAgents)).Methods(http.MethodGet)
@@ -629,6 +646,8 @@ func main() {
 	r.HandleFunc("/api/v2/admin/transition/activity", security.Secure(transitionController.ListActivities)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/admin/transition", security.Secure(transitionController.ListPackageTransitions)).Methods(http.MethodGet)
 
+	r.HandleFunc("/api/v2/admin/system/stats", security.Secure(systemStatsController.GetSystemStats)).Methods(http.MethodGet)
+
 	r.HandleFunc("/api/v2/compare", security.Secure(comparisonController.CompareTwoVersions)).Methods(http.MethodPost)
 
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/changes/export", security.Secure(exportController.GenerateApiChangesExcelReport)).Methods(http.MethodGet)
@@ -660,6 +679,10 @@ func main() {
 
 	r.HandleFunc("/api/v1/export", security.Secure(exportController.StartAsyncExport)).Methods(http.MethodPost)
 	r.HandleFunc("/api/v1/export/{exportId}/status", security.Secure(exportController.GetAsyncExportStatus)).Methods(http.MethodGet)
+
+	r.HandleFunc("/api/v1/deleted/packages", security.Secure(packageController.GetDeletedPackagesList)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/deleted/packages/{packageId}/versions", security.Secure(versionController.GetDeletedPackageVersionsList)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/deleted/packages/{packageId}/versions/{version}", security.Secure(versionController.GetDeletedPackageVersionContent)).Methods(http.MethodGet)
 
 	//debug + cleanup
 	if !systemInfoService.GetSystemInfo().ProductionMode {
@@ -700,7 +723,6 @@ func main() {
 		"/ws/",
 		"/metrics",
 	}
-	knownPathPrefixes = append(knownPathPrefixes, systemInfoService.GetCustomPathPrefixes()...)
 	for _, prefix := range knownPathPrefixes {
 		//add routing for unknown paths with known path prefixes
 		r.PathPrefix(prefix).HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -786,9 +808,9 @@ func makeServer(systemInfoService service.SystemInfoService, r *mux.Router) *htt
 
 	corsOptions = append(corsOptions, handlers.AllowedHeaders([]string{"Connection", "Accept-Encoding", "Content-Encoding", "X-Requested-With", "Content-Type", "Authorization"}))
 
-	allowedOrigin := systemInfoService.GetOriginAllowed()
-	if allowedOrigin != "" {
-		corsOptions = append(corsOptions, handlers.AllowedOrigins([]string{allowedOrigin}))
+	allowedOrigins := systemInfoService.GetAllowedOrigins()
+	if len(allowedOrigins) > 0 {
+		corsOptions = append(corsOptions, handlers.AllowedOrigins(allowedOrigins))
 	}
 	corsOptions = append(corsOptions, handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "OPTIONS"}))
 

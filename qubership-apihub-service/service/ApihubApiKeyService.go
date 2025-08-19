@@ -444,10 +444,7 @@ func (t apihubApiKeyServiceImpl) GetApiKeyById(apiKeyId string) (*view.ApihubApi
 }
 
 func (t apihubApiKeyServiceImpl) CreateSystemApiKey() error {
-	apiKey, err := t.systemInfoService.GetSystemApiKey()
-	if err != nil {
-		return fmt.Errorf("failed to create system api key: %w", err)
-	}
+	apiKey := t.systemInfoService.GetSystemApiKey()
 
 	packageId, apiKeyName := "*", "system_api_key"
 	resultRoles := []string{view.SysadmRole}
@@ -462,10 +459,7 @@ func (t apihubApiKeyServiceImpl) CreateSystemApiKey() error {
 	} else {
 		log.Debug("System api key not found, creating new")
 
-		email, _, err := t.systemInfoService.GetZeroDayAdminCreds()
-		if err != nil {
-			return fmt.Errorf("failed to create system api key: %w", err)
-		}
+		email, _ := t.systemInfoService.GetZeroDayAdminCreds()
 		adminUser, err := t.userService.GetUserByEmail(email)
 		if err != nil {
 			return err

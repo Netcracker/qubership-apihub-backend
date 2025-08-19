@@ -14,17 +14,16 @@
 
 package entity
 
-type PublishedContentMessageEntity struct {
-	tableName struct{} `pg:"published_content_messages"`
+import (
+	"time"
+)
 
-	//todo add packageId to correctly link this table via FK with published_data table
-	Checksum string                 `pg:"checksum, pk, type:varchar"`
-	Messages []ContentValidationMsg `pg:"messages, type:jsonb"`
-	Slug     string                 `pg:"-"`
-}
+type LockEntity struct {
+	tableName struct{} `pg:"locks"`
 
-type ContentValidationMsg struct {
-	Type string
-	Path []string
-	Text string
+	Name       string    `pg:"name, pk, type:varchar"`
+	InstanceId string    `pg:"instance_id, type:varchar, notnull"`
+	AcquiredAt time.Time `pg:"acquired_at, type:timestamp without time zone, notnull"`
+	ExpiresAt  time.Time `pg:"expires_at, type:timestamp without time zone, notnull"`
+	Version    int64     `pg:"version, type:bigint, notnull, default:1"`
 }
