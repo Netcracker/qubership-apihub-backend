@@ -63,7 +63,6 @@ const (
 	LDAP_SEARCH_BASE                           = "LDAP_SEARCH_BASE"
 	SYSTEM_NOTIFICATION                        = "SYSTEM_NOTIFICATION" //TODO: replace with db impl
 	BUILDS_CLEANUP_SCHEDULE                    = "BUILDS_CLEANUP_SCHEDULE"
-	INSECURE_PROXY                             = "INSECURE_PROXY"
 	METRICS_GETTER_SCHEDULE                    = "METRICS_GETTER_SCHEDULE"
 	MONITORING_ENABLED                         = "MONITORING_ENABLED"
 	STORAGE_SERVER_USERNAME                    = "STORAGE_SERVER_USERNAME"
@@ -143,7 +142,6 @@ type SystemInfoService interface {
 	GetLdapOrganizationUnit() string
 	GetLdapSearchBase() string
 	GetBuildsCleanupSchedule() string
-	InsecureProxyEnabled() bool
 	GetMetricsGetterSchedule() string
 	MonitoringEnabled() bool
 	GetMinioAccessKeyId() string
@@ -260,7 +258,6 @@ func (g systemInfoServiceImpl) Init() error {
 	g.setLdapSearchBase()
 	g.setSystemNotification()
 	g.setBuildsCleanupSchedule()
-	g.setInsecureProxy()
 	g.setMetricsGetterSchedule()
 	g.setMonitoringEnabled()
 	g.setMinioAccessKeyId()
@@ -665,20 +662,6 @@ func (g systemInfoServiceImpl) GetBuildsCleanupSchedule() string {
 
 func (g systemInfoServiceImpl) setBuildsCleanupSchedule() {
 	g.systemInfoMap[BUILDS_CLEANUP_SCHEDULE] = "0 1 * * 0" // at 01:00 AM on Sunday
-}
-
-func (g systemInfoServiceImpl) setInsecureProxy() {
-	envVal := os.Getenv(INSECURE_PROXY)
-	insecureProxy, err := strconv.ParseBool(envVal)
-	if err != nil {
-		log.Infof("environment variable %v has invalid value, using false value instead", INSECURE_PROXY)
-		insecureProxy = false
-	}
-	g.systemInfoMap[INSECURE_PROXY] = insecureProxy
-}
-
-func (s systemInfoServiceImpl) InsecureProxyEnabled() bool {
-	return s.systemInfoMap[INSECURE_PROXY].(bool)
 }
 
 func (g systemInfoServiceImpl) GetMetricsGetterSchedule() string {

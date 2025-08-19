@@ -42,8 +42,6 @@ tags:
     description: Search functions.
   - name: Admin
     description: APIs for technical administration.
-  - name: Agent
-    description: APIHUB Agent API documentation.
   - name: Integrations
     description: APIs for git integrations.
   - name: Roles
@@ -401,7 +399,7 @@ paths:
       tags:
         - Export
       summary: Async export of version, document or operations group
-      description: | 
+      description: |
         Start export of package version, one document or operations group. Use ```GET /api/v1/export/publish/{publishId}/status``` to get status of export and exported file itself.\
         Export of document is currently available for documents with type openapi-3-1, openapi-3-0, or openapi-2-0 and is intended to retrieve content with some transformations. For other document types, use GET /api/v2/packages/{packageId}/versions/{version}/files/{slug} to obtain the original document content.\
         Export of operations group is currently available for groups with apiType = REST.
@@ -514,7 +512,7 @@ paths:
                 type: object
                 properties:
                   status:
-                    description: | 
+                    description: |
                       Export process status.\
                       "none" status means - not started.
                     type: string
@@ -535,7 +533,7 @@ paths:
             Content-Disposition:
               schema:
                 type: string
-                description: | 
+                description: |
                   File name for exported entity.
                     - if version was exported: <packageId>_<version>.<extension>
                     - if document was exported: <packageId>_<version>_<file name>.<extension>
@@ -1944,7 +1942,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -2008,7 +2006,7 @@ paths:
           description: Moved Permanently
           headers:
             Location:
-              schema: 
+              schema:
                 type: string
               description: Current ednpoint with new packageId of moved package
             X-New-Package-Id:
@@ -7505,7 +7503,7 @@ paths:
                 description: Binary content for unsupported file types (doc, xls, jpg, png, etc.).
                 type: string
                 format: binary
-          headers: 
+          headers:
             Content-Disposition:
               schema:
                 type: string
@@ -9381,318 +9379,6 @@ paths:
               examples:
                 InternalServerError:
                   $ref: "#/components/examples/InternalServerError"
-  "/api/v2/agents":
-    get:
-      tags:
-        - Agent
-      summary: Get list of all Agent instances
-      description: Get a list of clouds on which Agent instances are installed that have registered themselves in APIHUB Registry
-      operationId: getAgents
-      parameters:
-        - name: onlyActive
-          in: query
-          description: Defines whether return all Agent instances or only active instances
-          required: true
-          schema:
-            type: boolean
-            default: true
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                type: array
-                description: Array of Agent instances
-                items:
-                  type: object
-                  properties:
-                    agentId:
-                      type: string
-                      description: Id of Agent instance
-                    cloud:
-                      type: string
-                      description: Cloud name where Agent is deployed
-                    namespace:
-                      type: string
-                      description: Cloud namespace where Agent is deployed
-                    url:
-                      type: string
-                      description: The URL to the Agent
-                    lastActive:
-                      type: string
-                      format: date-time
-                      description: the last time when Agent register itself in registry
-                    status:
-                      type: string
-                      description: status of Agent instance
-                    backendVersion:
-                      type: string
-                      description: Backend version of Agent instance
-                    agentVersion:
-                      type: string
-                      description: Version of Agent instance
-                    compatibilityError:
-                      type: object
-                      properties:
-                        severity:
-                          type: string
-                          enum:
-                            - error
-                            - warning
-                          description: Severity of compatibility error
-                        message:
-                          type: string
-                          description: Description of compatibility error
-        "400":
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                IncorrectInputParams:
-                  $ref: "#/components/examples/IncorrectInputParameters"
-        "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples: {}
-        "500":
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                InternalServerError:
-                  $ref: "#/components/examples/InternalServerError"
-    post:
-      x-nc-api-audience: noBWC
-      tags:
-        - Agent
-      summary: Agent registration
-      description: Agent registration in APIHUB registry
-      operationId: postAgentRegistration
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - cloud
-                - namespace
-                - url
-                - backendVersion
-              properties:
-                cloud:
-                  type: string
-                  description: Cloud name where Agent is deployed
-                namespace:
-                  type: string
-                  description: Cloud namespace where Agent is deployed
-                url:
-                  type: string
-                  description: The URL to the Agent
-                backendVersion:
-                  type: string
-                  description: Backend version of Agent instance
-                agentVersion:
-                  type: string
-                  description: Version of Agent instance
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  version:
-                    type: string
-                    description: Expected version of Agents
-          description: Success
-        "400":
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                IncorrectInputParams:
-                  $ref: "#/components/examples/IncorrectInputParameters"
-        "403":
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples: {}
-        "500":
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                InternalServerError:
-                  $ref: "#/components/examples/InternalServerError"
-  '/api/v2/agents/{agentId}/namespaces/{name}/serviceNames':
-    get:
-      summary: Get list of service names
-      description: |
-        Synchronously get list of service names in selected namespace without discovery.
-      operationId: getNamespaceServicesNames
-      tags:
-        - Agent
-      parameters:
-        - $ref: "#/components/parameters/AgentId"
-        - $ref: "#/components/parameters/Namespace"
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - serviceNames
-                properties:
-                  serviceNames:
-                    description: List of the service names in namespace
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: string
-                          description: service id
-                        name:
-                          type: string
-                          description: service name
-        "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples: {}
-        "424":
-          description: Failed dependency
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples: {}
-        "500":
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                InternalServerError:
-                  $ref: "#/components/examples/InternalServerError"
-  /agents/{agentId}/namespaces/{name}/services/{serviceId}/proxy/{path}:
-    get:
-      summary: Proxy endpoint to service
-      description: Proxy endpoint to service
-      operationId: getAgentsIdNamespacesIdServicesProxy
-      security:
-        - {}
-      tags:
-        - Agent
-        - TryIt
-      parameters:
-        - $ref: "#/components/parameters/AgentId"
-        - $ref: "#/components/parameters/Namespace"
-        - $ref: "#/components/parameters/ServiceId"
-        - name: path
-          in: path
-          required: true
-          schema:
-            type: string
-          description: String that includes paths and query params
-          example: api/v2/escaped/te%20xt/text/text123?escaped=te%20xt
-        - name: X-Apihub-Authorization
-          in: header
-          schema:
-            type: string
-          description: |
-            nc-service authorization:
-              * if system env INSECURE_PROXY is empty or false, then X-Apihub-Authorization is **required**
-              * if system env INSECURE_PROXY = true, then then X-Apihub-Authorization is optional
-      responses:
-        1XX:
-          description: Information responses
-          content:
-            "*/*":
-              schema:
-                description: Schema of any type
-        2XX:
-          description: Successful responses
-          content:
-            "*/*":
-              schema:
-                description: Schema of any type
-        3XX:
-          description: Redirection messages
-          content:
-            "*/*":
-              schema:
-                description: Schema of any type
-        4XX:
-          description: Client error responses
-          content:
-            "*/*":
-              schema:
-                description: Schema of any type
-        5XX:
-          description: Server error responses
-          content:
-            "*/*":
-              schema:
-                description: Schema of any type
-  "/api/v2/agents/{agentId}/namespaces":
-    get:
-      summary: Get Namespace list
-      description: Get Namespace list from current Cloud.
-      operationId: getAgentsIdNamespaces
-      tags:
-        - Agent
-      parameters:
-        - $ref: "#/components/parameters/AgentId"
-      responses:
-        "200":
-          description: Successful operation
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  namespaces:
-                    description: List of cloud Namespaces
-                    type: array
-                    items:
-                      type: string
-                      description: Namespace name
-                  cloudName:
-                    type: string
-                    description: Cloud name
-        "424":
-          description: Failed dependency
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples: {}
-        "500":
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
   "/api/internal/users":
     post:
       x-nc-api-audience: noBWC
@@ -14400,14 +14086,6 @@ components:
           - external
           - unknown
         default: all
-    AgentId:
-      name: agentId
-      in: path
-      description: Id of Agent instance
-      required: true
-      schema:
-        type: string
-      example: K8S-SERVER_api-hub-dev
     Namespace:
       name: name
       description: Cloud Namespace name
@@ -14629,7 +14307,7 @@ components:
     ExportVersion:
       type: object
       title: Export entire version
-      description: | 
+      description: |
         Export settings for exporting a version (i.e., all documents from the version). Only version of package with kind = package can be exported.\
           * format = html: the export result includes a ZIP file containing interactive HTML for OpenAPI documents (i.e., those with types openapi-3-1, openapi-3-0, or openapi-2-0) and raw files for all other document types.
           * format = yaml/json: the export result includes a ZIP file containing OpenAPI documents in yaml/json format accordingly, and raw files for all other document types.
@@ -14660,7 +14338,7 @@ components:
           type: boolean
           default: false
         format:
-          description: | 
+          description: |
             File format for export.
           type: string
           enum:
@@ -14673,7 +14351,7 @@ components:
       description: |
         Export settings for exporting one document. The option is applicable only for document types - openapi-3-1 / openapi-3-0 / openapi-2-0.
         The export result is determined by the "format" parameter.
-      required: 
+      required:
         - exportedEntity
         - packageId
         - version
@@ -14693,13 +14371,13 @@ components:
           description: Package version
           type: string
           example: 2024.2
-        documentId: 
+        documentId:
           description: Unique string identifier of document to export. Type of this document must be openapi-3-1 / openapi-3-0 / openapi-2-0.
           type: string
           pattern: "^[a-z0-9-]"
           example: "qitmf-v5-11-json"
         format:
-          description: | 
+          description: |
             File format for export.
           type: string
           enum:
@@ -14714,10 +14392,10 @@ components:
     ExportRestOperationsGroup:
       type: object
       title: Export REST operations group
-      description: | 
+      description: |
         Export settings for exporting the operations group. The option is applicable only for groups with apiType = REST.
         The export result is determined by the "format" and "buildType" parameters.
-      required: 
+      required:
         - exportedEntity
         - packageId
         - version
@@ -14751,9 +14429,9 @@ components:
             - reducedSourceSpecifications
             - mergedSpecification
         format:
-          description: | 
+          description: |
             Format of the exported file.\
-            If operationsSpecTransformation = reducedSourceSpecifications, then export result is a ZIP file containing files in selected format.\ 
+            If operationsSpecTransformation = reducedSourceSpecifications, then export result is a ZIP file containing files in selected format.\
             If operationsSpecTransformation = mergedSpecification:
               * if format = html, then export result is a ZIP file containing interactive HTML for OpenAPI document.
               * if format = yaml/json, then export result is one OpenAPI file in the appropriate format.
@@ -14905,10 +14583,10 @@ components:
       properties:
         allowedOasExtensions:
           description: >-
-            List of OAS extensions that shall be preserverd when user exports OpenAPI specification(s) with remove OAS extensions option. 
+            List of OAS extensions that shall be preserverd when user exports OpenAPI specification(s) with remove OAS extensions option.
           type: array
           items:
-            type: object 
+            type: object
             properties:
               oasExtension:
                 description: |
@@ -14934,7 +14612,7 @@ components:
                   - package
     PackageExportConfigUpdate:
       description: Parameters for update of package export config.
-      type: object 
+      type: object
       properties:
         allowedOasExtensions:
           description: |
@@ -16864,7 +16542,7 @@ components:
     BuildResult:
       description: |
         Result of build operation in ZIP archive.
-          - The archive can contain folders with sources, builded documents and JSON operation files. 
+          - The archive can contain folders with sources, builded documents and JSON operation files.
           - In addition, several config files are provided. The structure of these files is described in buildResult schema.
         There are following build types:
           - build - build process for version publication. It consist of contract and operations build and validation, calculation of the changelog, creation of the final version of the published contracts.
@@ -16880,7 +16558,7 @@ components:
         - title: Build result for build
           description: Build result for buildType = build
           type: object
-          required: 
+          required:
             - info.json
             - documents.json
           properties:
@@ -16924,7 +16602,7 @@ components:
                   type: string
                 validationRulesSeverity:
                   type: object
-                  description: Configuration for validation rules severity levels          
+                  description: Configuration for validation rules severity levels
                   readOnly: true
                   properties:
                     brokenRefs:
@@ -17147,7 +16825,7 @@ components:
                                     properties:
                                       currentAudience:
                                         type: string
-                                        description: Current apiAudience value (currentAudience must not be equal to previousAudience) 
+                                        description: Current apiAudience value (currentAudience must not be equal to previousAudience)
                                         enum:
                                           - internal
                                           - external
@@ -17238,7 +16916,7 @@ components:
                           deprecatedInfo:
                             description: |
                               Additional information about deprecated operation:
-                              * for REST API it is value of 'x-deprecated-meta' extension (value of extension must be string), which is defined for deprecated operation. 
+                              * for REST API it is value of 'x-deprecated-meta' extension (value of extension must be string), which is defined for deprecated operation.
                               * for GraphQL API it is value of 'reason' argument of @deprecated directive, which is defined for deprecated operation.
                             type: string
                           deprecatedInPreviousVersions:
@@ -17261,11 +16939,11 @@ components:
                             additionalProperties:
                               type: string
                             example:
-                              all: "Quote Snapshot V6 Performs full text search ofQuotes Statistics By Phrase fullTextSearchStatistics searchPhrase offset int32 limit int32 fields 200 OK application/json quote anonymousCustomerData assignTo The name of the user/team to whom the Quote is assigned cancellationReason The entity that represents common information about a customer's request cancellationReasonDescription The reason (from the free text field) why the Quote has been cancelled contactMedium A list of contact mediums (ContactMedium [*]). Indicates the contact medium that could be used to contact the party deliveryMethod Id of the Delivery Method (from the Delivery Method list) for Quote description Description of the Quote extendedParameters additionalProperties The attribute contains additional parameters of the Quote The attribute contains additional parameters of the Quote Map<String,List<String>> The attribute contains additional parameters of the Quote externalRefs Represents a reference to an external object id Unique identifier of the Quote name Quote name quoteDate Date and time when the Quote was created date-time quoteTotalPrice Represents Quote total price relatedParty A list of related party references (RelatedPartyRef [*]).A related party defines party or party role linked to a specific entity relatedQuote A list of related quotes (RelatedQuote [*]). It represents another revision of the in-flight Quote from the same chain, i.e. in-flight Quote with the same initialBaselineQuoteId value. This class is returned in the API response only in case of enhancedListQuotes API operation is called. It can be empty if there are no other in-flight Quotes in this chain revision Attribute is used to mark in-flight Quote. Increased in case changes are done to the Quote after submission int32 state State of the Quote updatedWhen Date and time when the Quote was updated date-time validFor Quote with reduced scope of attributes quoteItemStatistic Shows the number of Quote's root Quote Items grouped by some criteria(e.g. by Product Offering, Action) action Numbers of root Quote Items grouped by Action count Number of Quote Items for the specific value int32 name Action name Shows the number of Customer's Product Instances for specified criteria (e.g. Product Family, Billing Account and so on) productFamilyId Unique identifier of Product Family productFamilyName Product family name. Name is returned in the default locale. If alternative locale is passed in Accept-language header in the API request the system returns corresponding localized name in the response. productOfferingId Unique identifier of Product Offering productOfferingName Product offering name. Attribute is returned in the response for catalog entities only (product offering). Name is returned in the default locale. If alternative locale is passed in Accept-language header in the API request the system returns corresponding localized name in the response Shows the number of Quote's root Quote Items grouped by some criteria(e.g. by Product Offering, Action) Shows the Quote with a number of root Quote Items 4XX default response application/json;charset=UTF-8;model=errorResponse;version=1 5XX default response application/json;charset=UTF-8;model=errorResponse;version=1 "    
+                              all: "Quote Snapshot V6 Performs full text search ofQuotes Statistics By Phrase fullTextSearchStatistics searchPhrase offset int32 limit int32 fields 200 OK application/json quote anonymousCustomerData assignTo The name of the user/team to whom the Quote is assigned cancellationReason The entity that represents common information about a customer's request cancellationReasonDescription The reason (from the free text field) why the Quote has been cancelled contactMedium A list of contact mediums (ContactMedium [*]). Indicates the contact medium that could be used to contact the party deliveryMethod Id of the Delivery Method (from the Delivery Method list) for Quote description Description of the Quote extendedParameters additionalProperties The attribute contains additional parameters of the Quote The attribute contains additional parameters of the Quote Map<String,List<String>> The attribute contains additional parameters of the Quote externalRefs Represents a reference to an external object id Unique identifier of the Quote name Quote name quoteDate Date and time when the Quote was created date-time quoteTotalPrice Represents Quote total price relatedParty A list of related party references (RelatedPartyRef [*]).A related party defines party or party role linked to a specific entity relatedQuote A list of related quotes (RelatedQuote [*]). It represents another revision of the in-flight Quote from the same chain, i.e. in-flight Quote with the same initialBaselineQuoteId value. This class is returned in the API response only in case of enhancedListQuotes API operation is called. It can be empty if there are no other in-flight Quotes in this chain revision Attribute is used to mark in-flight Quote. Increased in case changes are done to the Quote after submission int32 state State of the Quote updatedWhen Date and time when the Quote was updated date-time validFor Quote with reduced scope of attributes quoteItemStatistic Shows the number of Quote's root Quote Items grouped by some criteria(e.g. by Product Offering, Action) action Numbers of root Quote Items grouped by Action count Number of Quote Items for the specific value int32 name Action name Shows the number of Customer's Product Instances for specified criteria (e.g. Product Family, Billing Account and so on) productFamilyId Unique identifier of Product Family productFamilyName Product family name. Name is returned in the default locale. If alternative locale is passed in Accept-language header in the API request the system returns corresponding localized name in the response. productOfferingId Unique identifier of Product Offering productOfferingName Product offering name. Attribute is returned in the response for catalog entities only (product offering). Name is returned in the default locale. If alternative locale is passed in Accept-language header in the API request the system returns corresponding localized name in the response Shows the number of Quote's root Quote Items grouped by some criteria(e.g. by Product Offering, Action) Shows the Quote with a number of root Quote Items 4XX default response application/json;charset=UTF-8;model=errorResponse;version=1 5XX default response application/json;charset=UTF-8;model=errorResponse;version=1 "
         - title: Build result for changelog
           description: Build result for buildType = changelog
           type: object
-          required: 
+          required:
             - info.json
           properties:
             info.json:
@@ -17402,7 +17080,7 @@ components:
                                     properties:
                                       currentAudience:
                                         type: string
-                                        description: Current apiAudience value (currentAudience must not be equal to previousAudience) 
+                                        description: Current apiAudience value (currentAudience must not be equal to previousAudience)
                                         enum:
                                           - internal
                                           - external
@@ -17467,7 +17145,7 @@ components:
               - mergedSpecification
               - reducedSourceSpecifications
           type: object
-          required: 
+          required:
             - info.json
           properties:
             info.json:
@@ -17911,7 +17589,7 @@ components:
                 type: boolean
     PublishBuildConfig:
       type: object
-      description: | 
+      description: |
         Configuration for publication process.\
         Files or/and Refs are **required**.
       required:
@@ -18024,7 +17702,7 @@ components:
           type: string
           example: 2022.3@3
         format:
-          description: | 
+          description: |
             File format for export.\
             * format = html: the export result includes a ZIP file containing interactive HTML for OpenAPI documents (i.e., those with types openapi-3-1, openapi-3-0, or openapi-2-0) and raw files for all other document types.
             * format = yaml/json: the export result includes a ZIP file containing OpenAPI documents in yaml/json format accordingly, and raw files for all other document types.
@@ -18081,7 +17759,7 @@ components:
             specific revision.
           type: string
           example: 2022.3@3
-        documentId: 
+        documentId:
           description: Unique string identifier of document to export. Type of this document must be openapi-3-1 / openapi-3-0 / openapi-2-0.
           type: string
           pattern: "^[a-z0-9-]"
@@ -18129,7 +17807,7 @@ components:
           description: Type of the build process.
           type: string
           enum:
-            - exportRestOperationsGroup        
+            - exportRestOperationsGroup
         packageId:
           description: Package unique identifier (full alias).
           type: string
@@ -18156,9 +17834,9 @@ components:
             - mergedSpecification
         format:
           type: string
-          description: | 
+          description: |
             Format of the exported file.\
-            If operationsSpecTransformation = reducedSourceSpecifications, then export result includes a ZIP file containing files in selected format.\ 
+            If operationsSpecTransformation = reducedSourceSpecifications, then export result includes a ZIP file containing files in selected format.\
             If operationsSpecTransformation = mergedSpecification:
               * if format = html, then export result is a ZIP file containing interactive HTML for OpenAPI document.
               * if format = yaml/json, then export result is one OpenAPI file in the appropriate format.

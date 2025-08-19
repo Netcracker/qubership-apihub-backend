@@ -50,8 +50,6 @@ tags:
     description: APIs for the user operations
   - name: Versions
     description: Published project versions API
-  - name: Agent
-    description: APIHUB Agent API documentation.
   - name: Publish
     description: APIs for publication
 paths:
