@@ -20,8 +20,6 @@ ARG GIT_HASH=unknown
 ENV GIT_BRANCH=$GIT_BRANCH
 ENV GIT_HASH=$GIT_HASH
 
-MAINTAINER qubership.org
-
 WORKDIR /app/qubership-apihub-service
 
 USER root
