@@ -398,10 +398,6 @@ func (g *systemInfoServiceImpl) GetBuildsCleanupSchedule() string {
 	return g.config.Cleanup.Builds.Schedule
 }
 
-func (s *systemInfoServiceImpl) InsecureProxyEnabled() bool {
-	return s.config.Security.InsecureProxy
-}
-
 func (g *systemInfoServiceImpl) GetMetricsGetterSchedule() string {
 	return g.config.TechnicalParameters.MetricsGetterSchedule
 }
