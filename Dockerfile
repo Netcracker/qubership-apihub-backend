@@ -6,9 +6,9 @@ ARG TARGETARCH
 
 WORKDIR /workspace
 
-COPY qubership-apihub-service qubership-apihub-service 
+COPY qubership-apihub-service qubership-apihub-service
 
-WORKDIR /workspace/qubership-apihub-service 
+WORKDIR /workspace/qubership-apihub-service
 
 RUN set GOSUMDB=off && set CGO_ENABLED=0 && go mod tidy && go mod download && GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build .
 
