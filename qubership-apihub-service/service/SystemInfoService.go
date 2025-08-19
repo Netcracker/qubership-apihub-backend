@@ -100,7 +100,11 @@ type SystemInfoService interface {
 	GetRevisionsCleanupDeleteReleaseRevisions() bool
 	GetRevisionsTTLDays() int
 	GetComparisonCleanupSchedule() string
+	GetComparisonCleanupTimeout() int
 	GetComparisonsTTLDays() int
+	GetSoftDeletedDataCleanupSchedule() string
+	GetSoftDeletedDataCleanupTimeout() int
+	GetSoftDeletedDataTTLDays() int
 	GetExtensions() []view.Extension
 }
 
@@ -114,15 +118,15 @@ func (g *systemInfoServiceImpl) GetCredsFromEnv() *view.DbCredentials {
 	}
 }
 
-func (s *systemInfoServiceImpl) GetMinioStorageCreds() *view.MinioStorageCreds {
+func (g *systemInfoServiceImpl) GetMinioStorageCreds() *view.MinioStorageCreds {
 	return &view.MinioStorageCreds{
-		BucketName:           s.GetMinioBucketName(),
-		IsActive:             s.IsMinioStorageActive(),
-		Endpoint:             s.GetMinioEndpoint(),
-		Crt:                  s.GetMinioCrt(),
-		AccessKeyId:          s.GetMinioAccessKeyId(),
-		SecretAccessKey:      s.GetMinioSecretAccessKey(),
-		IsOnlyForBuildResult: s.IsMinioStoreOnlyBuildResult(),
+		BucketName:           g.GetMinioBucketName(),
+		IsActive:             g.IsMinioStorageActive(),
+		Endpoint:             g.GetMinioEndpoint(),
+		Crt:                  g.GetMinioCrt(),
+		AccessKeyId:          g.GetMinioAccessKeyId(),
+		SecretAccessKey:      g.GetMinioSecretAccessKey(),
+		IsOnlyForBuildResult: g.IsMinioStoreOnlyBuildResult(),
 	}
 }
 
@@ -226,13 +230,17 @@ func (g *systemInfoServiceImpl) setDefaults() {
 	viper.SetDefault("editor.disabled", true)
 	viper.SetDefault("olric.discoveryMode", "local")
 	viper.SetDefault("olric.replicaCount", 1)
-	viper.SetDefault("cleanup.builds.schedule", "0 1 * * 0")    // at 01:00 AM on Sunday
-	viper.SetDefault("cleanup.revisions.schedule", "0 1 * * 6") // at 01:00 AM on Saturday
+	viper.SetDefault("cleanup.builds.schedule", "0 1 * * 0")     // at 01:00 AM on Sunday
+	viper.SetDefault("cleanup.revisions.schedule", "0 21 * * 0") // at 9:00 PM on Sunday
 	viper.SetDefault("cleanup.revisions.deleteLastRevision", false)
 	viper.SetDefault("cleanup.revisions.deleteReleaseRevisions", false)
 	viper.SetDefault("cleanup.revisions.ttlDays", 365)
-	viper.SetDefault("cleanup.comparisons.schedule", "0 23 * * 0") // at 11:00 PM on Sunday
+	viper.SetDefault("cleanup.comparisons.schedule", "0 5 * * 0") //at 5:00 AM on Sunday
+	viper.SetDefault("cleanup.comparisons.timeoutMinutes", 720)   //12 hours
 	viper.SetDefault("cleanup.comparisons.ttlDays", 30)
+	viper.SetDefault("cleanup.softDeletedData.schedule", "0 22 * * 5") //at 10 PM on Friday
+	viper.SetDefault("cleanup.softDeletedData.timeoutMinutes", 1200)   //20 hours
+	viper.SetDefault("cleanup.softDeletedData.ttlDays", 730)           // 2 years
 }
 
 func (g *systemInfoServiceImpl) GetConfigFolder() string {
@@ -393,16 +401,16 @@ func (g *systemInfoServiceImpl) GetBuildsCleanupSchedule() string {
 	return g.config.Cleanup.Builds.Schedule
 }
 
-func (s *systemInfoServiceImpl) InsecureProxyEnabled() bool {
-	return s.config.Security.InsecureProxy
+func (g *systemInfoServiceImpl) InsecureProxyEnabled() bool {
+	return g.config.Security.InsecureProxy
 }
 
 func (g *systemInfoServiceImpl) GetMetricsGetterSchedule() string {
 	return g.config.TechnicalParameters.MetricsGetterSchedule
 }
 
-func (s *systemInfoServiceImpl) MonitoringEnabled() bool {
-	return s.config.Monitoring.Enabled
+func (g *systemInfoServiceImpl) MonitoringEnabled() bool {
+	return g.config.Monitoring.Enabled
 }
 
 func (g *systemInfoServiceImpl) GetMinioAccessKeyId() string {
@@ -562,35 +570,51 @@ func (g *systemInfoServiceImpl) buildAuthConfig() (idp.AuthConfig, error) {
 	return authConfig, nil
 }
 
-func (g systemInfoServiceImpl) GetRevisionsCleanupSchedule() string {
+func (g *systemInfoServiceImpl) GetRevisionsCleanupSchedule() string {
 	return g.config.Cleanup.Revisions.Schedule
 }
 
-func (g systemInfoServiceImpl) GetRevisionsCleanupDeleteLastRevision() bool {
+func (g *systemInfoServiceImpl) GetRevisionsCleanupDeleteLastRevision() bool {
 	return g.config.Cleanup.Revisions.DeleteLastRevision
 }
 
-func (g systemInfoServiceImpl) GetRevisionsCleanupDeleteReleaseRevisions() bool {
+func (g *systemInfoServiceImpl) GetRevisionsCleanupDeleteReleaseRevisions() bool {
 	return g.config.Cleanup.Revisions.DeleteReleaseRevisions
 }
 
-func (g systemInfoServiceImpl) GetRevisionsTTLDays() int {
+func (g *systemInfoServiceImpl) GetRevisionsTTLDays() int {
 	return g.config.Cleanup.Revisions.TTLDays
 }
 
-func (g systemInfoServiceImpl) GetInstanceId() string {
+func (g *systemInfoServiceImpl) GetInstanceId() string {
 	return g.config.TechnicalParameters.InstanceId
 }
 
-func (g systemInfoServiceImpl) GetComparisonCleanupSchedule() string {
+func (g *systemInfoServiceImpl) GetComparisonCleanupSchedule() string {
 	return g.config.Cleanup.Comparisons.Schedule
 }
 
-func (g systemInfoServiceImpl) GetComparisonsTTLDays() int {
+func (g *systemInfoServiceImpl) GetComparisonCleanupTimeout() int {
+	return g.config.Cleanup.Comparisons.TimeoutMinutes
+}
+
+func (g *systemInfoServiceImpl) GetComparisonsTTLDays() int {
 	return g.config.Cleanup.Comparisons.TTLDays
 }
 
-func (g systemInfoServiceImpl) GetExtensions() []view.Extension {
+func (g *systemInfoServiceImpl) GetSoftDeletedDataCleanupSchedule() string {
+	return g.config.Cleanup.SoftDeletedData.Schedule
+}
+
+func (g *systemInfoServiceImpl) GetSoftDeletedDataCleanupTimeout() int {
+	return g.config.Cleanup.SoftDeletedData.TimeoutMinutes
+}
+
+func (g *systemInfoServiceImpl) GetSoftDeletedDataTTLDays() int {
+	return g.config.Cleanup.SoftDeletedData.TTLDays
+}
+
+func (g *systemInfoServiceImpl) GetExtensions() []view.Extension {
 	if len(g.config.Extensions) == 0 {
 		return make([]view.Extension, 0)
 	}
