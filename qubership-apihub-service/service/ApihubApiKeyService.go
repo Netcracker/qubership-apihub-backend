@@ -512,7 +512,7 @@ func (t apihubApiKeyServiceImpl) CreateApiKey(ctx context.SecurityContext, packa
 				Email:     user.Email,
 				AvatarUrl: fmt.Sprintf("/api/v2/users/%s/profile/avatar", user.Id),
 			}
-			createdForUser, err = t.userService.GetOrCreateUserForIntegration(externalUser, view.ExternalLdapIntegration)
+			createdForUser, err = t.userService.GetOrCreateUserForIntegration(externalUser, view.ExternalLdapIntegration, "")
 			if err != nil {
 				return nil, err
 			}
@@ -775,10 +775,7 @@ func (t apihubApiKeyServiceImpl) GetApiKeyById(apiKeyId string) (*view.ApihubApi
 }
 
 func (t apihubApiKeyServiceImpl) CreateSystemApiKey() error {
-	apiKey, err := t.systemInfoService.GetSystemApiKey()
-	if err != nil {
-		return fmt.Errorf("failed to create system api key: %w", err)
-	}
+	apiKey := t.systemInfoService.GetSystemApiKey()
 
 	packageId, apiKeyName := "*", "system_api_key"
 	resultRoles := []string{view.SysadmRole}
@@ -793,10 +790,7 @@ func (t apihubApiKeyServiceImpl) CreateSystemApiKey() error {
 	} else {
 		log.Debug("System api key not found, creating new")
 
-		email, _, err := t.systemInfoService.GetZeroDayAdminCreds()
-		if err != nil {
-			return fmt.Errorf("failed to create system api key: %w", err)
-		}
+		email, _ := t.systemInfoService.GetZeroDayAdminCreds()
 		adminUser, err := t.userService.GetUserByEmail(email)
 		if err != nil {
 			return err

@@ -6,12 +6,11 @@
 # Example file can be found there:
 # https://github.com/Netcracker/.github/blob/main/config/examples/auto-labeler-config.yaml
 
-
 name: Automatic PR Labeler
 
 on:
   pull_request:
-    branches: [main]
+    branches: [develop]
     types:
       [opened, reopened, synchronize]
 
@@ -22,7 +21,6 @@ permissions:
 
 jobs:
   assign-labels:
-
     if: (github.event.pull_request.merged == false) && (github.event.pull_request.user.login != 'dependabot[bot]') && (github.event.pull_request.user.login != 'github-actions[bot]')
     runs-on: ubuntu-latest
     steps:
@@ -44,4 +42,4 @@ jobs:
             echo "⚠️ Pull request from fork! ⚠️";
             echo "Labels will not be applied to PR. Assign them manually please.";
             echo "Labels to assign: ${{ steps.action-assign-labels.outputs.labels-next }}";
-          } >> $GITHUB_STEP_SUMMARY
+          } >> "$GITHUB_STEP_SUMMARY"

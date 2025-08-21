@@ -107,15 +107,17 @@ type PackagesInfo struct {
 	Kind                      string              `json:"kind"`
 	Name                      string              `json:"name"`
 	Description               string              `json:"description"`
-	IsFavorite                bool                `json:"isFavorite"`
+	IsFavorite                bool                `json:"isFavorite,omitempty"`
 	ServiceName               string              `json:"serviceName,omitempty"`
-	ImageUrl                  string              `json:"imageUrl"`
+	ImageUrl                  string              `json:"imageUrl,omitempty"`
 	Parents                   []ParentPackageInfo `json:"parents"`
 	DefaultRole               string              `json:"defaultRole"`
-	UserPermissions           []string            `json:"permissions"`
+	UserPermissions           []string            `json:"permissions,omitempty"`
 	LastReleaseVersionDetails *VersionDetails     `json:"lastReleaseVersionDetails,omitempty"`
 	RestGroupingPrefix        string              `json:"restGroupingPrefix,omitempty"`
 	ReleaseVersionPattern     string              `json:"releaseVersionPattern,omitempty"`
+	CreatedAt                 time.Time           `json:"createdAt,omitempty"`
+	DeletedAt                 *time.Time          `json:"deletedAt,omitempty"`
 }
 
 type ParentPackageInfo struct {
@@ -124,7 +126,7 @@ type ParentPackageInfo struct {
 	ParentId          string `json:"parentId"`
 	Kind              string `json:"kind"`
 	Name              string `json:"name"`
-	ImageUrl          string `json:"imageUrl"`
+	ImageUrl          string `json:"imageUrl,omitempty"`
 	HasReadPermission *bool  `json:"hasReadPermission,omitempty"`
 }
 
@@ -164,7 +166,7 @@ type PatchPackageReq struct {
 type PackageInfoFile struct {
 	PackageId                string                 `json:"packageId" validate:"required"`
 	Kind                     string                 `json:"-"`
-	BuildType                string                 `json:"buildType"`
+	BuildType                BuildType              `json:"buildType"`
 	Version                  string                 `json:"version" validate:"required"`
 	Status                   string                 `json:"status" validate:"required"`
 	PreviousVersion          string                 `json:"previousVersion"`
@@ -186,7 +188,7 @@ type PackageInfoFile struct {
 }
 
 type ChangelogInfoFile struct {
-	BuildType                string                 `json:"buildType"`
+	BuildType                BuildType              `json:"buildType"`
 	PackageId                string                 `json:"packageId" validate:"required"`
 	Version                  string                 `json:"version" validate:"required"`
 	PreviousVersionPackageId string                 `json:"previousVersionPackageId" validate:"required"`

@@ -15,6 +15,7 @@
 package entity
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -170,6 +171,18 @@ type PublishedShortVersionEntity struct {
 	PublishedAt time.Time `pg:"published_at, type:timestamp without time zone"`
 }
 
+type PublishedVersionKeyEntity struct {
+	tableName struct{} `pg:"published_version,discard_unknown_columns"`
+
+	PackageId string `pg:"package_id, pk, type:varchar" json:"packageId"`
+	Version   string `pg:"version, pk, type:varchar" json:"version"`
+	Revision  int    `pg:"revision, pk, type:integer" json:"revision"`
+}
+
+func (e PublishedVersionKeyEntity) String() string {
+	return fmt.Sprintf("{packageId:%s version:%s revision:%d}", e.PackageId, e.Version, e.Revision)
+}
+
 type PublishedContentEntity struct {
 	tableName struct{} `pg:"published_version_revision_content, alias:published_version_revision_content"`
 	// TODO: not sure about pk
@@ -193,6 +206,8 @@ type PublishedContentEntity struct {
 
 type PublishedContentWithDataEntity struct {
 	tableName struct{} `pg:"published_version_revision_content, alias:published_version_revision_content"`
+	// both PublishedContentEntity and PublishedContentDataEntity have PackageId field, so go-pg mapping works incorrect(randomly). ContentPackageId is required to fix the issue.
+	ContentPackageId string `pg:"content_package_id, type:varchar"`
 	PublishedContentEntity
 	PublishedContentDataEntity
 }
@@ -214,7 +229,7 @@ type TransformedContentDataEntity struct {
 	Revision      int                    `pg:"revision, pk, type:integer"`
 	ApiType       string                 `pg:"api_type, pk, type:varchar"`
 	GroupId       string                 `pg:"group_id, pk, type:varchar"`
-	BuildType     string                 `pg:"build_type, pk, type:varchar"`
+	BuildType     view.BuildType         `pg:"build_type, pk, type:varchar"`
 	Format        string                 `pg:"format, pk, type:varchar"`
 	Data          []byte                 `pg:"data, type:bytea"`
 	DocumentsInfo []view.PackageDocument `pg:"documents_info, type:jsonb"`
@@ -373,6 +388,7 @@ func MakeReadonlyPublishedVersionListView2(versionEnt *PackageVersionRevisionEnt
 		PreviousVersion:          view.MakeVersionRefKey(versionEnt.PreviousVersion, versionEnt.PreviousVersionRevision),
 		VersionLabels:            versionEnt.Labels,
 		PreviousVersionPackageId: versionEnt.PreviousVersionPackageId,
+		ApiProcessorVersion:      versionEnt.Metadata.GetBuilderVersion(),
 	}
 	return &item
 }
@@ -466,6 +482,7 @@ func MakeDocumentForTransformationView(ent *PublishedContentWithDataEntity) *vie
 		Filename:             ent.Filename,
 		IncludedOperationIds: ent.OperationIds,
 		Data:                 ent.Data,
+		PackageRef:           view.MakePackageRefKey(ent.ContentPackageId, ent.Version, ent.Revision),
 	}
 }
 
@@ -706,7 +723,7 @@ func MakeSimplePackageView(entity *PackageEntity, parents []view.ParentPackageIn
 	}
 }
 
-func MakePackagesInfo(entity *PackageEntity, defaultVersionDetails *view.VersionDetails, parents []view.ParentPackageInfo, isFavorite bool, userPermissions []string) *view.PackagesInfo {
+func MakePackagesInfo(entity *PackageEntity, defaultVersionDetails *view.VersionDetails, parents []view.ParentPackageInfo, isFavorite bool, userPermissions []string, showOnlyDeleted bool) *view.PackagesInfo {
 	var parentsRes []view.ParentPackageInfo
 	if parents == nil {
 		parentsRes = make([]view.ParentPackageInfo, 0)
@@ -715,21 +732,28 @@ func MakePackagesInfo(entity *PackageEntity, defaultVersionDetails *view.Version
 	}
 
 	packageInfo := view.PackagesInfo{
-		Id:                        entity.Id,
-		ParentId:                  entity.ParentId,
-		Name:                      entity.Name,
-		Alias:                     entity.Alias,
-		ImageUrl:                  entity.ImageUrl,
-		Parents:                   parentsRes,
-		IsFavorite:                isFavorite,
-		ServiceName:               entity.ServiceName,
-		Description:               entity.Description,
-		Kind:                      entity.Kind,
-		DefaultRole:               entity.DefaultRole,
-		UserPermissions:           userPermissions,
-		LastReleaseVersionDetails: defaultVersionDetails,
-		RestGroupingPrefix:        entity.RestGroupingPrefix,
-		ReleaseVersionPattern:     entity.ReleaseVersionPattern,
+		Id:                    entity.Id,
+		ParentId:              entity.ParentId,
+		Name:                  entity.Name,
+		Alias:                 entity.Alias,
+		Parents:               parentsRes,
+		ServiceName:           entity.ServiceName,
+		Description:           entity.Description,
+		Kind:                  entity.Kind,
+		DefaultRole:           entity.DefaultRole,
+		RestGroupingPrefix:    entity.RestGroupingPrefix,
+		ReleaseVersionPattern: entity.ReleaseVersionPattern,
+		CreatedAt:             entity.CreatedAt,
+	}
+
+	if !showOnlyDeleted {
+		packageInfo.ImageUrl = entity.ImageUrl
+		packageInfo.IsFavorite = isFavorite
+		packageInfo.UserPermissions = userPermissions
+		packageInfo.LastReleaseVersionDetails = defaultVersionDetails
+		packageInfo.DeletedAt = nil
+	} else {
+		packageInfo.DeletedAt = entity.DeletedAt
 	}
 
 	return &packageInfo

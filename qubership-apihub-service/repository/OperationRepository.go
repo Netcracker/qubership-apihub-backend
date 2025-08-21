@@ -38,7 +38,7 @@ type OperationRepository interface {
 	GetChangelog(searchQuery entity.ChangelogSearchQueryEntity) ([]entity.OperationComparisonChangelogEntity, error)
 	SearchForOperations_deprecated(searchQuery *entity.OperationSearchQuery) ([]entity.OperationSearchResult_deprecated, error)
 	SearchForOperations(searchQuery *entity.OperationSearchQuery) ([]entity.OperationSearchResult, error)
-	GetOperationsTypeCount(packageId string, version string, revision int) ([]entity.OperationsTypeCountEntity, error)
+	GetOperationsTypeCount(packageId string, version string, revision int, showOnlyDeleted bool) ([]entity.OperationsTypeCountEntity, error)
 	GetOperationsTypeDataHashes(packageId string, version string, revision int) ([]entity.OperationsTypeDataHashEntity, error)
 	GetOperationDeprecatedItems(packageId string, version string, revision int, operationType string, operationId string) (*entity.OperationRichEntity, error)
 	GetDeprecatedOperationsSummary(packageId string, version string, revision int) ([]entity.DeprecatedOperationsSummaryEntity, error)
@@ -211,6 +211,8 @@ func (o operationRepositoryImpl) GetOperations(packageId string, version string,
 
 	if searchReq.CustomTagKey != "" && searchReq.CustomTagValue != "" {
 		query.Where("exists(select 1 from jsonb_each_text(operation.custom_tags) where key = ? and value = ?)", searchReq.CustomTagKey, searchReq.CustomTagValue)
+	} else if searchReq.CustomTagKey != "" {
+		query.Where("exists(select 1 from jsonb_each_text(operation.custom_tags) where key = ?)", searchReq.CustomTagKey)
 	} else if searchReq.TextFilter != "" {
 		searchReq.TextFilter = "%" + utils.LikeEscaped(searchReq.TextFilter) + "%"
 		query.WhereGroup(func(q *pg.Query) (*pg.Query, error) {
@@ -1312,8 +1314,13 @@ func (o operationRepositoryImpl) SearchForOperations(searchQuery *entity.Operati
 	return result, nil
 }
 
-func (o operationRepositoryImpl) GetOperationsTypeCount(packageId string, version string, revision int) ([]entity.OperationsTypeCountEntity, error) {
+func (o operationRepositoryImpl) GetOperationsTypeCount(packageId string, version string, revision int, showOnlyDeleted bool) ([]entity.OperationsTypeCountEntity, error) {
 	var result []entity.OperationsTypeCountEntity
+	notCondition := ""
+	if showOnlyDeleted {
+		notCondition = "not"
+	}
+
 	operationsTypeCountQuery := `
 	with versions as(
         select s.reference_id as package_id, s.reference_version as version, s.reference_revision as revision
@@ -1322,7 +1329,7 @@ func (o operationRepositoryImpl) GetOperationsTypeCount(packageId string, versio
 		on pv.package_id = s.reference_id
 		and pv.version = s.reference_version
 		and pv.revision = s.reference_revision
-		and pv.deleted_at is null
+		and pv.deleted_at is %s null
         where s.package_id = ?
         and s.version = ?
         and s.revision = ?
@@ -1379,7 +1386,7 @@ func (o operationRepositoryImpl) GetOperationsTypeCount(packageId string, versio
 	and uoc.api_audience = ?;
 	`
 	_, err := o.cp.GetConnection().Query(&result,
-		operationsTypeCountQuery,
+		fmt.Sprintf(operationsTypeCountQuery, notCondition),
 		packageId, version, revision,
 		packageId, version, revision,
 		view.NoBwcApiKind,
@@ -1807,14 +1814,16 @@ func (o operationRepositoryImpl) GetGroupedOperations(packageId string, version 
 		Offset(searchReq.Limit * searchReq.Page).
 		Limit(searchReq.Limit)
 
-	if searchReq.TextFilter != "" {
+	if searchReq.CustomTagKey != "" && searchReq.CustomTagValue != "" {
+		query.Where("exists(select 1 from jsonb_each_text(operation.custom_tags) where key = ? and value = ?)", searchReq.CustomTagKey, searchReq.CustomTagValue)
+	} else if searchReq.CustomTagKey != "" {
+		query.Where("exists(select 1 from jsonb_each_text(operation.custom_tags) where key = ?)", searchReq.CustomTagKey)
+	} else if searchReq.TextFilter != "" {
 		searchReq.TextFilter = "%" + utils.LikeEscaped(searchReq.TextFilter) + "%"
 		query.WhereGroup(func(q *pg.Query) (*pg.Query, error) {
 			q = q.WhereOr("operation.title ilike ?", searchReq.TextFilter).
 				WhereOr("operation.metadata->>? ilike ?", "path", searchReq.TextFilter).
-				WhereOr("operation.metadata->>? ilike ?", "method", searchReq.TextFilter).
-				WhereOr("exists(select 1 from jsonb_each_text(operation.custom_tags) where key ilike ? OR value ilike ?)",
-					searchReq.TextFilter, searchReq.TextFilter)
+				WhereOr("operation.metadata->>? ilike ?", "method", searchReq.TextFilter)
 			return q, nil
 		})
 	}

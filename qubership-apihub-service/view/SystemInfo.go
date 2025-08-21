@@ -14,16 +14,25 @@
 
 package view
 
+import (
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
+)
+
 type SystemInfo struct {
-	BackendVersion  string   `json:"backendVersion"`
-	FrontendVersion string   `json:"frontendVersion"`
-	ProductionMode  bool     `json:"productionMode"`
-	Notification    string   `json:"notification,omitempty"`
-	ExternalLinks   []string `json:"externalLinks"`
+	BackendVersion      string   `json:"backendVersion"`
+	ProductionMode      bool     `json:"productionMode"`
+	Notification        string   `json:"notification,omitempty"`
+	ExternalLinks       []string `json:"externalLinks"`
+	MigrationInProgress bool     `json:"migrationInProgress"`
 }
 
-type SystemConfigurationInfo struct {
+type SystemConfigurationInfo_deprecated struct {
 	SSOIntegrationEnabled bool   `json:"ssoIntegrationEnabled"`
 	AutoRedirect          bool   `json:"autoRedirect"`
 	DefaultWorkspaceId    string `json:"defaultWorkspaceId"`
+}
+
+type SystemConfigurationInfo struct {
+	DefaultWorkspaceId string         `json:"defaultWorkspaceId"`
+	AuthConfig         idp.AuthConfig `json:"authConfig"`
 }

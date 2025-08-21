@@ -16,6 +16,7 @@ package controller
 
 import (
 	"fmt"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -29,8 +30,10 @@ import (
 
 type ActivityTrackingController interface {
 	GetActivityHistory_deprecated(w http.ResponseWriter, r *http.Request)
+	GetActivityHistory_deprecated_2(w http.ResponseWriter, r *http.Request)
 	GetActivityHistory(w http.ResponseWriter, r *http.Request)
 	GetActivityHistoryForPackage_deprecated(w http.ResponseWriter, r *http.Request)
+	GetActivityHistoryForPackage_deprecated_2(w http.ResponseWriter, r *http.Request)
 	GetActivityHistoryForPackage(w http.ResponseWriter, r *http.Request)
 }
 
@@ -51,7 +54,7 @@ func (a activityTrackingControllerImpl) GetActivityHistory_deprecated(w http.Res
 	if onlyFavoriteStr != "" {
 		onlyFavorite, err = strconv.ParseBool(onlyFavoriteStr)
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -64,7 +67,7 @@ func (a activityTrackingControllerImpl) GetActivityHistory_deprecated(w http.Res
 
 	textFilter, err := url.QueryUnescape(r.URL.Query().Get("textFilter"))
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -76,7 +79,7 @@ func (a activityTrackingControllerImpl) GetActivityHistory_deprecated(w http.Res
 
 	limit, customError := getLimitQueryParam(r)
 	if customError != nil {
-		RespondWithCustomError(w, customError)
+		utils.RespondWithCustomError(w, customError)
 		return
 	}
 
@@ -84,7 +87,7 @@ func (a activityTrackingControllerImpl) GetActivityHistory_deprecated(w http.Res
 	if r.URL.Query().Get("page") != "" {
 		page, err = strconv.Atoi(r.URL.Query().Get("page"))
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -95,15 +98,9 @@ func (a activityTrackingControllerImpl) GetActivityHistory_deprecated(w http.Res
 		}
 	}
 
-	types, err := getListFromParam(r, "types")
-	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.InvalidURLEscape,
-			Message: exception.InvalidURLEscapeMsg,
-			Params:  map[string]interface{}{"param": "types"},
-			Debug:   err.Error(),
-		})
+	types, customErr := getListFromParam(r, "types")
+	if customErr != nil {
+		utils.RespondWithCustomError(w, customErr)
 		return
 	}
 
@@ -111,7 +108,7 @@ func (a activityTrackingControllerImpl) GetActivityHistory_deprecated(w http.Res
 	if r.URL.Query().Get("onlyShared") != "" {
 		onlyShared, err = strconv.ParseBool(r.URL.Query().Get("onlyShared"))
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -122,15 +119,9 @@ func (a activityTrackingControllerImpl) GetActivityHistory_deprecated(w http.Res
 		}
 	}
 
-	kind, err := getListFromParam(r, "kind")
-	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.InvalidURLEscape,
-			Message: exception.InvalidURLEscapeMsg,
-			Params:  map[string]interface{}{"param": "kind"},
-			Debug:   err.Error(),
-		})
+	kind, customErr := getListFromParam(r, "kind")
+	if customErr != nil {
+		utils.RespondWithCustomError(w, customErr)
 		return
 	}
 
@@ -148,16 +139,16 @@ func (a activityTrackingControllerImpl) GetActivityHistory_deprecated(w http.Res
 	if err != nil {
 		log.Error("Failed to get activity events for favourite packages: ", err.Error())
 		if customError, ok := err.(*exception.CustomError); ok {
-			RespondWithCustomError(w, customError)
+			utils.RespondWithCustomError(w, customError)
 		} else {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusInternalServerError,
 				Message: "Failed to get activity events",
 				Debug:   err.Error()})
 		}
 		return
 	}
-	RespondWithJson(w, http.StatusOK, result)
+	utils.RespondWithJson(w, http.StatusOK, result)
 }
 
 func (a activityTrackingControllerImpl) GetActivityHistory(w http.ResponseWriter, r *http.Request) {
@@ -167,7 +158,7 @@ func (a activityTrackingControllerImpl) GetActivityHistory(w http.ResponseWriter
 	if onlyFavoriteStr != "" {
 		onlyFavorite, err = strconv.ParseBool(onlyFavoriteStr)
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -180,7 +171,7 @@ func (a activityTrackingControllerImpl) GetActivityHistory(w http.ResponseWriter
 
 	textFilter, err := url.QueryUnescape(r.URL.Query().Get("textFilter"))
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -192,7 +183,7 @@ func (a activityTrackingControllerImpl) GetActivityHistory(w http.ResponseWriter
 
 	limit, customError := getLimitQueryParam(r)
 	if customError != nil {
-		RespondWithCustomError(w, customError)
+		utils.RespondWithCustomError(w, customError)
 		return
 	}
 
@@ -200,7 +191,7 @@ func (a activityTrackingControllerImpl) GetActivityHistory(w http.ResponseWriter
 	if r.URL.Query().Get("page") != "" {
 		page, err = strconv.Atoi(r.URL.Query().Get("page"))
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -211,15 +202,9 @@ func (a activityTrackingControllerImpl) GetActivityHistory(w http.ResponseWriter
 		}
 	}
 
-	types, err := getListFromParam(r, "types")
-	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.InvalidURLEscape,
-			Message: exception.InvalidURLEscapeMsg,
-			Params:  map[string]interface{}{"param": "types"},
-			Debug:   err.Error(),
-		})
+	types, customErr := getListFromParam(r, "types")
+	if customErr != nil {
+		utils.RespondWithCustomError(w, customErr)
 		return
 	}
 
@@ -227,7 +212,7 @@ func (a activityTrackingControllerImpl) GetActivityHistory(w http.ResponseWriter
 	if r.URL.Query().Get("onlyShared") != "" {
 		onlyShared, err = strconv.ParseBool(r.URL.Query().Get("onlyShared"))
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -238,15 +223,9 @@ func (a activityTrackingControllerImpl) GetActivityHistory(w http.ResponseWriter
 		}
 	}
 
-	kind, err := getListFromParam(r, "kind")
-	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.InvalidURLEscape,
-			Message: exception.InvalidURLEscapeMsg,
-			Params:  map[string]interface{}{"param": "kind"},
-			Debug:   err.Error(),
-		})
+	kind, customErr := getListFromParam(r, "kind")
+	if customErr != nil {
+		utils.RespondWithCustomError(w, customErr)
 		return
 	}
 
@@ -264,16 +243,120 @@ func (a activityTrackingControllerImpl) GetActivityHistory(w http.ResponseWriter
 	if err != nil {
 		log.Error("Failed to get activity events for favourite packages: ", err.Error())
 		if customError, ok := err.(*exception.CustomError); ok {
-			RespondWithCustomError(w, customError)
+			utils.RespondWithCustomError(w, customError)
 		} else {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusInternalServerError,
 				Message: "Failed to get activity events",
 				Debug:   err.Error()})
 		}
 		return
 	}
-	RespondWithJson(w, http.StatusOK, result)
+	utils.RespondWithJson(w, http.StatusOK, result)
+}
+
+func (a activityTrackingControllerImpl) GetActivityHistory_deprecated_2(w http.ResponseWriter, r *http.Request) {
+	var err error
+	onlyFavorite := false
+	onlyFavoriteStr := r.URL.Query().Get("onlyFavorite")
+	if onlyFavoriteStr != "" {
+		onlyFavorite, err = strconv.ParseBool(onlyFavoriteStr)
+		if err != nil {
+			utils.RespondWithCustomError(w, &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.IncorrectParamType,
+				Message: exception.IncorrectParamTypeMsg,
+				Params:  map[string]interface{}{"param": "onlyFavorite", "type": "bool"},
+				Debug:   err.Error(),
+			})
+			return
+		}
+	}
+
+	textFilter, err := url.QueryUnescape(r.URL.Query().Get("textFilter"))
+	if err != nil {
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidURLEscape,
+			Message: exception.InvalidURLEscapeMsg,
+			Params:  map[string]interface{}{"param": "textFilter"},
+			Debug:   err.Error(),
+		})
+		return
+	}
+
+	limit, customError := getLimitQueryParam(r)
+	if customError != nil {
+		utils.RespondWithCustomError(w, customError)
+		return
+	}
+
+	page := 0
+	if r.URL.Query().Get("page") != "" {
+		page, err = strconv.Atoi(r.URL.Query().Get("page"))
+		if err != nil {
+			utils.RespondWithCustomError(w, &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.IncorrectParamType,
+				Message: exception.IncorrectParamTypeMsg,
+				Params:  map[string]interface{}{"param": "page", "type": "int"},
+				Debug:   err.Error(),
+			})
+			return
+		}
+	}
+
+	types, customErr := getListFromParam(r, "types")
+	if customErr != nil {
+		utils.RespondWithCustomError(w, customErr)
+		return
+	}
+
+	onlyShared := false
+	if r.URL.Query().Get("onlyShared") != "" {
+		onlyShared, err = strconv.ParseBool(r.URL.Query().Get("onlyShared"))
+		if err != nil {
+			utils.RespondWithCustomError(w, &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.IncorrectParamType,
+				Message: exception.IncorrectParamTypeMsg,
+				Params:  map[string]interface{}{"param": "onlyShared", "type": "boolean"},
+				Debug:   err.Error(),
+			})
+			return
+		}
+	}
+
+	kind, customErr := getListFromParam(r, "kind")
+	if customErr != nil {
+		utils.RespondWithCustomError(w, customErr)
+		return
+	}
+
+	// TODO: role check?
+	activityHistoryReq := view.ActivityHistoryReq{
+		OnlyFavorite: onlyFavorite,
+		TextFilter:   textFilter,
+		Types:        types,
+		OnlyShared:   onlyShared,
+		Kind:         kind,
+		Limit:        limit,
+		Page:         page,
+	}
+	result, err := a.activityTrackingService.GetActivityHistory_deprecated_2(context.Create(r), activityHistoryReq)
+	if err != nil {
+		log.Error("Failed to get activity events for favourite packages: ", err.Error())
+		if customError, ok := err.(*exception.CustomError); ok {
+			utils.RespondWithCustomError(w, customError)
+		} else {
+			utils.RespondWithCustomError(w, &exception.CustomError{
+				Status:  http.StatusInternalServerError,
+				Message: "Failed to get activity events",
+				Debug:   err.Error()})
+		}
+		return
+	}
+	utils.RespondWithJson(w, http.StatusOK, result)
 }
 
 func (a activityTrackingControllerImpl) GetActivityHistoryForPackage_deprecated(w http.ResponseWriter, r *http.Request) {
@@ -285,7 +368,7 @@ func (a activityTrackingControllerImpl) GetActivityHistoryForPackage_deprecated(
 		return
 	}
 	if !sufficientPrivileges {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -298,7 +381,7 @@ func (a activityTrackingControllerImpl) GetActivityHistoryForPackage_deprecated(
 	if includeRefsStr != "" {
 		includeRefs, err = strconv.ParseBool(includeRefsStr)
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -311,7 +394,7 @@ func (a activityTrackingControllerImpl) GetActivityHistoryForPackage_deprecated(
 
 	textFilter, err := url.QueryUnescape(r.URL.Query().Get("textFilter"))
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -323,7 +406,7 @@ func (a activityTrackingControllerImpl) GetActivityHistoryForPackage_deprecated(
 
 	limit, customError := getLimitQueryParam(r)
 	if customError != nil {
-		RespondWithCustomError(w, customError)
+		utils.RespondWithCustomError(w, customError)
 		return
 	}
 
@@ -331,7 +414,7 @@ func (a activityTrackingControllerImpl) GetActivityHistoryForPackage_deprecated(
 	if r.URL.Query().Get("page") != "" {
 		page, err = strconv.Atoi(r.URL.Query().Get("page"))
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -342,15 +425,9 @@ func (a activityTrackingControllerImpl) GetActivityHistoryForPackage_deprecated(
 		}
 	}
 
-	types, err := getListFromParam(r, "types")
-	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.InvalidURLEscape,
-			Message: exception.InvalidURLEscapeMsg,
-			Params:  map[string]interface{}{"param": "types"},
-			Debug:   err.Error(),
-		})
+	types, customErr := getListFromParam(r, "types")
+	if customErr != nil {
+		utils.RespondWithCustomError(w, customErr)
 		return
 	}
 
@@ -359,7 +436,87 @@ func (a activityTrackingControllerImpl) GetActivityHistoryForPackage_deprecated(
 		handlePkgRedirectOrRespondWithError(w, r, a.ptHandler, packageId, fmt.Sprintf("Failed to get activity events for package %s", packageId), err)
 		return
 	}
-	RespondWithJson(w, http.StatusOK, result)
+	utils.RespondWithJson(w, http.StatusOK, result)
+}
+
+func (a activityTrackingControllerImpl) GetActivityHistoryForPackage_deprecated_2(w http.ResponseWriter, r *http.Request) {
+	packageId := getStringParam(r, "packageId")
+	ctx := context.Create(r)
+	sufficientPrivileges, err := a.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
+	if err != nil {
+		handlePkgRedirectOrRespondWithError(w, r, a.ptHandler, packageId, "Failed to check user privileges", err)
+		return
+	}
+	if !sufficientPrivileges {
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusForbidden,
+			Code:    exception.InsufficientPrivileges,
+			Message: exception.InsufficientPrivilegesMsg,
+		})
+		return
+	}
+
+	includeRefs := false
+	includeRefsStr := r.URL.Query().Get("includeRefs")
+	if includeRefsStr != "" {
+		includeRefs, err = strconv.ParseBool(includeRefsStr)
+		if err != nil {
+			utils.RespondWithCustomError(w, &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.IncorrectParamType,
+				Message: exception.IncorrectParamTypeMsg,
+				Params:  map[string]interface{}{"param": "includeRefs", "type": "bool"},
+				Debug:   err.Error(),
+			})
+			return
+		}
+	}
+
+	textFilter, err := url.QueryUnescape(r.URL.Query().Get("textFilter"))
+	if err != nil {
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidURLEscape,
+			Message: exception.InvalidURLEscapeMsg,
+			Params:  map[string]interface{}{"param": "textFilter"},
+			Debug:   err.Error(),
+		})
+		return
+	}
+
+	limit, customError := getLimitQueryParam(r)
+	if customError != nil {
+		utils.RespondWithCustomError(w, customError)
+		return
+	}
+
+	page := 0
+	if r.URL.Query().Get("page") != "" {
+		page, err = strconv.Atoi(r.URL.Query().Get("page"))
+		if err != nil {
+			utils.RespondWithCustomError(w, &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.IncorrectParamType,
+				Message: exception.IncorrectParamTypeMsg,
+				Params:  map[string]interface{}{"param": "page", "type": "int"},
+				Debug:   err.Error(),
+			})
+			return
+		}
+	}
+
+	types, customErr := getListFromParam(r, "types")
+	if customErr != nil {
+		utils.RespondWithCustomError(w, customErr)
+		return
+	}
+
+	result, err := a.activityTrackingService.GetEventsForPackage_deprecated_2(packageId, includeRefs, limit, page, textFilter, types)
+	if err != nil {
+		handlePkgRedirectOrRespondWithError(w, r, a.ptHandler, packageId, fmt.Sprintf("Failed to get activity events for package %s", packageId), err)
+		return
+	}
+	utils.RespondWithJson(w, http.StatusOK, result)
 }
 
 func (a activityTrackingControllerImpl) GetActivityHistoryForPackage(w http.ResponseWriter, r *http.Request) {
@@ -371,7 +528,7 @@ func (a activityTrackingControllerImpl) GetActivityHistoryForPackage(w http.Resp
 		return
 	}
 	if !sufficientPrivileges {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -384,7 +541,7 @@ func (a activityTrackingControllerImpl) GetActivityHistoryForPackage(w http.Resp
 	if includeRefsStr != "" {
 		includeRefs, err = strconv.ParseBool(includeRefsStr)
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -397,7 +554,7 @@ func (a activityTrackingControllerImpl) GetActivityHistoryForPackage(w http.Resp
 
 	textFilter, err := url.QueryUnescape(r.URL.Query().Get("textFilter"))
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -409,7 +566,7 @@ func (a activityTrackingControllerImpl) GetActivityHistoryForPackage(w http.Resp
 
 	limit, customError := getLimitQueryParam(r)
 	if customError != nil {
-		RespondWithCustomError(w, customError)
+		utils.RespondWithCustomError(w, customError)
 		return
 	}
 
@@ -417,7 +574,7 @@ func (a activityTrackingControllerImpl) GetActivityHistoryForPackage(w http.Resp
 	if r.URL.Query().Get("page") != "" {
 		page, err = strconv.Atoi(r.URL.Query().Get("page"))
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -428,15 +585,9 @@ func (a activityTrackingControllerImpl) GetActivityHistoryForPackage(w http.Resp
 		}
 	}
 
-	types, err := getListFromParam(r, "types")
-	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.InvalidURLEscape,
-			Message: exception.InvalidURLEscapeMsg,
-			Params:  map[string]interface{}{"param": "types"},
-			Debug:   err.Error(),
-		})
+	types, customErr := getListFromParam(r, "types")
+	if customErr != nil {
+		utils.RespondWithCustomError(w, customErr)
 		return
 	}
 
@@ -445,5 +596,5 @@ func (a activityTrackingControllerImpl) GetActivityHistoryForPackage(w http.Resp
 		handlePkgRedirectOrRespondWithError(w, r, a.ptHandler, packageId, fmt.Sprintf("Failed to get activity events for package %s", packageId), err)
 		return
 	}
-	RespondWithJson(w, http.StatusOK, result)
+	utils.RespondWithJson(w, http.StatusOK, result)
 }

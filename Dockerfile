@@ -6,9 +6,9 @@ ARG TARGETARCH
 
 WORKDIR /workspace
 
-COPY qubership-apihub-service qubership-apihub-service 
+COPY qubership-apihub-service qubership-apihub-service
 
-WORKDIR /workspace/qubership-apihub-service 
+WORKDIR /workspace/qubership-apihub-service
 
 RUN set GOSUMDB=off && set CGO_ENABLED=0 && go mod tidy && go mod download && GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build .
 
@@ -20,8 +20,6 @@ ARG GIT_HASH=unknown
 ENV GIT_BRANCH=$GIT_BRANCH
 ENV GIT_HASH=$GIT_HASH
 
-MAINTAINER qubership.org
-
 WORKDIR /app/qubership-apihub-service
 
 USER root
@@ -29,12 +27,12 @@ USER root
 RUN apk --no-cache add curl
 
 COPY --from=builder /workspace/qubership-apihub-service/qubership-apihub-service ./qubership-apihub-service
-ADD qubership-apihub-service/static ./static
-ADD qubership-apihub-service/resources ./resources
-ADD docs/api ./api
+COPY qubership-apihub-service/static ./static
+COPY qubership-apihub-service/resources ./resources
+COPY docs/api ./api
 
 RUN chmod -R a+rwx /app
 
 USER 10001
 
-ENTRYPOINT ./qubership-apihub-service
+ENTRYPOINT ["./qubership-apihub-service"]

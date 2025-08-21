@@ -40,6 +40,7 @@ type PackageController interface {
 	GetPackage(w http.ResponseWriter, r *http.Request)
 	GetPackageStatus(w http.ResponseWriter, r *http.Request)
 	GetPackagesList(w http.ResponseWriter, r *http.Request)
+	GetDeletedPackagesList(w http.ResponseWriter, r *http.Request)
 	GetAvailableVersionStatusesForPublish(w http.ResponseWriter, r *http.Request)
 	RecalculateOperationGroups(w http.ResponseWriter, r *http.Request)
 	CalculateOperationGroups(w http.ResponseWriter, r *http.Request)
@@ -82,7 +83,7 @@ func (p packageControllerImpl) DeletePackage(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if !sufficientPrivileges {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -106,7 +107,7 @@ func (p packageControllerImpl) DisfavorPackage(w http.ResponseWriter, r *http.Re
 		return
 	}
 	if !sufficientPrivileges {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -130,7 +131,7 @@ func (p packageControllerImpl) FavorPackage(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if !sufficientPrivileges {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -156,7 +157,7 @@ func (p packageControllerImpl) GetPackage(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if !sufficientPrivileges {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -171,7 +172,7 @@ func (p packageControllerImpl) GetPackage(w http.ResponseWriter, r *http.Request
 		handlePkgRedirectOrRespondWithError(w, r, p.ptHandler, packageId, "Failed to get package info", err)
 		return
 	}
-	RespondWithJson(w, http.StatusOK, packageInfo)
+	utils.RespondWithJson(w, http.StatusOK, packageInfo)
 }
 
 func (p packageControllerImpl) GetPackageStatus(w http.ResponseWriter, r *http.Request) {
@@ -183,7 +184,7 @@ func (p packageControllerImpl) GetPackageStatus(w http.ResponseWriter, r *http.R
 		return
 	}
 	if !sufficientPrivileges {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -195,29 +196,23 @@ func (p packageControllerImpl) GetPackageStatus(w http.ResponseWriter, r *http.R
 		handlePkgRedirectOrRespondWithError(w, r, p.ptHandler, packageId, "Failed to get package status", err)
 		return
 	}
-	RespondWithJson(w, http.StatusOK, packageStatus)
+	utils.RespondWithJson(w, http.StatusOK, packageStatus)
 }
 
 func (p packageControllerImpl) GetPackagesList(w http.ResponseWriter, r *http.Request) {
 	var err error
 	filter := r.URL.Query().Get("textFilter")
 	parentId := r.URL.Query().Get("parentId")
-	kind, err := getListFromParam(r, "kind")
-	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.InvalidURLEscape,
-			Message: exception.InvalidURLEscapeMsg,
-			Params:  map[string]interface{}{"param": "kind"},
-			Debug:   err.Error(),
-		})
+	kind, customErr := getListFromParam(r, "kind")
+	if customErr != nil {
+		utils.RespondWithCustomError(w, customErr)
 		return
 	}
 	onlyFavorite := false
 	if r.URL.Query().Get("onlyFavorite") != "" {
 		onlyFavorite, err = strconv.ParseBool(r.URL.Query().Get("onlyFavorite"))
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -232,7 +227,7 @@ func (p packageControllerImpl) GetPackagesList(w http.ResponseWriter, r *http.Re
 	if r.URL.Query().Get("onlyShared") != "" {
 		onlyShared, err = strconv.ParseBool(r.URL.Query().Get("onlyShared"))
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -247,7 +242,7 @@ func (p packageControllerImpl) GetPackagesList(w http.ResponseWriter, r *http.Re
 	if r.URL.Query().Get("showParents") != "" {
 		showParents, err = strconv.ParseBool(r.URL.Query().Get("showParents"))
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -262,7 +257,7 @@ func (p packageControllerImpl) GetPackagesList(w http.ResponseWriter, r *http.Re
 	if r.URL.Query().Get("lastReleaseVersionDetails") != "" {
 		lastReleaseVersionDetails, err = strconv.ParseBool(r.URL.Query().Get("lastReleaseVersionDetails"))
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -275,7 +270,7 @@ func (p packageControllerImpl) GetPackagesList(w http.ResponseWriter, r *http.Re
 
 	limit, customError := getLimitQueryParam(r)
 	if customError != nil {
-		RespondWithCustomError(w, customError)
+		utils.RespondWithCustomError(w, customError)
 		return
 	}
 
@@ -283,7 +278,7 @@ func (p packageControllerImpl) GetPackagesList(w http.ResponseWriter, r *http.Re
 	if r.URL.Query().Get("page") != "" {
 		page, err = strconv.Atoi(r.URL.Query().Get("page"))
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -299,7 +294,7 @@ func (p packageControllerImpl) GetPackagesList(w http.ResponseWriter, r *http.Re
 	if r.URL.Query().Get("showAllDescendants") != "" {
 		showAllDescendants, err = strconv.ParseBool(r.URL.Query().Get("showAllDescendants"))
 		if err != nil {
-			RespondWithCustomError(w, &exception.CustomError{
+			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -324,20 +319,109 @@ func (p packageControllerImpl) GetPackagesList(w http.ResponseWriter, r *http.Re
 		ShowAllDescendants:        showAllDescendants,
 	}
 
-	packages, err := p.packageService.GetPackagesList(context.Create(r), packageListReq)
+	packages, err := p.packageService.GetPackagesList(context.Create(r), packageListReq, false)
 
 	if err != nil {
-		RespondWithError(w, "Failed to get packages", err)
+		utils.RespondWithError(w, "Failed to get packages", err)
 		return
 	}
-	RespondWithJson(w, http.StatusOK, packages)
+	utils.RespondWithJson(w, http.StatusOK, packages)
+}
+
+func (p packageControllerImpl) GetDeletedPackagesList(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Create(r)
+	sufficientPrivileges := p.roleService.IsSysadm(ctx)
+	if !sufficientPrivileges {
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusForbidden,
+			Code:    exception.InsufficientPrivileges,
+			Message: exception.InsufficientPrivilegesMsg,
+		})
+		return
+	}
+
+	var err error
+	parentId := r.URL.Query().Get("parentId")
+	kind, customErr := getListFromParam(r, "kind")
+	if customErr != nil {
+		utils.RespondWithCustomError(w, customErr)
+		return
+	}
+
+	showParents := false
+	if r.URL.Query().Get("showParents") != "" {
+		showParents, err = strconv.ParseBool(r.URL.Query().Get("showParents"))
+		if err != nil {
+			utils.RespondWithCustomError(w, &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.IncorrectParamType,
+				Message: exception.IncorrectParamTypeMsg,
+				Params:  map[string]interface{}{"param": "showParents", "type": "boolean"},
+				Debug:   err.Error(),
+			})
+			return
+		}
+	}
+
+	limit, customError := getLimitQueryParam(r)
+	if customError != nil {
+		utils.RespondWithCustomError(w, customError)
+		return
+	}
+
+	page := 0
+	if r.URL.Query().Get("page") != "" {
+		page, err = strconv.Atoi(r.URL.Query().Get("page"))
+		if err != nil {
+			utils.RespondWithCustomError(w, &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.IncorrectParamType,
+				Message: exception.IncorrectParamTypeMsg,
+				Params:  map[string]interface{}{"param": "page", "type": "int"},
+				Debug:   err.Error(),
+			})
+			return
+		}
+	}
+
+	showAllDescendants := false
+	if r.URL.Query().Get("showAllDescendants") != "" {
+		showAllDescendants, err = strconv.ParseBool(r.URL.Query().Get("showAllDescendants"))
+		if err != nil {
+			utils.RespondWithCustomError(w, &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.IncorrectParamType,
+				Message: exception.IncorrectParamTypeMsg,
+				Params:  map[string]interface{}{"param": "showAllDescendants", "type": "boolean"},
+				Debug:   err.Error(),
+			})
+			return
+		}
+	}
+
+	packageListReq := view.PackageListReq{
+		Kind:               kind,
+		Limit:              limit,
+		Offset:             limit * page,
+		ParentId:           parentId,
+		ShowParents:        showParents,
+		ShowAllDescendants: showAllDescendants,
+	}
+
+	packages, err := p.packageService.GetPackagesList(context.Create(r), packageListReq, true)
+
+	if err != nil {
+		utils.RespondWithError(w, "Failed to get packages", err)
+		return
+	}
+	utils.RespondWithJson(w, http.StatusOK, packages)
 }
 
 func (p packageControllerImpl) CreatePackage(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.BadRequestBody,
 			Message: exception.BadRequestBodyMsg,
@@ -348,7 +432,7 @@ func (p packageControllerImpl) CreatePackage(w http.ResponseWriter, r *http.Requ
 	var packg view.SimplePackage
 	err = json.Unmarshal(body, &packg)
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.BadRequestBody,
 			Message: exception.BadRequestBodyMsg,
@@ -359,7 +443,7 @@ func (p packageControllerImpl) CreatePackage(w http.ResponseWriter, r *http.Requ
 	validationErr := utils.ValidateObject(packg)
 	if validationErr != nil {
 		if customError, ok := validationErr.(*exception.CustomError); ok {
-			RespondWithCustomError(w, customError)
+			utils.RespondWithCustomError(w, customError)
 			return
 		}
 	}
@@ -371,12 +455,12 @@ func (p packageControllerImpl) CreatePackage(w http.ResponseWriter, r *http.Requ
 	} else {
 		sufficientPrivileges, err = p.roleService.HasRequiredPermissions(ctx, packg.ParentId, view.CreateAndUpdatePackagePermission)
 		if err != nil {
-			RespondWithError(w, "Failed to check user privileges", err)
+			utils.RespondWithError(w, "Failed to check user privileges", err)
 			return
 		}
 	}
 	if !sufficientPrivileges {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -385,7 +469,7 @@ func (p packageControllerImpl) CreatePackage(w http.ResponseWriter, r *http.Requ
 	}
 
 	if !IsAcceptableAlias(packg.Alias) {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.AliasContainsForbiddenChars,
 			Message: exception.AliasContainsForbiddenCharsMsg,
@@ -394,7 +478,7 @@ func (p packageControllerImpl) CreatePackage(w http.ResponseWriter, r *http.Requ
 	}
 
 	if !strings.Contains(packg.ParentId, ".") && strings.ToLower(packg.Alias) == "runenv" && !p.roleService.IsSysadm(ctx) {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.AliasContainsRunenvChars,
 			Message: exception.AliasContainsRunenvCharsMsg,
@@ -404,14 +488,14 @@ func (p packageControllerImpl) CreatePackage(w http.ResponseWriter, r *http.Requ
 
 	newPackage, err := p.packageService.CreatePackage(ctx, packg)
 	if err != nil {
-		RespondWithError(w, "Failed to create package", err)
+		utils.RespondWithError(w, "Failed to create package", err)
 		return
 	}
 	if newPackage.ParentId != "" && (newPackage.Kind == entity.KIND_PACKAGE || newPackage.Kind == entity.KIND_DASHBOARD) {
 		p.monitoringService.IncreaseBusinessMetricCounter(ctx.GetUserId(), metrics.PackagesAndDashboardsCreated, newPackage.ParentId)
 	}
 
-	RespondWithJson(w, http.StatusCreated, newPackage)
+	utils.RespondWithJson(w, http.StatusCreated, newPackage)
 }
 
 func (p packageControllerImpl) UpdatePackage(w http.ResponseWriter, r *http.Request) {
@@ -423,7 +507,7 @@ func (p packageControllerImpl) UpdatePackage(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if !sufficientPrivileges {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -433,7 +517,7 @@ func (p packageControllerImpl) UpdatePackage(w http.ResponseWriter, r *http.Requ
 	defer r.Body.Close()
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.BadRequestBody,
 			Message: exception.BadRequestBodyMsg,
@@ -445,7 +529,7 @@ func (p packageControllerImpl) UpdatePackage(w http.ResponseWriter, r *http.Requ
 
 	err = json.Unmarshal(body, &patchPackage)
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.BadRequestBody,
 			Message: exception.BadRequestBodyMsg,
@@ -460,7 +544,7 @@ func (p packageControllerImpl) UpdatePackage(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	RespondWithJson(w, http.StatusOK, updatedPackage)
+	utils.RespondWithJson(w, http.StatusOK, updatedPackage)
 }
 
 func (p packageControllerImpl) GetAvailableVersionStatusesForPublish(w http.ResponseWriter, r *http.Request) {
@@ -472,7 +556,7 @@ func (p packageControllerImpl) GetAvailableVersionStatusesForPublish(w http.Resp
 		return
 	}
 	if !sufficientPrivileges {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -484,7 +568,7 @@ func (p packageControllerImpl) GetAvailableVersionStatusesForPublish(w http.Resp
 		handlePkgRedirectOrRespondWithError(w, r, p.ptHandler, packageId, "Failed to get available version statuses for publish", err)
 		return
 	}
-	RespondWithJson(w, http.StatusOK, availableVersionStatusesForPublish)
+	utils.RespondWithJson(w, http.StatusOK, availableVersionStatusesForPublish)
 }
 
 func (p packageControllerImpl) RecalculateOperationGroups(w http.ResponseWriter, r *http.Request) {
@@ -496,7 +580,7 @@ func (p packageControllerImpl) RecalculateOperationGroups(w http.ResponseWriter,
 		return
 	}
 	if !sufficientPrivileges {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -521,7 +605,7 @@ func (p packageControllerImpl) CalculateOperationGroups(w http.ResponseWriter, r
 		return
 	}
 	if !sufficientPrivileges {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -530,7 +614,7 @@ func (p packageControllerImpl) CalculateOperationGroups(w http.ResponseWriter, r
 	}
 	groupingPrefix, err := url.QueryUnescape(r.URL.Query().Get("groupingPrefix"))
 	if err != nil {
-		RespondWithCustomError(w, &exception.CustomError{
+		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -546,5 +630,5 @@ func (p packageControllerImpl) CalculateOperationGroups(w http.ResponseWriter, r
 		return
 	}
 
-	RespondWithJson(w, http.StatusOK, groups)
+	utils.RespondWithJson(w, http.StatusOK, groups)
 }

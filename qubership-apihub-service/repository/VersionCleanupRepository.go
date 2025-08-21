@@ -15,6 +15,9 @@
 package repository
 
 import (
+	"context"
+	"time"
+
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/db"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
 	"github.com/go-pg/pg/v10"
@@ -22,8 +25,8 @@ import (
 
 type VersionCleanupRepository interface {
 	GetVersionCleanupRun(id string) (*entity.VersionCleanupEntity, error)
-	StoreVersionCleanupRun(entity entity.VersionCleanupEntity) error
-	UpdateVersionCleanupRun(runId string, status string, details string, deletedItems int) error
+	StoreVersionCleanupRun(ctx context.Context, entity entity.VersionCleanupEntity) error
+	UpdateVersionCleanupRun(ctx context.Context, runId string, status string, details string, deletedItems int, finishedAt *time.Time) error
 }
 
 func NewVersionCleanupRepository(cp db.ConnectionProvider) VersionCleanupRepository {
@@ -46,16 +49,27 @@ func (v versionCleanupRepositoryImpl) GetVersionCleanupRun(id string) (*entity.V
 	return ent, nil
 }
 
-func (v versionCleanupRepositoryImpl) StoreVersionCleanupRun(entity entity.VersionCleanupEntity) error {
-	_, err := v.cp.GetConnection().Model(&entity).Insert()
+func (v versionCleanupRepositoryImpl) StoreVersionCleanupRun(ctx context.Context, entity entity.VersionCleanupEntity) error {
+	_, err := v.cp.GetConnection().ModelContext(ctx, &entity).Insert()
 	return err
 }
 
-func (v versionCleanupRepositoryImpl) UpdateVersionCleanupRun(runId string, status string, details string, deletedItems int) error {
-	_, err := v.cp.GetConnection().Model(&entity.VersionCleanupEntity{}).
-		Set("status=?", status).
-		Set("details=?", details).
-		Set("deleted_items=?", deletedItems).
-		Where("run_id = ?", runId).Update()
+func (v versionCleanupRepositoryImpl) UpdateVersionCleanupRun(ctx context.Context, runId string, status string, details string, deletedItems int, finishedAt *time.Time) error {
+	query := v.cp.GetConnection().ModelContext(ctx, &entity.VersionCleanupEntity{}).
+		Set("deleted_items=?", deletedItems)
+	
+	if status != "" {
+		query = query.Set("status=?", status)
+	}
+	
+	if details != "" {
+		query = query.Set("details=?", details)
+	}
+
+	if finishedAt != nil {
+		query = query.Set("finished_at=?", finishedAt)
+	}
+
+	_, err := query.Where("run_id = ?", runId).Update()
 	return err
 }

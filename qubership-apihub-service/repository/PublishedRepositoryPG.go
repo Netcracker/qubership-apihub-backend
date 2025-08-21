@@ -23,13 +23,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
 	mEntity "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/migration/entity"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
-
-	log "github.com/sirupsen/logrus"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
@@ -78,25 +78,12 @@ func (p publishedRepositoryImpl) MarkVersionDeleted(packageId string, versionNam
 				return err
 			}
 		}
-
-		clearDefaultReleaseVersionForProjectQuery := `
-			UPDATE package_group
-			SET default_released_version = null
-			WHERE default_released_version = ? AND id = ?`
-		_, err = tx.Exec(clearDefaultReleaseVersionForProjectQuery, versionName, packageId)
-		if err != nil {
-			return err
-		}
-		_, err = tx.Exec(`delete from grouped_operation where package_id = ? and version = ?`, packageId, versionName)
+		err = p.clearDefaultReleaseVersion(tx, packageId, versionName)
 		if err != nil {
 			return err
 		}
 
-		clearPreviousVersionQuery := `
-			UPDATE published_version
-			SET previous_version = null, previous_version_package_id = null
-			WHERE previous_version = ? AND (previous_version_package_id = ? OR ((previous_version_package_id = '' or previous_version_package_id is null) and package_id = ?))`
-		_, err = tx.Exec(clearPreviousVersionQuery, versionName, packageId, packageId)
+		err = p.clearPreviousVersion(tx, packageId, versionName)
 		if err != nil {
 			return err
 		}
@@ -104,6 +91,25 @@ func (p publishedRepositoryImpl) MarkVersionDeleted(packageId string, versionNam
 		return nil
 	})
 
+	return err
+}
+
+func (p publishedRepositoryImpl) clearDefaultReleaseVersion(tx *pg.Tx, packageId string, version string) error {
+	_, err := tx.Exec(`
+		UPDATE package_group
+		SET default_released_version = null
+		WHERE default_released_version = ? AND id = ?`, version, packageId)
+	return err
+}
+
+func (p publishedRepositoryImpl) clearPreviousVersion(tx *pg.Tx, packageId string, version string) error {
+	_, err := tx.Exec(`
+		UPDATE published_version
+		SET metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('deleted_previous_version', previous_version, 'deleted_previous_version_package_id', previous_version_package_id),
+			previous_version = null,
+			previous_version_package_id = null
+		WHERE previous_version = ? AND (previous_version_package_id = ? OR ((previous_version_package_id = '' or previous_version_package_id is null) and package_id = ?))`,
+		version, packageId, packageId)
 	return err
 }
 
@@ -246,6 +252,29 @@ func (p publishedRepositoryImpl) GetLatestRevision(packageId, versionName string
 
 	return result.Revision, nil
 }
+
+func (p publishedRepositoryImpl) GetDeletedPackageLatestRevision(packageId, versionName string) (int, error) {
+	result := new(entity.PublishedVersionEntity)
+	version, _, err := SplitVersionRevision(versionName)
+	if err != nil {
+		return -1, err
+	}
+	query := p.cp.GetConnection().Model(result).
+		Where("package_id = ?", packageId).
+		Where("deleted_at is not ?", nil).
+		Where("version = ?", version).
+		Order("revision DESC")
+	err = query.First()
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return 0, nil
+		}
+		return -1, err
+	}
+
+	return result.Revision, nil
+}
+
 func (p publishedRepositoryImpl) GetReadonlyVersion_deprecated(packageId string, versionName string) (*entity.ReadonlyPublishedVersionEntity_deprecated, error) {
 	getPackage, errGetPackage := p.GetPackage(packageId)
 	if errGetPackage != nil {
@@ -277,14 +306,26 @@ func (p publishedRepositoryImpl) GetReadonlyVersion_deprecated(packageId string,
 	}
 	return result, nil
 }
-func (p publishedRepositoryImpl) GetReadonlyVersion(packageId string, versionName string) (*entity.PackageVersionRevisionEntity, error) {
-	getPackage, errGetPackage := p.GetPackage(packageId)
+
+func (p publishedRepositoryImpl) GetReadonlyVersion(packageId string, versionName string, showOnlyDeleted bool) (*entity.PackageVersionRevisionEntity, error) {
+	var getPackage *entity.PackageEntity
+	var errGetPackage error
+	notCondition := ""
+
+	if showOnlyDeleted {
+		getPackage, errGetPackage = p.GetPackageIncludingDeleted(packageId)
+		notCondition = "not"
+	} else {
+		getPackage, errGetPackage = p.GetPackage(packageId)
+	}
+
 	if errGetPackage != nil {
 		return nil, errGetPackage
 	}
 	if getPackage == nil {
 		return nil, nil
 	}
+
 	result := new(entity.PackageVersionRevisionEntity)
 	version, revision, err := SplitVersionRevision(versionName)
 	if err != nil {
@@ -302,10 +343,10 @@ func (p publishedRepositoryImpl) GetReadonlyVersion(packageId string, versionNam
 	  and pv.version = ?
 	  and ((? = 0 and pv.revision = get_latest_revision(?,?)) or
 		   (? != 0 and pv.revision = ?))
-	  and pv.deleted_at is null
+	  and pv.deleted_at is %s null
 	limit 1
 	`
-	_, err = p.cp.GetConnection().QueryOne(result, query, packageId, version, revision, packageId, version, revision, revision)
+	_, err = p.cp.GetConnection().QueryOne(result, fmt.Sprintf(query, notCondition), packageId, version, revision, packageId, version, revision, revision)
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return nil, nil
@@ -1121,9 +1162,22 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 			}
 			utils.PerfLog(time.Since(start).Milliseconds(), 50, "CreateVersionWithData: operationsData insert")
 		}
+
+		var existingGroupedOperations []entity.GroupedOperationEntity
+
 		if packageInfo.MigrationBuild {
 			// In case of migration list of operations may change due to new builder implementation, so need to cleanup existing list before insert
+
 			start = time.Now()
+			// Need to preserve grouped operations, since it will be deleted along with operations
+			err = tx.Model(&existingGroupedOperations).
+				Where("package_id = ?", version.PackageId).
+				Where("version = ?", version.Version).
+				Where("revision = ?", version.Revision).Select()
+			if err != nil {
+				return fmt.Errorf("failed to fetch grouped operations before operations cleanup: %w", err)
+			}
+
 			_, err := tx.Model(&entity.OperationEntity{}).
 				Where("package_id=?", version.PackageId).
 				Where("version=?", version.Version).
@@ -1239,6 +1293,33 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 			}
 			utils.PerfLog(time.Since(start).Milliseconds(), 50, "CreateVersionWithData: builderNotifications insert")
 		}
+
+		if len(existingGroupedOperations) > 0 {
+			// Restore grouped operations
+			start = time.Now()
+
+			// Check that every grouped operation still exists in the new list
+			opMap := make(map[string]struct{})
+			for _, op := range operations {
+				opMap[op.OperationId] = struct{}{}
+			}
+			var groupedOperationsToRestore []entity.GroupedOperationEntity
+			for _, groupedOperation := range existingGroupedOperations {
+				if _, ok := opMap[groupedOperation.OperationId]; ok {
+					groupedOperationsToRestore = append(groupedOperationsToRestore, groupedOperation)
+				} else {
+					log.Warnf("Grouped operation with id %s is not found in the operations list and will not be restored. PackageId=%s, version=%s, revision=%d",
+						groupedOperation.OperationId, version.PackageId, version.Version, version.Revision)
+				}
+			}
+
+			_, err = tx.Model(&groupedOperationsToRestore).Insert()
+			if err != nil {
+				return fmt.Errorf("failed to restore grouped operations: %w", err)
+			}
+			utils.PerfLog(time.Since(start).Milliseconds(), 50, "CreateVersionWithData: restore grouped operations")
+		}
+
 		if !packageInfo.MigrationBuild {
 			start = time.Now()
 			err = p.propagatePreviousOperationGroups(tx, version)
@@ -1818,12 +1899,12 @@ func (p publishedRepositoryImpl) GetVersionsByPreviousVersion(previousPackageId 
                 on pv.package_id = mx.package_id
                 and pv.version = mx.version
                 and pv.revision = mx.revision
-			where pv.previous_version_package_id = ?
+			where (pv.previous_version_package_id = ? or (pv.package_id = ? and pv.previous_version_package_id is null))
 			and pv.previous_version = ?
 			and pv.deleted_at is null
 			order by pv.published_at desc
  `
-	_, err = p.cp.GetConnection().Query(&ents, query, previousPackageId, previousVersion, previousPackageId, previousVersion)
+	_, err = p.cp.GetConnection().Query(&ents, query, previousPackageId, previousPackageId, previousVersion)
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return nil, nil
@@ -2036,7 +2117,8 @@ func (p publishedRepositoryImpl) GetReadonlyPackageVersionsWithLimit_deprecated(
 
 	return ents, nil
 }
-func (p publishedRepositoryImpl) GetReadonlyPackageVersionsWithLimit(searchQuery entity.PublishedVersionSearchQueryEntity, checkRevisions bool) ([]entity.PackageVersionRevisionEntity, error) {
+
+func (p publishedRepositoryImpl) GetReadonlyPackageVersionsWithLimit(searchQuery entity.PublishedVersionSearchQueryEntity, checkRevisions bool, showOnlyDeleted bool) ([]entity.PackageVersionRevisionEntity, error) {
 	var ents []entity.PackageVersionRevisionEntity
 	if searchQuery.TextFilter != "" {
 		searchQuery.TextFilter = "%" + utils.LikeEscaped(searchQuery.TextFilter) + "%"
@@ -2050,6 +2132,12 @@ func (p publishedRepositoryImpl) GetReadonlyPackageVersionsWithLimit(searchQuery
 	if searchQuery.SortOrder == "" {
 		searchQuery.SortOrder = entity.GetVersionSortOrderPG(view.VersionSortOrderDesc)
 	}
+
+	notCondition := ""
+	if showOnlyDeleted {
+		notCondition = "not"
+	}
+
 	if checkRevisions {
 		query := `
 		select pv.*, get_latest_revision(coalesce(pv.previous_version_package_id,pv.package_id), pv.previous_version) as previous_version_revision,
@@ -2141,13 +2229,13 @@ func (p publishedRepositoryImpl) GetReadonlyPackageVersionsWithLimit(searchQuery
 			where (?text_filter = '' or pv.version ilike ?text_filter OR EXISTS(SELECT 1 FROM unnest(pv.labels) as label WHERE label ILIKE ?text_filter))
 			and (?status = '' or pv.status ilike ?status)
 			and (?label = '' or ?label = any(pv.labels))
-			and pv.deleted_at is null
+			and pv.deleted_at is %s null
 			order by pv.%s %s
 			limit ?limit
 			offset ?offset
  `
 		_, err := p.cp.GetConnection().Model(&searchQuery).
-			Query(&ents, fmt.Sprintf(query, searchQuery.SortBy, searchQuery.SortOrder))
+			Query(&ents, fmt.Sprintf(query, notCondition, searchQuery.SortBy, searchQuery.SortOrder))
 		if err != nil {
 			if err == pg.ErrNoRows {
 				return nil, nil
@@ -2693,7 +2781,7 @@ func (p publishedRepositoryImpl) GetParentPackageGroups(id string) ([]entity.Pac
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetParentsForPackage(id string) ([]entity.PackageEntity, error) {
+func (p publishedRepositoryImpl) GetParentsForPackage(id string, includeDeleted bool) ([]entity.PackageEntity, error) {
 	var parentIds []string
 	var result []entity.PackageEntity
 
@@ -2702,15 +2790,20 @@ func (p publishedRepositoryImpl) GetParentsForPackage(id string) ([]entity.Packa
 		return result, nil
 	}
 
-	err := p.cp.GetConnection().Model(&result).
-		Where("deleted_at is ?", nil).
-		ColumnExpr("package_group.*").
+	query := p.cp.GetConnection().Model(&result)
+	if !includeDeleted {
+		query.Where("deleted_at is ?", nil)
+	}
+
+	query.ColumnExpr("package_group.*").
 		Join("JOIN UNNEST(?::text[]) WITH ORDINALITY t(id, ord) USING (id)", pg.Array(parentIds)).
-		Order("t.ord").
-		Select()
+		Order("t.ord")
+
+	err := query.Select()
 	if err != nil {
 		return nil, err
 	}
+
 	return result, nil
 }
 
@@ -2902,10 +2995,11 @@ func (p publishedRepositoryImpl) GetFilteredPackages(filter string, parentId str
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetFilteredPackagesWithOffset(searchReq view.PackageListReq, userId string) ([]entity.PackageEntity, error) {
+func (p publishedRepositoryImpl) GetFilteredPackagesWithOffset(ctx context.Context, searchReq view.PackageListReq, userId string) ([]entity.PackageEntity, error) {
 	var result []entity.PackageEntity
-	query := p.cp.GetConnection().Model(&result).
+	query := p.cp.GetConnection().ModelContext(ctx, &result).
 		Where("deleted_at is ?", nil)
+
 	if searchReq.OnlyFavorite {
 		query.Join("INNER JOIN favorite_packages as fav").
 			JoinOn("package_group.id = fav.package_id").
@@ -2927,7 +3021,7 @@ func (p publishedRepositoryImpl) GetFilteredPackagesWithOffset(searchReq view.Pa
 			return q, nil
 		})
 	}
-	if searchReq.ParentId != "" {
+	if searchReq.ParentId != "" && searchReq.ParentId != "*" {
 		if searchReq.ShowAllDescendants {
 			query.Where("package_group.id ilike ?", searchReq.ParentId+".%")
 		} else {
@@ -2943,6 +3037,35 @@ func (p publishedRepositoryImpl) GetFilteredPackagesWithOffset(searchReq view.Pa
 	}
 	if len(searchReq.Ids) > 0 {
 		query.Where("id in (?)", pg.In(searchReq.Ids))
+	}
+
+	err := query.Select()
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (p publishedRepositoryImpl) GetFilteredDeletedPackages(ctx context.Context, searchReq view.PackageListReq, userId string) ([]entity.PackageEntity, error) {
+	var result []entity.PackageEntity
+
+	query := p.cp.GetConnection().ModelContext(ctx, &result).
+		Where("deleted_at is not ?", nil)
+
+	query.Order("name ASC").
+		Offset(searchReq.Offset).
+		Limit(searchReq.Limit)
+
+	if searchReq.ParentId != "" && searchReq.ParentId != "*" {
+		if searchReq.ShowAllDescendants {
+			query.Where("package_group.id ilike ?", searchReq.ParentId+".%")
+		} else {
+			query.Where("parent_id = ?", searchReq.ParentId)
+		}
+	}
+
+	if len(searchReq.Kind) != 0 {
+		query.Where("kind in (?)", pg.In(searchReq.Kind))
 	}
 
 	err := query.Select()
@@ -3433,83 +3556,10 @@ func (p publishedRepositoryImpl) GetVersionRefsComparisons(comparisonId string) 
 	return comparisons, nil
 }
 
-func (p publishedRepositoryImpl) SaveTransformedDocument(data *entity.TransformedContentDataEntity, publishId string) error {
-	ctx := context.Background()
-	err := p.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
-		var ents []entity.BuildEntity
-		_, err := tx.Query(&ents, getBuildWithLock, publishId)
-		if err != nil {
-			return fmt.Errorf("SaveTransformedDocument: failed to get build %s: %w", publishId, err)
-		}
-		if len(ents) == 0 {
-			return fmt.Errorf("SaveTransformedDocument: failed to start doc transformation publish. Build with buildId='%s' is not found", publishId)
-		}
-		build := &ents[0]
-
-		//do not allow publish for "complete" builds and builds that are not failed with "Restart count exceeded limit"
-		if build.Status == string(view.StatusComplete) ||
-			(build.Status == string(view.StatusError) && build.RestartCount < 2) {
-			return fmt.Errorf("failed to start document transformation. Build with buildId='%v' is already published or failed", publishId)
-		}
-
-		_, err = tx.Model(data).OnConflict("(package_id, version, revision, api_type, group_id, build_type, format) DO UPDATE").Insert()
-		if err != nil {
-			return fmt.Errorf("failed to insert published_data %+v: %w", data, err)
-		}
-		var ent entity.BuildEntity
-		query := tx.Model(&ent).
-			Where("build_id = ?", publishId).
-			Set("status = ?", view.StatusComplete).
-			Set("details = ?", "").
-			Set("last_active = now()")
-		_, err = query.Update()
-		if err != nil {
-			return fmt.Errorf("failed to update build entity: %w", err)
-		}
-		return nil
-	})
-	return err
-}
-
-func (p publishedRepositoryImpl) GetTransformedDocuments(packageId string, version string, apiType string, groupId string, buildType string, format string) (*entity.TransformedContentDataEntity, error) {
-	result := new(entity.TransformedContentDataEntity)
-	version, revision, err := SplitVersionRevision(version)
-	if err != nil {
-		return nil, err
-	}
-	err = p.cp.GetConnection().Model(result).
-		Where("package_id = ?", packageId).
-		Where("version = ?", version).
-		Where("revision = ?", revision).
-		Where("api_type = ?", apiType).
-		Where("group_id = ?", groupId).
-		Where("build_type = ?", buildType).
-		Where("format = ?", format).
-		First()
-	if err != nil {
-		if err == pg.ErrNoRows {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return result, err
-}
-
-func (p publishedRepositoryImpl) DeleteTransformedDocuments(packageId string, version string, revision int, apiType string, groupId string) error {
-	ctx := context.Background()
-	return p.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
-		query := `
-		delete from transformed_content_data
-		where package_id = ? and version = ? and revision = ? and api_type = ? and group_id = ?`
-		_, err := tx.Exec(query, packageId, version, revision, apiType, groupId)
-		return err
-	})
-}
-
 func (p publishedRepositoryImpl) GetVersionRevisionContentForDocumentsTransformation(packageId string, versionName string, revision int, searchQuery entity.ContentForDocumentsTransformationSearchQueryEntity) ([]entity.PublishedContentWithDataEntity, error) {
 	var ents []entity.PublishedContentWithDataEntity
 	query := p.cp.GetConnection().Model(&ents).Distinct().
-		ColumnExpr("published_version_revision_content.*").ColumnExpr("pd.*")
+		ColumnExpr("published_version_revision_content.*").ColumnExpr("pd.*").ColumnExpr("published_version_revision_content.package_id as content_package_id")
 	query.Join(`inner join
 			(with refs as(
 				select s.reference_id as package_id, s.reference_version as version, s.reference_revision as revision
@@ -3614,64 +3664,6 @@ func (p publishedRepositoryImpl) SavePublishedSourcesArchive(ent *entity.Publish
 		return nil
 	})
 	return err
-}
-
-func (p publishedRepositoryImpl) DeleteDraftVersionsBeforeDate_deprecated(packageId string, date time.Time, userId string) (int, error) {
-	limit, page, deletedItems := 100, 0, 0
-	for {
-		ents, err := p.GetReadonlyPackageVersionsWithLimit_deprecated(entity.PublishedVersionSearchQueryEntity{
-			PackageId: packageId,
-			Status:    string(view.Draft),
-			Limit:     limit,
-			Offset:    limit * page,
-		}, false)
-		if err != nil {
-			return 0, err
-		}
-		if len(ents) == 0 {
-			return deletedItems, nil
-		}
-
-		for _, v := range ents {
-			if v.PublishedAt.Before(date) { // set id of clean up job in deleted_by column
-				err = p.MarkVersionDeleted(packageId, v.Version, userId)
-				if err != nil {
-					return deletedItems, err
-				}
-				deletedItems++
-			}
-		}
-		page++
-	}
-}
-
-func (p publishedRepositoryImpl) DeleteDraftVersionsBeforeDate(packageId string, date time.Time, userId string) (int, error) {
-	limit, page, deletedItems := 100, 0, 0
-	for {
-		ents, err := p.GetReadonlyPackageVersionsWithLimit(entity.PublishedVersionSearchQueryEntity{
-			PackageId: packageId,
-			Status:    string(view.Draft),
-			Limit:     limit,
-			Offset:    limit * page,
-		}, false)
-		if err != nil {
-			return 0, err
-		}
-		if len(ents) == 0 {
-			return deletedItems, nil
-		}
-
-		for _, v := range ents {
-			if v.PublishedAt.Before(date) { // set id of clean up job in deleted_by column
-				err = p.MarkVersionDeleted(packageId, v.Version, userId)
-				if err != nil {
-					return deletedItems, err
-				}
-				deletedItems++
-			}
-		}
-		page++
-	}
 }
 
 type PublishedBuildChangesOverview map[string]int
@@ -3851,4 +3843,724 @@ func (p publishedRepositoryImpl) GetCSVDashboardPublishReport(publishId string) 
 		return nil, err
 	}
 	return result, nil
+}
+
+func (p publishedRepositoryImpl) DeletePackageRevisionsBeforeDate(ctx context.Context, packageId string, deleteBefore time.Time, deleteLastRevision bool, deleteReleaseRevisions bool, deletedBy string) (int, error) {
+	var totalDeletedCount int
+	var processingErrors []error
+
+	var versions []string
+	err := p.cp.GetConnection().ModelContext(ctx, (*entity.PublishedVersionEntity)(nil)).
+		Column("version").
+		Where("package_id = ? AND deleted_at is null", packageId).
+		Order("version ASC").
+		Distinct().
+		Select(&versions)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get versions: %w", err)
+	}
+
+	for idx, version := range versions {
+		log.Tracef("[revisions cleanup] Processing version %d/%d: %s", idx+1, len(versions), version)
+		deletedCount, err := p.deleteVersionRevisions(ctx, packageId, version, deleteBefore, deleteLastRevision, deleteReleaseRevisions, deletedBy)
+		if err != nil {
+			if ctx.Err() != nil {
+				return totalDeletedCount, ctx.Err()
+			}
+			processingErrors = append(processingErrors, fmt.Errorf("failed to process version %s: %w", version, err))
+			continue
+		}
+		totalDeletedCount += deletedCount
+	}
+
+	if len(processingErrors) > 0 {
+		var combinedErr error
+		for _, err := range processingErrors {
+			if combinedErr == nil {
+				combinedErr = err
+			} else {
+				combinedErr = fmt.Errorf("%v; %v", combinedErr, err)
+			}
+		}
+		log.Debugf("[revisions cleanup] Package %s revisions cleanup completed with %d errors. Total deleted: %d", packageId, len(processingErrors), totalDeletedCount)
+		return totalDeletedCount, fmt.Errorf("cleanup completed with errors (deleted %d items): %w", totalDeletedCount, combinedErr)
+	}
+
+	log.Debugf("[revisions cleanup] Package %s revisions cleanup completed. Total deleted: %d", packageId, totalDeletedCount)
+	return totalDeletedCount, nil
+}
+
+func (p publishedRepositoryImpl) deleteVersionRevisions(ctx context.Context, packageId string, version string, deleteBefore time.Time, deleteLastRevision bool, deleteReleaseRevisions bool, deletedBy string) (int, error) {
+	var deletedCount int
+	err := p.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
+		var revisions []entity.PublishedVersionEntity
+		err := tx.Model(&revisions).
+			Where("package_id = ? AND version = ? AND deleted_at is null", packageId, version).
+			Order("revision ASC").
+			Select()
+		if err != nil {
+			return fmt.Errorf("failed to get revisions: %w", err)
+		}
+
+		var candidates []*entity.PublishedVersionEntity
+		lastRevisionIndex := len(revisions) - 1
+		for i, revision := range revisions {
+			if !revision.PublishedAt.Before(deleteBefore) {
+				log.Tracef("[revisions cleanup] package %s, version %s, revision %d is not before delete threshold %s, skipping", packageId, version, revision.Revision, deleteBefore)
+				break
+			}
+			if i == lastRevisionIndex && !deleteLastRevision {
+				log.Tracef("[revisions cleanup] package %s, version %s, last revision %d, skipping because deleteLastRevision=false", packageId, version, revision.Revision)
+				break
+			}
+			if revision.Status == string(view.Release) && !deleteReleaseRevisions {
+				log.Tracef("[revisions cleanup] package %s, version %s, release revision %d, skipping because deleteReleaseRevisions=false", packageId, version, revision.Revision)
+				break
+			}
+			candidates = append(candidates, &revision)
+		}
+
+		if len(candidates) > 0 {
+			for _, revision := range candidates {
+				// check for references and update in a single atomic operation
+				result, err := tx.Exec(`
+					UPDATE published_version
+					SET deleted_at = ?, deleted_by = ?
+					WHERE package_id = ? AND version = ? AND revision = ? AND deleted_at IS NULL
+					AND NOT EXISTS (
+						SELECT 1 FROM published_version_reference ref
+						INNER JOIN published_version pv ON
+								pv.package_id = ref.package_id AND
+								pv.version = ref.version AND
+								pv.revision = ref.revision
+						WHERE ref.reference_id = ? AND ref.reference_version = ? AND ref.reference_revision = ?
+						AND pv.deleted_at IS NULL
+					)
+				`, time.Now(), deletedBy,
+					revision.PackageId, revision.Version, revision.Revision,
+					revision.PackageId, revision.Version, revision.Revision)
+
+				if err != nil {
+					return fmt.Errorf("failed to mark revision %d as deleted: %w", revision.Revision, err)
+				}
+
+				if result.RowsAffected() == 0 {
+					log.Tracef("[revisions cleanup] package %s, version %s, revision %d has references or was already deleted, skipping", packageId, version, revision.Revision)
+					break
+				}
+
+				err = p.trackDeletion(tx, packageId, version, revision.Revision, revision.Status, string(view.ATETDeleteRevision), deletedBy)
+				if err != nil {
+					return fmt.Errorf("failed to track revision deletion: %w", err)
+				}
+
+				err = p.clearAdHocComparisons(tx, packageId, version, revision.Revision)
+				if err != nil {
+					return fmt.Errorf("failed to clear ad-hoc comparisons for revision %d: %w", revision.Revision, err)
+				}
+
+				deletedCount++
+			}
+
+			if deletedCount == len(revisions) {
+				log.Tracef("[revisions cleanup] All revisions for version %s were deleted, cleaning up related data", version)
+				err = p.clearDefaultReleaseVersion(tx, packageId, version)
+				if err != nil {
+					return fmt.Errorf("failed to clear default release version: %w", err)
+				}
+
+				err = p.clearPreviousVersion(tx, packageId, version)
+				if err != nil {
+					return fmt.Errorf("failed to clear %s version as a previous version: %w", version, err)
+				}
+
+				lastRevision := revisions[lastRevisionIndex]
+				err = p.trackDeletion(tx, packageId, version, lastRevision.Revision, lastRevision.Status, string(view.ATETDeleteVersion), deletedBy)
+				if err != nil {
+					return fmt.Errorf("failed to track version deletion: %w", err)
+				}
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		return 0, err
+	}
+
+	log.Tracef("[revisions cleanup] Successfully processed version %s, deleted %d revisions", version, deletedCount)
+	return deletedCount, nil
+}
+
+func (p publishedRepositoryImpl) trackDeletion(tx *pg.Tx, packageId string, version string, revision int, status string, eventType string, deletedBy string) error {
+	dataMap := map[string]interface{}{}
+	dataMap["version"] = version
+	dataMap["revision"] = revision
+	dataMap["status"] = status
+	ent := entity.ActivityTrackingEntity{
+		Id:        uuid.New().String(),
+		Type:      eventType,
+		Data:      dataMap,
+		PackageId: packageId,
+		Date:      time.Now(),
+		UserId:    deletedBy,
+	}
+	_, err := tx.Model(&ent).Insert()
+	if err != nil {
+		return fmt.Errorf("failed to track deletion: %w", err)
+	}
+	return nil
+}
+
+func (p publishedRepositoryImpl) clearAdHocComparisons(tx *pg.Tx, packageId string, version string, revision int) error {
+	log.Tracef("[revisions cleanup] Clearing ad-hoc comparisons for %s/%s@%d", packageId, version, revision)
+
+	var deletedCount int
+	page, limit := 0, 100
+
+	for {
+		var candidateIds []string
+		_, err := tx.Query(&candidateIds, `
+			WITH candidate_comparisons AS (
+				SELECT
+					vc.comparison_id,
+					vc.package_id,
+					vc.version,
+					vc.revision,
+					vc.previous_package_id,
+					vc.previous_version,
+					vc.previous_revision,
+					pv.previous_version AS actual_previous_version,
+					COALESCE(pv.previous_version_package_id, pv.package_id) AS actual_previous_package_id
+				FROM version_comparison vc
+				LEFT JOIN published_version pv ON
+					pv.package_id = vc.package_id AND
+					pv.version = vc.version AND
+					pv.revision = vc.revision
+				WHERE
+					(vc.package_id = ? AND vc.version = ? AND vc.revision = ?) OR
+					(vc.previous_package_id = ? AND vc.previous_version = ? AND vc.previous_revision = ?)
+				ORDER BY vc.comparison_id
+				LIMIT ?
+				OFFSET ?
+			)
+			SELECT comparison_id FROM candidate_comparisons cc
+			WHERE
+				cc.actual_previous_version IS NULL OR
+				(cc.previous_version != cc.actual_previous_version OR
+				cc.previous_package_id != cc.actual_previous_package_id)
+		`, packageId, version, revision, packageId, version, revision, limit, page*limit)
+		if err != nil {
+			if err == pg.ErrNoRows {
+				break
+			}
+			return fmt.Errorf("failed to get ad-hoc comparison candidates: %w", err)
+		}
+
+		if len(candidateIds) == 0 {
+			break
+		}
+
+		for _, comparisonId := range candidateIds {
+			// check for references and delete in a single atomic operation
+			result, err := tx.Exec(`
+				DELETE FROM version_comparison
+				WHERE comparison_id = ?
+				AND NOT EXISTS (
+    				SELECT 1
+    				FROM version_comparison
+    				WHERE ? = ANY(refs)
+				)
+			`, comparisonId, comparisonId)
+			if err != nil {
+				return fmt.Errorf("failed to check and delete ad-hoc comparison %s: %w", comparisonId, err)
+			}
+
+			if result.RowsAffected() > 0 {
+				log.Tracef("[revisions cleanup] Deleted ad-hoc comparison %s", comparisonId)
+				deletedCount++
+			} else {
+				log.Tracef("[revisions cleanup] Skipped ad-hoc comparison %s (referenced or already deleted)", comparisonId)
+			}
+		}
+
+		if len(candidateIds) < limit {
+			break
+		}
+		page++
+	}
+
+	if deletedCount > 0 {
+		log.Tracef("[revisions cleanup] Deleted %d ad-hoc comparisons for %s/%s@%d",
+			deletedCount, packageId, version, revision)
+	}
+
+	return nil
+}
+
+func (p publishedRepositoryImpl) GetVersionComparisonsCleanupCandidates(ctx context.Context, limit int, offset int) ([]entity.VersionComparisonCleanupCandidateEntity, error) {
+	var candidates []entity.VersionComparisonCleanupCandidateEntity
+
+	_, err := p.cp.GetConnection().QueryContext(ctx, &candidates, `
+			SELECT
+				vc.comparison_id,
+				vc.package_id,
+				vc.version,
+				vc.revision,
+				vc.previous_package_id,
+				vc.previous_version,
+				vc.previous_revision,
+				vc.last_active,
+				pv.package_id IS NULL AS revision_not_published,
+				pv.previous_version AS actual_previous_version,
+				COALESCE(pv.previous_version_package_id, pv.package_id) AS actual_previous_package_id,
+				(SELECT MAX(revision)
+					FROM published_version
+					WHERE package_id = vc.previous_package_id
+					AND version = vc.previous_version) AS previous_max_revision
+			FROM version_comparison vc
+			LEFT JOIN published_version pv ON
+				pv.package_id = vc.package_id AND
+				pv.version = vc.version AND
+				pv.revision = vc.revision
+			ORDER BY vc.last_active ASC
+			LIMIT ?
+			OFFSET ?
+	`, limit, offset)
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return []entity.VersionComparisonCleanupCandidateEntity{}, nil
+		}
+		return nil, fmt.Errorf("failed to get cleanup candidates: %w", err)
+	}
+
+	return candidates, nil
+}
+
+func (p publishedRepositoryImpl) DeleteVersionComparison(ctx context.Context, comparisonId string) (bool, error) {
+	var deleted bool
+
+	err := p.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
+		result, err := tx.ExecContext(ctx, `
+			DELETE FROM version_comparison
+			WHERE comparison_id = ?
+			AND NOT EXISTS (
+    			SELECT 1
+    			FROM version_comparison
+    			WHERE ? = ANY(refs)
+			)
+		`, comparisonId, comparisonId)
+		if err != nil {
+			return fmt.Errorf("failed to check and delete comparison %s: %w", comparisonId, err)
+		}
+
+		if result.RowsAffected() > 0 {
+			log.Tracef("[comparisons cleanup] Deleted comparison %s", comparisonId)
+			deleted = true
+		} else {
+			log.Tracef("[comparisons cleanup] Skipped comparison %s (referenced or already deleted)", comparisonId)
+			deleted = false
+		}
+
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+
+	return deleted, nil
+}
+
+func (p publishedRepositoryImpl) DeleteSoftDeletedPackagesBeforeDate(ctx context.Context, runId string, beforeDate time.Time, batchSize int) (int, error) {
+	var deletedItemsStats entity.DeletedItemsStats
+
+	err := p.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
+		getPackageIdsQuery := `
+			SELECT id FROM package_group
+			WHERE deleted_at < ?
+			ORDER BY deleted_at ASC
+			LIMIT ?`
+
+		var packageIds []string
+		_, err := tx.QueryContext(ctx, &packageIds, getPackageIdsQuery, beforeDate, batchSize)
+		if err != nil {
+			return fmt.Errorf("failed to get package IDs: %w", err)
+		}
+
+		if len(packageIds) == 0 {
+			return nil
+		}
+		log.Debugf("[soft deleted data cleanup] Found %d packages to delete in current batch", len(packageIds))
+
+		err = p.countRelatedDataForPackagesTx(ctx, tx, packageIds, &deletedItemsStats)
+		if err != nil {
+			return fmt.Errorf("failed to count package related data: %w", err)
+		}
+
+		log.Trace("[soft deleted data cleanup] Deleting related API keys for packages")
+		deleteApiKeysQuery := `
+			DELETE FROM apihub_api_keys
+			WHERE package_id IN (?)`
+		_, err = tx.ExecContext(ctx, deleteApiKeysQuery, pg.In(packageIds))
+		if err != nil {
+			return fmt.Errorf("failed to delete related API keys: %w", err)
+		}
+
+		log.Trace("[soft deleted data cleanup] Deleting package transitions for packages")
+		deletePackageTransitionsQuery := `
+			DELETE FROM package_transition
+			WHERE new_package_id IN (?)`
+		_, err = tx.ExecContext(ctx, deletePackageTransitionsQuery, pg.In(packageIds))
+		if err != nil {
+			return fmt.Errorf("failed to delete related package transitions: %w", err)
+		}
+
+		log.Tracef("[soft deleted data cleanup] Deleting packages: %v", packageIds)
+		deletePackagesQuery := `
+			DELETE FROM package_group
+			WHERE id IN (?)`
+		_, err = tx.ExecContext(ctx, deletePackagesQuery, pg.In(packageIds))
+		if err != nil {
+			return fmt.Errorf("failed to delete packages: %w", err)
+		}
+
+		deletedItemsStats.Packages = packageIds
+		deletedItemsStats.CalculateTotal()
+
+		var cleanupRun entity.SoftDeletedDataCleanupEntity
+		err = tx.Model(&cleanupRun).
+			Where("run_id = ?", runId).
+			Select()
+		if err != nil {
+			return fmt.Errorf("failed to get current state of cleanup run: %w", err)
+		}
+		if cleanupRun.DeletedItems == nil {
+			cleanupRun.DeletedItems = &entity.DeletedItemsStats{}
+		}
+		cleanupRun.DeletedItems.Add(&deletedItemsStats)
+		_, err = tx.Model(&cleanupRun).
+			Column("deleted_items").
+			WherePK().
+			Update()
+		if err != nil {
+			return fmt.Errorf("failed to update cleanup run state: %w", err)
+		}
+		log.Debugf("[soft deleted data cleanup] Deleted %d packages with %d total cascade records: %v",
+			len(deletedItemsStats.Packages), deletedItemsStats.TotalRecords-len(deletedItemsStats.Packages), deletedItemsStats.Packages)
+
+		return nil
+	})
+
+	return deletedItemsStats.TotalRecords, err
+}
+
+func (p publishedRepositoryImpl) DeleteSoftDeletedPackageRevisionsBeforeDate(ctx context.Context, runId string, beforeDate time.Time, batchSize int) (int, error) {
+	var deletedItemsStats entity.DeletedItemsStats
+
+	err := p.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
+		geRevisionKeysQuery := `
+			SELECT package_id, version, revision
+			FROM published_version
+			WHERE deleted_at < ?
+			ORDER BY deleted_at ASC
+			LIMIT ?`
+
+		var revisionKeys []entity.PublishedVersionKeyEntity
+		_, err := tx.QueryContext(ctx, &revisionKeys, geRevisionKeysQuery, beforeDate, batchSize)
+		if err != nil {
+			return fmt.Errorf("failed to get revision keys: %w", err)
+		}
+
+		if len(revisionKeys) == 0 {
+			return nil
+		}
+		log.Debugf("[soft deleted data cleanup] Found %d package revisions to delete in current batch", len(revisionKeys))
+
+		valuesClause, args := buildRevisionKeysValuesClause(revisionKeys)
+
+		err = p.countRelatedDataForPackageRevisionsTx(ctx, tx, valuesClause, args, &deletedItemsStats)
+		if err != nil {
+			return fmt.Errorf("failed to count related data: %w", err)
+		}
+
+		log.Tracef("[soft deleted data cleanup] Deleting package revisions: %v", revisionKeys)
+		deleteQuery := `DELETE FROM published_version WHERE (package_id, version, revision) IN (` + valuesClause + `)`
+		_, err = tx.ExecContext(ctx, deleteQuery, args...)
+		if err != nil {
+			return fmt.Errorf("failed to delete package revisions: %w", err)
+		}
+
+		deletedItemsStats.PackageRevisions = revisionKeys
+		deletedItemsStats.CalculateTotal()
+
+		var cleanupRun entity.SoftDeletedDataCleanupEntity
+		err = tx.Model(&cleanupRun).
+			Where("run_id = ?", runId).
+			Select()
+		if err != nil {
+			return fmt.Errorf("failed to get current state of cleanup run: %w", err)
+		}
+		if cleanupRun.DeletedItems == nil {
+			cleanupRun.DeletedItems = &entity.DeletedItemsStats{}
+		}
+		cleanupRun.DeletedItems.Add(&deletedItemsStats)
+		_, err = tx.Model(&cleanupRun).
+			Column("deleted_items").
+			WherePK().
+			Update()
+		if err != nil {
+			return fmt.Errorf("failed to update cleanup run state: %w", err)
+		}
+
+		log.Debugf("[soft deleted data cleanup] Deleted %d package revisions with %d total cascade records: %v",
+			len(deletedItemsStats.PackageRevisions), deletedItemsStats.TotalRecords-len(deletedItemsStats.PackageRevisions), deletedItemsStats.PackageRevisions)
+
+		return nil
+	})
+
+	return deletedItemsStats.TotalRecords, err
+}
+
+func (p publishedRepositoryImpl) countRelatedDataForPackagesTx(ctx context.Context, tx *pg.Tx, packageIds []string, stats *entity.DeletedItemsStats) error {
+	err := tx.ModelContext(ctx, &stats.PackageRevisions).
+		Where("package_id IN (?)", pg.In(packageIds)).
+		Select()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.ActivityTracking),
+		`SELECT COUNT(*) FROM activity_tracking WHERE package_id IN (?)`, pg.In(packageIds))
+	if err != nil {
+		return err
+	}
+
+	err = tx.ModelContext(ctx, &stats.ApiKeys).
+		Where("package_id IN (?)", pg.In(packageIds)).
+		Select()
+	if err != nil {
+		return err
+	}
+
+	var buildIds []string
+	_, err = tx.QueryContext(ctx, &buildIds,
+		`SELECT build_id FROM build WHERE package_id IN (?)`, pg.In(packageIds))
+	if err != nil {
+		return err
+	}
+	stats.Builds = len(buildIds)
+	if stats.Builds == 0 {
+		stats.BuildDepends = 0
+		stats.BuildResults = 0
+		stats.BuildSources = 0
+		stats.BuilderNotifications = 0
+	} else {
+		_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.BuildDepends),
+			`SELECT COUNT(*) FROM build_depends WHERE build_id IN (?) or depend_id IN (?)`, pg.In(buildIds), pg.In(buildIds))
+		if err != nil {
+			return err
+		}
+		_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.BuildResults),
+			`SELECT COUNT(*) FROM build_result WHERE build_id IN (?)`, pg.In(buildIds))
+		if err != nil {
+			return err
+		}
+		_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.BuildSources),
+			`SELECT COUNT(*) FROM build_src WHERE build_id IN (?)`, pg.In(buildIds))
+		if err != nil {
+			return err
+		}
+		_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.BuilderNotifications),
+			`SELECT COUNT(*) FROM builder_notifications WHERE build_id IN (?)`, pg.In(buildIds))
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.FavoritePackages),
+		`SELECT COUNT(*) FROM favorite_packages WHERE package_id IN (?)`, pg.In(packageIds))
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.MigratedVersions),
+		`SELECT COUNT(*) FROM migrated_version WHERE package_id IN (?)`, pg.In(packageIds))
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.Operations),
+		`SELECT COUNT(*) FROM operation WHERE package_id IN (?)`, pg.In(packageIds))
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.OperationGroups),
+		`SELECT COUNT(*) FROM operation_group WHERE package_id IN (?)`, pg.In(packageIds))
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.GroupedOperations),
+		`SELECT COUNT(*) FROM grouped_operation WHERE package_id IN (?)`, pg.In(packageIds))
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.OperationOpenCounts),
+		`SELECT COUNT(*) FROM operation_open_count WHERE package_id IN (?)`, pg.In(packageIds))
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.PackageExportConfigs),
+		`SELECT COUNT(*) FROM package_export_config WHERE package_id IN (?)`, pg.In(packageIds))
+	if err != nil {
+		return err
+	}
+
+	err = tx.ModelContext(ctx, &stats.PackageMembersRoles).
+		Where("package_id IN (?)", pg.In(packageIds)).
+		Select()
+	if err != nil {
+		return err
+	}
+
+	err = tx.ModelContext(ctx, &stats.PackageServices).
+		Where("package_id IN (?)", pg.In(packageIds)).
+		Select()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.PublishedData),
+		`SELECT COUNT(*) FROM published_data WHERE package_id IN (?)`, pg.In(packageIds))
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.PublishedDocumentOpenCounts),
+		`SELECT COUNT(*) FROM published_document_open_count WHERE package_id IN (?)`, pg.In(packageIds))
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.PublishedSources),
+		`SELECT COUNT(*) FROM published_sources WHERE package_id IN (?)`, pg.In(packageIds))
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.PublishedVersionOpenCounts),
+		`SELECT COUNT(*) FROM published_version_open_count WHERE package_id IN (?)`, pg.In(packageIds))
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.PublishedVersionReferences),
+		`SELECT COUNT(*) FROM published_version_reference WHERE package_id IN (?)`, pg.In(packageIds))
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.PublishedVersionRevisionContent),
+		`SELECT COUNT(*) FROM published_version_revision_content WHERE package_id IN (?)`, pg.In(packageIds))
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.PublishedVersionValidation),
+		`SELECT COUNT(*) FROM published_version_validation WHERE package_id IN (?)`, pg.In(packageIds))
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.SharedUrlInfo),
+		`SELECT COUNT(*) FROM shared_url_info WHERE package_id IN (?)`, pg.In(packageIds))
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.TransformedContentData),
+		`SELECT COUNT(*) FROM transformed_content_data WHERE package_id IN (?)`, pg.In(packageIds))
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.PackageTransitions),
+		`SELECT COUNT(*) FROM package_transition WHERE new_package_id IN (?)`, pg.In(packageIds))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func buildRevisionKeysValuesClause(revisionKeys []entity.PublishedVersionKeyEntity) (string, []interface{}) {
+	valuesClause := "VALUES "
+	args := make([]interface{}, 0, len(revisionKeys)*3)
+	for i, key := range revisionKeys {
+		if i > 0 {
+			valuesClause += ", "
+		}
+		valuesClause += "(?, ?, ?)"
+		args = append(args, key.PackageId, key.Version, key.Revision)
+	}
+	return valuesClause, args
+}
+
+func (p publishedRepositoryImpl) countRelatedDataForPackageRevisionsTx(ctx context.Context, tx *pg.Tx, valuesClause string, args []interface{}, stats *entity.DeletedItemsStats) error {
+	if valuesClause == "" {
+		return nil
+	}
+
+	_, err := tx.QueryOneContext(ctx, pg.Scan(&stats.PublishedVersionRevisionContent),
+		`SELECT COUNT(*) FROM published_version_revision_content WHERE (package_id, version, revision) IN (`+valuesClause+`)`, args...)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.OperationGroups),
+		`SELECT COUNT(*) FROM operation_group WHERE (package_id, version, revision) IN (`+valuesClause+`)`, args...)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.PublishedVersionReferences),
+		`SELECT COUNT(*) FROM published_version_reference WHERE (package_id, version, revision) IN (`+valuesClause+`)`, args...)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.PublishedVersionValidation),
+		`SELECT COUNT(*) FROM published_version_validation WHERE (package_id, version, revision) IN (`+valuesClause+`)`, args...)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.PublishedSources),
+		`SELECT COUNT(*) FROM published_sources WHERE (package_id, version, revision) IN (`+valuesClause+`)`, args...)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.Operations),
+		`SELECT COUNT(*) FROM operation WHERE (package_id, version, revision) IN (`+valuesClause+`)`, args...)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.TransformedContentData),
+		`SELECT COUNT(*) FROM transformed_content_data WHERE (package_id, version, revision) IN (`+valuesClause+`)`, args...)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.GroupedOperations),
+		`SELECT COUNT(*) FROM grouped_operation WHERE (package_id, version, revision) IN (`+valuesClause+`)`, args...)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
