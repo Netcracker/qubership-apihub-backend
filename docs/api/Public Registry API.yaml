@@ -5746,6 +5746,14 @@ paths:
                                 - bwc
                                 - no-bwc
                                 - experimental
+                            dataHash:
+                              description: Operation hash.
+                              type: string
+                              example: sdfsdfsf242
+                            previousDataHash:
+                              description: Hash of the previous published version operation.
+                              type: string
+                              example: sdfsdfsf24dds2
                             changeSummary:
                               $ref: "#/components/schemas/ChangeSummary"
                   packages:
