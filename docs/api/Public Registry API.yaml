@@ -4956,13 +4956,6 @@ paths:
                               type: number
                             deprecatedCount:
                               type: number
-                            operations:
-                              type: object
-                              description: Hash map of 'operationId:dataHash value'.
-                              additionalProperties:
-                                description: Operation hash.
-                                type: string
-                                example: lkfsdkff112
                   - type: object
                     properties:
                       operationGroups:
@@ -5339,13 +5332,6 @@ paths:
                                   operationsCount:
                                     type: number
                                     description: Number of operations in which the apiAudience was changed from previousAudience to currentAudience
-                            operations:
-                              type: object
-                              description: Hash map of 'operationId:dataHash value'.
-                              additionalProperties:
-                                description: Operation hash.
-                                type: string
-                                example: lkfsdkff112
                   - type: object
                     properties:
                       operationGroups:
@@ -5746,14 +5732,6 @@ paths:
                                 - bwc
                                 - no-bwc
                                 - experimental
-                            dataHash:
-                              description: Operation hash.
-                              type: string
-                              example: sdfsdfsf242
-                            previousDataHash:
-                              description: Hash of the previous published version operation.
-                              type: string
-                              example: sdfsdfsf24dds2
                             changeSummary:
                               $ref: "#/components/schemas/ChangeSummary"
                   packages:
@@ -16218,7 +16196,6 @@ components:
       required:
         - title
         - apiKind
-        - dataHash
         - apiAudience
       properties:
         title:
@@ -16241,10 +16218,6 @@ components:
             - internal
             - external
             - unknown
-        dataHash:
-          description: Operation hash.
-          type: string
-          example: sdfsdfsf242
         packageRef:
           description: >
             Parent package and version link. Created by
