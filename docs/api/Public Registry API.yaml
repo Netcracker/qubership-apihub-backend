@@ -5746,14 +5746,6 @@ paths:
                                 - bwc
                                 - no-bwc
                                 - experimental
-                            dataHash:
-                              description: Operation hash.
-                              type: string
-                              example: sdfsdfsf242
-                            previousDataHash:
-                              description: Hash of the previous published version operation.
-                              type: string
-                              example: sdfsdfsf24dds2
                             changeSummary:
                               $ref: "#/components/schemas/ChangeSummary"
                   packages:
@@ -15990,7 +15982,6 @@ components:
         - documentId
         - title
         - apiType
-        - dataHash
         - apiAudience
         - apiKind
       properties:
@@ -16016,10 +16007,6 @@ components:
         #    - graphql
         #    - protobuf
           $ref: "#/components/schemas/ApiType"
-        dataHash:
-          description: Operation hash.
-          type: string
-          example: sdfsdfsf242
         externalMetadata:
           description: External operation metadata.
           type: object
@@ -16264,7 +16251,6 @@ components:
         - operationId
         - title
         - apiKind
-        - dataHash
         - apiAudience
       properties:
         operationId:
@@ -16297,10 +16283,6 @@ components:
           items:
             type: string
           example: ["Access Control API, Address Management API"]
-        dataHash:
-          description: Operation hash.
-          type: string
-          example: sdfsdfsf242
         packageRef:
           description: >
             Parent package and version link. Created by
@@ -16702,14 +16684,6 @@ components:
                       operationId tag from the OpenAPI file.
                     type: string
                     example: get-quoteManagement-v5-quote
-                  dataHash:
-                    description: Operation hash.
-                    type: string
-                    example: sdfsdfsf242
-                  previousDataHash:
-                    description: Hash of the previous published version operation.
-                    type: string
-                    example: sdfsdfsf24dds2
                   changeSummary:
                     $ref: "#/components/schemas/ChangeSummary"
                   changes:
@@ -16757,7 +16731,6 @@ components:
                       - documentId
                       - title
                       - apiType
-                      - dataHash
                       - apiKind
                     properties:
                       operationId:
@@ -16780,10 +16753,6 @@ components:
                           - kafka
                           - grpc
                           - graphql
-                      dataHash:
-                        description: Operation hash.
-                        type: string
-                        example: sdfsdfsf242
                       deprecated:
                         description: Operation deprecate flag.
                         type: boolean
@@ -17208,14 +17177,6 @@ components:
                           Parameter is required if operation was deleted or modified.
                         type: string
                         example: get-quoteManagement-v5-quote-id
-                      dataHash:
-                        description: Operation hash.
-                        type: string
-                        example: sdfsdfsf242
-                      previousDataHash:
-                        description: Hash of the previous published version operation.
-                        type: string
-                        example: sdfsdfsf24dds2
                       changeSummary:
                         $ref: "#/components/schemas/ChangeSummary"
                       changes:
@@ -17458,14 +17419,6 @@ components:
                           operationId tag from the OpenAPI file.
                         type: string
                         example: get-quoteManagement-v5-quote
-                      dataHash:
-                        description: Operation hash.
-                        type: string
-                        example: sdfsdfsf242
-                      previousDataHash:
-                        description: Hash of the previous published version operation.
-                        type: string
-                        example: sdfsdfsf24dds2
                       changeSummary:
                         $ref: "#/components/schemas/ChangeSummary"
                       changes:
