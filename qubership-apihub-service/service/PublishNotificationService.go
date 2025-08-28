@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	"github.com/google/uuid"
+	"time"
 
 	"sync"
 
@@ -84,11 +85,16 @@ func (t *publishNotificationServiceImpl) SendNotification(packageId string, vers
 
 func (t *publishNotificationServiceImpl) initVersionPublishedDTopic() {
 	var err error
-	t.olricC = t.op.Get()
-	topicName := VersionPublishedTopicName
-	t.versionPublishedTopic, err = t.olricC.NewDTopic(topicName, 10000, olric.UnorderedDelivery)
-	if err != nil {
-		log.Errorf("Failed to create DTopic %s: %s", VersionPublishedTopicName, err.Error())
+	for attempt := 1; attempt < 4; attempt++ {
+		t.olricC = t.op.Get()
+		topicName := VersionPublishedTopicName
+		t.versionPublishedTopic, err = t.olricC.NewDTopic(topicName, 10000, olric.UnorderedDelivery)
+		if err != nil {
+			log.Errorf("Failed to create DTopic %s (attempt %d): %s", VersionPublishedTopicName, attempt, err.Error())
+			time.Sleep(10 * time.Second)
+			continue
+		}
+		break
 	}
 	t.isReadyWg.Done()
 }
