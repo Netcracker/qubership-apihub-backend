@@ -25,8 +25,6 @@ security:
     refreshTokenDurationSec: 43200
   # Mandatory; Factual APIHUB server URL in your environment.; If not set, default value: ""; Example: https://apihub.example.com
   apihubExternalUrl: 'https://apihub.example.com'
-  # Optional; Set to true to enable apihub playground work without authtorization. Dangerous. Not recommended; If not set, default value: false; Example: true
-  insecureProxy: false
   # Optional; Allowed list of hosts that are accepted for proxy(playground) requests.; If not set, default value: []; Example: [example.com]
   allowedHostsForProxy:
     - example.com
@@ -155,7 +153,7 @@ editor:
   clientId: ''
   clientSecret: ''
 
-# Section with Olric configuration.
+# Section with Olric(distributed cache and pub-sub) configuration.
 olric:
   # Optional; Discovery mode for Olric. If not set, default value: local; Example: local
   discoveryMode: 'local'
@@ -192,3 +190,9 @@ cleanup:
   builds:
     # Optional; Schedule for the builds cleanup job. If not set, default value: "0 1 * * 0"; Example: "* * * * *"
     schedule: '0 1 * * 0'
+
+# List of enabled extension services
+#extensions:
+#  - name: linter
+#    baseUrl: http://example.com
+#    pathPrefix: api-linter

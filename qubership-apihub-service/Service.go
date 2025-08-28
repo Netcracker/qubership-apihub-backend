@@ -225,7 +225,6 @@ func main() {
 
 	roleRepository := repository.NewRoleRepository(cp)
 	operationRepository := repository.NewOperationRepository(cp)
-	agentRepository := repository.NewAgentRepository(cp)
 	businessMetricRepository := repository.NewBusinessMetricRepository(cp)
 
 	activityTrackingRepository := repository.NewActivityTrackingRepository(cp)
@@ -325,7 +324,6 @@ func main() {
 	versionService.SetBuildService(buildService)
 	operationGroupService.SetBuildService(buildService)
 
-	agentService := service.NewAgentRegistrationService(agentRepository)
 	excelService := service.NewExcelService(publishedRepository, versionService, operationService, packageService)
 	comparisonService := service.NewComparisonService(publishedRepository, operationRepository, packageVersionEnrichmentService)
 	businessMetricService := service.NewBusinessMetricService(businessMetricRepository)
@@ -369,9 +367,6 @@ func main() {
 	apihubApiKeyController := controller.NewApihubApiKeyController(apihubApiKeyService, roleService)
 	cleanupController := controller.NewCleanupController(cleanupService)
 
-	agentClient := client.NewAgentClient()
-	agentController := controller.NewAgentController(agentService, agentClient, roleService.IsSysadm)
-	agentProxyController := controller.NewAgentProxyController(agentService, systemInfoService)
 	playgroundProxyController := controller.NewPlaygroundProxyController(systemInfoService)
 	publishV2Controller := controller.NewPublishV2Controller(buildService, publishedService, buildResultService, roleService, systemInfoService)
 	exportController := controller.NewExportController(publishedService, portalService, searchService, roleService, excelService, versionService, monitoringService, exportService, packageService)
@@ -507,7 +502,7 @@ func main() {
 	r.HandleFunc("/api/v2/packages/{packageId}/recalculateGroups", security.Secure(packageController.RecalculateOperationGroups)).Methods(http.MethodPost)
 	r.HandleFunc("/api/v2/packages/{packageId}/calculateGroups", security.Secure(packageController.CalculateOperationGroups)).Methods(http.MethodGet)
 
-	//api for agent
+	//api for extensions
 	r.HandleFunc("/api/v2/users/{userId}/availablePackagePromoteStatuses", security.Secure(roleController.GetAvailableUserPackagePromoteStatuses)).Methods(http.MethodPost)
 
 	r.HandleFunc("/api/v2/packages/{packageId}/publish/{publishId}/status", security.Secure(publishV2Controller.GetPublishStatus)).Methods(http.MethodGet)
@@ -552,6 +547,8 @@ func main() {
 	r.HandleFunc("/api/v2/auth/publicKey", security.NoSecure(jwtPubKeyController.GetRsaPublicKey)).Methods(http.MethodGet)
 	// Required to verify api key for external authorization
 	r.HandleFunc("/api/v2/auth/apiKey", security.NoSecure(apihubApiKeyController.GetApiKeyByKey)).Methods(http.MethodGet)
+	// Required to verify PAT for external authorization
+	r.HandleFunc("/api/v2/auth/pat", security.NoSecure(personalAccessTokenController.GetPatByPat)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/auth/apiKey/{apiKeyId}", security.Secure(apihubApiKeyController.GetApiKeyById)).Methods(http.MethodGet)
 	// Required for extensions to check Apihub auth. Just return 200 OK if authentication is passed.
 	r.HandleFunc("/api/v1/auth/token", security.SecureJWT(func(writer http.ResponseWriter, request *http.Request) {})).Methods(http.MethodGet)
@@ -596,13 +593,6 @@ func main() {
 	r.HandleFunc("/api/v3/activity", security.Secure(activityTrackingController.GetActivityHistory_deprecated_2)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v4/activity", security.Secure(activityTrackingController.GetActivityHistory)).Methods(http.MethodGet)
 
-	r.HandleFunc("/api/v2/agents", security.Secure(agentController.ListAgents)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/agents", security.Secure(agentController.ProcessAgentSignal)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v2/agents/{id}", security.Secure(agentController.GetAgent)).Methods(http.MethodGet)
-
-	r.HandleFunc("/api/v2/agents/{agentId}/namespaces", security.Secure(agentController.GetAgentNamespaces)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/agents/{agentId}/namespaces/{namespace}/serviceNames", security.Secure(agentController.ListServiceNames))
-
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/groups", security.Secure(operationGroupController.CreateOperationGroup_deprecated)).Methods(http.MethodPost)
 	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/groups", security.Secure(operationGroupController.CreateOperationGroup)).Methods(http.MethodPost)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}", security.Secure(operationGroupController.DeleteOperationGroup)).Methods(http.MethodDelete)
@@ -613,13 +603,6 @@ func main() {
 	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}", security.Secure(operationGroupController.UpdateOperationGroup)).Methods(http.MethodPatch)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}/ghosts", security.Secure(operationGroupController.GetGroupedOperationGhosts_deprecated)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}/template", security.Secure(operationGroupController.GetGroupExportTemplate)).Methods(http.MethodGet)
-
-	const proxyPath = "/agents/{agentId}/namespaces/{name}/services/{serviceId}/proxy/"
-	if systemInfoService.InsecureProxyEnabled() {
-		r.PathPrefix(proxyPath).HandlerFunc(agentProxyController.Proxy)
-	} else {
-		r.PathPrefix(proxyPath).HandlerFunc(security.SecureAgentProxy(agentProxyController.Proxy))
-	}
 
 	r.HandleFunc("/playground/proxy", security.SecureProxy(playgroundProxyController.Proxy))
 
