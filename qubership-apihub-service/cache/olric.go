@@ -102,11 +102,10 @@ func getConfig(olricConfig sysconfig.OlricConfig) (*config.Config, error) {
 		}
 
 		cloudDiscovery := &discovery.CloudDiscovery{}
-		labelSelector := fmt.Sprintf("name=%s", getServiceName())
 		cfg.ServiceDiscovery = map[string]interface{}{
 			"plugin":   cloudDiscovery,
 			"provider": "k8s",
-			"args":     fmt.Sprintf("namespace=%s label_selector=\"%s\"", namespace, labelSelector),
+			"args":     fmt.Sprintf("namespace=%s label_selector=\"%s\"", namespace, "olric-cluster=apihub"), // select pods with label "olric-cluster=apihub"
 		}
 
 		// TODO: try to get from replica set via kube client
@@ -181,8 +180,4 @@ func isPortFree(address string, port int) bool {
 
 	_ = ln.Close()
 	return true
-}
-
-func getServiceName() string {
-	return "apihub-backend"
 }
