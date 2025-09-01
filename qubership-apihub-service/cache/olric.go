@@ -35,6 +35,8 @@ type OlricProvider interface {
 	GetBindAddr() string
 }
 
+const olricBindAddr = "0.0.0.0"
+
 type olricProviderImpl struct {
 	wg     sync.WaitGroup
 	cfg    *config.Config
@@ -126,9 +128,9 @@ func getConfig(olricConfig sysconfig.OlricConfig) (*config.Config, error) {
 		cfg.LogLevel = "WARN"
 		cfg.LogVerbosity = 2
 
-		cfg.BindAddr = "localhost"
+		cfg.BindAddr = olricBindAddr
 		cfg.BindPort = getLocalPort()
-		cfg.MemberlistConfig.BindAddr = "localhost"
+		cfg.MemberlistConfig.BindAddr = olricBindAddr
 		cfg.MemberlistConfig.BindPort = getLocalMemberlistPort()
 		cfg.PartitionCount = 5
 
@@ -142,7 +144,7 @@ func getConfig(olricConfig sysconfig.OlricConfig) (*config.Config, error) {
 func getLocalPort() int {
 	//try specific port first
 	port := 47375
-	if isPortFree("localhost", port) {
+	if isPortFree(olricBindAddr, port) {
 		return port
 	}
 	//and if fails, then random
@@ -151,7 +153,7 @@ func getLocalPort() int {
 func getLocalMemberlistPort() int {
 	//try specific port first
 	port := 47376
-	if isPortFree("localhost", port) {
+	if isPortFree(olricBindAddr, port) {
 		return port
 	}
 	//and if fails, then random
@@ -161,7 +163,10 @@ func getLocalMemberlistPort() int {
 func getLocalRandomFreePort() int {
 	for {
 		port := rand.Intn(48127) + 1024
-		if isPortFree("localhost", port) {
+		if isPortFree(olricBindAddr, port) {
+			return port
+		}
+		if isPortFree(olricBindAddr, port) {
 			return port
 		}
 	}
