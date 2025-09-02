@@ -269,7 +269,7 @@ paths:
           description: Refresh token that will be used to issue a new access token.
           schema:
             type: string
-            example: "apihub-refresh-token=eyJhbGciOiJSUzI1NiIsImtpZCI6InNlY3JldC1pZCIsInR5cCI6IkpXVCJ9.eyJFeHRlbnNpb25zIjp7InN5c3RlbVJvbGUiOlsiU3lzdGVtIGFkbWluaXN0cmF0b3IiXX0sIkdyb3VwcyI6W10sIklEIjoiYXBpaHViIiwiTmFtZSI6ImFwaWh1YiIsImF1ZCI6WyIiXSwiZXhwIjoxNzQ1MzI1MjkxLCJpYXQiOjE3NDUzMjE2OTEsIm5iZiI6MTc0NTMyMTY5MSwic3ViIjoiYXBpaHViIn0.SN-XnFPWUy6FlzjJcKsZIFsCMSFSRR7W7NHBpBAlbyEJFjXDEpBR9zHHlf2z8Voa2Rzzs6agcb16QS-5TkBOq5FN1GaOZO5okXkJBia1JE8ukFBFsWLYsRNFGD_0WzOp1sSq_9xtnBAYrIikM93sZJ_woxFYwfWg-CBA1OAwhNvJk3HUI_Ql2tRyGgtgB6WYncVpWgYyzu6upXUuxz5TocJfFEqIEqpbTvtE7AOUpACO8r4uY0lTySzk0d6B_XngLZEwZdD4gb5Mm40QPWwexE5hBxof1ZLZGz-09oSQjKgrlIpA9x7v7-Iy7BouQoLBNHx1Dff48BPlok4eQrJqmg"
+            example: "apihub-refresh-token=eyJhbGciOiJSUzI1NiIsImtpZCI6InNlY3JldC1pZCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhcGlodWIiLCJuYW1lIjoiQVBJIEh1YiIsImV4cCI6MTcwMDAwMDAwMCwiaWF0IjoxNjAwMDAwMDAwfQ..."
       responses:
         "200":
           description: Successful access token refresh
@@ -278,7 +278,7 @@ paths:
               description: apihub-access-token cookie, containing a refreshed access token.
               schema:
                 type: string
-                example: "apihub-access-token=eyJhbGciOiJSUzI1NiIsImtpZCI6InNlY3JldC1pZCIsInR5cCI6IkpXVCJ9.eyJFeHRlbnNpb25zIjp7InN5c3RlbVJvbGUiOlsiU3lzdGVtIGFkbWluaXN0cmF0b3IiXX0sIkdyb3VwcyI6W10sIklEIjoiYXBpaHViIiwiTmFtZSI6ImFwaWh1YiIsImF1ZCI6WyIiXSwiZXhwIjoxNzQ0OTcxNzI5LCJpYXQiOjE3NDQ5NjgxMjksIm5iZiI6MTc0NDk2ODEyOSwic3ViIjoiYXBpaHViIn0.JjoK6w2XqjSBfiKxFm-SIPREHDxygfSjkh-Y41ESAVA68zjZMGs_sl8pECWB41jUL9lSy63WRw9aAHMCyWsM5kMdYi43kVFm1dWAv9R0PR31TBkHLjWoRjb4T-9TdHaCJ7O6ZWVFc8fR3e5YmEtWSvXXWCx67ipYbCJYC_9zPclNdONTP8cZiTM8g6AGGVuxrwNR1gGHFFTyb29jEsd9Ucu22a8lm0iJ1_a33jch3x9LGB95zumFL8WsQ4HmhLO_6PYbSsZojAe20DLoiX41SvQsQLWfmQAURih-9iRLXVTaxs3XjkupCqfnIQcEDM9ANhaUrrme1_hJwqT4VoqOjw"
+                example: "apihub-access-token=eyJhbGciOiJSUzI1NiIsImtpZCI6InNlY3JldC1pZCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhcGlodWIiLCJuYW1lIjoiQVBJIEh1YiIsImV4cCI6MTcwMDAwMDAwMCwiaWF0IjoxNjAwMDAwMDAwfQ..."
         "302":
           description: Found
           headers:
@@ -373,7 +373,7 @@ paths:
           description: Refresh token that will be used to issue a new access token.
           schema:
             type: string
-            example: "apihub-refresh-token=eyJhbGciOiJSUzI1NiIsImtpZCI6InNlY3JldC1pZCIsInR5cCI6IkpXVCJ9.eyJFeHRlbnNpb25zIjp7InN5c3RlbVJvbGUiOlsiU3lzdGVtIGFkbWluaXN0cmF0b3IiXX0sIkdyb3VwcyI6W10sIklEIjoiYXBpaHViIiwiTmFtZSI6ImFwaWh1YiIsImF1ZCI6WyIiXSwiZXhwIjoxNzQ1MzI1MjkxLCJpYXQiOjE3NDUzMjE2OTEsIm5iZiI6MTc0NTMyMTY5MSwic3ViIjoiYXBpaHViIn0.SN-XnFPWUy6FlzjJcKsZIFsCMSFSRR7W7NHBpBAlbyEJFjXDEpBR9zHHlf2z8Voa2Rzzs6agcb16QS-5TkBOq5FN1GaOZO5okXkJBia1JE8ukFBFsWLYsRNFGD_0WzOp1sSq_9xtnBAYrIikM93sZJ_woxFYwfWg-CBA1OAwhNvJk3HUI_Ql2tRyGgtgB6WYncVpWgYyzu6upXUuxz5TocJfFEqIEqpbTvtE7AOUpACO8r4uY0lTySzk0d6B_XngLZEwZdD4gb5Mm40QPWwexE5hBxof1ZLZGz-09oSQjKgrlIpA9x7v7-Iy7BouQoLBNHx1Dff48BPlok4eQrJqmg"
+            example: "apihub-refresh-token=eyJhbGciOiJSUzI1NiIsImtpZCI6InNlY3JldC1pZCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhcGlodWIiLCJuYW1lIjoiQVBJIEh1YiIsImV4cCI6MTcwMDAwMDAwMCwiaWF0IjoxNjAwMDAwMDAwfQ..."
       responses:
         "200":
           description: Successful access token refresh
@@ -382,7 +382,7 @@ paths:
               description: apihub-access-token cookie, containing a refreshed access token.
               schema:
                 type: string
-                example: "apihub-access-token=eyJhbGciOiJSUzI1NiIsImtpZCI6InNlY3JldC1pZCIsInR5cCI6IkpXVCJ9.eyJFeHRlbnNpb25zIjp7InN5c3RlbVJvbGUiOlsiU3lzdGVtIGFkbWluaXN0cmF0b3IiXX0sIkdyb3VwcyI6W10sIklEIjoiYXBpaHViIiwiTmFtZSI6ImFwaWh1YiIsImF1ZCI6WyIiXSwiZXhwIjoxNzQ0OTcxNzI5LCJpYXQiOjE3NDQ5NjgxMjksIm5iZiI6MTc0NDk2ODEyOSwic3ViIjoiYXBpaHViIn0.JjoK6w2XqjSBfiKxFm-SIPREHDxygfSjkh-Y41ESAVA68zjZMGs_sl8pECWB41jUL9lSy63WRw9aAHMCyWsM5kMdYi43kVFm1dWAv9R0PR31TBkHLjWoRjb4T-9TdHaCJ7O6ZWVFc8fR3e5YmEtWSvXXWCx67ipYbCJYC_9zPclNdONTP8cZiTM8g6AGGVuxrwNR1gGHFFTyb29jEsd9Ucu22a8lm0iJ1_a33jch3x9LGB95zumFL8WsQ4HmhLO_6PYbSsZojAe20DLoiX41SvQsQLWfmQAURih-9iRLXVTaxs3XjkupCqfnIQcEDM9ANhaUrrme1_hJwqT4VoqOjw"
+                example: "apihub-access-token=eyJhbGciOiJSUzI1NiIsImtpZCI6InNlY3JldC1pZCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhcGlodWIiLCJuYW1lIjoiQVBJIEh1YiIsImV4cCI6MTcwMDAwMDAwMCwiaWF0IjoxNjAwMDAwMDAwfQ..."
         "302":
           description: Found
   /api/v1/logout:
@@ -405,7 +405,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-              example: {}
+              examples:
+                Unauthorized:
+                  $ref: "#/components/examples/Unauthorized"
         '500':
           description: Internal Server Error
           content:
@@ -575,7 +577,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-              examples: {}
+              examples:
+                Unauthorized:
+                  $ref: "#/components/examples/Unauthorized"
         '404':
           description: Not found
           content:
@@ -3292,7 +3296,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-              examples: {}
+              examples:
+                Unauthorized:
+                  $ref: "#/components/examples/Unauthorized"
         '409':
           description: Conflict
           content:
@@ -3336,7 +3342,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-              examples: {}
+              examples:
+                Unauthorized:
+                  $ref: "#/components/examples/Unauthorized"
         '404':
           description: Not found
           content:
@@ -3381,7 +3389,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-              examples: {}
+              examples:
+                Unauthorized:
+                  $ref: "#/components/examples/Unauthorized"
         '403':
           description: Forbidden
           content:
@@ -4035,7 +4045,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-              examples: {}
+              examples:
+                Unauthorized:
+                  $ref: "#/components/examples/Unauthorized"
         '403':
           description: Forbidden
           content:
@@ -4114,7 +4126,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-              examples: {}
+              examples:
+                Unauthorized:
+                  $ref: "#/components/examples/Unauthorized"
         '403':
           description: Forbidden
           content:
@@ -4178,7 +4192,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-              examples: {}
+              examples:
+                Unauthorized:
+                  $ref: "#/components/examples/Unauthorized"
         '403':
           description: Forbidden
           content:
@@ -5970,7 +5986,7 @@ paths:
         - Changes
       summary: Export API changes to xlsx file
       description: Export API changes to xlsx file
-      operationId: getPackageIdVersionIdChangesExport
+      operationId: getPackageIdVersionIdChangesExportV3
       security:
         - BearerAuth: []
         - CookieAuth: []
@@ -10640,7 +10656,7 @@ paths:
       summary: Export deprecated operations to xlsx file
       description: |
         Export operations of specific API type.
-      operationId: getPackagesIdVersionsIdApiTypeOperationsExport
+      operationId: getPackagesIdVersionsIdApiTypeDeprecatedOperationsExport
       security:
         - BearerAuth: [ ]
         - CookieAuth: [ ]
@@ -11988,7 +12004,7 @@ paths:
       description: |
         Calculate groups by transmitted restGroupingPrefix.
         This is in-flight calculation, i.e. calculated groups will not be saved.
-      operationId: postPackagesIdRecalculateGroups
+      operationId: postPackagesIdCalculateGroups
       security:
         - BearerAuth: []
         - CookieAuth: []
@@ -16441,10 +16457,10 @@ components:
                         type: object
                         additionalProperties:
                           type: string
-                          example:
-                            Template: a6b1596abe745a4a0cd3de25a411dbe671a3ba7c
-                            ErrorResponse: cf1d87cf3895af106a3ad29f2098dcc2cc477e71
-                            CreateItemDto: 72bfdc14758213e5c09620b29054da86b75d4868
+                        example:
+                          Template: a6b1596abe745a4a0cd3de25a411dbe671a3ba7c
+                          ErrorResponse: cf1d87cf3895af106a3ad29f2098dcc2cc477e71
+                          CreateItemDto: 72bfdc14758213e5c09620b29054da86b75d4868
                       deprecatedInfo:
                         description: Additional information about deprecated operation
                         type: object
@@ -16867,10 +16883,10 @@ components:
                             type: object
                             additionalProperties:
                               type: string
-                              example:
-                                Template: a6b1596abe745a4a0cd3de25a411dbe671a3ba7c
-                                ErrorResponse: cf1d87cf3895af106a3ad29f2098dcc2cc477e71
-                                CreateItemDto: 72bfdc14758213e5c09620b29054da86b75d4868
+                            example:
+                              Template: a6b1596abe745a4a0cd3de25a411dbe671a3ba7c
+                              ErrorResponse: cf1d87cf3895af106a3ad29f2098dcc2cc477e71
+                              CreateItemDto: 72bfdc14758213e5c09620b29054da86b75d4868
                           deprecatedInfo:
                             description: |
                               Additional information about deprecated operation:
@@ -18084,6 +18100,12 @@ components:
         status: 400
         code: "APIHUB-COMMON-4001"
         message: "Incorrect input parameters"
+    Unauthorized:
+      description: Unauthorized access
+      value:
+        status: 401
+        code: "APIHUB-4101"
+        message: "Authentication required"
     InternalServerError:
       description: Default internal server error
       value:
