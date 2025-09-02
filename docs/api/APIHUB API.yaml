@@ -1669,11 +1669,11 @@ paths:
                 items:
                   type: object
                   properties:
-                  publishId:
-                    type: string
-                    description: Publish process Id
-                    format: uuid
-                    example: 9c8e9045-dd9c-4946-b9e4-e05e3f41c4cc
+                    publishId:
+                      type: string
+                      description: Publish process Id
+                      format: uuid
+                      example: 9c8e9045-dd9c-4946-b9e4-e05e3f41c4cc
         "500":
           $ref: "#/components/responses/internalServerError500"
 components:
@@ -2473,7 +2473,6 @@ components:
       description: Published project version content
       type: object
       required:
-        - status
         - status
         - refs
         - files
