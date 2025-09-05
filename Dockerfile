@@ -24,6 +24,7 @@ WORKDIR /app/qubership-apihub-service
 
 USER root
 
+# hadolint ignore=DL3018
 RUN apk --no-cache add curl
 
 COPY --from=builder /workspace/qubership-apihub-service/qubership-apihub-service ./qubership-apihub-service
