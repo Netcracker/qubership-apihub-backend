@@ -10,7 +10,7 @@ COPY qubership-apihub-service qubership-apihub-service
 
 WORKDIR /workspace/qubership-apihub-service
 
-RUN GOSUMDB=off CGO_ENABLED=0 && go mod tidy && go mod download && GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build .
+RUN GOSUMDB=off CGO_ENABLED=0 go mod tidy && go mod download && GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build .
 
 FROM docker.io/alpine:3.22.1
 
