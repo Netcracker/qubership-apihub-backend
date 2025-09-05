@@ -12,7 +12,7 @@ WORKDIR /workspace/qubership-apihub-service
 
 RUN set GOSUMDB=off && set CGO_ENABLED=0 && go mod tidy && go mod download && GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build .
 
-FROM docker.io/golang:1.23.4-alpine3.21
+FROM docker.io/alpine:3.22.1
 
 ARG GIT_BRANCH=unknown
 ARG GIT_HASH=unknown
