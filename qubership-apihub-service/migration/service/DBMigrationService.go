@@ -17,10 +17,13 @@ package service
 import (
 	"context"
 	"fmt"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
+	"github.com/google/uuid"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -39,11 +42,13 @@ import (
 type DBMigrationService interface {
 	Migrate(basePath string) (int, int, bool, error)
 	SoftMigrateDb(currentVersion int, newVersion int, migrationRequired bool) error
-	MigrateOperations(migrationId string, req mView.MigrationRequest) error
+	StartMigrateOperations(req mView.MigrationRequest) (string, error)
+	migrateOperations(migrationId string, req mView.MigrationRequest) error
 	GetMigrationReport(migrationId string, includeBuildSamples bool) (*mView.MigrationReport, error)
 	CancelRunningMigrations() error
 	GetSuspiciousBuilds(migrationId string, changedField string, limit int, page int) ([]mView.SuspiciousMigrationBuild, error)
 	IsMigrationInProgress() (bool, error)
+	StartOpsMigrationRestoreProc(ctx context.Context)
 }
 
 func NewDBMigrationService(cp db.ConnectionProvider, mRRepo mRepository.MigrationRunRepository,
@@ -57,6 +62,7 @@ func NewDBMigrationService(cp db.ConnectionProvider, mRRepo mRepository.Migratio
 		transitionRepository:   transitionRepository,
 		migrationsFolder:       filepath.Join(systemInfoService.GetBasePath(), "resources", "migrations"),
 		minioStorageService:    minioStorageService,
+		instanceId:             uuid.New().String(),
 	}
 	upMigrations, downMigrations, err := service.getMigrationFilenamesMap()
 	if err != nil {
@@ -77,6 +83,7 @@ type dbMigrationServiceImpl struct {
 	upMigrations           map[int]string
 	downMigrations         map[int]string
 	minioStorageService    service.MinioStorageService
+	instanceId             string
 }
 
 const storedMigrationsTableMigrationVersion = 1 // migration table will be created at first migration
@@ -390,7 +397,15 @@ func (d *dbMigrationServiceImpl) getSchemaMigrationEntity(migrationNumber int) (
 
 func (d *dbMigrationServiceImpl) CancelRunningMigrations() error {
 	_, err := d.cp.GetConnection().Exec(`
-	update build set status = ?, details = ?
+	update migration_run set status = ?, error_details = ?, finished_at=now()
+	where status in (?) `,
+		view.StatusError, CancelledMigrationError,
+		pg.In([]view.BuildStatusEnum{view.StatusNotStarted, view.StatusRunning}))
+	if err != nil {
+		return err
+	}
+	_, err = d.cp.GetConnection().Exec(`
+	update build set status = ?, details = ?, last_active=now()
 	where status in (?) and created_by = 'db migration'`,
 		view.StatusError, CancelledMigrationError,
 		pg.In([]view.BuildStatusEnum{view.StatusNotStarted, view.StatusRunning}))
@@ -406,4 +421,21 @@ func (d *dbMigrationServiceImpl) IsMigrationInProgress() (bool, error) {
 		return false, err
 	}
 	return len(migrations) > 0, nil
+}
+
+func (d *dbMigrationServiceImpl) StartOpsMigrationRestoreProc(ctx context.Context) {
+	utils.SafeAsync(func() {
+		//d.restartMigrations() // TODO: or better wait?
+
+		ticker := time.NewTicker(time.Second * 60)
+		for {
+			select {
+			case <-ticker.C:
+				d.restartMigrations() // find stale migration and restore it
+			case <-ctx.Done():
+				ticker.Stop()
+				return
+			}
+		}
+	})
 }

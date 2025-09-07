@@ -1,0 +1,112 @@
+package stages
+
+import (
+	"fmt"
+	mView "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/migration/view"
+
+	"strings"
+)
+
+func (d OpsMigration) StageIndependentVersionsLastRevisions() error {
+	_, err := d.waitForBuilds(mView.MigrationStageIndependentVersionsLastRevs, 1) // for recovery
+	if err != nil {
+		return err
+	}
+
+	getLatestIndependentVersionsQuery := makeIndependentVersionsQuery(d.ent.PackageIds, d.ent.Versions, true)
+
+	count, err := d.createBuilds(getLatestIndependentVersionsQuery, d.ent.Id)
+	if err != nil {
+		return fmt.Errorf("migration %s stage %s round %d: %w", d.ent.Id, mView.MigrationStageIndependentVersionsLastRevs, 1, err)
+	}
+
+	if count > 0 {
+		_, err = d.waitForBuilds(mView.MigrationStageIndependentVersionsLastRevs, 1)
+	}
+
+	return nil
+}
+
+func (d OpsMigration) StageIndependentVersionsOldRevisions() error {
+	_, err := d.waitForBuilds(mView.MigrationStageIndependentVersionsOldRevs, 1) // for recovery, but round number is not recovered since it's not significant in the whole procedure
+	if err != nil {
+		return err
+	}
+
+	getOldIndependentVersionsQuery := makeIndependentVersionsQuery(d.ent.PackageIds, d.ent.Versions, false)
+
+	count, err := d.createBuilds(getOldIndependentVersionsQuery, d.ent.Id)
+	if err != nil {
+		return fmt.Errorf("migration %s stage %s round %d: %w", d.ent.Id, mView.MigrationStageIndependentVersionsLastRevs, 1, err)
+	}
+
+	if count > 0 {
+		_, err = d.waitForBuilds(mView.MigrationStageIndependentVersionsLastRevs, 1)
+	}
+
+	return nil
+}
+
+func makeIndependentVersionsQuery(packageIds []string, versionsIn []string, isLatest bool) string {
+	var wherePackageIn string
+	if len(packageIds) > 0 {
+		wherePackageIn = " and package_id in ("
+		for i, pkg := range packageIds {
+			if i > 0 {
+				wherePackageIn += ","
+			}
+			wherePackageIn += fmt.Sprintf("'%s'", pkg)
+		}
+		wherePackageIn += ") "
+	}
+
+	var whereVersionIn string
+	if len(versionsIn) > 0 {
+		whereVersionIn = " and version in ("
+		for i, ver := range versionsIn {
+			if i > 0 {
+				whereVersionIn += ","
+			}
+			verSplit := strings.Split(ver, "@")
+			whereVersionIn += fmt.Sprintf("'%s'", verSplit[0]) // remove revision
+		}
+		whereVersionIn += ") "
+	}
+
+	var maxrevQueryOperator string
+	if isLatest {
+		maxrevQueryOperator = "=" // join on latest revision
+	} else {
+		maxrevQueryOperator = "!=" // join on NOT latest revision
+	}
+
+	getLatestIndependentVersionsQuery := `
+	with maxrev as (
+		select package_id, version, max(revision) as revision
+			from published_version where deleted_at is null `
+
+	if wherePackageIn != "" {
+		getLatestIndependentVersionsQuery += wherePackageIn
+	}
+	if whereVersionIn != "" {
+		getLatestIndependentVersionsQuery += whereVersionIn
+	}
+
+	getLatestIndependentVersionsQuery +=
+		fmt.Sprintf(
+			` group by package_id, version
+	)
+	select pv.* from
+	published_version pv
+	inner join maxrev
+		on pv.package_id = maxrev.package_id
+		and pv.version = maxrev.version
+		and pv.revision %s maxrev.revision
+		and pv.deleted_at is null
+	inner join package_group pkg on pv.package_id = pkg.id
+	where
+		pv.previous_version is null and pkg.deleted_at is null
+    order by pv.published_at asc, pv.package_id asc, pv.version asc, pv.revision asc
+	`, maxrevQueryOperator) // published_at is a first order to avoid paging breakage by new entries
+	return getLatestIndependentVersionsQuery
+}

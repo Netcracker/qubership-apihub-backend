@@ -45,6 +45,8 @@ type MigrationRunEntity struct {
 	ErrorDetails           string    `pg:"error_details, type:varchar"`
 	FinishedAt             time.Time `pg:"finished_at, type:timestamp without time zone"`
 	UpdatedAt              time.Time `pg:"updated_at, type:timestamp without time zone"`
+	InstanceId             string    `pg:"instance_id, type:varchar"`
+	SequenceNumber         int       `pg:"sequence_number, type:integer"`
 }
 
 type MigratedVersionEntity struct {

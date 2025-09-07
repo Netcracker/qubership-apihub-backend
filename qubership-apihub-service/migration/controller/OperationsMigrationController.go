@@ -25,9 +25,7 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/migration/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/migration/view"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
-	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	log "github.com/sirupsen/logrus"
 )
 
 type OperationsMigrationController interface {
@@ -85,7 +83,7 @@ func (t operationsMigrationControllerImpl) StartOpsMigration(w http.ResponseWrit
 		return
 	}
 
-	id := uuid.New().String()
+	/*id := uuid.New().String()
 
 	utils.SafeAsync(func() {
 		err := t.migrationService.MigrateOperations(id, req)
@@ -94,7 +92,13 @@ func (t operationsMigrationControllerImpl) StartOpsMigration(w http.ResponseWrit
 		} else {
 			log.Infof("Operations migration process complete")
 		}
-	})
+	})*/
+
+	id, err := t.migrationService.StartMigrateOperations(req)
+	if err != nil {
+		utils.RespondWithError(w, "Failed to start operations migration", err)
+		return
+	}
 
 	result := map[string]interface{}{}
 	result["id"] = id

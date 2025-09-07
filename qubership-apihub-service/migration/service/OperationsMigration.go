@@ -17,6 +17,10 @@ package service
 import (
 	"context"
 	"fmt"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/migration/stages"
+	"github.com/google/uuid"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -30,19 +34,95 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func (d dbMigrationServiceImpl) MigrateOperations(migrationId string, req mView.MigrationRequest) error {
-	log.Infof("Migration started with request: %+v", req)
-	var err error
-	//err := d.validateMinRequiredVersion(filesOperationsMigrationVersion)
-	//if err != nil {
-	//	return err
-	//}
+func (d *dbMigrationServiceImpl) StartMigrateOperations(req mView.MigrationRequest) (string, error) {
+	migrationId := uuid.New().String()
 
-	mrEnt := mEntity.MigrationRunEntity{
+	log.Infof("Starting migration with request: %+v, generated id = %s", req, migrationId)
+
+	var om *stages.OpsMigration
+
+	err := d.cp.GetConnection().RunInTransaction(context.Background(), func(tx *pg.Tx) error {
+		if len(req.PackageIds) == 0 && len(req.Versions) == 0 {
+			// Allow only one full migration. Full migration have no limitations for packageIds and versions, i.e. all(non-deleted) data will be migrated.
+			var ents []mEntity.MigrationRunEntity
+			/*_, err := tx.Query(&ents, "select * from migration_run where array_length(package_ids,1) is null "+
+			"and array_length(versions,1) is null and status=? for update", mView.MigrationStatusRunning) // TODO what about rebuild params?*/
+			err := tx.Model(&ents).Where("status=?", mView.MigrationStatusRunning).Select()
+
+			if err != nil {
+				return err
+			}
+
+			if len(ents) > 0 {
+				return &exception.CustomError{
+					Status:  http.StatusConflict,
+					Code:    exception.OperationsMigrationConflict,
+					Message: exception.OperationsMigrationConflictMsg,
+					Params:  map[string]interface{}{"reason": "full migration is already running"},
+				}
+			}
+		}
+
+		mrEnt := mEntity.MigrationRunEntity{
+			Id:                     migrationId,
+			StartedAt:              time.Now(),
+			Status:                 mView.MigrationStatusRunning,
+			Stage:                  string(mView.MigrationStageStarting),
+			PackageIds:             req.PackageIds,
+			Versions:               req.Versions,
+			IsRebuild:              req.Rebuild,
+			CurrentBuilderVersion:  req.CurrentBuilderVersion,
+			IsRebuildChangelogOnly: req.RebuildChangelogOnly,
+			SkipValidation:         req.SkipValidation,
+			InstanceId:             d.instanceId,
+		}
+
+		// TODO: add optimistic lock for insert??
+
+		_, err := d.cp.GetConnection().Model(&mrEnt).Insert()
+		if err != nil {
+			return fmt.Errorf("failed to insert MigrationRunEntity: %w", err)
+		}
+
+		om = stages.NewOpsMigration(d.cp, d.systemInfoService, d.minioStorageService, d.repo, d.buildCleanupRepository, mrEnt)
+
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+
+	utils.SafeAsync(func() {
+		if om != nil {
+			om.Start()
+		} else {
+			log.Errorf("OpsMigration is nil!!!")
+		}
+
+		/*err := d.migrateOperations(migrationId, req)
+		if err != nil {
+			log.Errorf("Operations migration process failed: %s", err)
+		} else {
+			log.Infof("Operations migration process complete")
+		}*/
+	})
+
+	return migrationId, err
+}
+
+func (d *dbMigrationServiceImpl) migrateOperations(migrationId string, req mView.MigrationRequest) error {
+	log.Infof("Migration started with request: %+v and id = %s", req, migrationId)
+
+	/*err := d.validateMinRequiredVersion(filesOperationsMigrationVersion)
+	if err != nil {
+		return err
+	}*/
+
+	/*mrEnt := mEntity.MigrationRunEntity{
 		Id:                     migrationId,
 		StartedAt:              time.Now(),
 		Status:                 mView.MigrationStatusRunning,
-		Stage:                  "starting",
+		Stage:                  mView.MigrationStageStarting,
 		PackageIds:             req.PackageIds,
 		Versions:               req.Versions,
 		IsRebuild:              req.Rebuild,
@@ -54,9 +134,10 @@ func (d dbMigrationServiceImpl) MigrateOperations(migrationId string, req mView.
 	_, err = d.cp.GetConnection().Model(&mrEnt).Insert()
 	if err != nil {
 		return fmt.Errorf("failed to insert MigrationRunEntity: %w", err)
-	}
+	}*/
 
-	_, err = d.cp.GetConnection().Exec(`create schema if not exists migration;`)
+	// create temporary tables required for suspicious builds analysis
+	_, err := d.cp.GetConnection().Exec(`create schema if not exists migration;`)
 	if err != nil {
 		return err
 	}

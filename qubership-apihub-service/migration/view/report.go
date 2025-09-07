@@ -63,3 +63,29 @@ const MigrationStatusRunning = "running"
 const MigrationStatusComplete = "complete"
 const MigrationStatusFailed = "failed"
 const MigrationStatusCancelled = "cancelled"
+
+type OpsMigrationStage string
+
+const MigrationStageStarting OpsMigrationStage = "starting"
+const MigrationStageCleanupBefore OpsMigrationStage = "cleanup_before"
+const MigrationStageIndependentVersionsLastRevs OpsMigrationStage = "independent_versions_last"
+const MigrationStageDependentVersionsLastRevs OpsMigrationStage = "dependent_versions_last"
+
+const MigrationStageIndependentVersionsOldRevs OpsMigrationStage = "independent_versions_old"
+const MigrationStageDependentVersionsOldRevs OpsMigrationStage = "dependent_versions_old"
+
+const MigrationStageComparisonsOther OpsMigrationStage = "comparisons_other"
+
+const MigrationStageComparisonsOnly OpsMigrationStage = "comparisons_only"
+
+const MigrationStagePostCheck OpsMigrationStage = "post_check"
+const MigrationStageDone OpsMigrationStage = "done"
+const MigrationStageUndefined OpsMigrationStage = "undefined"
+
+func MigrationStageFromString(stage string) OpsMigrationStage {
+	val := OpsMigrationStage(stage)
+	if val == "" {
+		return MigrationStageUndefined
+	}
+	return val
+}
