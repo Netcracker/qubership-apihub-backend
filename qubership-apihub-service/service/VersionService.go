@@ -710,7 +710,7 @@ func (v versionServiceImpl) GetPackageVersionsView(req view.VersionListReq, show
 
 	versions := make([]view.PublishedVersionListView, 0)
 	versionSortByPG := entity.GetVersionSortByPG(req.SortBy)
-	
+
 	// sortBy and sortOrder are not request params for GetDeletedPackageVersions API -
 	// Hence, they needs not be validated when the GetDeletedPackageVersions API is invoked.
 	if versionSortByPG == "" && !showOnlyDeleted {
@@ -972,21 +972,20 @@ func (v versionServiceImpl) getVersionOperationTypes_deprecated(versionEnt *enti
 		}
 	}
 	if includeOperations {
-		operationTypeHashes, err := v.operationRepo.GetOperationsTypeDataHashes(versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
+		operationTypes, err := v.operationRepo.GetOperationsTypes(versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
 		if err != nil {
 			return nil, err
 		}
-		for _, ot := range operationTypeHashes {
+		for _, ot := range operationTypes {
 			apiType, _ := view.ParseApiType(ot.ApiType)
 			if apiType == "" {
 				continue
 			}
-			if versionApiTypeSummary, exists := versionSummaryMap[ot.ApiType]; exists {
-				versionApiTypeSummary.Operations = ot.OperationsHash
+			if _, exists := versionSummaryMap[ot.ApiType]; exists {
+				continue
 			} else {
 				versionSummaryMap[ot.ApiType] = &view.VersionOperationType{
-					ApiType:    ot.ApiType,
-					Operations: ot.OperationsHash,
+					ApiType: ot.ApiType,
 				}
 			}
 		}
@@ -1182,22 +1181,22 @@ func (v versionServiceImpl) getVersionOperationTypes(versionEnt *entity.PackageV
 			}
 		}
 	}
+	//TODO: discuss it
 	if includeOperations {
-		operationTypeHashes, err := v.operationRepo.GetOperationsTypeDataHashes(versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
+		operationTypes, err := v.operationRepo.GetOperationsTypes(versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
 		if err != nil {
 			return nil, err
 		}
-		for _, ot := range operationTypeHashes {
+		for _, ot := range operationTypes {
 			apiType, _ := view.ParseApiType(ot.ApiType)
 			if apiType == "" {
 				continue
 			}
-			if versionApiTypeSummary, exists := versionSummaryMap[ot.ApiType]; exists {
-				versionApiTypeSummary.Operations = ot.OperationsHash
+			if _, exists := versionSummaryMap[ot.ApiType]; exists {
+				continue
 			} else {
 				versionSummaryMap[ot.ApiType] = &view.VersionOperationType{
-					ApiType:    ot.ApiType,
-					Operations: ot.OperationsHash,
+					ApiType: ot.ApiType,
 				}
 			}
 		}

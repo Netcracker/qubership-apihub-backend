@@ -24,7 +24,6 @@ type Operation struct {
 	OperationId             string                 `json:"operationId" validate:"required"`
 	Title                   string                 `json:"title" validate:"required"`
 	ApiType                 string                 `json:"apiType" validate:"required"`
-	DataHash                string                 `json:"dataHash" validate:"required"`
 	Deprecated              bool                   `json:"deprecated"`
 	ApiKind                 string                 `json:"apiKind" validate:"required"`
 	Metadata                map[string]interface{} `json:"metadata" validate:"required"`
@@ -35,39 +34,40 @@ type Operation struct {
 	Tags                    []string               `json:"tags"`
 	Models                  map[string]string      `json:"models"`
 	ApiAudience             string                 `json:"apiAudience" validate:"required"`
+	DocumentId              string                 `json:"documentId"`
 }
 
 type DocumentsOperation_deprecated struct {
 	OperationId string      `json:"operationId" validate:"required"`
 	Title       string      `json:"title" validate:"required"`
 	ApiType     string      `json:"apiType" validate:"required"`
-	DataHash    string      `json:"dataHash" validate:"required"`
 	Deprecated  bool        `json:"deprecated"`
 	ApiKind     string      `json:"apiKind" validate:"required"`
 	Metadata    interface{} `json:"metadata" validate:"required"`
+	DocumentId  string      `json:"documentId"`
 }
 
 type SingleOperationView struct {
 	Data        *orderedmap.OrderedMap `json:"data,omitempty"`
 	OperationId string                 `json:"operationId"`
 	Title       string                 `json:"title"`
-	DataHash    string                 `json:"dataHash"`
 	Deprecated  bool                   `json:"deprecated,omitempty"`
 	ApiKind     string                 `json:"apiKind"`
 	ApiType     string                 `json:"apiType"`
 	CustomTags  map[string]interface{} `json:"customTags,omitempty"`
 	ApiAudience string                 `json:"apiAudience"`
+	DocumentId  string                 `json:"documentId"`
 }
 
 type CommonOperationView struct {
 	OperationId string                 `json:"operationId"`
 	Title       string                 `json:"title"`
-	DataHash    string                 `json:"dataHash"`
 	Deprecated  bool                   `json:"deprecated,omitempty"`
 	ApiKind     string                 `json:"apiKind"`
 	ApiType     string                 `json:"apiType"`
 	CustomTags  map[string]interface{} `json:"customTags,omitempty"`
 	ApiAudience string                 `json:"apiAudience"`
+	DocumentId  string                 `json:"documentId"`
 }
 
 type OperationListView struct {
@@ -80,7 +80,6 @@ type DeprecatedOperationView struct {
 	PackageRef              string           `json:"packageRef,omitempty"`
 	OperationId             string           `json:"operationId"`
 	Title                   string           `json:"title"`
-	DataHash                string           `json:"dataHash"`
 	Deprecated              bool             `json:"deprecated,omitempty"`
 	ApiKind                 string           `json:"apiKind"`
 	ApiType                 string           `json:"apiType"`
@@ -89,6 +88,7 @@ type DeprecatedOperationView struct {
 	DeprecatedInfo          string           `json:"deprecatedInfo,omitempty"`
 	DeprecatedItems         []DeprecatedItem `json:"deprecatedItems,omitempty"`
 	ApiAudience             string           `json:"apiAudience"`
+	DocumentId              string           `json:"documentId"`
 }
 type DeprecatedItem struct {
 	PreviousReleaseVersions []string        `json:"deprecatedInPreviousVersions,omitempty"`
@@ -106,8 +106,6 @@ type DeprecatedItems struct {
 type OperationComparison struct {
 	OperationId         string                 `json:"operationId"`
 	PreviousOperationId string                 `json:"previousOperationId"`
-	DataHash            string                 `json:"dataHash,omitempty"`
-	PreviousDataHash    string                 `json:"previousDataHash,omitempty"`
 	ChangeSummary       ChangeSummary          `json:"changeSummary,omitempty"`
 	Changes             []interface{}          `json:"changes" validate:"required,dive,required"`
 	JsonPath            []string               `json:"jsonPath,omitempty"`
@@ -276,8 +274,6 @@ type OperationComparisonChangelogView_deprecated struct {
 	OperationId               string        `json:"operationId"`
 	Title                     string        `json:"title"`
 	ApiKind                   string        `json:"apiKind,omitempty"`
-	DataHash                  string        `json:"dataHash,omitempty"`
-	PreviousDataHash          string        `json:"previousDataHash,omitempty"`
 	ChangeSummary             ChangeSummary `json:"changeSummary"`
 	PackageRef                string        `json:"packageRef"`
 	PreviousVersionPackageRef string        `json:"previousVersionPackageRef"`
@@ -288,7 +284,6 @@ type GenericComparisonOperationView struct {
 	Title       string `json:"title"`
 	ApiKind     string `json:"apiKind,omitempty"`
 	ApiAudience string `json:"apiAudience"`
-	DataHash    string `json:"dataHash,omitempty"`
 	PackageRef  string `json:"packageRef"`
 }
 
@@ -296,7 +291,6 @@ type ComparisonOperationView_deprecated struct {
 	Title       string `json:"title"`
 	ApiKind     string `json:"apiKind,omitempty"`
 	ApiAudience string `json:"apiAudience"`
-	DataHash    string `json:"dataHash,omitempty"`
 	PackageRef  string `json:"packageRef"`
 }
 
@@ -311,8 +305,6 @@ type OperationComparisonChangesView struct {
 	OperationId               string        `json:"operationId"`
 	Title                     string        `json:"title"`
 	ApiKind                   string        `json:"apiKind,omitempty"`
-	DataHash                  string        `json:"dataHash,omitempty"`
-	PreviousDataHash          string        `json:"previousDataHash,omitempty"`
 	ChangeSummary             ChangeSummary `json:"changeSummary"`
 	PackageRef                string        `json:"packageRef"`
 	PreviousVersionPackageRef string        `json:"previousVersionPackageRef"`
@@ -418,7 +410,6 @@ func GetDocumentTypesForApiType(apiType string) []string {
 
 type OperationListReq struct {
 	Deprecated     *bool
-	HashList       []string
 	Ids            []string
 	IncludeData    bool
 	Kind           string

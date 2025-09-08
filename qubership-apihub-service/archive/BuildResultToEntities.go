@@ -25,6 +25,7 @@ import (
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/repository"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	log "github.com/sirupsen/logrus"
@@ -202,16 +203,17 @@ func (a *BuildResultToEntitiesReader) ReadTransformedDocumentsToEntity() (*entit
 	}, nil
 }
 
-func (a *BuildResultToEntitiesReader) ReadOperationsToEntities() ([]*entity.OperationEntity, []*entity.OperationDataEntity, error) {
+func (a *BuildResultToEntitiesReader) ReadOperationsToEntities() ([]*entity.OperationEntity, []*entity.OperationDataEntity, map[string]string, error) {
 	operationsFromZipReadStart := time.Now()
 	operationEntities := make([]*entity.OperationEntity, 0)
 	operationDataEntities := make([]*entity.OperationDataEntity, 0)
+	operationsHashes := make(map[string]string)
 	operationsExternalMetadataMap := a.calculateOperationsExternalMetadataMap()
 	for _, operation := range a.PackageOperations.Operations {
 		if fileHeader, exists := a.OperationFileHeaders[operation.OperationId]; exists {
 			fileData, err := ReadZipFile(fileHeader)
 			if err != nil {
-				return nil, nil, &exception.CustomError{
+				return nil, nil, nil, &exception.CustomError{
 					Status:  http.StatusBadRequest,
 					Code:    exception.InvalidPackageArchivedFile,
 					Message: exception.InvalidPackageArchivedFileMsg,
@@ -241,7 +243,7 @@ func (a *BuildResultToEntitiesReader) ReadOperationsToEntities() ([]*entity.Oper
 
 			customTags, err = operationMetadata.GetMapStringToInterface("customTags")
 			if err != nil {
-				return nil, nil, &exception.CustomError{
+				return nil, nil, nil, &exception.CustomError{
 					Status:  http.StatusBadRequest,
 					Code:    exception.InvalidPackagedFile,
 					Message: exception.InvalidPackagedFileMsg,
@@ -264,12 +266,13 @@ func (a *BuildResultToEntitiesReader) ReadOperationsToEntities() ([]*entity.Oper
 				customTags[k] = v
 			}
 
+			dataHash := utils.GetEncodedXXHash128(fileData)
 			operationEntities = append(operationEntities, &entity.OperationEntity{
 				PackageId:               a.PackageInfo.PackageId,
 				Version:                 a.PackageInfo.Version,
 				Revision:                a.PackageInfo.Revision,
 				OperationId:             operation.OperationId,
-				DataHash:                operation.DataHash,
+				DataHash:                dataHash,
 				Deprecated:              operation.Deprecated,
 				Kind:                    operation.ApiKind,
 				Type:                    operation.ApiType,
@@ -281,19 +284,21 @@ func (a *BuildResultToEntitiesReader) ReadOperationsToEntities() ([]*entity.Oper
 				Models:                  operation.Models,
 				CustomTags:              customTags,
 				ApiAudience:             operation.ApiAudience,
+				DocumentId:              operation.DocumentId,
 			})
 			operationDataEntities = append(operationDataEntities, &entity.OperationDataEntity{
-				DataHash:    operation.DataHash,
+				DataHash:    dataHash,
 				Data:        fileData,
 				SearchScope: operation.SearchScopes,
 			})
+			operationsHashes[operation.OperationId] = dataHash
 		}
 	}
 	log.Debugf("Zip operations reading time: %vms", time.Since(operationsFromZipReadStart).Milliseconds())
-	return operationEntities, operationDataEntities, nil
+	return operationEntities, operationDataEntities, operationsHashes, nil
 }
 
-func (a *BuildResultToEntitiesReader) ReadOperationComparisonsToEntities() ([]*entity.VersionComparisonEntity, []*entity.OperationComparisonEntity, []string, error) {
+func (a *BuildResultToEntitiesReader) ReadOperationComparisonsToEntities(publishingOperationsHashes map[string]string, operationRepository repository.OperationRepository) ([]*entity.VersionComparisonEntity, []*entity.OperationComparisonEntity, []string, error) {
 	versionComparisonEntities := make([]*entity.VersionComparisonEntity, 0)
 	operationComparisonEntities := make([]*entity.OperationComparisonEntity, 0)
 	versionComparisonsFromCache := make([]string, 0)
@@ -375,8 +380,43 @@ func (a *BuildResultToEntitiesReader) ReadOperationComparisonsToEntities() ([]*e
 					Params:  map[string]interface{}{"file": comparison.ComparisonFileId, "error": validationErr.Error()},
 				}
 			}
+
+			//TODO: will it successfully handle dashboard case ?
+			var operationsHashes map[string]string
+			if publishingOperationsHashes != nil && mainVersion {
+				operationsHashes = publishingOperationsHashes
+			} else if operationRepository != nil {
+				operationsHashesEntity, err := operationRepository.GetOperationsDataHashes(
+					versionComparisonEnt.PackageId,
+					versionComparisonEnt.Version,
+					versionComparisonEnt.Revision,
+				)
+				if err != nil {
+					//TODO: handle this error
+					return nil, nil, nil, err
+				}
+				operationsHashes = operationsHashesEntity.OperationsHashes
+			}
+
+			var previousOperationsHashes map[string]string
+			if versionComparisonEnt.PreviousPackageId != "" && versionComparisonEnt.PreviousVersion != "" && operationRepository != nil {
+				previousOperationsHashesEntity, err := operationRepository.GetOperationsDataHashes(
+					versionComparisonEnt.PreviousPackageId,
+					versionComparisonEnt.PreviousVersion,
+					versionComparisonEnt.PreviousRevision,
+				)
+				if err != nil {
+					//TODO: handle this error
+					return nil, nil, nil, err
+				}
+				previousOperationsHashes = previousOperationsHashesEntity.OperationsHashes
+			}
+
 			for _, operationComparison := range operationChanges.OperationComparisons {
-				err = validateOperationComparison(operationComparison)
+				dataHash := operationsHashes[operationComparison.OperationId]
+				previousDataHash := previousOperationsHashes[operationComparison.PreviousOperationId]
+
+				err = validateOperationComparison(operationComparison, dataHash, previousDataHash)
 				if err != nil {
 					return nil, nil, nil, &exception.CustomError{
 						Status:  http.StatusBadRequest,
@@ -385,7 +425,6 @@ func (a *BuildResultToEntitiesReader) ReadOperationComparisonsToEntities() ([]*e
 						Params:  map[string]interface{}{"file": comparison.ComparisonFileId, "error": err.Error()},
 					}
 				}
-
 				//todo maybe check that changedOperation.OperationId really exists in this package or in our db
 				operationComparisonEntities = append(operationComparisonEntities,
 					&entity.OperationComparisonEntity{
@@ -398,8 +437,8 @@ func (a *BuildResultToEntitiesReader) ReadOperationComparisonsToEntities() ([]*e
 						PreviousRevision:    versionComparisonEnt.PreviousRevision,
 						PreviousOperationId: operationComparison.PreviousOperationId,
 						ComparisonId:        versionComparisonEnt.ComparisonId,
-						DataHash:            operationComparison.DataHash,
-						PreviousDataHash:    operationComparison.PreviousDataHash,
+						DataHash:            dataHash,
+						PreviousDataHash:    previousDataHash,
 						ChangesSummary:      operationComparison.ChangeSummary,
 						Changes:             map[string]interface{}{"changes": operationComparison.Changes},
 					})
@@ -420,27 +459,27 @@ func (a *BuildResultToEntitiesReader) ReadOperationComparisonsToEntities() ([]*e
 	return versionComparisonEntities, operationComparisonEntities, versionComparisonsFromCache, nil
 }
 
-func validateOperationComparison(oc view.OperationComparison) error {
+func validateOperationComparison(oc view.OperationComparison, dataHash string, previousDataHash string) error {
 	oidIsEmpty := false
 	if oc.OperationId == "" {
-		if oc.DataHash != "" {
-			return fmt.Errorf("invalid operation comparison: operationId is empty, but dataHash is set to %s", oc.DataHash)
+		if dataHash != "" {
+			return fmt.Errorf("invalid operation comparison: operationId is empty, but dataHash is set to %s", dataHash)
 		}
 		oidIsEmpty = true
 	} else {
-		if oc.DataHash == "" {
+		if dataHash == "" {
 			return fmt.Errorf("invalid operation comparison: operationId is set to %s, but dataHash is empty", oc.OperationId)
 		}
 	}
 	if oc.PreviousOperationId == "" {
-		if oc.PreviousDataHash != "" {
-			return fmt.Errorf("invalid operation comparison: previousOperationId is empty, but previousDataHash is set to %s", oc.DataHash)
+		if previousDataHash != "" {
+			return fmt.Errorf("invalid operation comparison: previousOperationId is empty, but previousDataHash is set to %s", previousDataHash)
 		}
 		if oidIsEmpty {
 			return fmt.Errorf("invalid operation comparison: both operationId and previousOperationId are empty, jsonPath=%+v", oc.JsonPath)
 		}
 	} else {
-		if oc.PreviousDataHash == "" {
+		if previousDataHash == "" {
 			return fmt.Errorf("invalid operation comparison: previousOperationId is set to %s, but previousDataHash is empty", oc.PreviousOperationId)
 		}
 	}

@@ -39,7 +39,9 @@ type OperationRepository interface {
 	SearchForOperations_deprecated(searchQuery *entity.OperationSearchQuery) ([]entity.OperationSearchResult_deprecated, error)
 	SearchForOperations(searchQuery *entity.OperationSearchQuery) ([]entity.OperationSearchResult, error)
 	GetOperationsTypeCount(packageId string, version string, revision int, showOnlyDeleted bool) ([]entity.OperationsTypeCountEntity, error)
+	GetOperationsTypes(packageId string, version string, revision int) ([]entity.OperationsTypeEntity, error)
 	GetOperationsTypeDataHashes(packageId string, version string, revision int) ([]entity.OperationsTypeDataHashEntity, error)
+	GetOperationsDataHashes(packageId string, version string, revision int) (entity.OperationsDataHashEntity, error)
 	GetOperationDeprecatedItems(packageId string, version string, revision int, operationType string, operationId string) (*entity.OperationRichEntity, error)
 	GetDeprecatedOperationsSummary(packageId string, version string, revision int) ([]entity.DeprecatedOperationsSummaryEntity, error)
 	GetDeprecatedOperationsRefsSummary(packageId string, version string, revision int) ([]entity.DeprecatedOperationsSummaryEntity, error)
@@ -250,9 +252,6 @@ func (o operationRepositoryImpl) GetOperations(packageId string, version string,
 		query.Where("operation.operation_id in (?)", pg.In(searchReq.Ids))
 	}
 
-	if len(searchReq.HashList) > 0 {
-		query.Where("operation.data_hash in (?)", pg.In(searchReq.HashList))
-	}
 	if searchReq.DocumentSlug != "" {
 		query.Join("inner join published_version_revision_content as pvrc").
 			JoinOn("operation.operation_id = any(pvrc.operation_ids)").
@@ -1402,6 +1401,30 @@ func (o operationRepositoryImpl) GetOperationsTypeCount(packageId string, versio
 	return result, nil
 }
 
+func (o operationRepositoryImpl) GetOperationsTypes(packageId string, version string, revision int) ([]entity.OperationsTypeEntity, error) {
+	var result []entity.OperationsTypeEntity
+	operationsTypesQuery := `
+		select distinct type
+		from operation
+		where package_id = ?
+		and version = ?
+		and revision = ?
+		order by type;
+	`
+	_, err := o.cp.GetConnection().Query(&result,
+		operationsTypesQuery,
+		packageId, version, revision,
+	)
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return result, nil
+}
+
 func (o operationRepositoryImpl) GetOperationsTypeDataHashes(packageId string, version string, revision int) ([]entity.OperationsTypeDataHashEntity, error) {
 	var result []entity.OperationsTypeDataHashEntity
 	operationsTypeOperationHashesQuery := `
@@ -1421,6 +1444,29 @@ func (o operationRepositoryImpl) GetOperationsTypeDataHashes(packageId string, v
 			return nil, nil
 		}
 		return nil, err
+	}
+
+	return result, nil
+}
+
+func (o operationRepositoryImpl) GetOperationsDataHashes(packageId string, version string, revision int) (entity.OperationsDataHashEntity, error) {
+	var result entity.OperationsDataHashEntity
+	operationsHashesQuery := `
+		select json_object_agg(operation_id, data_hash) operations_hash
+		from operation
+		where package_id = ?
+		and version = ?
+		and revision = ?;
+	`
+	_, err := o.cp.GetConnection().Query(&result,
+		operationsHashesQuery,
+		packageId, version, revision,
+	)
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return result, nil
+		}
+		return result, err
 	}
 
 	return result, nil

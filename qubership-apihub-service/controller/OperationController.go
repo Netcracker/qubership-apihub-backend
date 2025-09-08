@@ -15,10 +15,11 @@
 package controller
 
 import (
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"net/http"
 	"net/url"
 	"strconv"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
@@ -182,12 +183,6 @@ func (o operationControllerImpl) GetOperationList(w http.ResponseWriter, r *http
 		}
 	}
 
-	hashList, customErr := getListFromParam(r, "hashList")
-	if customErr != nil {
-		utils.RespondWithCustomError(w, customErr)
-		return
-	}
-
 	ids, customErr := getListFromParam(r, "ids")
 	if customErr != nil {
 		utils.RespondWithCustomError(w, customErr)
@@ -293,7 +288,6 @@ func (o operationControllerImpl) GetOperationList(w http.ResponseWriter, r *http
 
 	restOperationListReq := view.OperationListReq{
 		Deprecated:   deprecated,
-		HashList:     hashList,
 		Ids:          ids,
 		IncludeData:  includeData,
 		Kind:         kind,
