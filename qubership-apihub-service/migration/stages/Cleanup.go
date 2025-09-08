@@ -51,6 +51,9 @@ func (d OpsMigration) StageCleanupAfter() error {
 	if err != nil {
 		log.Errorf("failed to cleanup migration tables: %v", err.Error())
 	}
-
+	_, err = d.cp.GetConnection().Exec(fmt.Sprintf(`drop table migration."expired_ts_operation_data_%s";`, d.ent.Id))
+	if err != nil {
+		log.Errorf("failed to cleanup migration tables: %v", err.Error())
+	}
 	return nil
 }

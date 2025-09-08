@@ -27,5 +27,13 @@ func (d OpsMigration) createTempTables() error {
 	if err != nil {
 		return err
 	}
+	_, err = d.cp.GetConnection().Exec(fmt.Sprintf(`create index "operation_comparison_%s_comparison_id_index" on migration."operation_comparison_%s" (comparison_id);`, d.ent.Id, d.ent.Id))
+	if err != nil {
+		return err
+	}
+	_, err = d.cp.GetConnection().Exec(fmt.Sprintf(`create table migration."expired_ts_operation_data_%s" (package_id varchar, version varchar, revision integer);`, d.ent.Id))
+	if err != nil {
+		return err
+	}
 	return nil
 }
