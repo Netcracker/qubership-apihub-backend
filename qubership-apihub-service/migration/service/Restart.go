@@ -16,8 +16,14 @@ func (d *dbMigrationServiceImpl) restartMigrations() error {
 
 	err := d.cp.GetConnection().RunInTransaction(context.Background(), func(tx *pg.Tx) error {
 		var ents []mEntity.MigrationRunEntity
-		_, err := tx.Query(&ents, `select * from migration_run where status=? and
-			 updated_at < (now() - interval '? seconds') order by started_at for update skip locked `, mView.MigrationStatusRunning, 120)
+
+		err := tx.Model(&ents).
+			Where("status=?", mView.MigrationStatusRunning).
+			Where("updated_at < (now() - interval '? seconds')", 120).
+			Where("instance_id!=?", d.instanceId).
+			Order("started_at").
+			For("UPDATE skip locked").
+			Select()
 		if err != nil {
 			return err
 		}
@@ -29,7 +35,11 @@ func (d *dbMigrationServiceImpl) restartMigrations() error {
 
 		// TODO: add retries!!!
 
-		_, err = tx.Model(&mEntity.MigrationRunEntity{}).Set("instance_id=?", d.instanceId).Set("updated_at=now()").Where("id=?", mrEnt.Id).Update()
+		_, err = tx.Model(&mEntity.MigrationRunEntity{}).
+			Set("instance_id=?", d.instanceId).
+			Set("updated_at=now()").
+			Where("id=?", mrEnt.Id).
+			Update()
 		if err != nil {
 			return fmt.Errorf("failed to update migration %s for restart: %w", mrEnt.Id, err)
 		}
