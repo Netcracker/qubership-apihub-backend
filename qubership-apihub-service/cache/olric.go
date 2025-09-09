@@ -19,11 +19,11 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
-	"os"
 	"strconv"
 	"sync"
 	"time"
 
+	sysconfig "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/config"
 	"github.com/buraksezer/olric"
 	discovery "github.com/buraksezer/olric-cloud-plugin/lib"
 	"github.com/buraksezer/olric/config"
@@ -35,18 +35,20 @@ type OlricProvider interface {
 	GetBindAddr() string
 }
 
+const olricBindAddr = "0.0.0.0"
+
 type olricProviderImpl struct {
 	wg     sync.WaitGroup
 	cfg    *config.Config
 	olricC *olric.Olric
 }
 
-func NewOlricProvider() (OlricProvider, error) {
+func NewOlricProvider(olricConfig sysconfig.OlricConfig) (OlricProvider, error) {
 	prov := &olricProviderImpl{wg: sync.WaitGroup{}}
 
 	var err error
 	gob.Register(map[string]interface{}{})
-	prov.cfg, err = getConfig()
+	prov.cfg, err = getConfig(olricConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -84,8 +86,8 @@ func (op *olricProviderImpl) GetBindAddr() string {
 	return op.cfg.BindAddr
 }
 
-func getConfig() (*config.Config, error) {
-	mode := getMode()
+func getConfig(olricConfig sysconfig.OlricConfig) (*config.Config, error) {
+	mode := olricConfig.DiscoveryMode
 	switch mode {
 	case "lan":
 		log.Info("Olric run in cloud mode")
@@ -94,21 +96,20 @@ func getConfig() (*config.Config, error) {
 		cfg.LogLevel = "WARN"
 		cfg.LogVerbosity = 2
 
-		namespace, err := getNamespace()
-		if err != nil {
-			return nil, err
+		namespace := olricConfig.Namespace
+		if namespace == "" {
+			return nil, fmt.Errorf("namespace is not set")
 		}
 
 		cloudDiscovery := &discovery.CloudDiscovery{}
-		labelSelector := fmt.Sprintf("name=%s", getServiceName())
 		cfg.ServiceDiscovery = map[string]interface{}{
 			"plugin":   cloudDiscovery,
 			"provider": "k8s",
-			"args":     fmt.Sprintf("namespace=%s label_selector=\"%s\"", namespace, labelSelector),
+			"args":     fmt.Sprintf("namespace=%s label_selector=\"%s\"", namespace, "olric-cluster=apihub"), // select pods with label "olric-cluster=apihub"
 		}
 
 		// TODO: try to get from replica set via kube client
-		replicaCount := getReplicaCount()
+		replicaCount := olricConfig.ReplicaCount
 		log.Infof("replicaCount is set to %d", replicaCount)
 
 		cfg.PartitionCount = uint64(replicaCount * 4)
@@ -126,10 +127,10 @@ func getConfig() (*config.Config, error) {
 		cfg.LogLevel = "WARN"
 		cfg.LogVerbosity = 2
 
-		cfg.BindAddr = "localhost"
-
-		cfg.BindPort = getRandomFreePort()
-		cfg.MemberlistConfig.BindPort = getRandomFreePort()
+		cfg.BindAddr = olricBindAddr
+		cfg.BindPort = getLocalPort()
+		cfg.MemberlistConfig.BindAddr = olricBindAddr
+		cfg.MemberlistConfig.BindPort = getLocalMemberlistPort()
 		cfg.PartitionCount = 5
 
 		return cfg, nil
@@ -139,10 +140,32 @@ func getConfig() (*config.Config, error) {
 	}
 }
 
-func getRandomFreePort() int {
+func getLocalPort() int {
+	//try specific port first
+	port := 47375
+	if isPortFree(olricBindAddr, port) {
+		return port
+	}
+	//and if fails, then random
+	return getLocalRandomFreePort()
+}
+func getLocalMemberlistPort() int {
+	//try specific port first
+	port := 47376
+	if isPortFree(olricBindAddr, port) {
+		return port
+	}
+	//and if fails, then random
+	return getLocalRandomFreePort()
+}
+
+func getLocalRandomFreePort() int {
 	for {
 		port := rand.Intn(48127) + 1024
-		if isPortFree("localhost", port) {
+		if isPortFree(olricBindAddr, port) {
+			return port
+		}
+		if isPortFree(olricBindAddr, port) {
 			return port
 		}
 	}
@@ -157,38 +180,4 @@ func isPortFree(address string, port int) bool {
 
 	_ = ln.Close()
 	return true
-}
-
-func getMode() string {
-	olricCacheMode, exists := os.LookupEnv("OLRIC_DISCOVERY_MODE")
-	if exists {
-		return olricCacheMode
-	}
-
-	return "local"
-}
-
-func getReplicaCount() int {
-	replicaCountStr, exists := os.LookupEnv("OLRIC_REPLICA_COUNT")
-	if exists {
-		rc, err := strconv.Atoi(replicaCountStr)
-		if err != nil {
-			log.Errorf("Invalid OLRIC_REPLICA_COUNT env value, expecting int. Replica count set to 1.")
-			return 1
-		}
-		return rc
-	}
-	return 1
-}
-
-func getNamespace() (string, error) {
-	ns, exists := os.LookupEnv("NAMESPACE")
-	if !exists {
-		return "", fmt.Errorf("NAMESPACE env is not set")
-	}
-	return ns, nil
-}
-
-func getServiceName() string {
-	return "apihub-backend"
 }
