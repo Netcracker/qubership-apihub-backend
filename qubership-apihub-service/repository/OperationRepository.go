@@ -1452,7 +1452,7 @@ func (o operationRepositoryImpl) GetOperationsTypeDataHashes(packageId string, v
 func (o operationRepositoryImpl) GetOperationsDataHashes(packageId string, version string, revision int) (entity.OperationsDataHashEntity, error) {
 	var result entity.OperationsDataHashEntity
 	operationsHashesQuery := `
-		select json_object_agg(operation_id, data_hash) operations_hash
+		select json_object_agg(operation_id, data_hash) operations_hashes
 		from operation
 		where package_id = ?
 		and version = ?

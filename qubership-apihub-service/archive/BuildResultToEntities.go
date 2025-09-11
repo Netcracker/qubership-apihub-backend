@@ -381,7 +381,6 @@ func (a *BuildResultToEntitiesReader) ReadOperationComparisonsToEntities(publish
 				}
 			}
 
-			//TODO: will it successfully handle dashboard case ?
 			var operationsHashes map[string]string
 			if publishingOperationsHashes != nil && mainVersion {
 				operationsHashes = publishingOperationsHashes
@@ -392,8 +391,12 @@ func (a *BuildResultToEntitiesReader) ReadOperationComparisonsToEntities(publish
 					versionComparisonEnt.Revision,
 				)
 				if err != nil {
-					//TODO: handle this error
-					return nil, nil, nil, err
+					return nil, nil, nil, &exception.CustomError{
+						Status:  http.StatusInternalServerError,
+						Message: "Failed to get operations data hashes for $packageId-$version-$revision",
+						Debug:   err.Error(),
+						Params:  map[string]interface{}{"packageId": versionComparisonEnt.PackageId, "version": versionComparisonEnt.Version, "revision": versionComparisonEnt.Revision},
+					}
 				}
 				operationsHashes = operationsHashesEntity.OperationsHashes
 			}
@@ -406,8 +409,12 @@ func (a *BuildResultToEntitiesReader) ReadOperationComparisonsToEntities(publish
 					versionComparisonEnt.PreviousRevision,
 				)
 				if err != nil {
-					//TODO: handle this error
-					return nil, nil, nil, err
+					return nil, nil, nil, &exception.CustomError{
+						Status:  http.StatusInternalServerError,
+						Message: "Failed to get operations data hashes for $packageId-$version-$revision",
+						Debug:   err.Error(),
+						Params:  map[string]interface{}{"packageId": versionComparisonEnt.PreviousPackageId, "version": versionComparisonEnt.PreviousVersion, "revision": versionComparisonEnt.PreviousRevision},
+					}
 				}
 				previousOperationsHashes = previousOperationsHashesEntity.OperationsHashes
 			}

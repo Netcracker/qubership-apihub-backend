@@ -64,7 +64,7 @@ func makeLatestIndependentVersionsQuery(packageIds []string, versionsIn []string
 	getLatestIndependentVersionsQuery +=
 		` group by package_id, version
 	)
-	select pv.* from 
+	select pv.* from
 	published_version pv
 	inner join maxrev
 		on pv.package_id = maxrev.package_id
@@ -87,7 +87,7 @@ func makeLatestIndependentVersionsQuery(packageIds []string, versionsIn []string
 													and pv.previous_version = maxrev.version
 					where mv.version = pv.previous_version
 					and mv.revision = maxrev.revision /* prev version max rev */
-					and mv.build_type = 'build' 
+					and mv.build_type = 'build'
 					and mv.error is null
 					and (CASE WHEN (pv.previous_version_package_id IS NULL OR pv.previous_version_package_id = '') THEN pv.package_id ELSE pv.previous_version_package_id END) = mv.package_id
 					)
@@ -98,7 +98,7 @@ func makeLatestIndependentVersionsQuery(packageIds []string, versionsIn []string
 			where mv.version = pv.version
 			  and mv.package_id = pv.package_id
 			  and mv.revision = pv.revision
-              and mv.build_type = 'build' 
+              and mv.build_type = 'build'
 		) and pkg.deleted_at is null
 	`
 	return getLatestIndependentVersionsQuery
@@ -147,7 +147,7 @@ func makeNotLatestVersionsQuery(packageIds []string, versionsIn []string) string
 	getNotLatestVersionsQuery +=
 		` group by package_id, version
 	)
-	select pv.* from 
+	select pv.* from
 	published_version pv
 	inner join package_group pkg on pv.package_id = pkg.id
 	where pv.deleted_at is null
@@ -156,8 +156,8 @@ func makeNotLatestVersionsQuery(packageIds []string, versionsIn []string) string
 		where mv.version = pv.version
 		and mv.package_id = pv.package_id
 		and mv.revision = pv.revision
-		and mv.build_type = 'build' 
-	) 
+		and mv.build_type = 'build'
+	)
 	and exists(
 				select 1 from migrated_version mv
 								inner join maxrev
@@ -165,7 +165,7 @@ func makeNotLatestVersionsQuery(packageIds []string, versionsIn []string) string
 												and pv.previous_version = maxrev.version
 				where mv.version = pv.previous_version
 				and mv.revision = maxrev.revision /* prev version max rev */
-				and mv.build_type = 'build' 
+				and mv.build_type = 'build'
 				and mv.error is null
 				and (CASE WHEN (pv.previous_version_package_id IS NULL OR pv.previous_version_package_id = '') THEN pv.package_id ELSE pv.previous_version_package_id END) = mv.package_id
 				)
@@ -175,8 +175,8 @@ func makeNotLatestVersionsQuery(packageIds []string, versionsIn []string) string
 }
 
 func makeAllChangelogForMigrationQuery(packageIds, versions []string) string {
-	query := `SELECT distinct package_id, version, revision, previous_package_id, previous_version, previous_revision 
-	FROM version_comparison 
+	query := `SELECT distinct package_id, version, revision, previous_package_id, previous_version, previous_revision
+	FROM version_comparison
 	WHERE package_id != ''
 	and version != '' and previous_version != ''`
 	if len(packageIds) != 0 || len(versions) != 0 {
@@ -224,7 +224,6 @@ func makeChangelogByMigratedVersionQuery(migrationId string) string {
 					and c.version = mv.version
 					and c.revision = mv.revision
 					and mv.build_type = 'build'
-					and mv.no_changelog = true
 				where c.version != '' and c.previous_version != ''`
 
 	if migrationId != "" {
