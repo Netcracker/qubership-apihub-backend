@@ -2,8 +2,6 @@ module github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service
 
 go 1.24.7
 
-toolchain go1.24.7
-
 require (
 	github.com/buraksezer/olric v0.4.7
 	github.com/buraksezer/olric-cloud-plugin v0.3.0-beta.4
@@ -35,7 +33,7 @@ require (
 	golang.org/x/crypto v0.41.0
 	golang.org/x/net v0.43.0
 	golang.org/x/sync v0.16.0
-	golang.org/x/time v0.12.0
+	golang.org/x/time v0.13.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/resty.v1 v1.12.0
 )
