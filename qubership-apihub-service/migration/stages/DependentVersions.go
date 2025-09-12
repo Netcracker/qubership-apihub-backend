@@ -38,7 +38,7 @@ func (d OpsMigration) StageDependentVersionsLastRevs() error {
 func (d OpsMigration) StageDependentVersionsOldRevs() error {
 	round := 1
 
-	_, err := d.waitForBuilds(mView.MigrationStageDependentVersionsLastRevs, round) // for recovery, but round number is not recovered since it's not significant in the whole procedure
+	_, err := d.waitForBuilds(mView.MigrationStageDependentVersionsOldRevs, round) // for recovery, but round number is not recovered since it's not significant in the whole procedure
 	if err != nil {
 		return err
 	}
@@ -49,11 +49,11 @@ func (d OpsMigration) StageDependentVersionsOldRevs() error {
 
 		count, err = d.createBuilds(query, d.ent.Id)
 		if err != nil {
-			return fmt.Errorf("migration %s stage %s round %d: %w", d.ent.Id, mView.MigrationStageDependentVersionsLastRevs, round, err)
+			return fmt.Errorf("migration %s stage %s round %d: %w", d.ent.Id, mView.MigrationStageDependentVersionsOldRevs, round, err)
 		}
 
 		if count > 0 {
-			_, err = d.waitForBuilds(mView.MigrationStageDependentVersionsLastRevs, round)
+			_, err = d.waitForBuilds(mView.MigrationStageDependentVersionsOldRevs, round)
 		}
 		round += 1
 	}

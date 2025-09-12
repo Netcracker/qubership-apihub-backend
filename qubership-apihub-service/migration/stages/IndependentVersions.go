@@ -37,11 +37,11 @@ func (d OpsMigration) StageIndependentVersionsOldRevisions() error {
 
 	count, err := d.createBuilds(getOldIndependentVersionsQuery, d.ent.Id)
 	if err != nil {
-		return fmt.Errorf("migration %s stage %s round %d: %w", d.ent.Id, mView.MigrationStageIndependentVersionsLastRevs, 1, err)
+		return fmt.Errorf("migration %s stage %s round %d: %w", d.ent.Id, mView.MigrationStageIndependentVersionsOldRevs, 1, err)
 	}
 
 	if count > 0 {
-		_, err = d.waitForBuilds(mView.MigrationStageIndependentVersionsLastRevs, 1)
+		_, err = d.waitForBuilds(mView.MigrationStageIndependentVersionsOldRevs, 1)
 	}
 
 	return nil

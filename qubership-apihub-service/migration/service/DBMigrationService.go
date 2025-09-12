@@ -43,7 +43,6 @@ type DBMigrationService interface {
 	Migrate(basePath string) (int, int, bool, error)
 	SoftMigrateDb(currentVersion int, newVersion int, migrationRequired bool) error
 	StartMigrateOperations(req mView.MigrationRequest) (string, error)
-	migrateOperations(migrationId string, req mView.MigrationRequest) error
 	GetMigrationReport(migrationId string, includeBuildSamples bool) (*mView.MigrationReport, error)
 	CancelRunningMigrations() error
 	GetSuspiciousBuilds(migrationId string, changedField string, limit int, page int) ([]mView.SuspiciousMigrationBuild, error)
@@ -425,8 +424,6 @@ func (d *dbMigrationServiceImpl) IsMigrationInProgress() (bool, error) {
 
 func (d *dbMigrationServiceImpl) StartOpsMigrationRestoreProc(ctx context.Context) {
 	utils.SafeAsync(func() {
-		//d.restartMigrations() // TODO: or better wait?
-
 		ticker := time.NewTicker(time.Second * 60)
 		for {
 			select {

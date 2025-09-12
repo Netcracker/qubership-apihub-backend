@@ -32,21 +32,21 @@ type PublishedContentMigrationEntity struct {
 type MigrationRunEntity struct {
 	tableName struct{} `pg:"migration_run"`
 
-	Id                     string    `pg:"id, type:varchar"`
-	StartedAt              time.Time `pg:"started_at, type:timestamp without time zone"`
-	Status                 string    `pg:"status, type:varchar"`
-	Stage                  string    `pg:"stage, type:varchar"`
-	PackageIds             []string  `pg:"package_ids, type:varchar[]"`
-	Versions               []string  `pg:"versions, type:varchar[]"`
-	IsRebuild              bool      `pg:"is_rebuild, type:boolean"`
-	IsRebuildChangelogOnly bool      `pg:"is_rebuild_changelog_only, type:boolean"`
-	SkipValidation         bool      `pg:"skip_validation, type:boolean"`
-	CurrentBuilderVersion  string    `pg:"current_builder_version, type:varchar"`
-	ErrorDetails           string    `pg:"error_details, type:varchar"`
-	FinishedAt             time.Time `pg:"finished_at, type:timestamp without time zone"`
-	UpdatedAt              time.Time `pg:"updated_at, type:timestamp without time zone"`
-	InstanceId             string    `pg:"instance_id, type:varchar"`
-	SequenceNumber         int       `pg:"sequence_number, type:integer"`
+	Id                     string                 `pg:"id, type:varchar"`
+	StartedAt              time.Time              `pg:"started_at, type:timestamp without time zone"`
+	Status                 string                 `pg:"status, type:varchar"`
+	Stage                  view.OpsMigrationStage `pg:"stage, type:varchar"`
+	PackageIds             []string               `pg:"package_ids, type:varchar[]"`
+	Versions               []string               `pg:"versions, type:varchar[]"`
+	IsRebuild              bool                   `pg:"is_rebuild, type:boolean"`
+	IsRebuildChangelogOnly bool                   `pg:"is_rebuild_changelog_only, type:boolean"`
+	SkipValidation         bool                   `pg:"skip_validation, type:boolean"`
+	CurrentBuilderVersion  string                 `pg:"current_builder_version, type:varchar"`
+	ErrorDetails           string                 `pg:"error_details, type:varchar"`
+	FinishedAt             time.Time              `pg:"finished_at, type:timestamp without time zone"`
+	UpdatedAt              time.Time              `pg:"updated_at, type:timestamp without time zone"`
+	InstanceId             string                 `pg:"instance_id, type:varchar"`
+	SequenceNumber         int                    `pg:"sequence_number, type:integer"`
 }
 
 type MigratedVersionEntity struct {

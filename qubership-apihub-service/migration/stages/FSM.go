@@ -46,7 +46,7 @@ func NewOpsMigration(cp db.ConnectionProvider,
 func (d OpsMigration) Start() {
 	d.keepaliveWhileRunning()
 
-	err := d.processStage(mView.MigrationStageFromString(d.ent.Stage)) // TODO: enum from string
+	err := d.processStage(d.ent.Stage)
 	if err != nil {
 		// TODO: or other handling?
 		log.Errorf("Migration stage failed: %s", err)
@@ -90,7 +90,7 @@ func (d OpsMigration) processStage(stage mView.OpsMigrationStage) error {
 		nextStage = mView.MigrationStageIndependentVersionsOldRevs
 
 	case mView.MigrationStageIndependentVersionsOldRevs:
-		//
+		// Build old (not latest) revisions of the independent versions
 		err = utils.SafeSync(d.StageIndependentVersionsOldRevisions)
 		nextStage = mView.MigrationStageDependentVersionsOldRevs
 
@@ -102,6 +102,8 @@ func (d OpsMigration) processStage(stage mView.OpsMigrationStage) error {
 		err = utils.SafeSync(d.StageComparisonsOther)
 		nextStage = mView.MigrationStagePostCheck
 
+	// TODO: ts_ tables recalculation!!!!!!!!!!!! port from develop!!!!
+
 	case mView.MigrationStagePostCheck:
 		err = utils.SafeSync(d.StagePostCheck)
 		nextStage = mView.MigrationStageDone
@@ -112,8 +114,6 @@ func (d OpsMigration) processStage(stage mView.OpsMigrationStage) error {
 	case mView.MigrationStageComparisonsOnly: // separate flow
 		err = utils.SafeSync(d.StageComparisonsOnly)
 		nextStage = mView.MigrationStagePostCheck
-
-		// TODO: ts_ tables recalculation!!!!!!!!!!!! port from develop!!!!
 
 	default:
 		nextStage = mView.MigrationStageUndefined

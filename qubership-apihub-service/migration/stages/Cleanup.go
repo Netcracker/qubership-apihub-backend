@@ -13,7 +13,7 @@ func (d OpsMigration) StageCleanupBefore() error {
 		// it means that we're going to rebuild all versions
 		// this action will generate a lot of data and may cause DB disk overflow
 		// Try to avoid too much space usage by cleaning up all old migration build data
-		log.Infof("Starting cleanup before full migration")
+		log.Infof("ops migration %s: Starting cleanup before full migration", d.ent.Id)
 		if d.systemInfoService.IsMinioStorageActive() {
 			ctx := context.Background()
 			ids, err := d.buildCleanupRepository.GetRemoveMigrationBuildIds()
@@ -28,13 +28,13 @@ func (d OpsMigration) StageCleanupBefore() error {
 			if err != nil {
 				return err
 			}
-			log.Infof("Cleanup before full migration cleaned up %d entries", deleted)
+			log.Infof("ops migration %s: Cleanup before full migration cleaned up %d entries", d.ent.Id, deleted)
 		} else {
 			deleted, err := d.buildCleanupRepository.RemoveMigrationBuildData()
 			if err != nil {
 				return err
 			}
-			log.Infof("Cleanup before full migration cleaned up %d entries", deleted)
+			log.Infof("ops migration %s: Cleanup before full migration cleaned up %d entries", d.ent.Id, deleted)
 		}
 	}
 	return nil
@@ -42,7 +42,6 @@ func (d OpsMigration) StageCleanupBefore() error {
 
 func (d OpsMigration) StageCleanupAfter() error {
 	// delete temporary tables after migration end
-
 	_, err := d.cp.GetConnection().Exec(fmt.Sprintf(`drop table migration."version_comparison_%s";`, d.ent.Id))
 	if err != nil {
 		log.Errorf("failed to cleanup migration tables: %v", err.Error())
@@ -53,7 +52,7 @@ func (d OpsMigration) StageCleanupAfter() error {
 	}
 	_, err = d.cp.GetConnection().Exec(fmt.Sprintf(`drop table migration."expired_ts_operation_data_%s";`, d.ent.Id))
 	if err != nil {
-		log.Errorf("failed to cleanup migration tables: %v", err.Error())
+		log.Errorf("ops migration %s: failed to cleanup migration tables: %v", d.ent.Id, err.Error())
 	}
 	return nil
 }
