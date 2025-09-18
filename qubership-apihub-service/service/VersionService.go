@@ -2198,12 +2198,14 @@ func (v versionServiceImpl) publishFromCSV(ctx context.SecurityContext, dashboar
 	}
 	pathParamsRegex := regexp.MustCompile(`\{.+?\}`)
 	for i := firstRow; i < len(csvOriginal); i++ {
+		log.Infof("Value of i: %d", i)
 		row := csvOriginal[i]
 		if len(row) != columns {
 			report[i] = append(report[i], "incorrect number of columns")
 			continue
 		}
 		serviceName := row[serviceNameCol]
+		log.Infof("serviceName: %s", serviceName)
 		if serviceName == "" {
 			report[i] = append(report[i], "empty service name")
 			continue
@@ -2226,73 +2228,116 @@ func (v versionServiceImpl) publishFromCSV(ctx context.SecurityContext, dashboar
 		}
 		path = pathParamsRegex.ReplaceAllString(path, "*") //replace all path parameters with '*'
 		serviceInfo := servicesMap[serviceName]
+		log.Infof("serviceInfo: %v", serviceInfo)
 		if serviceInfo == nil {
+			log.Info("checkpoint 1")
 			if _, exists := notIncludedServices[serviceName]; exists {
 				report[i] = append(report[i], "service package doesn't exist")
 				continue
 			}
+			log.Info("checkpoint 2")
 			servicePackageId, err := v.publishedRepo.GetServiceOwner(req.ServicesWorkspaceId, serviceName)
+			log.Infof("servicePackageId: %s", servicePackageId)
 			if err != nil {
 				report[i] = append(report[i], fmt.Sprintf("failed to look up service package: %v", err.Error()))
 				continue
 			}
+			log.Info("checkpoint 3")
 			if servicePackageId == "" {
 				report[i] = append(report[i], "service package doesn't exist")
 				notIncludedServices[serviceName] = struct{}{}
 				continue
 			}
+			log.Info("checkpoint 4")
 			svcInfo := ServiceInfo{
 				PackageId: servicePackageId,
 			}
+			log.Info("checkpoint 5")
 			serviceInfo = &svcInfo
 			servicesMap[serviceName] = serviceInfo
+			log.Infof("servicesMap[serviceName]: %v", servicesMap[serviceName])
 		}
+		log.Infof("serviceInfo.Version: %s", serviceInfo.Version)
 		if serviceInfo.Version == "" {
+			log.Info("Checkpoint 6")
 			if _, exists := notIncludedVersions[fmt.Sprintf("%v%v%v", serviceInfo.PackageId, keySeparator, serviceVersion)]; exists {
 				report[i] = append(report[i], "service version doesn't exist")
 				continue
 			}
+			log.Info("Checkpoint 7")
 			versionEnt, err := v.publishedRepo.GetVersion(serviceInfo.PackageId, serviceVersion)
+			log.Info("Checkpoint 8")
+			log.Infof("versionEnt: %v", versionEnt)
 			if err != nil {
 				report[i] = append(report[i], fmt.Sprintf("failed to look up service version: %v", err.Error()))
 				continue
 			}
+			log.Info("Checkpoint 9")
 			if versionEnt == nil {
 				report[i] = append(report[i], "service version doesn't exist")
 				continue
 			}
+			log.Info("Checkpoint 10")
 			if versionEnt.Status != string(view.Release) {
 				report[i] = append(report[i], fmt.Sprintf("service version not in '%v' status", view.Release))
 				continue
 			}
+			log.Info("Checkpoint 11")
 			serviceInfo.Version = versionEnt.Version
 			serviceInfo.Revision = versionEnt.Revision
+			log.Info("Checkpoint 12")
+			log.Infof("serviceInfo after: %v", serviceInfo)
 		} else {
+			log.Info("Checkpoint 13")
 			if serviceInfo.Version != serviceVersion {
+				log.Info("Checkpoint 14")
+				log.Infof("report[i]: %s", report[i])
 				report[i] = append(report[i], fmt.Sprintf("service already matched with '%v' version", serviceInfo.Version))
+				log.Infof("report[i]: %s", report[i])
+				log.Info("Checkpoint 15")
 				continue
 			}
+			log.Info("Checkpoint 16")
 		}
+		log.Info("Checkpoint 17")
 		serviceOperationIds, err := v.operationRepo.GetOperationsByPathAndMethod(serviceInfo.PackageId, serviceInfo.Version, serviceInfo.Revision, string(view.RestApiType), path, method)
+		log.Info("Checkpoint 18")
+		log.Infof("serviceOperationIds %v", serviceOperationIds)
 		if err != nil {
 			report[i] = append(report[i], fmt.Sprintf("failed to look up operation by path and method: %v", err.Error()))
 			notIncludedOperationsCount++
 			continue
 		}
+		log.Info("Checkpoint 19")
 		if len(serviceOperationIds) == 0 {
+			log.Info("Checkpoint 19.1")
 			report[i] = append(report[i], "endpoint not found")
+			log.Infof("report[i] %v", report[i])
 			notIncludedOperationsCount++
+			log.Infof("notIncludedOperationsCount %d", notIncludedOperationsCount)
+			log.Info("Checkpoint 19.2")
 			continue
 		}
+		log.Info("Checkpoint 20")
 		if len(serviceOperationIds) > 1 {
+			log.Info("Checkpoint 20.1")
 			report[i] = append(report[i], "more than 1 endpoint matched")
+			log.Infof("report[i] %v", report[i])
 			notIncludedOperationsCount++
+			log.Infof("notIncludedOperationsCount %d", notIncludedOperationsCount)
+			log.Info("Checkpoint 20.2")
 			continue
 		}
+		log.Info("Checkpoint 21")
 		serviceInfo.OperationIds = append(serviceInfo.OperationIds, serviceOperationIds[0])
+		log.Infof("serviceInfo.OperationIds: %v", serviceInfo.OperationIds)
 		report[i] = append(report[i], "ok")
 		includedServices[serviceName] = struct{}{}
+		log.Infof("includedServices: %v", includedServices)
+		log.Info("Checkpoint 22")
 	}
+	log.Info("Checkpoint 23")
+	log.Infof("servicesMap: %v", servicesMap)
 	dashboardRefs := make([]view.BCRef, 0)
 	for _, info := range servicesMap {
 		if info.Version != "" {
@@ -2302,6 +2347,8 @@ func (v versionServiceImpl) publishFromCSV(ctx context.SecurityContext, dashboar
 			})
 		}
 	}
+	log.Info("Checkpoint 24")
+	log.Infof("dashboardRefs: %v", dashboardRefs)
 
 	var err error
 	publishEntity.Report, err = csvToBytes(report, separator)
@@ -2313,6 +2360,8 @@ func (v versionServiceImpl) publishFromCSV(ctx context.SecurityContext, dashboar
 		v.updateDashboardPublishProcess(publishEntity, string(view.StatusError), "no versions matched")
 		return
 	}
+
+	log.Info("Checkpoint 25")
 
 	dashboardPublishBuildConfig := view.BuildConfig{
 		PackageId:                req.PackageId,
@@ -2328,11 +2377,13 @@ func (v versionServiceImpl) publishFromCSV(ctx context.SecurityContext, dashboar
 		},
 	}
 	build, err := v.buildService.PublishVersion(ctx, dashboardPublishBuildConfig, nil, false, "", nil, false, false)
+	log.Info("Checkpoint 26")
 	if err != nil {
 		v.updateDashboardPublishProcess(publishEntity, string(view.StatusError), fmt.Sprintf("failed to start csv dashboard publish: %v", err.Error()))
 		return
 	}
 	err = v.buildService.AwaitBuildCompletion(build.PublishId)
+	log.Info("Checkpoint 27")
 	if err != nil {
 		v.updateDashboardPublishProcess(publishEntity, string(view.StatusError), fmt.Sprintf("failed to publish dashboard from csv: %v", err.Error()))
 		return
@@ -2340,6 +2391,7 @@ func (v versionServiceImpl) publishFromCSV(ctx context.SecurityContext, dashboar
 	err = v.operationGroupService.CreateOperationGroup(ctx, req.PackageId, req.Version, string(view.RestApiType), view.CreateOperationGroupReq{
 		GroupName: dashboardName,
 	})
+	log.Info("Checkpoint 28")
 	if err != nil {
 		if customError, ok := err.(*exception.CustomError); ok {
 			if customError.Code != exception.OperationGroupAlreadyExists {
@@ -2351,6 +2403,7 @@ func (v versionServiceImpl) publishFromCSV(ctx context.SecurityContext, dashboar
 			return
 		}
 	}
+	log.Info("Checkpoint 29")
 	groupOperations := make([]view.GroupOperations, 0)
 	uniqueOperations := make(map[view.GroupOperations]struct{})
 	for _, info := range servicesMap {
@@ -2369,6 +2422,7 @@ func (v versionServiceImpl) publishFromCSV(ctx context.SecurityContext, dashboar
 			}
 		}
 	}
+	log.Info("Checkpoint 30")
 	err = v.operationGroupService.UpdateOperationGroup(ctx, req.PackageId, req.Version, string(view.RestApiType), dashboardName, view.UpdateOperationGroupReq{
 		Operations: &groupOperations,
 	})
@@ -2377,6 +2431,8 @@ func (v versionServiceImpl) publishFromCSV(ctx context.SecurityContext, dashboar
 		return
 	}
 
+	log.Info("Checkpoint 31")
+	log.Infof("allServices: %v", allServices)
 	notIncludedServicesCount := 0
 	for service := range allServices {
 		if svc, exists := servicesMap[service]; exists {
@@ -2387,17 +2443,25 @@ func (v versionServiceImpl) publishFromCSV(ctx context.SecurityContext, dashboar
 			notIncludedServicesCount++
 		}
 	}
+	log.Infof("notIncludedServicesCount: %d", notIncludedServicesCount)
+	log.Info("Checkpoint 32")
 	summary := ""
 	if notIncludedServicesCount > 0 {
+		log.Info("Checkpoint 33")
 		summary = fmt.Sprintf(`%v services were not included into dashboard version`, notIncludedServicesCount)
 	}
 	if notIncludedOperationsCount > 0 {
+		log.Info("Checkpoint 34")
 		if summary != "" {
+			log.Info("Checkpoint 35")
 			summary = fmt.Sprintf(`%v; %v operations were not included into %v operation group`, summary, notIncludedOperationsCount, dashboardName)
 		} else {
+			log.Info("Checkpoint 36")
 			summary = fmt.Sprintf(`%v operations were not included into %v operation group`, notIncludedOperationsCount, dashboardName)
 		}
 	}
+	log.Info("Checkpoint 37")
+	log.Infof("summary: %s", summary)
 
 	v.updateDashboardPublishProcess(publishEntity, string(view.StatusComplete), summary)
 }
