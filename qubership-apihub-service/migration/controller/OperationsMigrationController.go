@@ -83,17 +83,6 @@ func (t operationsMigrationControllerImpl) StartOpsMigration(w http.ResponseWrit
 		return
 	}
 
-	/*id := uuid.New().String()
-
-	utils.SafeAsync(func() {
-		err := t.migrationService.MigrateOperations(id, req)
-		if err != nil {
-			log.Errorf("Operations migration process failed: %s", err)
-		} else {
-			log.Infof("Operations migration process complete")
-		}
-	})*/
-
 	id, err := t.migrationService.StartMigrateOperations(req)
 	if err != nil {
 		utils.RespondWithError(w, "Failed to start operations migration", err)

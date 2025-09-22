@@ -15,8 +15,9 @@
 package view
 
 import (
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	"time"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 )
 
 type MigrationReport struct {
@@ -27,8 +28,10 @@ type MigrationReport struct {
 	SuccessBuildsCount    int               `json:"successBuildsCount,omitempty"`
 	ErrorBuildsCount      int               `json:"errorBuildsCount,omitempty"`
 	SuspiciousBuildsCount int               `json:"suspiciousBuildsCount,omitempty"`
+	ErrorDetails          string            `json:"errorDetails,omitempty"`
 	ErrorBuilds           []MigrationError  `json:"errorBuilds,omitempty"`
 	MigrationChanges      []MigrationChange `json:"migrationChanges,omitempty"`
+	PostCheckResult       *PostCheckResult  `json:"postCheckResult,omitempty"`
 }
 
 type MigrationError struct {
@@ -59,6 +62,28 @@ type SuspiciousMigrationBuild struct {
 	PreviousVersionPackageId string                 `json:"previousVersionPackageId,omitempty"`
 }
 
+type NotMigratedVersion struct {
+	PackageId                string `json:"packageId"`
+	Version                  string `json:"version"`
+	Revision                 int    `json:"revision"`
+	PreviousVersion          string `json:"previousVersion"`
+	PreviousVersionPackageId string `json:"previousVersionPackageId"`
+}
+
+type NotMigratedComparison struct {
+	PackageId         string `pg:"package_id, type:varchar"`
+	Version           string `pg:"version, type:varchar"`
+	Revision          int    `pg:"revision, type:integer"`
+	PreviousPackageId string `pg:"previous_package_id, type:varchar"`
+	PreviousVersion   string `pg:"previous_version, type:varchar"`
+	PreviousRevision  int    `pg:"previous_revision, type:integer"`
+}
+
+type PostCheckResult struct {
+	NotMigratedVersions    []NotMigratedVersion    `json:"notMigratedVersions"`
+	NotMigratedComparisons []NotMigratedComparison `json:"notMigratedComparisons"`
+}
+
 const MigrationStatusRunning = "running"
 const MigrationStatusComplete = "complete"
 const MigrationStatusFailed = "failed"
@@ -77,6 +102,8 @@ const MigrationStageDependentVersionsOldRevs OpsMigrationStage = "dependent_vers
 const MigrationStageComparisonsOther OpsMigrationStage = "comparisons_other"
 
 const MigrationStageComparisonsOnly OpsMigrationStage = "comparisons_only"
+
+const MigrationStageTSRecalculate OpsMigrationStage = "ts_recalculate"
 
 const MigrationStagePostCheck OpsMigrationStage = "post_check"
 const MigrationStageDone OpsMigrationStage = "done"

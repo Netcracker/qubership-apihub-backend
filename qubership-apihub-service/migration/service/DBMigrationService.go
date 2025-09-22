@@ -17,13 +17,14 @@ package service
 import (
 	"context"
 	"fmt"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
-	"github.com/google/uuid"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
+	"github.com/google/uuid"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -142,14 +143,6 @@ func (d *dbMigrationServiceImpl) Migrate(basePath string) (currentMigrationNum i
 	if len(upMigrations)+len(downMigrations) == 0 {
 		log.Infof("Schema Migration: no migrations required")
 		return currentMigrationNumber, newMigrationNumber, false, nil
-	}
-
-	// It's a tricky. Making table creation as a soft migration was a big mistake...
-	// Added constraint for the table in the regular migration(#91) will mess empty DB startup, so need to make sure the table is created
-	err = d.createMigrationTables()
-	if err != nil {
-		log.Errorf("Failed to create operations migration table: %s", err)
-		return currentMigrationNumber, newMigrationNumber, true, nil
 	}
 
 	err = d.applyRequiredMigrations(upMigrations, downMigrations)

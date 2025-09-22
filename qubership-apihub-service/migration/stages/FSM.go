@@ -1,7 +1,22 @@
+// Copyright 2024-2025 NetCracker Technology Corporation
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package stages
 
 import (
 	"fmt"
+
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/db"
 	mEntity "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/migration/entity"
 	mRepository "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/migration/repository"
@@ -10,8 +25,9 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 
-	log "github.com/sirupsen/logrus"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type OpsMigration struct {
@@ -48,7 +64,6 @@ func (d OpsMigration) Start() {
 
 	err := d.processStage(d.ent.Stage)
 	if err != nil {
-		// TODO: or other handling?
 		log.Errorf("Migration stage failed: %s", err)
 	}
 }
@@ -100,9 +115,11 @@ func (d OpsMigration) processStage(stage mView.OpsMigrationStage) error {
 
 	case mView.MigrationStageComparisonsOther:
 		err = utils.SafeSync(d.StageComparisonsOther)
-		nextStage = mView.MigrationStagePostCheck
+		nextStage = mView.MigrationStageTSRecalculate
 
-	// TODO: ts_ tables recalculation!!!!!!!!!!!! port from develop!!!!
+	case mView.MigrationStageTSRecalculate:
+		err = utils.SafeSync(d.StageTSRecalculate)
+		nextStage = mView.MigrationStagePostCheck
 
 	case mView.MigrationStagePostCheck:
 		err = utils.SafeSync(d.StagePostCheck)
@@ -133,7 +150,6 @@ func (d OpsMigration) processStage(stage mView.OpsMigrationStage) error {
 	if err != nil {
 		return d.handleError(fmt.Errorf("ops migration %s: failed to set next stage: %s", d.ent.Id, err), stage, start)
 	}
-	// TODO: print next stage?
 
 	if nextStage == mView.MigrationStageDone {
 		err = d.handleComplete()
@@ -147,10 +163,10 @@ func (d OpsMigration) processStage(stage mView.OpsMigrationStage) error {
 }
 
 func (d OpsMigration) handleError(err error, stage mView.OpsMigrationStage, start time.Time) error {
-	/*cleanupErr := d.StageCleanupAfter() // TODO: breaks publish logic on migration retry, e.x. comparison publish since temp table is deleted. Not sure how to resolve it
+	cleanupErr := d.StageCleanupAfter()
 	if cleanupErr != nil {
 		log.Errorf("Failed to run post-migration cleanup")
-	}*/
+	}
 
 	d.keepaliveStopChan <- struct{}{}
 

@@ -25,9 +25,7 @@ import (
 
 type MigrationRunRepository interface {
 	GetMigrationRun(migrationId string) (*mEntity.MigrationRunEntity, error)
-	UpdateMigrationRun(entity *mEntity.MigrationRunEntity) error
 	GetRunningMigrations() ([]*mEntity.MigrationRunEntity, error)
-	GetMigrationsToRecover(instanceId string) ([]*mEntity.MigrationRunEntity, error)
 }
 
 func NewMigrationRunRepository(cp db.ConnectionProvider) MigrationRunRepository {
@@ -52,32 +50,11 @@ func (m migrationRunRepositoryImpl) GetMigrationRun(migrationId string) (*mEntit
 	return mRunEnt, nil
 }
 
-func (m migrationRunRepositoryImpl) UpdateMigrationRun(ent *mEntity.MigrationRunEntity) error {
-	ent.UpdatedAt = time.Now()
-	_, err := m.cp.GetConnection().Model(ent).Where("id = ?", ent.Id).Update()
-	return err
-}
-
 func (m migrationRunRepositoryImpl) GetRunningMigrations() ([]*mEntity.MigrationRunEntity, error) {
 	ents := make([]*mEntity.MigrationRunEntity, 0)
 	err := m.cp.GetConnection().Model(&ents).
 		Where("status = ?", view.MigrationStatusRunning).
 		Where("started_at > ?", time.Now().Add(-7*24*time.Hour)).
-		Select()
-	if err != nil {
-		if err != pg.ErrNoRows {
-			return nil, err
-		}
-	}
-	return ents, nil
-}
-
-func (m migrationRunRepositoryImpl) GetMigrationsToRecover(instanceId string) ([]*mEntity.MigrationRunEntity, error) {
-	ents := make([]*mEntity.MigrationRunEntity, 0)
-	err := m.cp.GetConnection().Model(&ents).
-		Where("status = ?", view.MigrationStatusRunning).
-		Where("started_at > ?", time.Now().Add(-7*24*time.Hour)).
-		Where("instance_id != ?", instanceId).
 		Select()
 	if err != nil {
 		if err != pg.ErrNoRows {
