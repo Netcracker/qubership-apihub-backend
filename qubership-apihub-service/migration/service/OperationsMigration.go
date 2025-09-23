@@ -61,6 +61,12 @@ func (d *dbMigrationServiceImpl) StartMigrateOperations(req mView.MigrationReque
 			}
 		}
 
+		var lastSeqNum int
+		_, err := tx.Query(pg.Scan(&lastSeqNum), "SELECT COALESCE(MAX(sequence_number), 0) FROM migration_run")
+		if err != nil {
+			return fmt.Errorf("failed to get current sequence number: %w", err)
+		}
+
 		mrEnt := mEntity.MigrationRunEntity{
 			Id:                     migrationId,
 			StartedAt:              time.Now(),
@@ -73,13 +79,24 @@ func (d *dbMigrationServiceImpl) StartMigrateOperations(req mView.MigrationReque
 			IsRebuildChangelogOnly: req.RebuildChangelogOnly,
 			SkipValidation:         req.SkipValidation,
 			InstanceId:             d.instanceId,
+			SequenceNumber:         lastSeqNum + 1,
 		}
 
-		// TODO: add optimistic lock for insert??
+		result, err := tx.Model(&mrEnt).
+			OnConflict("(sequence_number) DO NOTHING").
+			Insert()
 
-		_, err := d.cp.GetConnection().Model(&mrEnt).Insert()
 		if err != nil {
 			return fmt.Errorf("failed to insert MigrationRunEntity: %w", err)
+		}
+
+		if result.RowsAffected() == 0 {
+			return &exception.CustomError{
+				Status:  http.StatusConflict,
+				Code:    exception.OperationsMigrationConflict,
+				Message: exception.OperationsMigrationConflictMsg,
+				Params:  map[string]interface{}{"reason": "concurrent migration start detected"},
+			}
 		}
 
 		om = stages.NewOpsMigration(d.cp, d.systemInfoService, d.minioStorageService, d.repo, d.buildCleanupRepository, mrEnt)

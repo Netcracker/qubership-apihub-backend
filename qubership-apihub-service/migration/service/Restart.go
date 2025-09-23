@@ -26,6 +26,8 @@ import (
 	"github.com/go-pg/pg/v10"
 )
 
+const MaxMigrationRetries = 3
+
 func (d *dbMigrationServiceImpl) restartMigrations() error {
 	var om *stages.OpsMigration
 
@@ -48,10 +50,22 @@ func (d *dbMigrationServiceImpl) restartMigrations() error {
 		// ok, we have stale migrations, take the oldest one
 		mrEnt := ents[0]
 
-		// TODO: add retries!!!
+		if mrEnt.RetryCount >= MaxMigrationRetries {
+			_, err = tx.Model(&mEntity.MigrationRunEntity{}).
+				Set("status=?", mView.MigrationStatusFailed).
+				Set("error_details=?", fmt.Sprintf("Migration exceeded retry limit (%d attempts)", MaxMigrationRetries)).
+				Set("finished_at=now()").
+				Where("id=?", mrEnt.Id).
+				Update()
+			if err != nil {
+				return fmt.Errorf("failed to mark migration %s as failed after retry limit: %w", mrEnt.Id, err)
+			}
+			return nil
+		}
 
 		_, err = tx.Model(&mEntity.MigrationRunEntity{}).
 			Set("instance_id=?", d.instanceId).
+			Set("retry_count=?", mrEnt.RetryCount+1).
 			Set("updated_at=now()").
 			Where("id=?", mrEnt.Id).
 			Update()
@@ -60,6 +74,7 @@ func (d *dbMigrationServiceImpl) restartMigrations() error {
 		}
 
 		mrEnt.InstanceId = d.instanceId
+		mrEnt.RetryCount = mrEnt.RetryCount + 1
 		om = stages.NewOpsMigration(d.cp, d.systemInfoService, d.minioStorageService, d.repo, d.buildCleanupRepository, mrEnt)
 
 		return nil

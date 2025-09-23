@@ -11,5 +11,8 @@ alter table migration_run
 alter table migration_run
     add post_check_result jsonb;
 
+alter table migration_run
+    add retry_count integer default 0;
+
 drop table if exists public.migrated_version;
 

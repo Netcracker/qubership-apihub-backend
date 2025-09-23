@@ -16,11 +16,12 @@ package stages
 
 import (
 	"fmt"
-
 	"strings"
 
 	mEntity "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/migration/entity"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
+
+	"github.com/go-pg/pg/v10"
 )
 
 // StagePostCheck check that migration affected all required versions and comparisons!
@@ -28,28 +29,26 @@ func (d OpsMigration) StagePostCheck() error {
 	// self-check
 
 	var wherePackageIn string
+	var whereVersionIn string
+	queryParams := make([]interface{}, 0)
+
 	if len(d.ent.PackageIds) > 0 {
-		wherePackageIn = " and v.package_id in ("
-		for i, pkg := range d.ent.PackageIds {
-			if i > 0 {
-				wherePackageIn += ","
-			}
-			wherePackageIn += fmt.Sprintf("'%s'", pkg)
-		}
-		wherePackageIn += ") "
+		wherePackageIn = " and v.package_id in (?) "
+		queryParams = append(queryParams, pg.In(d.ent.PackageIds))
 	}
 
-	var whereVersionIn string
 	if len(d.ent.Versions) > 0 {
-		whereVersionIn = " and v.version in ("
-		for i, ver := range d.ent.Versions {
-			if i > 0 {
-				whereVersionIn += ","
-			}
+		extractedVersions := make([]string, 0, len(d.ent.Versions))
+		for _, ver := range d.ent.Versions {
 			verSplit := strings.Split(ver, "@")
-			whereVersionIn += fmt.Sprintf("'%s'", verSplit[0])
+			if len(verSplit) > 0 && verSplit[0] != "" {
+				extractedVersions = append(extractedVersions, verSplit[0])
+			}
 		}
-		whereVersionIn += ") "
+		if len(extractedVersions) > 0 {
+			whereVersionIn = " and v.version in (?) "
+			queryParams = append(queryParams, pg.In(extractedVersions))
+		}
 	}
 
 	postCheckResult := &mEntity.PostCheckResultEntity{
@@ -72,7 +71,7 @@ func (d OpsMigration) StagePostCheck() error {
 				  and b.metadata->>'migration_id' = '%s'
 			  ) %s %s`, view.StatusComplete, view.StatusError, d.ent.Id, wherePackageIn, whereVersionIn)
 
-		_, err := d.cp.GetConnection().Query(&postCheckResult.NotMigratedVersions, notMigratedVersionsQuery)
+		_, err := d.cp.GetConnection().Query(&postCheckResult.NotMigratedVersions, notMigratedVersionsQuery, queryParams...)
 		if err != nil {
 			return fmt.Errorf("failed to query not migrated versions: %v", err.Error())
 		}
@@ -99,7 +98,7 @@ func (d OpsMigration) StagePostCheck() error {
 		      and b.metadata->>'migration_id' = '%s'
 		  ) %s %s`, view.StatusComplete, view.StatusError, d.ent.Id, wherePackageIn, whereVersionIn)
 
-		_, err = d.cp.GetConnection().Query(&postCheckResult.NotMigratedComparisons, notMigratedComparisonsQuery)
+		_, err = d.cp.GetConnection().Query(&postCheckResult.NotMigratedComparisons, notMigratedComparisonsQuery, queryParams...)
 		if err != nil {
 			return fmt.Errorf("failed to query not migrated comparisons: %v", err.Error())
 		}
@@ -120,10 +119,10 @@ func (d OpsMigration) StagePostCheck() error {
 		      and b.metadata->>'previous_version' = vc.previous_version || '@' || vc.previous_revision
 		      and b.metadata->>'previous_version_package_id' = vc.previous_package_id
 		      and (b.status='%s' or b.status='%s')
-		      and b.metadata->>'migration_id' = '%s'
+				  and b.metadata->>'migration_id' = '%s'
 		  ) %s %s`, view.StatusComplete, view.StatusError, d.ent.Id, wherePackageIn, whereVersionIn)
 
-		_, err := d.cp.GetConnection().Query(&postCheckResult.NotMigratedComparisons, notMigratedComparisonsQuery)
+		_, err := d.cp.GetConnection().Query(&postCheckResult.NotMigratedComparisons, notMigratedComparisonsQuery, queryParams...)
 		if err != nil {
 			return fmt.Errorf("failed to query not migrated comparisons: %v", err.Error())
 		}

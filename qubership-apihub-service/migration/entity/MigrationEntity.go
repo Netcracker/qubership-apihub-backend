@@ -49,6 +49,7 @@ type MigrationRunEntity struct {
 	UpdatedAt              time.Time              `pg:"updated_at, type:timestamp without time zone"`
 	InstanceId             string                 `pg:"instance_id, type:varchar"`
 	SequenceNumber         int                    `pg:"sequence_number, type:integer"`
+	RetryCount             int                    `pg:"retry_count, type:integer"`
 }
 
 type MigrationBuildResultEntity struct {

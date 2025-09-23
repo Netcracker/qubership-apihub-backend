@@ -10,6 +10,9 @@ alter table migration_run
 alter table migration_run
     drop column post_check_result;
 
+alter table migration_run
+    drop column retry_count;
+
 CREATE TABLE IF NOT EXISTS public.migrated_version (
     package_id character varying,
     version character varying,

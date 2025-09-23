@@ -36,10 +36,10 @@ import (
 
 const MigrationBuildPriority = -100
 
-func (d OpsMigration) createBuilds(versionsQuery string, migrationId string) (int, error) {
+func (d OpsMigration) createBuilds(versionsQuery string, params []interface{}, migrationId string) (int, error) {
 	var versions []entity.PublishedVersionEntity
 
-	_, err := d.cp.GetConnection().Query(&versions, versionsQuery)
+	_, err := d.cp.GetConnection().Query(&versions, versionsQuery, params...)
 	if err != nil {
 		return 0, fmt.Errorf("failed to read versions for migration: %w", err)
 	}
@@ -58,10 +58,10 @@ func (d OpsMigration) createBuilds(versionsQuery string, migrationId string) (in
 	return buildsCreated, nil
 }
 
-func (d OpsMigration) createComparisonBuilds(versionCompQuery string, migrationId string) (int, error) {
+func (d OpsMigration) createComparisonBuilds(versionCompQuery string, params []interface{}, migrationId string) (int, error) {
 	var versionComps []entity.VersionComparisonEntity
 
-	_, err := d.cp.GetConnection().Query(&versionComps, versionCompQuery)
+	_, err := d.cp.GetConnection().Query(&versionComps, versionCompQuery, params...)
 	if err != nil {
 		return 0, fmt.Errorf("failed to read version comparisons for migration: %w", err)
 	}

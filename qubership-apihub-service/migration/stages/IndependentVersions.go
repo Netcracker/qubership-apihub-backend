@@ -16,10 +16,11 @@ package stages
 
 import (
 	"fmt"
+	"strings"
 
 	mView "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/migration/view"
 
-	"strings"
+	"github.com/go-pg/pg/v10"
 )
 
 func (d OpsMigration) StageIndependentVersionsLastRevisions() error {
@@ -28,9 +29,9 @@ func (d OpsMigration) StageIndependentVersionsLastRevisions() error {
 		return err
 	}
 
-	getLatestIndependentVersionsQuery := makeIndependentVersionsQuery(d.ent.PackageIds, d.ent.Versions, true)
+	getLatestIndependentVersionsQuery, params := makeIndependentVersionsQuery(d.ent.PackageIds, d.ent.Versions, true)
 
-	count, err := d.createBuilds(getLatestIndependentVersionsQuery, d.ent.Id)
+	count, err := d.createBuilds(getLatestIndependentVersionsQuery, params, d.ent.Id)
 	if err != nil {
 		return fmt.Errorf("migration %s stage %s round %d: %w", d.ent.Id, mView.MigrationStageIndependentVersionsLastRevs, 1, err)
 	}
@@ -51,9 +52,9 @@ func (d OpsMigration) StageIndependentVersionsOldRevisions() error {
 		return err
 	}
 
-	getOldIndependentVersionsQuery := makeIndependentVersionsQuery(d.ent.PackageIds, d.ent.Versions, false)
+	getOldIndependentVersionsQuery, params := makeIndependentVersionsQuery(d.ent.PackageIds, d.ent.Versions, false)
 
-	count, err := d.createBuilds(getOldIndependentVersionsQuery, d.ent.Id)
+	count, err := d.createBuilds(getOldIndependentVersionsQuery, params, d.ent.Id)
 	if err != nil {
 		return fmt.Errorf("migration %s stage %s round %d: %w", d.ent.Id, mView.MigrationStageIndependentVersionsOldRevs, 1, err)
 	}
@@ -68,30 +69,27 @@ func (d OpsMigration) StageIndependentVersionsOldRevisions() error {
 	return nil
 }
 
-func makeIndependentVersionsQuery(packageIds []string, versionsIn []string, isLatest bool) string {
+func makeIndependentVersionsQuery(packageIds []string, versionsIn []string, isLatest bool) (string, []interface{}) {
+	params := make([]interface{}, 0)
 	var wherePackageIn string
 	if len(packageIds) > 0 {
-		wherePackageIn = " and package_id in ("
-		for i, pkg := range packageIds {
-			if i > 0 {
-				wherePackageIn += ","
-			}
-			wherePackageIn += fmt.Sprintf("'%s'", pkg)
-		}
-		wherePackageIn += ") "
+		wherePackageIn = " and package_id in (?) "
+		params = append(params, pg.In(packageIds))
 	}
 
 	var whereVersionIn string
 	if len(versionsIn) > 0 {
-		whereVersionIn = " and version in ("
-		for i, ver := range versionsIn {
-			if i > 0 {
-				whereVersionIn += ","
-			}
+		extractedVersions := make([]string, 0, len(versionsIn))
+		for _, ver := range versionsIn {
 			verSplit := strings.Split(ver, "@")
-			whereVersionIn += fmt.Sprintf("'%s'", verSplit[0]) // remove revision
+			if len(verSplit) > 0 && verSplit[0] != "" {
+				extractedVersions = append(extractedVersions, verSplit[0])
+			}
 		}
-		whereVersionIn += ") "
+		if len(extractedVersions) > 0 {
+			whereVersionIn = " and version in (?) "
+			params = append(params, pg.In(extractedVersions))
+		}
 	}
 
 	var maxrevQueryOperator string
@@ -129,5 +127,5 @@ func makeIndependentVersionsQuery(packageIds []string, versionsIn []string, isLa
 		pv.previous_version is null and pkg.deleted_at is null
     order by pv.published_at asc, pv.package_id asc, pv.version asc, pv.revision asc
 	`, maxrevQueryOperator) // published_at is a first order to avoid paging breakage by new entries
-	return getLatestIndependentVersionsQuery
+	return getLatestIndependentVersionsQuery, params
 }

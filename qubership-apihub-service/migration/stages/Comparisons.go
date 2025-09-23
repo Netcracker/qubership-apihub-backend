@@ -16,11 +16,12 @@ package stages
 
 import (
 	"fmt"
+	"strings"
 
 	mView "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/migration/view"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 
-	"strings"
+	"github.com/go-pg/pg/v10"
 )
 
 func (d OpsMigration) StageComparisonsOther() error {
@@ -29,9 +30,9 @@ func (d OpsMigration) StageComparisonsOther() error {
 		return err
 	}
 
-	query := makeOtherComparisonsQuery(d.ent.PackageIds, d.ent.Versions, d.ent.Id)
+	query, params := makeOtherComparisonsQuery(d.ent.PackageIds, d.ent.Versions, d.ent.Id)
 
-	count, err := d.createComparisonBuilds(query, d.ent.Id)
+	count, err := d.createComparisonBuilds(query, params, d.ent.Id)
 	if err != nil {
 		return fmt.Errorf("migration %s stage %s round %d: %w", d.ent.Id, mView.MigrationStageComparisonsOther, 1, err)
 	}
@@ -52,9 +53,9 @@ func (d OpsMigration) StageComparisonsOnly() error {
 		return err
 	}
 
-	query := makeComparisonsOnlyQuery(d.ent.PackageIds, d.ent.Versions)
+	query, params := makeComparisonsOnlyQuery(d.ent.PackageIds, d.ent.Versions)
 
-	count, err := d.createComparisonBuilds(query, d.ent.Id)
+	count, err := d.createComparisonBuilds(query, params, d.ent.Id)
 	if err != nil {
 		return fmt.Errorf("migration %s stage %s round %d: %w", d.ent.Id, mView.MigrationStageComparisonsOnly, 1, err)
 	}
@@ -69,30 +70,27 @@ func (d OpsMigration) StageComparisonsOnly() error {
 	return nil
 }
 
-func makeOtherComparisonsQuery(packageIds []string, versionsIn []string, migrationId string) string {
+func makeOtherComparisonsQuery(packageIds []string, versionsIn []string, migrationId string) (string, []interface{}) {
+	params := make([]interface{}, 0)
 	var wherePackageIn string
 	if len(packageIds) > 0 {
-		wherePackageIn = " and vc.package_id in ("
-		for i, pkg := range packageIds {
-			if i > 0 {
-				wherePackageIn += ","
-			}
-			wherePackageIn += fmt.Sprintf("'%s'", pkg)
-		}
-		wherePackageIn += ") "
+		wherePackageIn = " and vc.package_id in (?) "
+		params = append(params, pg.In(packageIds))
 	}
 
 	var whereVersionIn string
 	if len(versionsIn) > 0 {
-		whereVersionIn = " and vc.version in ("
-		for i, ver := range versionsIn {
-			if i > 0 {
-				whereVersionIn += ","
-			}
+		extractedVersions := make([]string, 0, len(versionsIn))
+		for _, ver := range versionsIn {
 			verSplit := strings.Split(ver, "@")
-			whereVersionIn += fmt.Sprintf("'%s'", verSplit[0])
+			if len(verSplit) > 0 && verSplit[0] != "" {
+				extractedVersions = append(extractedVersions, verSplit[0])
+			}
 		}
-		whereVersionIn += ") "
+		if len(extractedVersions) > 0 {
+			whereVersionIn = " and vc.version in (?) "
+			params = append(params, pg.In(extractedVersions))
+		}
 	}
 
 	query :=
@@ -110,33 +108,30 @@ func makeOtherComparisonsQuery(packageIds []string, versionsIn []string, migrati
 			and exists (select 1 from build b1 where b1.package_id = vc.package_id and b1.version like vc.version || '@%%' and b1.metadata->>'migration_id' = '%s' and b1.metadata->>'build_type' = 'build' and  b1.status='%s')
 			and exists (select 1 from build b2 where b2.package_id = vc.previous_package_id and b2.version like vc.previous_version || '@%%' and b2.metadata->>'migration_id' = '%s' and b2.metadata->>'build_type' = 'build' and b2.status='%s') %s %s
         `, migrationId, view.StatusComplete, migrationId, view.StatusComplete, wherePackageIn, whereVersionIn)
-	return query
+	return query, params
 }
 
-func makeComparisonsOnlyQuery(packageIds []string, versionsIn []string) string {
+func makeComparisonsOnlyQuery(packageIds []string, versionsIn []string) (string, []interface{}) {
+	params := make([]interface{}, 0)
 	var wherePackageIn string
 	if len(packageIds) > 0 {
-		wherePackageIn = " and vc.package_id in ("
-		for i, pkg := range packageIds {
-			if i > 0 {
-				wherePackageIn += ","
-			}
-			wherePackageIn += fmt.Sprintf("'%s'", pkg)
-		}
-		wherePackageIn += ") "
+		wherePackageIn = " and vc.package_id in (?) "
+		params = append(params, pg.In(packageIds))
 	}
 
 	var whereVersionIn string
 	if len(versionsIn) > 0 {
-		whereVersionIn = " and vc.version in ("
-		for i, ver := range versionsIn {
-			if i > 0 {
-				whereVersionIn += ","
-			}
+		extractedVersions := make([]string, 0, len(versionsIn))
+		for _, ver := range versionsIn {
 			verSplit := strings.Split(ver, "@")
-			whereVersionIn += fmt.Sprintf("'%s'", verSplit[0])
+			if len(verSplit) > 0 && verSplit[0] != "" {
+				extractedVersions = append(extractedVersions, verSplit[0])
+			}
 		}
-		whereVersionIn += ") "
+		if len(extractedVersions) > 0 {
+			whereVersionIn = " and vc.version in (?) "
+			params = append(params, pg.In(extractedVersions))
+		}
 	}
 
 	query :=
@@ -153,5 +148,5 @@ and vc.previous_revision=pv2.revision
 where
     pv1.deleted_at is null and pv2.deleted_at is null and pg1.deleted_at is null and pg2.deleted_at is null %s %s
         `, wherePackageIn, whereVersionIn)
-	return query
+	return query, params
 }
