@@ -79,13 +79,14 @@ func (d OpsMigration) processStage(stage mView.OpsMigrationStage) error {
 	// Every stage cage should be wrapped with utils.SafeSync() to handle possible panics
 	switch stage {
 	case mView.MigrationStageStarting:
+		// Prepare for migration: create temp tables
+		err = utils.SafeSync(d.StageStarting)
 		if d.ent.IsRebuildChangelogOnly {
 			// different sequence, rebuilding only changelogs, other stages skipped
+			//TODO: should we perform cleanup before this stage as well ?
 			nextStage = mView.MigrationStageComparisonsOnly
 		} else {
 			// general sequence
-			// Prepare for migration: create temp tables
-			err = utils.SafeSync(d.StageStarting)
 			nextStage = mView.MigrationStageCleanupBefore
 		}
 
