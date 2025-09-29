@@ -15,7 +15,6 @@
 package stages
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -30,22 +29,21 @@ func (d OpsMigration) StageCleanupBefore() error {
 		// Try to avoid too much space usage by cleaning up all old migration build data
 		log.Infof("ops migration %s: Starting cleanup before full migration", d.ent.Id)
 		if d.systemInfoService.IsMinioStorageActive() {
-			ctx := context.Background()
-			ids, err := d.buildCleanupRepository.GetRemoveMigrationBuildIds()
+			ids, err := d.buildCleanupRepository.GetRemoveMigrationBuildIds(d.migrationCtx)
 			if err != nil {
 				return err
 			}
-			err = d.minioStorageService.RemoveFiles(ctx, view.BUILD_RESULT_TABLE, ids)
+			err = d.minioStorageService.RemoveFiles(d.migrationCtx, view.BUILD_RESULT_TABLE, ids)
 			if err != nil {
 				return err
 			}
-			deleted, err := d.buildCleanupRepository.RemoveMigrationBuildSourceData(ids)
+			deleted, err := d.buildCleanupRepository.RemoveMigrationBuildSourceData(d.migrationCtx, ids)
 			if err != nil {
 				return err
 			}
 			log.Infof("ops migration %s: Cleanup before full migration cleaned up %d entries", d.ent.Id, deleted)
 		} else {
-			deleted, err := d.buildCleanupRepository.RemoveMigrationBuildData()
+			deleted, err := d.buildCleanupRepository.RemoveMigrationBuildData(d.migrationCtx)
 			if err != nil {
 				return err
 			}

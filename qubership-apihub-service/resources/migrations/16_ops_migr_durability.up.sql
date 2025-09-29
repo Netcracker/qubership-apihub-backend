@@ -14,5 +14,8 @@ alter table migration_run
 alter table migration_run
     add retry_count integer default 0;
 
+alter table version_comparison
+    add metadata jsonb;
+
 drop table if exists public.migrated_version;
 

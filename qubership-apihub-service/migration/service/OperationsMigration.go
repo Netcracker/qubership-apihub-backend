@@ -40,29 +40,24 @@ func (d *dbMigrationServiceImpl) StartMigrateOperations(req mView.MigrationReque
 	var om *stages.OpsMigration
 
 	err := d.cp.GetConnection().RunInTransaction(context.Background(), func(tx *pg.Tx) error {
-		if len(req.PackageIds) == 0 && len(req.Versions) == 0 {
-			// Allow only one full migration. Full migration have no limitations for packageIds and versions, i.e. all(non-deleted) data will be migrated.
-			var ents []mEntity.MigrationRunEntity
-			/*_, err := tx.Query(&ents, "select * from migration_run where array_length(package_ids,1) is null "+
-			"and array_length(versions,1) is null and status=? for update", mView.MigrationStatusRunning) // TODO what about rebuild params?*/
-			err := tx.Model(&ents).Where("status=?", mView.MigrationStatusRunning).Select()
+		// Allow only one migration.
+		var ents []mEntity.MigrationRunEntity
+		err := tx.Model(&ents).Where("status=?", mView.MigrationStatusRunning).Select()
+		if err != nil {
+			return err
+		}
 
-			if err != nil {
-				return err
-			}
-
-			if len(ents) > 0 {
-				return &exception.CustomError{
-					Status:  http.StatusConflict,
-					Code:    exception.OperationsMigrationConflict,
-					Message: exception.OperationsMigrationConflictMsg,
-					Params:  map[string]interface{}{"reason": "full migration is already running"},
-				}
+		if len(ents) > 0 {
+			return &exception.CustomError{
+				Status:  http.StatusConflict,
+				Code:    exception.OperationsMigrationConflict,
+				Message: exception.OperationsMigrationConflictMsg,
+				Params:  map[string]interface{}{"reason": "full migration is already running"},
 			}
 		}
 
 		var lastSeqNum int
-		_, err := tx.Query(pg.Scan(&lastSeqNum), "SELECT COALESCE(MAX(sequence_number), 0) FROM migration_run")
+		_, err = tx.Query(pg.Scan(&lastSeqNum), "SELECT COALESCE(MAX(sequence_number), 0) FROM migration_run")
 		if err != nil {
 			return fmt.Errorf("failed to get current sequence number: %w", err)
 		}
@@ -74,8 +69,6 @@ func (d *dbMigrationServiceImpl) StartMigrateOperations(req mView.MigrationReque
 			Stage:                  mView.MigrationStageStarting,
 			PackageIds:             req.PackageIds,
 			Versions:               req.Versions,
-			IsRebuild:              req.Rebuild,
-			CurrentBuilderVersion:  req.CurrentBuilderVersion,
 			IsRebuildChangelogOnly: req.RebuildChangelogOnly,
 			SkipValidation:         req.SkipValidation,
 			InstanceId:             d.instanceId,

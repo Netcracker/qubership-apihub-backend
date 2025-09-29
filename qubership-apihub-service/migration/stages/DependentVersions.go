@@ -53,7 +53,6 @@ func (d OpsMigration) StageDependentVersionsLastRevs() error {
 	return nil
 }
 
-// TODO: collapse with StageDependentVersionsLastRevs ???
 func (d OpsMigration) StageDependentVersionsOldRevs() error {
 	round := 1
 

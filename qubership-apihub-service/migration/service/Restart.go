@@ -35,7 +35,7 @@ func (d *dbMigrationServiceImpl) restartMigrations() error {
 		var ents []mEntity.MigrationRunEntity
 
 		err := tx.Model(&ents).
-			Where("status=?", mView.MigrationStatusRunning).
+			Where("status in (?)", pg.In([]string{mView.MigrationStatusRunning, mView.MigrationStatusCancelling})).
 			Where("updated_at < (now() - interval '? seconds')", 120).
 			Where("instance_id!=?", d.instanceId).
 			Order("started_at").

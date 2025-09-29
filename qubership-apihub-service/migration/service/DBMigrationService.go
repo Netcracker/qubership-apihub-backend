@@ -27,7 +27,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 
 	mEntity "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/migration/entity"
 
@@ -389,18 +388,10 @@ func (d *dbMigrationServiceImpl) getSchemaMigrationEntity(migrationNumber int) (
 
 func (d *dbMigrationServiceImpl) CancelRunningMigrations() error {
 	_, err := d.cp.GetConnection().Exec(`
-	update migration_run set status = ?, error_details = ?, finished_at=now()
-	where status in (?) `,
-		view.StatusError, CancelledMigrationError,
-		pg.In([]view.BuildStatusEnum{view.StatusNotStarted, view.StatusRunning}))
-	if err != nil {
-		return err
-	}
-	_, err = d.cp.GetConnection().Exec(`
-	update build set status = ?, details = ?, last_active=now()
-	where status in (?) and created_by = 'db migration'`,
-		view.StatusError, CancelledMigrationError,
-		pg.In([]view.BuildStatusEnum{view.StatusNotStarted, view.StatusRunning}))
+			update migration_run set status = ?
+			where status in (?) `,
+		mView.MigrationStatusCancelling, mView.MigrationStatusRunning,
+	)
 	if err != nil {
 		return err
 	}

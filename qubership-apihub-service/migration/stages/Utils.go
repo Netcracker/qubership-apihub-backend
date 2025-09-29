@@ -17,7 +17,6 @@ package stages
 import (
 	"archive/zip"
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 
@@ -35,11 +34,12 @@ import (
 )
 
 const MigrationBuildPriority = -100
+const CancelledMigrationError = "cancelled"
 
 func (d OpsMigration) createBuilds(versionsQuery string, params []interface{}, migrationId string) (int, error) {
 	var versions []entity.PublishedVersionEntity
 
-	_, err := d.cp.GetConnection().Query(&versions, versionsQuery, params...)
+	_, err := d.cp.GetConnection().QueryContext(d.migrationCtx, &versions, versionsQuery, params...)
 	if err != nil {
 		return 0, fmt.Errorf("failed to read versions for migration: %w", err)
 	}
@@ -61,7 +61,7 @@ func (d OpsMigration) createBuilds(versionsQuery string, params []interface{}, m
 func (d OpsMigration) createComparisonBuilds(versionCompQuery string, params []interface{}, migrationId string) (int, error) {
 	var versionComps []entity.VersionComparisonEntity
 
-	_, err := d.cp.GetConnection().Query(&versionComps, versionCompQuery, params...)
+	_, err := d.cp.GetConnection().QueryContext(d.migrationCtx, &versionComps, versionCompQuery, params...)
 	if err != nil {
 		return 0, fmt.Errorf("failed to read version comparisons for migration: %w", err)
 	}
@@ -85,7 +85,7 @@ func (d OpsMigration) waitForBuilds(stage mView.OpsMigrationStage, round int) (i
 	processed := 0
 	var builds []entity.BuildEntity
 
-	totalCount, err := d.cp.GetConnection().Model(&builds).
+	totalCount, err := d.cp.GetConnection().ModelContext(d.migrationCtx, &builds).
 		WhereOrGroup(func(query *orm.Query) (*orm.Query, error) {
 			query = query.WhereOr("status=?", view.StatusNotStarted)
 			query = query.WhereOr("status=?", view.StatusRunning)
@@ -101,7 +101,7 @@ func (d OpsMigration) waitForBuilds(stage mView.OpsMigrationStage, round int) (i
 	start := time.Now()
 	limitSec := time.Duration(totalCount) * time.Second * time.Duration(600) // limit per build with great reserve
 	for {
-		count, err := d.cp.GetConnection().Model(&builds).
+		count, err := d.cp.GetConnection().ModelContext(d.migrationCtx, &builds).
 			WhereOrGroup(func(query *orm.Query) (*orm.Query, error) {
 				query = query.WhereOr("status=?", view.StatusNotStarted)
 				query = query.WhereOr("status=?", view.StatusRunning)
@@ -166,7 +166,7 @@ func (d OpsMigration) addTaskToRebuild(migrationId string, versionEnt entity.Pub
 			return "", err
 		}
 		if configEntity.ArchiveChecksum != "" {
-			file, err := d.minioStorageService.GetFile(context.Background(), view.PUBLISHED_SOURCES_ARCHIVES_TABLE, configEntity.ArchiveChecksum)
+			file, err := d.minioStorageService.GetFile(d.migrationCtx, view.PUBLISHED_SOURCES_ARCHIVES_TABLE, configEntity.ArchiveChecksum)
 			if err != nil {
 				return "", err
 			}
@@ -267,7 +267,7 @@ func (d OpsMigration) addCompTaskToRebuild(migrationId string, compEnt entity.Ve
 
 func (d OpsMigration) getPublishedSrcDataConfigEntity(query, packageId, version string, revision int) (*entity.PublishedSrcDataConfigEntity, error) {
 	savedSources := new(entity.PublishedSrcDataConfigEntity)
-	_, err := d.cp.GetConnection().Query(savedSources, query, packageId, version, revision)
+	_, err := d.cp.GetConnection().QueryContext(d.migrationCtx, savedSources, query, packageId, version, revision)
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +295,7 @@ func (d OpsMigration) makeBuildSourceEntityFromSources(migrationId string, build
 		and revision = ?
 	`
 	var fileEntities []entity.PublishedContentEntity
-	_, err = d.cp.GetConnection().Query(&fileEntities, publishedFilesQuery, versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
+	_, err = d.cp.GetConnection().QueryContext(d.migrationCtx, &fileEntities, publishedFilesQuery, versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
 	if err != nil {
 		return nil, err
 	}
@@ -373,7 +373,7 @@ func (d OpsMigration) makeBuildSourceEntityFromPublishedFiles(migrationId string
 		and rc.revision = ?
 	`
 	var fileEntities []mEntity.PublishedContentMigrationEntity
-	_, err = d.cp.GetConnection().Query(&fileEntities, filesWithDataQuery, versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
+	_, err = d.cp.GetConnection().QueryContext(d.migrationCtx, &fileEntities, filesWithDataQuery, versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
 	if err != nil {
 		return nil, err
 	}
@@ -444,8 +444,7 @@ func (d OpsMigration) makeBuildSourceEntityFromPublishedFiles(migrationId string
 }
 
 func (d OpsMigration) storeVersionBuildTask(buildEnt entity.BuildEntity, sourceEnt entity.BuildSourceEntity) error {
-	ctx := context.Background()
-	return d.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
+	return d.cp.GetConnection().RunInTransaction(d.migrationCtx, func(tx *pg.Tx) error {
 		_, err := tx.Model(&buildEnt).Insert()
 		if err != nil {
 			return err
@@ -461,7 +460,7 @@ func (d OpsMigration) storeVersionBuildTask(buildEnt entity.BuildEntity, sourceE
 
 func (d OpsMigration) getVersionConfigReferences(packageId string, version string, revision int) ([]view.BCRef, error) {
 	var refEntities []entity.PublishedReferenceEntity
-	err := d.cp.GetConnection().Model(&refEntities).
+	err := d.cp.GetConnection().ModelContext(d.migrationCtx, &refEntities).
 		Where("package_id = ?", packageId).
 		Where("version = ?", version).
 		Where("revision = ?", revision).

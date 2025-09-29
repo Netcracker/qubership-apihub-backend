@@ -25,8 +25,6 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 )
 
-const CancelledMigrationError = "cancelled"
-
 var downMigrationFileRegexp = regexp.MustCompile(`^[0-9]+_.+\.down\.sql$`)
 var upMigrationFileRegexp = regexp.MustCompile(`^[0-9]+_.+\.up\.sql$`)
 

@@ -30,7 +30,7 @@ func (d OpsMigration) StageComparisonsOther() error {
 		return err
 	}
 
-	query, params := makeOtherComparisonsQuery(d.ent.PackageIds, d.ent.Versions, d.ent.Id)
+	query, params := makeComparisonsQuery(d.ent.PackageIds, d.ent.Versions, d.ent.Id, false)
 
 	count, err := d.createComparisonBuilds(query, params, d.ent.Id)
 	if err != nil {
@@ -53,7 +53,7 @@ func (d OpsMigration) StageComparisonsOnly() error {
 		return err
 	}
 
-	query, params := makeComparisonsOnlyQuery(d.ent.PackageIds, d.ent.Versions)
+	query, params := makeComparisonsQuery(d.ent.PackageIds, d.ent.Versions, d.ent.Id, true)
 
 	count, err := d.createComparisonBuilds(query, params, d.ent.Id)
 	if err != nil {
@@ -70,7 +70,7 @@ func (d OpsMigration) StageComparisonsOnly() error {
 	return nil
 }
 
-func makeOtherComparisonsQuery(packageIds []string, versionsIn []string, migrationId string) (string, []interface{}) {
+func makeComparisonsQuery(packageIds []string, versionsIn []string, migrationId string, isComparisonsOnly bool) (string, []interface{}) {
 	params := make([]interface{}, 0)
 	var wherePackageIn string
 	if len(packageIds) > 0 {
@@ -93,60 +93,23 @@ func makeOtherComparisonsQuery(packageIds []string, versionsIn []string, migrati
 		}
 	}
 
-	query :=
-		fmt.Sprintf(
-			`select vc.* from version_comparison vc
-			inner join published_version pv1 on vc.package_id=pv1.package_id and vc.version=pv1.version and vc.revision=pv1.revision
-			inner join published_version pv2 on vc.previous_package_id=pv2.package_id and vc.previous_version=pv2.version and vc.previous_revision=pv2.revision
-			inner join package_group pg1 on vc.package_id=pg1.id
-			inner join package_group pg2 on vc.previous_package_id=pg2.id
-			where pv1.deleted_at is null and pv2.deleted_at is null and pg1.deleted_at is null and pg2.deleted_at is null
-			/* at this stage we migrate only ad-hoc comparisons */
-			and (vc.previous_package_id!=(CASE WHEN (pv1.previous_version_package_id IS NULL OR pv1.previous_version_package_id = '') THEN pv1.package_id ELSE pv1.previous_version_package_id END)
-			or vc.previous_version!=coalesce(pv1.previous_version, ''))
-			/* both versions should be migrated */
-			and exists (select 1 from build b1 where b1.package_id = vc.package_id and b1.version like vc.version || '@%%' and b1.metadata->>'migration_id' = '%s' and b1.metadata->>'build_type' = 'build' and  b1.status='%s')
-			and exists (select 1 from build b2 where b2.package_id = vc.previous_package_id and b2.version like vc.previous_version || '@%%' and b2.metadata->>'migration_id' = '%s' and b2.metadata->>'build_type' = 'build' and b2.status='%s') %s %s
-        `, migrationId, view.StatusComplete, migrationId, view.StatusComplete, wherePackageIn, whereVersionIn)
-	return query, params
-}
+	query := fmt.Sprintf(
+		`select vc.* from version_comparison vc
+		inner join published_version pv1 on vc.package_id=pv1.package_id and vc.version=pv1.version and vc.revision=pv1.revision
+		inner join published_version pv2 on vc.previous_package_id=pv2.package_id and vc.previous_version=pv2.version and vc.previous_revision=pv2.revision
+		inner join package_group pg1 on vc.package_id=pg1.id
+		inner join package_group pg2 on vc.previous_package_id=pg2.id
+		where pv1.deleted_at is null and pv2.deleted_at is null and pg1.deleted_at is null and pg2.deleted_at is null
+		and (vc.metadata is null or not (vc.metadata \? 'migration_id') or vc.metadata->>'migration_id' is distinct from '%s') %s %s`,
+		migrationId, wherePackageIn, whereVersionIn)
 
-func makeComparisonsOnlyQuery(packageIds []string, versionsIn []string) (string, []interface{}) {
-	params := make([]interface{}, 0)
-	var wherePackageIn string
-	if len(packageIds) > 0 {
-		wherePackageIn = " and vc.package_id in (?) "
-		params = append(params, pg.In(packageIds))
+	if !isComparisonsOnly {
+		//both versions should be migrated
+		query += fmt.Sprintf(`
+		and exists (select 1 from build b1 where b1.package_id = vc.package_id and b1.version like vc.version || '@%%' and b1.metadata->>'migration_id' = '%s' and b1.metadata->>'build_type' = 'build' and  b1.status='%s')
+		and exists (select 1 from build b2 where b2.package_id = vc.previous_package_id and b2.version like vc.previous_version || '@%%' and b2.metadata->>'migration_id' = '%s' and b2.metadata->>'build_type' = 'build' and b2.status='%s')`,
+			migrationId, view.StatusComplete, migrationId, view.StatusComplete)
 	}
 
-	var whereVersionIn string
-	if len(versionsIn) > 0 {
-		extractedVersions := make([]string, 0, len(versionsIn))
-		for _, ver := range versionsIn {
-			verSplit := strings.Split(ver, "@")
-			if len(verSplit) > 0 && verSplit[0] != "" {
-				extractedVersions = append(extractedVersions, verSplit[0])
-			}
-		}
-		if len(extractedVersions) > 0 {
-			whereVersionIn = " and vc.version in (?) "
-			params = append(params, pg.In(extractedVersions))
-		}
-	}
-
-	query :=
-		fmt.Sprintf(
-			`select vc.* from version_comparison vc inner join published_version pv1 on
-            vc.package_id=pv1.package_id
-                and vc.version=pv1.version
-                and vc.revision=pv1.revision
-inner join published_version pv2 on vc.previous_package_id=pv2.package_id
-and vc.previous_version=pv2.version
-and vc.previous_revision=pv2.revision
-         inner join package_group pg1 on vc.package_id=pg1.id
-         inner join package_group pg2 on vc.previous_package_id=pg2.id
-where
-    pv1.deleted_at is null and pv2.deleted_at is null and pg1.deleted_at is null and pg2.deleted_at is null %s %s
-        `, wherePackageIn, whereVersionIn)
 	return query, params
 }

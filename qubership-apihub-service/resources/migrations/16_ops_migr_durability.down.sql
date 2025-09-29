@@ -13,6 +13,9 @@ alter table migration_run
 alter table migration_run
     drop column retry_count;
 
+alter table version_comparison
+    drop column metadata;
+
 CREATE TABLE IF NOT EXISTS public.migrated_version (
     package_id character varying,
     version character varying,

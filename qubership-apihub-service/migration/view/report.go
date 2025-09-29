@@ -87,6 +87,7 @@ type PostCheckResult struct {
 const MigrationStatusRunning = "running"
 const MigrationStatusComplete = "complete"
 const MigrationStatusFailed = "failed"
+const MigrationStatusCancelling = "cancelling"
 const MigrationStatusCancelled = "cancelled"
 
 type OpsMigrationStage string
@@ -108,6 +109,9 @@ const MigrationStageTSRecalculate OpsMigrationStage = "ts_recalculate"
 const MigrationStagePostCheck OpsMigrationStage = "post_check"
 const MigrationStageDone OpsMigrationStage = "done"
 const MigrationStageUndefined OpsMigrationStage = "undefined"
+
+const MigrationStageCancelling OpsMigrationStage = "cancelling"
+const MigrationStageCancelled OpsMigrationStage = "cancelled"
 
 func MigrationStageFromString(stage string) OpsMigrationStage {
 	val := OpsMigrationStage(stage)

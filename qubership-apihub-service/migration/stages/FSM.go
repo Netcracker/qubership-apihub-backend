@@ -15,6 +15,7 @@
 package stages
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/db"
@@ -39,7 +40,8 @@ type OpsMigration struct {
 
 	ent               mEntity.MigrationRunEntity // READ ONLY !!! Not updated during processing and contains outdated values like status, stage, etc
 	keepaliveStopChan chan struct{}
-	// TODO: handle migration cancelled somehow!
+	migrationCtx      context.Context
+	migrationCancel   context.CancelFunc
 }
 
 func NewOpsMigration(cp db.ConnectionProvider,
@@ -48,6 +50,7 @@ func NewOpsMigration(cp db.ConnectionProvider,
 	repo mRepository.MigrationRunRepository,
 	buildCleanupRepository repository.BuildCleanupRepository,
 	ent mEntity.MigrationRunEntity) *OpsMigration {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &OpsMigration{
 		cp:                     cp,
 		systemInfoService:      systemInfoService,
@@ -56,6 +59,8 @@ func NewOpsMigration(cp db.ConnectionProvider,
 		buildCleanupRepository: buildCleanupRepository,
 		ent:                    ent,
 		keepaliveStopChan:      make(chan struct{}, 1),
+		migrationCtx:           ctx,
+		migrationCancel:        cancel,
 	}
 }
 
@@ -71,6 +76,20 @@ func (d OpsMigration) Start() {
 func (d OpsMigration) processStage(stage mView.OpsMigrationStage) error {
 	start := time.Now()
 
+	if stage != mView.MigrationStageCancelling {
+		// Check if migration context is cancelled before starting stage
+		select {
+		case <-d.migrationCtx.Done():
+			log.Infof("Ops migration %s: migration cancelled, moving to cancelling stage", d.ent.Id)
+			err := d.handleStageChange(mView.MigrationStageCancelling)
+			if err != nil {
+				return d.handleError(fmt.Errorf("ops migration %s: failed to set next stage: %s", d.ent.Id, err), stage, start)
+			}
+			stage = mView.MigrationStageCancelling
+		default:
+		}
+	}
+
 	log.Infof("Ops migration %s: processing stage %s", d.ent.Id, stage)
 
 	var err error
@@ -83,7 +102,6 @@ func (d OpsMigration) processStage(stage mView.OpsMigrationStage) error {
 		err = utils.SafeSync(d.StageStarting)
 		if d.ent.IsRebuildChangelogOnly {
 			// different sequence, rebuilding only changelogs, other stages skipped
-			//TODO: should we perform cleanup before this stage as well ?
 			nextStage = mView.MigrationStageComparisonsOnly
 		} else {
 			// general sequence
@@ -133,15 +151,25 @@ func (d OpsMigration) processStage(stage mView.OpsMigrationStage) error {
 		err = utils.SafeSync(d.StageComparisonsOnly)
 		nextStage = mView.MigrationStagePostCheck
 
+	case mView.MigrationStageCancelling:
+		err = utils.SafeSync(d.StageCancelling)
+		nextStage = mView.MigrationStageCancelled
+
 	default:
 		nextStage = mView.MigrationStageUndefined
 	}
 
 	if err != nil {
-		return d.handleError(err, stage, start)
+		// Check if error is due to context cancellation
+		if d.migrationCtx.Err() == context.Canceled {
+			log.Infof("Ops migration %s: stage %s cancelled", d.ent.Id, stage)
+			nextStage = mView.MigrationStageCancelling
+		} else {
+			return d.handleError(err, stage, start)
+		}
+	} else {
+		log.Infof("Ops migration %s: stage %s successfully finished. Processing took %s", d.ent.Id, stage, time.Since(start))
 	}
-
-	log.Infof("Ops migration %s: stage %s successfully finished. Processing took %s", d.ent.Id, stage, time.Since(start))
 
 	if nextStage == mView.MigrationStageUndefined {
 		return d.handleError(fmt.Errorf("ops migration FSM implementation is incorrect, next stage was not set after '%s'", stage), stage, start)
@@ -158,18 +186,38 @@ func (d OpsMigration) processStage(stage mView.OpsMigrationStage) error {
 			return d.handleError(fmt.Errorf("ops migration %s: failed to run complete handler: %s", d.ent.Id, err), stage, start)
 		}
 		return nil
+	} else if nextStage == mView.MigrationStageCancelled {
+		err = d.handleCancel()
+		if err != nil {
+			return d.handleError(fmt.Errorf("ops migration %s: failed to run cancel handler: %s", d.ent.Id, err), stage, start)
+		}
+		return nil
 	}
 
 	return d.processStage(nextStage)
 }
 
-func (d OpsMigration) handleError(err error, stage mView.OpsMigrationStage, start time.Time) error {
+func (d OpsMigration) handleCancel() error {
 	cleanupErr := d.StageCleanupAfter()
 	if cleanupErr != nil {
 		log.Errorf("Failed to run post-migration cleanup")
 	}
 
-	d.keepaliveStopChan <- struct{}{}
+	log.Infof("Ops migration %s: processing cancelled", d.ent.Id)
+
+	_, updErr := d.cp.GetConnection().Model(&d.ent).
+		Set("status=?", mView.MigrationStageCancelled).
+		Set("finished_at=now()").
+		Where("id = ?", d.ent.Id).Update()
+	return updErr
+}
+
+func (d OpsMigration) handleError(err error, stage mView.OpsMigrationStage, start time.Time) error {
+	//TODO: should we handle cancellation at this terminal stage ?
+	cleanupErr := d.StageCleanupAfter()
+	if cleanupErr != nil {
+		log.Errorf("Failed to run post-migration cleanup")
+	}
 
 	log.Errorf("Ops migration %s: stage %s processing finished with error: %s. Processing took %s", d.ent.Id, stage, err, time.Since(start))
 
@@ -183,20 +231,19 @@ func (d OpsMigration) handleError(err error, stage mView.OpsMigrationStage, star
 }
 
 func (d OpsMigration) handleComplete() error {
-	err := d.StageCleanupAfter()
-	if err != nil {
+	//TODO: should we handle cancellation at this terminal stage ?
+	cleanupErr := d.StageCleanupAfter()
+	if cleanupErr != nil {
 		log.Errorf("Failed to run post-migration cleanup")
 	}
 
-	d.keepaliveStopChan <- struct{}{}
-
 	log.Infof("Ops migration %s: processing is successfully finished", d.ent.Id)
 
-	_, err = d.cp.GetConnection().Model(&d.ent).
+	_, updErr := d.cp.GetConnection().Model(&d.ent).
 		Set("status=?", mView.MigrationStatusComplete).
 		Set("finished_at=now()").
 		Where("id = ?", d.ent.Id).Update()
-	return err
+	return updErr
 }
 
 func (d OpsMigration) handleStageChange(stage mView.OpsMigrationStage) error {
@@ -209,6 +256,7 @@ func (d OpsMigration) handleStageChange(stage mView.OpsMigrationStage) error {
 
 func (d OpsMigration) keepaliveWhileRunning() {
 	t := time.NewTicker(time.Second * 30)
+	isCancelling := false
 
 	utils.SafeAsync(func() {
 		for {
@@ -216,22 +264,36 @@ func (d OpsMigration) keepaliveWhileRunning() {
 			case <-d.keepaliveStopChan:
 				log.Debugf("keepalive is stopped for migration %s", d.ent.Id)
 				t.Stop()
+				close(d.keepaliveStopChan)
 				return
 			case <-t.C:
+				status := mView.MigrationStatusRunning
+				if isCancelling {
+					status = mView.MigrationStatusCancelling
+				}
 				res, err := d.cp.GetConnection().Model(&mEntity.MigrationRunEntity{}).
 					Set("updated_at=now()").
 					Where("id = ?", d.ent.Id).
-					Where("status = ?", mView.MigrationStatusRunning).Update()
+					Where("status = ?", status).Update()
 				if err != nil {
 					log.Errorf("failed to update keepalive timeout for migration %s", d.ent.Id)
 				}
 
 				if res.RowsAffected() != 1 {
-					log.Infof("ops migration %s: status change to not running detected. Stopping keepalive", d.ent.Id)
-					d.keepaliveStopChan <- struct{}{}
+					log.Infof("ops migration %s: status change to not '%s' detected", d.ent.Id, status)
+
+					var migrationEntity mEntity.MigrationRunEntity
+					err := d.cp.GetConnection().Model(&migrationEntity).Where("id = ?", d.ent.Id).Select()
+					if err == nil && migrationEntity.Status == mView.MigrationStatusCancelling {
+						log.Infof("ops migration %s: cancelling status detected, cancelling migration context", d.ent.Id)
+						d.migrationCancel()
+						isCancelling = true //it is necessary to continue keepalive to avoid a restart during the cancelling stage
+					} else {
+						log.Infof("ops migration %s: stopping keepalive", d.ent.Id)
+						d.keepaliveStopChan <- struct{}{}
+					}
 				}
 			}
 		}
-		// TODO: maybe handle migration cancel here???
 	})
 }

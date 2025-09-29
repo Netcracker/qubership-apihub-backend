@@ -19,9 +19,8 @@ import (
 	"strings"
 
 	mEntity "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/migration/entity"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
-
 	"github.com/go-pg/pg/v10"
+	log "github.com/sirupsen/logrus"
 )
 
 // StagePostCheck check that migration affected all required versions and comparisons!
@@ -61,71 +60,28 @@ func (d OpsMigration) StagePostCheck() error {
 			select v.package_id, v.version, v.revision, v.previous_version, v.previous_version_package_id from published_version v
 			inner join package_group pkg on v.package_id = pkg.id
 			where v.deleted_at is null and pkg.deleted_at is null
-			  and not exists(
-				select 1 from build b
-				where b.package_id = v.package_id
-				  and (string_to_array(b.version, '@'))[1] = v.version
-				  and (string_to_array(b.version, '@'))[2]::int = v.revision
-				  and b.metadata->>'build_type' = 'build'
-				  and (b.status='%s' or b.status='%s')
-				  and b.metadata->>'migration_id' = '%s'
-			  ) %s %s`, view.StatusComplete, view.StatusError, d.ent.Id, wherePackageIn, whereVersionIn)
+			and (v.metadata is null or not (v.metadata \? 'migration_id') or v.metadata->>'migration_id' is distinct from '%s') %s %s`,
+			d.ent.Id, wherePackageIn, whereVersionIn)
 
-		_, err := d.cp.GetConnection().Query(&postCheckResult.NotMigratedVersions, notMigratedVersionsQuery, queryParams...)
+		_, err := d.cp.GetConnection().QueryContext(d.migrationCtx, &postCheckResult.NotMigratedVersions, notMigratedVersionsQuery, queryParams...)
 		if err != nil {
 			return fmt.Errorf("failed to query not migrated versions: %v", err.Error())
 		}
-		//TODO: do we need also find not migrated changelogs (they are built with versions) ?
-		//find not migrated ad-hoc comparisons
-		notMigratedComparisonsQuery := fmt.Sprintf(`
-		select vc.package_id, vc.version, vc.revision, vc.previous_package_id, vc.previous_version, vc.previous_revision from version_comparison vc
-		inner join published_version pv1 on vc.package_id=pv1.package_id and vc.version=pv1.version and vc.revision=pv1.revision
-		inner join published_version pv2 on vc.previous_package_id=pv2.package_id and vc.previous_version=pv2.version and vc.previous_revision=pv2.revision
-		inner join package_group pg1 on vc.package_id=pg1.id
-		inner join package_group pg2 on vc.previous_package_id=pg2.id
-		where pv1.deleted_at is null and pv2.deleted_at is null and pg1.deleted_at is null and pg2.deleted_at is null
-		and (vc.previous_package_id!=(CASE WHEN (pv1.previous_version_package_id IS NULL OR pv1.previous_version_package_id = '') THEN pv1.package_id ELSE pv1.previous_version_package_id END)
-		or vc.previous_version!=coalesce(pv1.previous_version, ''))
-		and not exists(
-		    select 1 from build b
-		    where b.package_id = vc.package_id
-		      and (string_to_array(b.version, '@'))[1] = vc.version
-		      and (string_to_array(b.version, '@'))[2]::int = vc.revision
-		      and b.metadata->>'build_type' = 'changelog'
-		      and b.metadata->>'previous_version' = vc.previous_version || '@' || vc.previous_revision
-		      and b.metadata->>'previous_version_package_id' = vc.previous_package_id
-		      and (b.status='%s' or b.status='%s')
-		      and b.metadata->>'migration_id' = '%s'
-		  ) %s %s`, view.StatusComplete, view.StatusError, d.ent.Id, wherePackageIn, whereVersionIn)
+	}
 
-		_, err = d.cp.GetConnection().Query(&postCheckResult.NotMigratedComparisons, notMigratedComparisonsQuery, queryParams...)
-		if err != nil {
-			return fmt.Errorf("failed to query not migrated comparisons: %v", err.Error())
-		}
-	} else {
-		notMigratedComparisonsQuery := fmt.Sprintf(`
-		select vc.package_id, vc.version, vc.revision, vc.previous_package_id, vc.previous_version, vc.previous_revision from version_comparison vc
-		inner join published_version pv1 on vc.package_id=pv1.package_id and vc.version=pv1.version and vc.revision=pv1.revision
-		inner join published_version pv2 on vc.previous_package_id=pv2.package_id and vc.previous_version=pv2.version and vc.previous_revision=pv2.revision
-		inner join package_group pg1 on vc.package_id=pg1.id
-		inner join package_group pg2 on vc.previous_package_id=pg2.id
+	notMigratedComparisonsQuery := fmt.Sprintf(`
+		select v.package_id, v.version, v.revision, v.previous_package_id, v.previous_version, v.previous_revision from version_comparison v
+		inner join published_version pv1 on v.package_id=pv1.package_id and v.version=pv1.version and v.revision=pv1.revision
+		inner join published_version pv2 on v.previous_package_id=pv2.package_id and v.previous_version=pv2.version and v.previous_revision=pv2.revision
+		inner join package_group pg1 on v.package_id=pg1.id
+		inner join package_group pg2 on v.previous_package_id=pg2.id
 		where pv1.deleted_at is null and pv2.deleted_at is null and pg1.deleted_at is null and pg2.deleted_at is null
-		  and not exists(
-		    select 1 from build b
-		    where b.package_id = vc.package_id
-		      and (string_to_array(b.version, '@'))[1] = vc.version
-		      and (string_to_array(b.version, '@'))[2]::int = vc.revision
-		      and b.metadata->>'build_type' = 'changelog'
-		      and b.metadata->>'previous_version' = vc.previous_version || '@' || vc.previous_revision
-		      and b.metadata->>'previous_version_package_id' = vc.previous_package_id
-		      and (b.status='%s' or b.status='%s')
-				  and b.metadata->>'migration_id' = '%s'
-		  ) %s %s`, view.StatusComplete, view.StatusError, d.ent.Id, wherePackageIn, whereVersionIn)
+		  and (v.metadata is null or not (v.metadata \? 'migration_id') or v.metadata->>'migration_id' is distinct from '%s') %s %s`,
+		d.ent.Id, wherePackageIn, whereVersionIn)
 
-		_, err := d.cp.GetConnection().Query(&postCheckResult.NotMigratedComparisons, notMigratedComparisonsQuery, queryParams...)
-		if err != nil {
-			return fmt.Errorf("failed to query not migrated comparisons: %v", err.Error())
-		}
+	_, err := d.cp.GetConnection().QueryContext(d.migrationCtx, &postCheckResult.NotMigratedComparisons, notMigratedComparisonsQuery, queryParams...)
+	if err != nil {
+		return fmt.Errorf("failed to query not migrated comparisons: %v", err.Error())
 	}
 
 	if len(postCheckResult.NotMigratedVersions) > 0 || len(postCheckResult.NotMigratedComparisons) > 0 {
@@ -135,10 +91,10 @@ func (d OpsMigration) StagePostCheck() error {
 		if err != nil {
 			return fmt.Errorf("failed to store post-check result: %v", err.Error())
 		}
-
-		return fmt.Errorf("Migration post-check failed: found %d not migrated versions and %d not migrated comparisons. ",
-			len(postCheckResult.NotMigratedVersions), len(postCheckResult.NotMigratedComparisons))
 	}
+
+	log.Infof("Migration post-check result: found %d not migrated versions and %d not migrated comparisons. ",
+		len(postCheckResult.NotMigratedVersions), len(postCheckResult.NotMigratedComparisons))
 
 	return nil
 }
