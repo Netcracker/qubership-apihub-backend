@@ -333,12 +333,12 @@ func (p publishedRepositoryImpl) GetReadonlyVersion(packageId string, versionNam
 	}
 	query := `
 	select pv.*,get_latest_revision(coalesce(pv.previous_version_package_id,pv.package_id),pv.previous_version) as previous_version_revision,
-	    usr.name as prl_usr_name, usr.email as prl_usr_email, usr.avatar_url as prl_usr_avatar_url,
+	usr.name as prl_usr_name, usr.email as prl_usr_email, usr.avatar_url as prl_usr_avatar_url,
 		apikey.id as prl_apikey_id, apikey.name as prl_apikey_name,
 		case when coalesce(usr.name, apikey.name)  is null then pv.created_by else usr.user_id end prl_usr_id
 		from published_version as pv
-	    left join user_data usr on usr.user_id = pv.created_by
-	    left join apihub_api_keys apikey on apikey.id = pv.created_by
+	left join user_data usr on usr.user_id = pv.created_by
+	left join apihub_api_keys apikey on apikey.id = pv.created_by
 	where pv.package_id = ?
 		and pv.version = ?
 		and ((? = 0 and pv.revision = get_latest_revision(?,?)) or
@@ -365,12 +365,12 @@ func (p publishedRepositoryImpl) GetRichPackageVersion(packageId string, version
 	query := `
 select pv.*, pg.kind as kind, pg.name as package_name, pg.service_name as service_name, parent_package_names(pg.id) parent_names, get_latest_revision(pv.package_id, pv.version) != pv.revision as not_latest_revision
 from package_group as pg,
-     published_version as pv
+	published_version as pv
 where pv.package_id = ?
 	and pv.version = ?
 	and ((? = 0 and pv.revision = get_latest_revision(pv.package_id, pv.version)) or
 		(? != 0 and pv.revision = ?))
-  and pv.package_id = pg.id
+	and pv.package_id = pg.id
 limit 1
 `
 	_, err = p.cp.GetConnection().QueryOne(result, query, packageId, version, revision, revision, revision)
@@ -1893,9 +1893,9 @@ func (p publishedRepositoryImpl) GetVersionsByPreviousVersion(previousPackageId 
 	query := `
 			select pv.* from published_version pv
 				inner join (
-                                select package_id, version, max(revision) as revision
-                                    from published_version
-                                    group by package_id, version
+					select package_id, version, max(revision) as revision
+					from published_version
+					group by package_id, version
 							) mx
 				on pv.package_id = mx.package_id
 				and pv.version = mx.version
@@ -2234,7 +2234,7 @@ func (p publishedRepositoryImpl) GetReadonlyPackageVersionsWithLimit(searchQuery
 			order by pv.%s %s
 			limit ?limit
 			offset ?offset
- `
+	`
 		_, err := p.cp.GetConnection().Model(&searchQuery).
 			Query(&ents, fmt.Sprintf(query, notCondition, searchQuery.SortBy, searchQuery.SortOrder))
 		if err != nil {
@@ -2281,7 +2281,7 @@ func (p publishedRepositoryImpl) GetVersionRefs(searchQuery entity.PackageVersio
 			and not(refs.package_id = ?package_id and refs.version = ?version and refs.revision = ?revision)
 		offset ?offset
 		limit ?limit;
- 		`
+		`
 	} else {
 		query = `
 		with refs as (
@@ -2411,9 +2411,9 @@ func (p publishedRepositoryImpl) GetLastVersions(ids []string) ([]entity.Publish
 	selectMaxVersionQuery := `
 		SELECT p.*
 		FROM (
-		    SELECT max(published_at) over (partition by package_id) AS _max_published_at, p.*
-		    FROM published_version AS p
-		    WHERE package_id IN (?) AND deleted_at is null
+		SELECT max(published_at) over (partition by package_id) AS _max_published_at, p.*
+		FROM published_version AS p
+		WHERE package_id IN (?) AND deleted_at is null
 		)  p
 		WHERE p.published_at = p._max_published_at;`
 	_, err := p.cp.GetConnection().Query(&versions, selectMaxVersionQuery, pg.In(ids))

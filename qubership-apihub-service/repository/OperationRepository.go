@@ -1336,7 +1336,7 @@ func (o operationRepositoryImpl) GetOperationsTypeCount(packageId string, versio
 		union
 		select ? as package_id, ? as version, ? as revision
 	),
-    depr_count as (
+	depr_count as (
 		select type, count(operation_id) cnt from operation o, versions v
 		where deprecated = true
 		and o.package_id = v.package_id
@@ -1482,13 +1482,13 @@ func (o operationRepositoryImpl) GetDeprecatedOperationsSummary(packageId string
 		and package_id = ? and version = ? and revision = ?
 		group by type
 	),
- 	tagss as (
-		 select type, array_agg(distinct x.value) as tags from operation
+	tagss as (
+		select type, array_agg(distinct x.value) as tags from operation
 			cross join lateral jsonb_array_elements_text(metadata->'tags') as x
-		 where package_id = ? and version = ? and revision = ?
-		 and ((operation.deprecated_items is not null and jsonb_typeof(operation.deprecated_items) = 'array' and jsonb_array_length(operation.deprecated_items) != 0)
+		where package_id = ? and version = ? and revision = ?
+		and ((operation.deprecated_items is not null and jsonb_typeof(operation.deprecated_items) = 'array' and jsonb_array_length(operation.deprecated_items) != 0)
 				or operation.deprecated = true)
-		 group by type
+		group by type
 	)
 
 	select dc.type as type,
@@ -1539,12 +1539,12 @@ func (o operationRepositoryImpl) GetDeprecatedOperationsRefsSummary(packageId st
 				or r.deprecated = true)
 		group by package_id, version, revision,type
 	),
-    tagss as (
-		 select type, array_agg(distinct x.value) as tags, package_id, version,revision from refss
+	tagss as (
+		select type, array_agg(distinct x.value) as tags, package_id, version,revision from refss
 			cross join lateral jsonb_array_elements_text(metadata->'tags') as x
 		where ((deprecated_items is not null and jsonb_typeof(deprecated_items) = 'array' and jsonb_array_length(deprecated_items) != 0)
 			or deprecated = true)
-		 group by package_id, version, revision, type
+		group by package_id, version, revision, type
 	)
 
 	select dc.type as type, dc.package_id as package_id, dc.version as version, dc.revision as revision,
@@ -1890,7 +1890,7 @@ func (o operationRepositoryImpl) GetGroupedOperations(packageId string, version 
 
 	if searchReq.EmptyTag {
 		query.Where(`not exists(select 1 from jsonb_array_elements(operation.metadata -> 'tags') a
-            where a.value != '""') `)
+			where a.value != '""') `)
 	}
 
 	if searchReq.Deprecated != nil {
