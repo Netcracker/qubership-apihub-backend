@@ -2221,7 +2221,7 @@ func (p publishedRepositoryImpl) GetReadonlyPackageVersionsWithLimit(searchQuery
 								from published_version
 								where (package_id = ?package_id)
 								group by package_id, version
-					  ) mx
+						) mx
 			on pv.package_id = mx.package_id
 			and pv.version = mx.version
 			and pv.revision = mx.revision
@@ -2737,7 +2737,7 @@ func (p publishedRepositoryImpl) GetAllChildPackageIdsIncludingParent(parentId s
 	var ents []entity.PackageIdEntity
 
 	query := `with recursive children as (
-    select id from package_group where id=?
+	select id from package_group where id=?
 		UNION ALL
 		select g.id from package_group g inner join children on children.id = g.parent_id)
 	select id from children`
