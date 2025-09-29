@@ -13797,7 +13797,7 @@ paths:
     get:
       summary: Proxy endpoint for try it in case of non-cloud environments.
       description: Allows to send any request to any address.
-      operationId: getAgentsIdNamespacesIdServicesProxy
+      operationId: playgroundProxy
       security:
         - {}
       tags:

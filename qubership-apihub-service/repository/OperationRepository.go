@@ -241,7 +241,7 @@ func (o operationRepositoryImpl) GetOperations(packageId string, version string,
 
 	if searchReq.EmptyTag {
 		query.Where(`not exists(select 1 from jsonb_array_elements(operation.metadata -> 'tags') a
-            where a.value != '""') `)
+			where a.value != '""') `)
 	}
 
 	if searchReq.Deprecated != nil {
@@ -334,7 +334,7 @@ func (o operationRepositoryImpl) GetDeprecatedOperations(packageId string, versi
 	}
 	if searchReq.EmptyTag {
 		query.Where(`not exists(select 1 from jsonb_array_elements(operation.metadata -> 'tags') a
-            where a.value != '""') `)
+			where a.value != '""') `)
 	}
 	if searchReq.EmptyGroup {
 		//todo try to replace this 'not in' condition with join
@@ -442,7 +442,7 @@ func (o operationRepositoryImpl) GetOperationsTags(searchQuery entity.OperationT
 		from
 		(
 			(select '' as tag
-  				from operation o
+				from operation o
 				where o.package_id = ?package_id
 				and o.version = ?version
 				and o.revision = ?revision
@@ -566,7 +566,7 @@ func (o operationRepositoryImpl) GetChangelog_deprecated(searchQuery entity.Chan
 	}
 	if searchQuery.EmptyTag {
 		query.JoinOn(`not exists(select 1 from jsonb_array_elements(o.metadata -> 'tags') a
-            where a.value != '""') `)
+			where a.value != '""') `)
 	}
 
 	if searchQuery.EmptyGroup {
@@ -706,7 +706,7 @@ func (o operationRepositoryImpl) GetChangelog(searchQuery entity.ChangelogSearch
 	}
 	if searchQuery.EmptyTag {
 		query.JoinOn(`not exists(select 1 from jsonb_array_elements(o.metadata -> 'tags') a
-            where a.value != '""') `)
+			where a.value != '""') `)
 	}
 
 	if searchQuery.EmptyGroup {
@@ -863,9 +863,9 @@ func (o operationRepositoryImpl) SearchForOperations_deprecated(searchQuery *ent
 							with filtered as (select data_hash from operations)
 							select
 							ts.data_hash,
-							case when scope_rank = 0 then detailed_scope_rank
-								 when detailed_scope_rank = 0 then scope_rank
-								 else scope_rank * detailed_scope_rank end rank
+				case when scope_rank = 0 then detailed_scope_rank
+					when detailed_scope_rank = 0 then scope_rank
+					else scope_rank * detailed_scope_rank end rank
 							from
 							ts_rest_operation_data ts,
 							filtered f,
@@ -958,9 +958,9 @@ func (o operationRepositoryImpl) SearchForOperations_deprecated(searchQuery *ent
 				on all_ts.data_hash = o.data_hash
 				and ?filter_all = true
 			left join operation_open_count oc
-                on oc.package_id = o.package_id
-                and oc.version = o.version
-                and oc.operation_id = o.operation_id,
+				on oc.package_id = o.package_id
+				and oc.version = o.version
+				and oc.operation_id = o.operation_id,
 			coalesce(?title_weight * (o.title ilike ?text_filter)::int, 0) title_tf,
 			coalesce(?scope_weight * (coalesce(rest_ts.rank, 0) + coalesce(graphql_ts.rank, 0) + coalesce(all_ts.rank, 0)), 0) scope_tf,
 			coalesce(title_tf + scope_tf, 0) init_rank,
@@ -1192,9 +1192,9 @@ func (o operationRepositoryImpl) SearchForOperations(searchQuery *entity.Operati
 							with filtered as (select data_hash from operations)
 							select
 							ts.data_hash,
-							case when scope_rank = 0 then detailed_scope_rank
-								 when detailed_scope_rank = 0 then scope_rank
-								 else scope_rank * detailed_scope_rank end rank
+				case when scope_rank = 0 then detailed_scope_rank
+					when detailed_scope_rank = 0 then scope_rank
+					else scope_rank * detailed_scope_rank end rank
 							from
 							ts_rest_operation_data ts,
 							filtered f,
@@ -1287,9 +1287,9 @@ func (o operationRepositoryImpl) SearchForOperations(searchQuery *entity.Operati
 				on all_ts.data_hash = o.data_hash
 				and ?filter_all = true
 			left join operation_open_count oc
-                on oc.package_id = o.package_id
-                and oc.version = o.version
-                and oc.operation_id = o.operation_id,
+				on oc.package_id = o.package_id
+				and oc.version = o.version
+				and oc.operation_id = o.operation_id,
 			coalesce(?title_weight * (o.title ilike ?text_filter)::int, 0) title_tf,
 			coalesce(?scope_weight * (coalesce(rest_ts.rank, 0) + coalesce(graphql_ts.rank, 0) + coalesce(all_ts.rank, 0)), 0) scope_tf,
 			coalesce(title_tf + scope_tf, 0) init_rank,
@@ -1322,20 +1322,20 @@ func (o operationRepositoryImpl) GetOperationsTypeCount(packageId string, versio
 
 	operationsTypeCountQuery := `
 	with versions as(
-        select s.reference_id as package_id, s.reference_version as version, s.reference_revision as revision
-        from published_version_reference s
+		select s.reference_id as package_id, s.reference_version as version, s.reference_revision as revision
+		from published_version_reference s
 		inner join published_version pv
 		on pv.package_id = s.reference_id
 		and pv.version = s.reference_version
 		and pv.revision = s.reference_revision
-		and pv.deleted_at is %s null
-        where s.package_id = ?
-        and s.version = ?
-        and s.revision = ?
-        and s.excluded = false
-        union
-        select ? as package_id, ? as version, ? as revision
-    ),
+	and pv.deleted_at is %s null
+		where s.package_id = ?
+		and s.version = ?
+		and s.revision = ?
+		and s.excluded = false
+		union
+		select ? as package_id, ? as version, ? as revision
+	),
     depr_count as (
 		select type, count(operation_id) cnt from operation o, versions v
 		where deprecated = true

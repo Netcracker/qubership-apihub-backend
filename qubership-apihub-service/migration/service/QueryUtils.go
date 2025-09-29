@@ -93,12 +93,12 @@ func makeLatestIndependentVersionsQuery(packageIds []string, versionsIn []string
 					)
 				)
 			)
-	  and not exists(
+		and not exists(
 			select 1 from migrated_version mv
 			where mv.version = pv.version
-			  and mv.package_id = pv.package_id
-			  and mv.revision = pv.revision
-              and mv.build_type = 'build'
+				and mv.package_id = pv.package_id
+				and mv.revision = pv.revision
+				and mv.build_type = 'build'
 		) and pkg.deleted_at is null
 	`
 	return getLatestIndependentVersionsQuery

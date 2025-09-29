@@ -291,10 +291,10 @@ func (p publishedRepositoryImpl) GetReadonlyVersion_deprecated(packageId string,
 	query := `
 	select pv.*,get_latest_revision(coalesce(pv.previous_version_package_id,pv.package_id),pv.previous_version) as previous_version_revision, coalesce(usr.name, created_by) user_name from published_version as pv left join user_data usr on usr.user_id = created_by
 	where pv.package_id = ?
-	  and pv.version = ?
-	  and ((? = 0 and pv.revision = get_latest_revision(?,?)) or
-		   (? != 0 and pv.revision = ?))
-	  and deleted_at is null
+		and pv.version = ?
+		and ((? = 0 and pv.revision = get_latest_revision(?,?)) or
+			(? != 0 and pv.revision = ?))
+		and deleted_at is null
 	limit 1
 	`
 	_, err = p.cp.GetConnection().QueryOne(result, query, packageId, version, revision, packageId, version, revision, revision)
@@ -340,10 +340,10 @@ func (p publishedRepositoryImpl) GetReadonlyVersion(packageId string, versionNam
 	    left join user_data usr on usr.user_id = pv.created_by
 	    left join apihub_api_keys apikey on apikey.id = pv.created_by
 	where pv.package_id = ?
-	  and pv.version = ?
-	  and ((? = 0 and pv.revision = get_latest_revision(?,?)) or
-		   (? != 0 and pv.revision = ?))
-	  and pv.deleted_at is %s null
+		and pv.version = ?
+		and ((? = 0 and pv.revision = get_latest_revision(?,?)) or
+			(? != 0 and pv.revision = ?))
+		and pv.deleted_at is %s null
 	limit 1
 	`
 	_, err = p.cp.GetConnection().QueryOne(result, fmt.Sprintf(query, notCondition), packageId, version, revision, packageId, version, revision, revision)
@@ -367,9 +367,9 @@ select pv.*, pg.kind as kind, pg.name as package_name, pg.service_name as servic
 from package_group as pg,
      published_version as pv
 where pv.package_id = ?
-  and pv.version = ?
-  and ((? = 0 and pv.revision = get_latest_revision(pv.package_id, pv.version)) or
-         (? != 0 and pv.revision = ?))
+	and pv.version = ?
+	and ((? = 0 and pv.revision = get_latest_revision(pv.package_id, pv.version)) or
+		(? != 0 and pv.revision = ?))
   and pv.package_id = pg.id
 limit 1
 `
@@ -401,7 +401,7 @@ func (p publishedRepositoryImpl) GetVersionRevisionsList_deprecated(searchQuery 
 			order by pv.revision desc
 			limit ?limit
 			offset ?offset;
- `
+	`
 	_, err := p.cp.GetConnection().Model(&searchQuery).Query(&ents, query)
 	if err != nil {
 		return nil, err
@@ -415,7 +415,7 @@ func (p publishedRepositoryImpl) GetVersionRevisionsList(searchQuery entity.Pack
 	}
 	query := `
 		select pv.*, pv.revision != get_latest_revision(pv.package_id, pv.version) as not_latest_revision,
-	    	us.user_id as prl_usr_id, us.name as prl_usr_name, us.email as prl_usr_email, us.avatar_url as prl_usr_avatar_url,
+			us.user_id as prl_usr_id, us.name as prl_usr_name, us.email as prl_usr_email, us.avatar_url as prl_usr_avatar_url,
 			apikey.id as prl_apikey_id, apikey.name as prl_apikey_name,
 			case when coalesce(us.name, apikey.name)  is null then pv.created_by else us.user_id end prl_usr_id
 			from published_version as pv
@@ -431,7 +431,7 @@ func (p publishedRepositoryImpl) GetVersionRevisionsList(searchQuery entity.Pack
 			order by pv.revision desc
 			limit ?limit
 			offset ?offset;
- `
+	`
 	_, err := p.cp.GetConnection().Model(&searchQuery).Query(&ents, query)
 	if err != nil {
 		return nil, err
@@ -1265,7 +1265,7 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 				calculateFullTextSearchOperationsQuery := `
 					insert into fts_operation_data
 					select data_hash,
-						   to_tsvector(convert_from(data,'UTF-8'))  data_vector
+						to_tsvector(convert_from(data,'UTF-8'))  data_vector
 					from operation_data where operation_data.data_hash in (select distinct data_hash from operation where package_id = ? and version = ? and revision = ?)
 					on conflict (data_hash) do update set data_vector = EXCLUDED.data_vector`
 				_, err = tx.Exec(calculateFullTextSearchOperationsQuery,
@@ -1724,11 +1724,11 @@ func (p publishedRepositoryImpl) GetLatestContentByVersion(packageId string, ver
 	query := `
 		SELECT p.*
 		FROM (
-		    SELECT max(revision) over (partition by package_id, version) AS _max_revision, p.*
-		    FROM published_version AS p
-		    WHERE p.package_id = ?
-		      AND p.version = ?
-			  AND p.deleted_at is null
+			SELECT max(revision) over (partition by package_id, version) AS _max_revision, p.*
+			FROM published_version AS p
+			WHERE p.package_id = ?
+				AND p.version = ?
+				AND p.deleted_at is null
 		)  p
 		WHERE p.revision = p._max_revision LIMIT 1;`
 	_, err = p.cp.GetConnection().Query(&latestVersionRev, query, packageId, version)
@@ -1896,15 +1896,15 @@ func (p publishedRepositoryImpl) GetVersionsByPreviousVersion(previousPackageId 
                                 select package_id, version, max(revision) as revision
                                     from published_version
                                     group by package_id, version
-                          ) mx
-                on pv.package_id = mx.package_id
-                and pv.version = mx.version
-                and pv.revision = mx.revision
+							) mx
+				on pv.package_id = mx.package_id
+				and pv.version = mx.version
+				and pv.revision = mx.revision
 			where (pv.previous_version_package_id = ? or (pv.package_id = ? and pv.previous_version_package_id is null))
 			and pv.previous_version = ?
 			and pv.deleted_at is null
 			order by pv.published_at desc
- `
+	`
 	_, err = p.cp.GetConnection().Query(&ents, query, previousPackageId, previousPackageId, previousVersion)
 	if err != nil {
 		if err == pg.ErrNoRows {
@@ -1980,7 +1980,7 @@ func (p publishedRepositoryImpl) GetPackageVersionsWithLimit(searchQuery entity.
 								from published_version
 								where (package_id = ?package_id)
 								group by package_id, version
-					  ) mx
+						) mx
 			on pv.package_id = mx.package_id
 			and pv.version = mx.version
 			and pv.revision = mx.revision
@@ -1991,7 +1991,7 @@ func (p publishedRepositoryImpl) GetPackageVersionsWithLimit(searchQuery entity.
 			order by pv.published_at desc
 			limit ?limit
 			offset ?offset
- `
+	`
 		_, err := p.cp.GetConnection().Model(&searchQuery).Query(&ents, query)
 		if err != nil {
 			if err == pg.ErrNoRows {
@@ -2092,7 +2092,7 @@ func (p publishedRepositoryImpl) GetReadonlyPackageVersionsWithLimit_deprecated(
 								from published_version
 								where (package_id = ?package_id)
 								group by package_id, version
-					  ) mx
+						) mx
 			on pv.package_id = mx.package_id
 			and pv.version = mx.version
 			and pv.revision = mx.revision
@@ -2105,7 +2105,7 @@ func (p publishedRepositoryImpl) GetReadonlyPackageVersionsWithLimit_deprecated(
 			order by pv.%s %s
 			limit ?limit
 			offset ?offset
- `
+	`
 		_, err := p.cp.GetConnection().Model(&searchQuery).
 			Query(&ents, fmt.Sprintf(query, searchQuery.SortBy, searchQuery.SortOrder))
 		if err != nil {
@@ -2142,10 +2142,10 @@ func (p publishedRepositoryImpl) GetReadonlyPackageVersionsWithLimit(searchQuery
 	if checkRevisions {
 		query := `
 		select pv.*, get_latest_revision(coalesce(pv.previous_version_package_id,pv.package_id), pv.previous_version) as previous_version_revision,
-		    usr.name as prl_usr_name, usr.email as prl_usr_email, usr.avatar_url as prl_usr_avatar_url,
+			usr.name as prl_usr_name, usr.email as prl_usr_email, usr.avatar_url as prl_usr_avatar_url,
 			apikey.id as prl_apikey_id, apikey.name as prl_apikey_name,
 			case when coalesce(usr.name, apikey.name)  is null then pv.created_by else usr.user_id end prl_usr_id
-		    from published_version pv
+			from published_version pv
 			left join user_data usr on usr.user_id = pv.created_by
 			left join apihub_api_keys apikey on apikey.id = pv.created_by
 			where pv.deleted_at is null
@@ -2212,10 +2212,10 @@ func (p publishedRepositoryImpl) GetReadonlyPackageVersionsWithLimit(searchQuery
 	} else {
 		query := `
 			select pv.*, get_latest_revision(coalesce(pv.previous_version_package_id,pv.package_id), pv.previous_version) as previous_version_revision,
-			       usr.name as prl_usr_name, usr.email as prl_usr_email, usr.avatar_url as prl_usr_avatar_url,
-			       apikey.id as prl_apikey_id, apikey.name as prl_apikey_name,
-				   case when coalesce(usr.name, apikey.name) is null then pv.created_by else usr.user_id end prl_usr_id
-			       from published_version pv
+				usr.name as prl_usr_name, usr.email as prl_usr_email, usr.avatar_url as prl_usr_avatar_url,
+				apikey.id as prl_apikey_id, apikey.name as prl_apikey_name,
+				case when coalesce(usr.name, apikey.name) is null then pv.created_by else usr.user_id end prl_usr_id
+				from published_version pv
 			inner join (
 							select package_id, version, max(revision) as revision
 								from published_version
@@ -2263,11 +2263,11 @@ func (p publishedRepositoryImpl) GetVersionRefs(searchQuery entity.PackageVersio
 					and revision = ?revision
 					and excluded = false
 			)
-		select pg.id as package_id,
-		 	pg.name as package_name,
-		  	pg.kind as kind,
-		   	pub_version.version as version,
-		    pub_version.status as version_status,
+	select pg.id as package_id,
+			pg.name as package_name,
+			pg.kind as kind,
+			pub_version.version as version,
+			pub_version.status as version_status,
 			pub_version.revision as revision,
 			pub_version.deleted_at,
 			pub_version.deleted_by
@@ -2293,10 +2293,10 @@ func (p publishedRepositoryImpl) GetVersionRefs(searchQuery entity.PackageVersio
 				and excluded = false
 		)
 			select pg.id as package_id,
-			 	pg.name as package_name,
-			  	pg.kind as kind,
-			   	pub_version.version as version,
-			    pub_version.status as version_status,
+				pg.name as package_name,
+				pg.kind as kind,
+				pub_version.version as version,
+				pub_version.status as version_status,
 				pub_version.revision as revision,
 				pub_version.deleted_at,
 				pub_version.deleted_by
@@ -2430,9 +2430,9 @@ func (p publishedRepositoryImpl) GetLastVersion(id string) (*entity.PublishedVer
 	selectMaxVersionQuery := `
 		SELECT p.*
 		FROM (
-		    SELECT max(published_at) over (partition by package_id) AS _max_published_at, p.*
-		    FROM published_version AS p
-		    WHERE package_id = ? AND deleted_at is null
+			SELECT max(published_at) over (partition by package_id) AS _max_published_at, p.*
+			FROM published_version AS p
+			WHERE package_id = ? AND deleted_at is null
 		)  p
 		WHERE p.published_at = p._max_published_at LIMIT 1;`
 	_, err := p.cp.GetConnection().Query(version, selectMaxVersionQuery, id)
@@ -3597,7 +3597,7 @@ func (p publishedRepositoryImpl) GetVersionRevisionContentForDocumentsTransforma
 					on go.operation_id = any(published_version_revision_content.operation_ids)
 					and published_version_revision_content.package_id = go.package_id
 					and published_version_revision_content.version = go.version
- 				    and published_version_revision_content.revision = go.revision
+					and published_version_revision_content.revision = go.revision
 					and go.group_id = ?`, searchQuery.OperationGroup)
 	}
 
@@ -4068,9 +4068,9 @@ func (p publishedRepositoryImpl) clearAdHocComparisons(tx *pg.Tx, packageId stri
 				DELETE FROM version_comparison
 				WHERE comparison_id = ?
 				AND NOT EXISTS (
-    				SELECT 1
-    				FROM version_comparison
-    				WHERE ? = ANY(refs)
+					SELECT 1
+					FROM version_comparison
+					WHERE ? = ANY(refs)
 				)
 			`, comparisonId, comparisonId)
 			if err != nil {
@@ -4146,9 +4146,9 @@ func (p publishedRepositoryImpl) DeleteVersionComparison(ctx context.Context, co
 			DELETE FROM version_comparison
 			WHERE comparison_id = ?
 			AND NOT EXISTS (
-    			SELECT 1
-    			FROM version_comparison
-    			WHERE ? = ANY(refs)
+				SELECT 1
+				FROM version_comparison
+				WHERE ? = ANY(refs)
 			)
 		`, comparisonId, comparisonId)
 		if err != nil {
