@@ -1181,7 +1181,6 @@ func (v versionServiceImpl) getVersionOperationTypes(versionEnt *entity.PackageV
 			}
 		}
 	}
-	//TODO: discuss it
 	if includeOperations {
 		operationTypes, err := v.operationRepo.GetOperationsTypes(versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
 		if err != nil {
