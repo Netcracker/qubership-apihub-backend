@@ -106,8 +106,8 @@ func makeComparisonsQuery(packageIds []string, versionsIn []string, migrationId 
 	if !isComparisonsOnly {
 		//both versions should be migrated
 		query += fmt.Sprintf(`
-		and exists (select 1 from build b1 where b1.package_id = vc.package_id and b1.version like vc.version || '@%%' and b1.metadata->>'migration_id' = '%s' and b1.metadata->>'build_type' = 'build' and  b1.status='%s')
-		and exists (select 1 from build b2 where b2.package_id = vc.previous_package_id and b2.version like vc.previous_version || '@%%' and b2.metadata->>'migration_id' = '%s' and b2.metadata->>'build_type' = 'build' and b2.status='%s')`,
+		and exists (select 1 from build b1 where b1.package_id = vc.package_id and b1.version = concat(vc.version,'@',vc.revision) and b1.metadata->>'migration_id' = '%s' and b1.metadata->>'build_type' = 'build' and  b1.status='%s')
+		and exists (select 1 from build b2 where b2.package_id = vc.previous_package_id and b2.version = concat(vc.previous_version,'@',previous_revision) and b2.metadata->>'migration_id' = '%s' and b2.metadata->>'build_type' = 'build' and b2.status='%s')`,
 			migrationId, view.StatusComplete, migrationId, view.StatusComplete)
 	}
 
