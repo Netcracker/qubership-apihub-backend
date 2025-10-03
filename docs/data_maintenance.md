@@ -111,7 +111,7 @@ The comparisons cleanup job is configured via configuration properties:
 |--------------------------------------|---------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `cleanup.comparisons.ttlDays`        | `30`          | Number of days to keep ad-hoc comparisons before they become eligible for deletion                                                                                                                 |
 | `cleanup.comparisons.schedule`       | `0 5 * * 0`   | Cron schedule for the cleanup job (Sunday 5:00 AM by default)                                                                                                                                      |
-| `cleanup.comparisons.timeoutMinutes` | `720`         | Maximum execution time for the cleanup in minutes. After the timeout, the job will not be terminated immediately. 'VACUUM FULL' will be performed on the affected tables prior to job termination. |
+| `cleanup.comparisons.timeoutMinutes` | `360`         | Maximum execution time for the cleanup in minutes. After the timeout, the job will not be terminated immediately. 'VACUUM FULL' will be performed on the affected tables prior to job termination. |
 
 The job includes a vacuum phase that runs after the main cleanup to optimize affected database tables.
 
@@ -144,7 +144,7 @@ The soft deleted data cleanup job is configured via configuration properties:
 |------------------------------------------|---------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `cleanup.softDeletedData.ttlDays`        | `730`         | Number of days to keep soft-deleted data before permanent deletion                                                                                                                                 |
 | `cleanup.softDeletedData.schedule`       | `0 22 * * 5`  | Cron schedule for the cleanup job (Friday 10:00 PM by default)                                                                                                                                     |
-| `cleanup.softDeletedData.timeoutMinutes` | `1200`        | Maximum execution time for the cleanup in minutes. After the timeout, the job will not be terminated immediately. 'VACUUM FULL' will be performed on the affected tables prior to job termination. |
+| `cleanup.softDeletedData.timeoutMinutes` | `600`         | Maximum execution time for the cleanup in minutes. After the timeout, the job will not be terminated immediately. 'VACUUM FULL' will be performed on the affected tables prior to job termination. |
 
 ### How job works
 

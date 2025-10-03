@@ -40,9 +40,10 @@ const (
 	maxErrorMessageLength    = 1000
 	sharedLockName           = "cleanup_job_lock"
 
-	jobTypeRevisions   cleanupJobType = "revisions"
-	jobTypeComparisons cleanupJobType = "comparisons"
-	jobTypeDeletedData cleanupJobType = "soft deleted data"
+	jobTypeRevisions        cleanupJobType = "revisions"
+	jobTypeComparisons      cleanupJobType = "comparisons"
+	jobTypeDeletedData      cleanupJobType = "soft deleted data"
+	jobTypeUnreferencedData cleanupJobType = "unreferenced data"
 
 	statusRunning  jobStatus = "running"
 	statusComplete jobStatus = "complete"
@@ -55,6 +56,7 @@ type CleanupService interface {
 	CreateRevisionsCleanupJob(publishedRepo repository.PublishedRepository, migrationRepository mRepository.MigrationRunRepository, versionCleanupRepo repository.VersionCleanupRepository, lockService LockService, instanceId string, schedule string, deleteLastRevision bool, deleteReleaseRevision bool, ttl int) error
 	CreateComparisonsCleanupJob(publishedRepo repository.PublishedRepository, migrationRepository mRepository.MigrationRunRepository, comparisonCleanupRepo repository.ComparisonCleanupRepository, lockService LockService, instanceId string, schedule string, timeoutMinutes int, ttl int) error
 	CreateSoftDeletedDataCleanupJob(publishedRepo repository.PublishedRepository, migrationRepository mRepository.MigrationRunRepository, deletedDataCleanupRepo repository.SoftDeletedDataCleanupRepository, lockService LockService, instanceId string, schedule string, timeoutMinutes int, ttl int) error
+	CreateUnreferencedDataCleanupJob(migrationRepository mRepository.MigrationRunRepository, unreferencedDataCleanupRepo repository.UnreferencedDataCleanupRepository, lockService LockService, instanceId string, schedule string, timeoutMinutes int) error
 }
 
 func NewCleanupService(cp db.ConnectionProvider) CleanupService {
@@ -206,7 +208,6 @@ func (c cleanupServiceImpl) CreateRevisionsCleanupJob(publishedRepository reposi
 	job := &revisionsCleanupJob{
 		baseCleanupJob: baseCleanupJob{
 			cp:                  c.cp,
-			publishedRepository: publishedRepository,
 			migrationRepository: migrationRepository,
 			lockService:         lockService,
 			instanceId:          instanceId,
@@ -215,6 +216,7 @@ func (c cleanupServiceImpl) CreateRevisionsCleanupJob(publishedRepository reposi
 			timeout:             timeout,
 		},
 		versionCleanupRepository: versionCleanupRepository,
+		publishedRepository:      publishedRepository,
 		deleteLastRevision:       deleteLastRevision,
 		deleteReleaseRevision:    deleteReleaseRevision,
 	}
@@ -226,7 +228,6 @@ func (c cleanupServiceImpl) CreateComparisonsCleanupJob(publishedRepo repository
 	job := &comparisonsCleanupJob{
 		baseCleanupJob: baseCleanupJob{
 			cp:                  c.cp,
-			publishedRepository: publishedRepo,
 			migrationRepository: migrationRepository,
 			lockService:         lockService,
 			instanceId:          instanceId,
@@ -234,6 +235,7 @@ func (c cleanupServiceImpl) CreateComparisonsCleanupJob(publishedRepo repository
 			jobType:             jobTypeComparisons,
 			timeout:             timeout,
 		},
+		publishedRepository:   publishedRepo,
 		comparisonCleanupRepo: comparisonCleanupRepo,
 	}
 	return c.addCleanupJob(job, schedule, jobTypeComparisons)
@@ -244,7 +246,6 @@ func (c cleanupServiceImpl) CreateSoftDeletedDataCleanupJob(publishedRepo reposi
 	job := &softDeletedDataCleanupJob{
 		baseCleanupJob: baseCleanupJob{
 			cp:                  c.cp,
-			publishedRepository: publishedRepo,
 			migrationRepository: migrationRepository,
 			lockService:         lockService,
 			instanceId:          instanceId,
@@ -252,9 +253,26 @@ func (c cleanupServiceImpl) CreateSoftDeletedDataCleanupJob(publishedRepo reposi
 			jobType:             jobTypeDeletedData,
 			timeout:             timeout,
 		},
+		publishedRepository:    publishedRepo,
 		deletedDataCleanupRepo: deletedDataCleanupRepo,
 	}
 	return c.addCleanupJob(job, schedule, jobTypeDeletedData)
+}
+
+func (c cleanupServiceImpl) CreateUnreferencedDataCleanupJob(migrationRepository mRepository.MigrationRunRepository, unreferencedDataCleanupRepo repository.UnreferencedDataCleanupRepository, lockService LockService, instanceId string, schedule string, timeoutMinutes int) error {
+	timeout := time.Duration(timeoutMinutes) * time.Minute
+	job := &unreferencedDataCleanupJob{
+		baseCleanupJob: baseCleanupJob{
+			cp:                  c.cp,
+			migrationRepository: migrationRepository,
+			lockService:         lockService,
+			instanceId:          instanceId,
+			jobType:             jobTypeUnreferencedData,
+			timeout:             timeout,
+		},
+		unreferencedDataCleanupRepo: unreferencedDataCleanupRepo,
+	}
+	return c.addCleanupJob(job, schedule, jobTypeUnreferencedData)
 }
 
 func (c cleanupServiceImpl) addCleanupJob(job cron.Job, schedule string, jobType cleanupJobType) error {
@@ -279,7 +297,6 @@ func (c cleanupServiceImpl) addCleanupJob(job cron.Job, schedule string, jobType
 
 type baseCleanupJob struct {
 	cp                  db.ConnectionProvider
-	publishedRepository repository.PublishedRepository
 	migrationRepository mRepository.MigrationRunRepository
 	lockService         LockService
 	instanceId          string
@@ -364,6 +381,7 @@ func (j *baseCleanupJob) createUpdateContext(ctx context.Context) (context.Conte
 
 type revisionsCleanupJob struct {
 	baseCleanupJob
+	publishedRepository      repository.PublishedRepository
 	versionCleanupRepository repository.VersionCleanupRepository
 	deleteLastRevision       bool
 	deleteReleaseRevision    bool
@@ -553,6 +571,7 @@ func (j *revisionsCleanupJob) updateCleanupRun(ctx context.Context, jobId string
 
 type comparisonsCleanupJob struct {
 	baseCleanupJob
+	publishedRepository   repository.PublishedRepository
 	comparisonCleanupRepo repository.ComparisonCleanupRepository
 }
 
@@ -767,6 +786,7 @@ func (j *comparisonsCleanupJob) updateCleanupRun(ctx context.Context, jobId stri
 
 type softDeletedDataCleanupJob struct {
 	baseCleanupJob
+	publishedRepository    repository.PublishedRepository
 	deletedDataCleanupRepo repository.SoftDeletedDataCleanupRepository
 }
 
@@ -807,7 +827,7 @@ func (j *softDeletedDataCleanupJob) Run() {
 	cleanupCtx, cleanupCancel := context.WithTimeout(jobCtx, j.timeout)
 	defer cleanupCancel()
 	isTimeout := false
-	processingErrors, cleanupErr := j.processDeletedDataCleanup(cleanupCtx, jobId, deleteBefore)
+	processingErrors, cleanupErr := j.processDeletedData(cleanupCtx, jobId, deleteBefore)
 	if cleanupErr != nil {
 		log.Warnf("Cleanup phase for job %s completed with error, but continuing to vacuum: %v", jobId, cleanupErr)
 		processingErrors = append(processingErrors, fmt.Sprintf("cleanup stopped: %s", cleanupErr.Error()))
@@ -853,7 +873,7 @@ func (j *softDeletedDataCleanupJob) initializeCleanupRun(ctx context.Context, jo
 	return nil
 }
 
-func (j *softDeletedDataCleanupJob) processDeletedDataCleanup(ctx context.Context, jobId string, deleteBefore time.Time) ([]string, error) {
+func (j *softDeletedDataCleanupJob) processDeletedData(ctx context.Context, jobId string, deleteBefore time.Time) ([]string, error) {
 	processingErrors := []string{}
 
 	log.Infof("[soft deleted data cleanup] Starting cleanup of packages deleted before %s", deleteBefore)
@@ -949,6 +969,248 @@ func (j *softDeletedDataCleanupJob) updateCleanupRun(ctx context.Context, jobId 
 	defer cancel()
 
 	err := j.deletedDataCleanupRepo.UpdateCleanupRun(updateCtx, jobId, string(status), errorMessage, finishedAt)
+	if err != nil {
+		log.Errorf("failed to set '%s' status for cleanup job id %s: %s", status, jobId, err.Error())
+		return err
+	}
+	return nil
+}
+
+type unreferencedDataCleanupJob struct {
+	baseCleanupJob
+	unreferencedDataCleanupRepo repository.UnreferencedDataCleanupRepository
+}
+
+func (j *unreferencedDataCleanupJob) Run() {
+	jobId := uuid.New().String()
+
+	vacuumTimeout := 3 * time.Hour
+	jobTimeout := j.timeout + vacuumTimeout //an extended timeout is required to hold the lock for the entire duration of the job; the configured timeout is used for the main stage of the job, and an additional timeout is applied for performing VACUUM FULL on the affected tables
+	jobCtx, jobCancel := context.WithTimeout(context.Background(), jobTimeout)
+	defer jobCancel()
+
+	defer func() {
+		if err := recover(); err != nil {
+			errorMsg := fmt.Sprintf("Soft deleted data cleanup job %s failed with panic: %v", jobId, err)
+			log.Errorf("%s", errorMsg)
+			finishedAt := time.Now()
+			_ = j.updateCleanupRun(jobCtx, jobId, statusError, errorMsg, &finishedAt)
+		}
+	}()
+
+	if j.isMigrationRunning() {
+		return
+	}
+
+	log.Infof("Starting soft deleted data cleanup job %s with TTL %d days, cleanup timeout %v", jobId, j.ttl, j.timeout)
+
+	if !j.acquireLock(jobCtx, jobId, jobCancel) {
+		return
+	}
+	defer j.releaseLock(jobCtx)
+	log.Debugf("Successfully acquired distributed lock for soft deleted data cleanup job %s", jobId)
+
+	deleteBefore := time.Now().AddDate(0, 0, -j.ttl)
+	if err := j.initializeCleanupRun(jobCtx, jobId, deleteBefore); err != nil {
+		return
+	}
+
+	cleanupCtx, cleanupCancel := context.WithTimeout(jobCtx, j.timeout)
+	defer cleanupCancel()
+	isTimeout := false
+	processingErrors, cleanupErr := j.processUnreferencedData(cleanupCtx, jobId, deleteBefore)
+	if cleanupErr != nil {
+		log.Warnf("Cleanup phase for job %s completed with error, but continuing to vacuum: %v", jobId, cleanupErr)
+		processingErrors = append(processingErrors, fmt.Sprintf("cleanup stopped: %s", cleanupErr.Error()))
+		if cleanupCtx.Err() == context.DeadlineExceeded {
+			log.Warnf("Cleanup phase for job %s timed out", jobId)
+			isTimeout = true
+		}
+	} else {
+		log.Debugf("Cleanup phase for job %s completed successfully", jobId)
+	}
+
+	vacuumCtx, vacuumCancel := context.WithTimeout(jobCtx, vacuumTimeout)
+	defer vacuumCancel()
+	log.Debugf("Starting vacuum phase for job %s with timeout %v", jobId, vacuumTimeout)
+	vacuumErr := j.unreferencedDataCleanupRepo.VacuumAffectedTables(vacuumCtx, jobId)
+	if vacuumErr != nil {
+		log.Warnf("Vacuum phase failed for job %s: %v", jobId, vacuumErr)
+		processingErrors = append(processingErrors, vacuumErr.Error())
+		if vacuumCtx.Err() == context.DeadlineExceeded {
+			log.Warnf("Vacuum phase for job %s timed out", jobId)
+			isTimeout = true
+		}
+	} else {
+		log.Debugf("Vacuum phase for job %s completed successfully", jobId)
+	}
+
+	j.finishCleanupRun(jobCtx, jobId, processingErrors, isTimeout)
+}
+
+func (j *unreferencedDataCleanupJob) initializeCleanupRun(ctx context.Context, jobId string, deleteBefore time.Time) error {
+	err := j.unreferencedDataCleanupRepo.StoreCleanupRun(ctx, entity.UnreferencedDataCleanupEntity{
+		RunId:      jobId,
+		InstanceId: j.instanceId,
+		Status:     string(statusRunning),
+		StartedAt:  time.Now(),
+	})
+	if err != nil {
+		log.Errorf("Failed to initialize cleanup run for job %s: %v", jobId, err)
+		return err
+	}
+
+	return nil
+}
+
+func (j *unreferencedDataCleanupJob) processUnreferencedData(ctx context.Context, jobId string, deleteBefore time.Time) ([]string, error) {
+	processingErrors := []string{}
+
+	log.Info("[unreferenced data cleanup] Starting cleanup of unreferenced operation data")
+
+	batchSize := 100
+	for {
+		select {
+		case <-ctx.Done():
+			errorMessage := "distributed lock was lost"
+			if ctx.Err() == context.DeadlineExceeded {
+				errorMessage = "cleanup timeout"
+			}
+			log.Warnf("Unreferenced data cleanup job %s interrupted during operation data cleanup - %s", jobId, errorMessage)
+			return processingErrors, fmt.Errorf("job interrupted - %s", errorMessage)
+		default:
+		}
+
+		deletedItems, err := j.unreferencedDataCleanupRepo.DeleteUnreferencedOperationData(ctx, jobId, batchSize)
+		if err != nil {
+			log.Warnf("[unreferenced data cleanup] Failed to delete operation data: %v", err)
+			processingErrors = append(processingErrors, fmt.Sprintf("failed to delete operation data: %s", err.Error()))
+			continue
+		}
+
+		if deletedItems == 0 {
+			log.Debug("[unreferenced data cleanup] No more operation data to delete")
+			break
+		}
+		log.Infof("[unreferenced data cleanup] Deleted %d items during operation data deletion", deletedItems)
+	}
+
+	log.Infof("[unreferenced data cleanup] Starting cleanup of unreferenced operation group templates")
+	for {
+		select {
+		case <-ctx.Done():
+			errorMessage := "distributed lock was lost"
+			if ctx.Err() == context.DeadlineExceeded {
+				errorMessage = "cleanup timeout"
+			}
+			log.Warnf("Unreferenced data cleanup job %s interrupted during operation group templates cleanup - %s", jobId, errorMessage)
+			return processingErrors, fmt.Errorf("job interrupted - %s", errorMessage)
+		default:
+		}
+
+		deletedItems, err := j.unreferencedDataCleanupRepo.DeleteUnreferencedOperationGroupTemplates(ctx, jobId, batchSize)
+		if err != nil {
+			log.Warnf("[unreferenced data cleanup] Failed to delete operation group templates: %v", err)
+			processingErrors = append(processingErrors, fmt.Sprintf("failed to delete operation group templates: %s", err.Error()))
+			continue
+		}
+
+		if deletedItems == 0 {
+			log.Debug("[unreferenced data cleanup] No more operation group templates to delete")
+			break
+		}
+		log.Infof("[unreferenced data cleanup] Deleted %d items during operation group templates deletion", deletedItems)
+	}
+
+	log.Infof("[unreferenced data cleanup] Starting cleanup of unreferenced source archives")
+	for {
+		select {
+		case <-ctx.Done():
+			errorMessage := "distributed lock was lost"
+			if ctx.Err() == context.DeadlineExceeded {
+				errorMessage = "cleanup timeout"
+			}
+			log.Warnf("Unreferenced data cleanup job %s interrupted during source archives cleanup - %s", jobId, errorMessage)
+			return processingErrors, fmt.Errorf("job interrupted - %s", errorMessage)
+		default:
+		}
+
+		deletedItems, err := j.unreferencedDataCleanupRepo.DeleteUnreferencedSrcArchives(ctx, jobId, batchSize)
+		if err != nil {
+			log.Warnf("[unreferenced data cleanup] Failed to delete source archives: %v", err)
+			processingErrors = append(processingErrors, fmt.Sprintf("failed to delete source archives: %s", err.Error()))
+			continue
+		}
+
+		if deletedItems == 0 {
+			log.Debug("[unreferenced data cleanup] No more source archives to delete")
+			break
+		}
+		log.Infof("[unreferenced data cleanup] Deleted %d items during source archives deletion", deletedItems)
+	}
+
+	log.Infof("[unreferenced data cleanup] Starting cleanup of unreferenced publish data")
+	for {
+		select {
+		case <-ctx.Done():
+			errorMessage := "distributed lock was lost"
+			if ctx.Err() == context.DeadlineExceeded {
+				errorMessage = "cleanup timeout"
+			}
+			log.Warnf("Unreferenced data cleanup job %s interrupted during publish data cleanup - %s", jobId, errorMessage)
+			return processingErrors, fmt.Errorf("job interrupted - %s", errorMessage)
+		default:
+		}
+
+		deletedItems, err := j.unreferencedDataCleanupRepo.DeleteUnreferencedPublishedData(ctx, jobId, batchSize)
+		if err != nil {
+			log.Warnf("[unreferenced data cleanup] Failed to delete publish data: %v", err)
+			processingErrors = append(processingErrors, fmt.Sprintf("failed to delete publish data: %s", err.Error()))
+			continue
+		}
+
+		if deletedItems == 0 {
+			log.Debug("[unreferenced data cleanup] No more publish data to delete")
+			break
+		}
+		log.Infof("[unreferenced data cleanup] Deleted %d items during publish data deletion", deletedItems)
+	}
+
+	return processingErrors, nil
+}
+
+func (j *unreferencedDataCleanupJob) finishCleanupRun(ctx context.Context, jobId string, errors []string, isTimeout bool) {
+	status := statusComplete
+	errorMessage := ""
+
+	if isTimeout {
+		status = statusTimeout
+	} else if len(errors) > 0 {
+		status = statusError
+	}
+	if len(errors) > 0 {
+		errorMessage = fmt.Sprintf("Unreferenced data cleanup finished with errors: %s", strings.Join(errors, "; "))
+	}
+
+	finishedAt := time.Now()
+	if err := j.updateCleanupRun(ctx, jobId, status, errorMessage, &finishedAt); err != nil {
+		logErrorMessage := errorMessage
+		runes := []rune(logErrorMessage)
+		if len(runes) > maxErrorMessageLength {
+			logErrorMessage = string(runes[:maxErrorMessageLength-3]) + "..."
+		}
+		log.Errorf("Failed to save cleanup run state: %v, jobId: %s, status: %s, errorMessage: %s", err, jobId, status, logErrorMessage)
+		return
+	}
+
+	log.Infof("Unreferenced data cleanup job %s finished with status '%s'.", jobId, status)
+}
+
+func (j *unreferencedDataCleanupJob) updateCleanupRun(ctx context.Context, jobId string, status jobStatus, errorMessage string, finishedAt *time.Time) error {
+	updateCtx, cancel := j.createUpdateContext(ctx)
+	defer cancel()
+
+	err := j.unreferencedDataCleanupRepo.UpdateCleanupRun(updateCtx, jobId, string(status), errorMessage, finishedAt)
 	if err != nil {
 		log.Errorf("failed to set '%s' status for cleanup job id %s: %s", status, jobId, err.Error())
 		return err
