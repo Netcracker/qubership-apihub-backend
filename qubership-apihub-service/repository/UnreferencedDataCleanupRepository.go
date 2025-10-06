@@ -366,6 +366,17 @@ func (u unreferencedDataCleanupRepositoryImpl) VacuumAffectedTables(ctx context.
 				log.Tracef("Successfully vacuumed 'ts_operation_data' table for cleanup run %s", runId)
 			}
 		}
+		if deletedItems.FTSOperationData > 0 {
+			log.Debugf("Vacuuming 'fts_operation_data' table for %d deleted entries (runId=%s)", deletedItems.FTSOperationData, runId)
+			_, err = u.cp.GetConnection().ExecContext(ctx, "VACUUM FULL fts_operation_data")
+			if err != nil {
+				errorMsg := fmt.Sprintf("Failed to vacuum 'fts_operation_data' table: %v", err)
+				log.Warn(errorMsg)
+				vacuumErrors = append(vacuumErrors, errorMsg)
+			} else {
+				log.Tracef("Successfully vacuumed 'fts_operation_data' table for cleanup run %s", runId)
+			}
+		}
 		if deletedItems.OperationGroupTemplate > 0 {
 			log.Debugf("Vacuuming 'operation_group_template' table for %d deleted entries (runId=%s)", deletedItems.OperationGroupTemplate, runId)
 			_, err = u.cp.GetConnection().ExecContext(ctx, "VACUUM FULL operation_group_template")
