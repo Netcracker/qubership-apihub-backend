@@ -18031,6 +18031,34 @@ components:
                       type: string
                     changesSummary:
                       $ref: "#/components/schemas/ChangeSummary"
+                    numberOfImpactedOperations:
+                      allOf:
+                        - $ref: '#/components/schemas/ChangeSummary'
+                        - type: object
+                          description: Number of operations impacted by each severety type.
+                    apiAudienceTransitions:
+                          type: array
+                          description: Shows transitions of operations' apiAudience value (compared to the previous release version) and number of operations in which this transition occurred. The array contains only records of transitions that actually occurred in operations.
+                          items:
+                            type: object
+                            properties:
+                              currentAudience:
+                                type: string
+                                description: Current apiAudience value (currentAudience must not be equal to previousAudience)
+                                enum:
+                                  - internal
+                                  - external
+                                  - unknown
+                              previousAudience:
+                                type: string
+                                description: Previous apiAudience value
+                                enum:
+                                  - internal
+                                  - external
+                                  - unknown
+                              operationsCount:
+                                type: number
+                                description: Number of operations in which the apiAudience was changed from previousAudience to currentAudience
                     tags:
                       type: array
                       items:
