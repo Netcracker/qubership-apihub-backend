@@ -15764,7 +15764,7 @@ components:
         - dataHash
         - apiAudience
         - apiKind
-        - refResolvedDocumentId
+        - preprocessedDocumentId
       properties:
         operationId:
           description: Operation unique identifier (slug). Not the same as operationId tag from the OpenAPI file.
@@ -15827,9 +15827,10 @@ components:
           items:
             type: string
           example: ["RestControllerV5"]
-        refResolvedDocumentId:
+        preprocessedDocumentId:
           description: >
-            Unique string identifier of the internal document, where the operation is present.
+            Unique string identifier of the preprocessed (validated, references resolved) internal document,
+            where the operation is present.
             Corresponds to `id` field for the document in `internal-documents.json`
           type: string
           pattern: "^[a-z0-9-]"
