@@ -7423,6 +7423,63 @@ paths:
               examples:
                 InternalServerError:
                   $ref: "#/components/examples/InternalServerError"
+  "/api/v1/internal-documents/{hash}":
+    parameters:
+      - name: hash
+        in: path
+        description: Document hash
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Internal Documents
+      summary: Get internal document content
+      description: Get internal document content
+      operationId: getInternalDocumentsHash
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+        - api-key: []
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                description: Text file content
+                type: string
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                description: Indicates inline content and file name
+                example: inline; filename="qitmf-v5.11.json"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                PackageNotFound:
+                  $ref: "#/components/examples/PackageNotFound"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
   "/api/v2/roles":
     post:
       tags:
@@ -12423,6 +12480,76 @@ paths:
               examples: {}
         "403":
           description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                PackageNotFound:
+                  $ref: "#/components/examples/PackageNotFound"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v1/packages/{packageId}/versions/{version}/internal-documents":
+    parameters:
+      - $ref: "#/components/parameters/packageId"
+      - $ref: "#/components/parameters/version"
+    get:
+      tags:
+        - Internal Documents
+        - Versions
+      summary: Get version internal documents
+      description: |
+        Get list of internal documents for the version. Internal documents are only supported for packages of kind `package`
+      operationId: getPackagesIdVersionsIdInternalDocuments
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+        - api-key: []
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                description: List of internal documents in a package.
+                type: array
+                items:
+                  allOf:
+                    - $ref: "#/components/schemas/InternalDocumentMetadata"
+                    - type: object
+                      required:
+                        - hash
+                      properties:
+                        hash:
+                          description: Hash of the corresponding document content.
+                          type: string
+        "301":
+            description: Moved Permanently
+            headers:
+              Location:
+                schema:
+                  type: string
+                description: Current endpoint with new packageId of moved package
+              X-New-Package-Id:
+                schema:
+                  type: string
+                description: New packageId of moved package
+        "401":
+          description: Unauthorized
           content:
             application/json:
               schema:
@@ -17828,33 +17955,36 @@ components:
               description: Namespace of Agent's publication.
               type: string
               example: cloudQSS-release2
+    InternalDocumentMetadata:
+      type: object
+      required:
+        - id
+        - fileName
+        - format
+      properties:
+        id:
+          description: Published file id.
+          type: string
+          pattern: "^[a-z0-9-]"
+          example: "qitmf-v5-11-json"
+        fileName:
+          type: string
+          description: File name (slug+extension).
+          example: "qitmf-v5.11.json"
+        format:
+          description: Format for the internal documents is always JSON
+          type: string
+          enum:
+            - json
     BuildResultInternalDocuments:
       type: object
       description: List of internal documents data.
       properties:
         documents:
+          description: List of internal documents for the version
           type: array
           items:
-            description: List of internal documents for the version
-            type: object
-            required:
-              - id
-              - format
-            properties:
-              id:
-                description: Published file id.
-                type: string
-                pattern: "^[a-z0-9-]"
-                example: "qitmf-v5-11-json"
-              fileName:
-                type: string
-                description: File name (slug+extension).
-                example: "qitmf-v5.11.json"
-              format:
-                description: Format for the internal documents is always JSON
-                type: string
-                enum:
-                  - json
+            $ref: "#/components/schemas/InternalDocumentMetadata"
     BuildResultComparisons:
       type: object
       properties:
