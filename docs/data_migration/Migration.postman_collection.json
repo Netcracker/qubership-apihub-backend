@@ -21,7 +21,8 @@
 							"pm.environment.set(\"migration_id\", data.id)"
 						],
 						"type": "text/javascript",
-						"packages": {}
+						"packages": {},
+						"requests": {}
 					}
 				}
 			],
@@ -30,13 +31,13 @@
 				"header": [
 					{
 						"key": "X-Personal-Access-Token",
-						"value": "85cd4fa7c9be44478f0d359dbea11c8dc1b5fa0b5c04c11c867dc97852660da8",
+						"value": "{{PAT}}",
 						"type": "text"
 					}
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\"packageIds\": [\"G1.d1\"], \"rebuild\":true}",
+					"raw": "{\"packageIds\": []}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -44,15 +45,10 @@
 					}
 				},
 				"url": {
-					"raw": "http://127.0.0.1:8090/api/internal/migrate/operations",
-					"protocol": "http",
+					"raw": "{{SERVER_HOST}}/api/internal/migrate/operations",
 					"host": [
-						"127",
-						"0",
-						"0",
-						"1"
+						"{{SERVER_HOST}}"
 					],
-					"port": "8090",
 					"path": [
 						"api",
 						"internal",
@@ -203,6 +199,51 @@
 							"value": "operation_data.SearchScope",
 							"disabled": true
 						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "cancel running migration",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 201\", function () {\r",
+							"    pm.response.to.have.status(201);\r",
+							"});\r",
+							"\r",
+							"var data = JSON.parse(responseBody);\r",
+							"pm.environment.set(\"migration_id\", data.id)"
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-Personal-Access-Token",
+						"value": "{{PAT}}",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "{{SERVER_HOST}}/api/internal/migrate/operations/cancel",
+					"host": [
+						"{{SERVER_HOST}}"
+					],
+					"path": [
+						"api",
+						"internal",
+						"migrate",
+						"operations",
+						"cancel"
 					]
 				}
 			},
