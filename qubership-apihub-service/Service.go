@@ -640,6 +640,7 @@ func main() {
 	r.HandleFunc("/api/internal/migrate/operations", security.Secure(dataMigrationController.StartOpsMigration)).Methods(http.MethodPost)
 	r.HandleFunc("/api/internal/migrate/operations/{migrationId}", security.Secure(dataMigrationController.GetMigrationReport)).Methods(http.MethodGet)
 	r.HandleFunc("/api/internal/migrate/operations/{migrationId}/suspiciousBuilds", security.Secure(dataMigrationController.GetSuspiciousBuilds)).Methods(http.MethodGet)
+	r.HandleFunc("/api/internal/migrate/operations/{migrationId}/perf", security.Secure(dataMigrationController.GetMigrationPerfReport)).Methods(http.MethodGet)
 	r.HandleFunc("/api/internal/migrate/operations/cancel", security.Secure(dataMigrationController.CancelRunningMigrations)).Methods(http.MethodPost)
 	r.HandleFunc("/api/internal/migrate/operations/cleanup", security.Secure(buildCleanupController.StartMigrationBuildCleanup)).Methods(http.MethodPost)
 	r.HandleFunc("/api/internal/migrate/operations/cleanup/{id}", security.Secure(buildCleanupController.GetMigrationBuildCleanupResult)).Methods(http.MethodGet)

@@ -37,6 +37,16 @@ func (d OpsMigration) createTempTables() error {
 	if err != nil {
 		return err
 	}
+	_, err = d.cp.GetConnection().ExecContext(d.migrationCtx, fmt.Sprintf(`create index "ix_ver_comp_%s"
+on migration."version_comparison_%s"(package_id,version,revision,previous_package_id,previous_version,previous_revision);`, d.ent.Id, d.ent.Id))
+	if err != nil {
+		return err
+	}
+	_, err = d.cp.GetConnection().ExecContext(d.migrationCtx, fmt.Sprintf(`create index "ix_compid_%s" on migration."version_comparison_%s"(comparison_id)`, d.ent.Id, d.ent.Id))
+	if err != nil {
+		return err
+	}
+
 	_, err = d.cp.GetConnection().ExecContext(d.migrationCtx, fmt.Sprintf(`create table migration."operation_comparison_%s" as select * from operation_comparison;`, d.ent.Id))
 	if err != nil {
 		return err

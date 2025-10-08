@@ -36,7 +36,7 @@ func (d OpsMigration) StageDependentVersionsLastRevs() error {
 	for count > 0 {
 		query, params := makeDependentVersionsQuery(d.ent.PackageIds, d.ent.Versions, d.ent.Id, true)
 
-		count, err = d.createBuilds(query, params, d.ent.Id)
+		count, err = d.createBuilds(query, params, d.ent.Id, mView.MigrationStageDependentVersionsLastRevs)
 		if err != nil {
 			return fmt.Errorf("migration %s stage %s round %d: %w", d.ent.Id, mView.MigrationStageDependentVersionsLastRevs, round, err)
 		}
@@ -65,7 +65,7 @@ func (d OpsMigration) StageDependentVersionsOldRevs() error {
 	for count > 0 {
 		query, params := makeDependentVersionsQuery(d.ent.PackageIds, d.ent.Versions, d.ent.Id, false)
 
-		count, err = d.createBuilds(query, params, d.ent.Id)
+		count, err = d.createBuilds(query, params, d.ent.Id, mView.MigrationStageDependentVersionsOldRevs)
 		if err != nil {
 			return fmt.Errorf("migration %s stage %s round %d: %w", d.ent.Id, mView.MigrationStageDependentVersionsOldRevs, round, err)
 		}

@@ -17,6 +17,7 @@ package stages
 import (
 	"context"
 	"fmt"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/db"
 	mEntity "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/migration/entity"
@@ -38,7 +39,7 @@ type OpsMigration struct {
 	repo                   mRepository.MigrationRunRepository
 	buildCleanupRepository repository.BuildCleanupRepository
 
-	ent               mEntity.MigrationRunEntity // READ ONLY !!! Not updated during processing and contains outdated values like status, stage, etc
+	ent               *mEntity.MigrationRunEntity // Not updated during processing and contains outdated values like status, stage, etc except StagesExecution.
 	keepaliveStopChan chan struct{}
 	migrationCtx      context.Context
 	migrationCancel   context.CancelFunc
@@ -57,7 +58,7 @@ func NewOpsMigration(cp db.ConnectionProvider,
 		minioStorageService:    minioStorageService,
 		repo:                   repo,
 		buildCleanupRepository: buildCleanupRepository,
-		ent:                    ent,
+		ent:                    &ent,
 		keepaliveStopChan:      make(chan struct{}, 1),
 		migrationCtx:           ctx,
 		migrationCancel:        cancel,
@@ -74,26 +75,33 @@ func (d OpsMigration) Start() {
 }
 
 func (d OpsMigration) processStage(stage mView.OpsMigrationStage) error {
-	start := time.Now()
-
 	if stage != mView.MigrationStageCancelling {
 		// Check if migration context is cancelled before starting stage
 		select {
 		case <-d.migrationCtx.Done():
 			log.Infof("Ops migration %s: migration cancelled, moving to cancelling stage", d.ent.Id)
-			err := d.handleStageChange(mView.MigrationStageCancelling)
+			err := d.handleStageFinish()
 			if err != nil {
-				return d.handleError(fmt.Errorf("ops migration %s: failed to set next stage: %s", d.ent.Id, err), stage, start)
+				return d.handleError(fmt.Errorf("ops migration %s: failed to set next stage: %s", d.ent.Id, err), stage)
 			}
 			stage = mView.MigrationStageCancelling
 		default:
 		}
 	}
 
-	log.Infof("Ops migration %s: processing stage %s", d.ent.Id, stage)
-
 	var err error
 	var nextStage mView.OpsMigrationStage
+
+	err = d.handleStageStart(stage)
+	if err != nil {
+		// Check if error is due to context cancellation
+		if d.migrationCtx.Err() == context.Canceled {
+			log.Infof("Ops migration %s: stage %s cancelled", d.ent.Id, stage)
+			stage = mView.MigrationStageCancelling
+		} else {
+			return d.handleError(err, stage)
+		}
+	}
 
 	// Every stage cage should be wrapped with utils.SafeSync() to handle possible panics
 	switch stage {
@@ -165,31 +173,29 @@ func (d OpsMigration) processStage(stage mView.OpsMigrationStage) error {
 			log.Infof("Ops migration %s: stage %s cancelled", d.ent.Id, stage)
 			nextStage = mView.MigrationStageCancelling
 		} else {
-			return d.handleError(err, stage, start)
+			return d.handleError(err, stage)
 		}
-	} else {
-		log.Infof("Ops migration %s: stage %s successfully finished. Processing took %s", d.ent.Id, stage, time.Since(start))
 	}
 
 	if nextStage == mView.MigrationStageUndefined {
-		return d.handleError(fmt.Errorf("ops migration FSM implementation is incorrect, next stage was not set after '%s'", stage), stage, start)
+		return d.handleError(fmt.Errorf("ops migration FSM implementation is incorrect, next stage was not set after '%s'", stage), stage)
 	}
 
-	err = d.handleStageChange(nextStage)
+	err = d.handleStageFinish()
 	if err != nil {
-		return d.handleError(fmt.Errorf("ops migration %s: failed to set next stage: %s", d.ent.Id, err), stage, start)
+		return d.handleError(fmt.Errorf("ops migration %s: failed to set next stage: %s", d.ent.Id, err), stage)
 	}
 
 	if nextStage == mView.MigrationStageDone {
 		err = d.handleComplete()
 		if err != nil {
-			return d.handleError(fmt.Errorf("ops migration %s: failed to run complete handler: %s", d.ent.Id, err), stage, start)
+			return d.handleError(fmt.Errorf("ops migration %s: failed to run complete handler: %s", d.ent.Id, err), stage)
 		}
 		return nil
 	} else if nextStage == mView.MigrationStageCancelled {
 		err = d.handleCancel()
 		if err != nil {
-			return d.handleError(fmt.Errorf("ops migration %s: failed to run cancel handler: %s", d.ent.Id, err), stage, start)
+			return d.handleError(fmt.Errorf("ops migration %s: failed to run cancel handler: %s", d.ent.Id, err), stage)
 		}
 		return nil
 	}
@@ -198,33 +204,57 @@ func (d OpsMigration) processStage(stage mView.OpsMigrationStage) error {
 }
 
 func (d OpsMigration) handleCancel() error {
+	log.Infof("Ops migration %s: processing cancelled", d.ent.Id)
+
+	start := time.Now()
+
 	cleanupErr := d.StageCleanupAfter()
 	if cleanupErr != nil {
 		log.Errorf("Failed to run post-migration cleanup")
 	}
 
-	log.Infof("Ops migration %s: processing cancelled", d.ent.Id)
+	d.ent.StagesExecution = append(d.ent.StagesExecution, mEntity.StageExecution{
+		Stage:       mView.MigrationStageCancelled,
+		Start:       start,
+		End:         time.Now(),
+		BuildsCount: 0,
+	})
 
 	_, updErr := d.cp.GetConnection().Model(&d.ent).
-		Set("status=?", mView.MigrationStageCancelled).
+		Set("status=?", mView.MigrationStatusCancelled).
+		Set("stage=?", mView.MigrationStageCancelled).
 		Set("finished_at=now()").
+		Set("stages_execution = ?", d.ent.StagesExecution).
 		Where("id = ?", d.ent.Id).Update()
 	return updErr
 }
 
-func (d OpsMigration) handleError(err error, stage mView.OpsMigrationStage, start time.Time) error {
+func (d OpsMigration) handleError(err error, stage mView.OpsMigrationStage) error {
+	seInd := len(d.ent.StagesExecution) - 1
+	d.ent.StagesExecution[seInd].End = time.Now()
+	
+	log.Errorf("Ops migration %s: stage %s processing finished with error: %s. Processing took %s", d.ent.Id, stage, err, time.Since(d.ent.StagesExecution[seInd].Start))
+	log.Infof("Ops migration %s: running post-migration cleanup", d.ent.Id)
 	//TODO: should we handle cancellation at this terminal stage ?
 	cleanupErr := d.StageCleanupAfter()
 	if cleanupErr != nil {
 		log.Errorf("Failed to run post-migration cleanup")
 	}
 
-	log.Errorf("Ops migration %s: stage %s processing finished with error: %s. Processing took %s", d.ent.Id, stage, err, time.Since(start))
+	bc, err := d.cp.GetConnection().Model(&entity.BuildEntity{}).
+		Where("metadata->>'migration_id' = ?", d.ent.Id).
+		Where("metadata->>'migration_stage' = ?", d.ent.StagesExecution[seInd].Stage).
+		Count()
+	if err != nil {
+		return err
+	}
+	d.ent.StagesExecution[seInd].BuildsCount = bc
 
 	_, updErr := d.cp.GetConnection().Model(&mEntity.MigrationRunEntity{}).
 		Set("finished_at=now()").
 		Set("status=?", mView.MigrationStatusFailed).
 		Set("error_details=?", fmt.Sprintf("%s", err)).
+		Set("stages_execution = ?", d.ent.StagesExecution).
 		Where("id = ?", d.ent.Id).Update()
 
 	return updErr
@@ -239,17 +269,50 @@ func (d OpsMigration) handleComplete() error {
 
 	log.Infof("Ops migration %s: processing is successfully finished", d.ent.Id)
 
-	_, updErr := d.cp.GetConnection().Model(&d.ent).
+	_, updErr := d.cp.GetConnection().Model(&mEntity.MigrationRunEntity{}).
 		Set("status=?", mView.MigrationStatusComplete).
+		Set("stage=?", mView.MigrationStageDone).
 		Set("finished_at=now()").
 		Where("id = ?", d.ent.Id).Update()
 	return updErr
 }
 
-func (d OpsMigration) handleStageChange(stage mView.OpsMigrationStage) error {
+func (d OpsMigration) handleStageStart(stage mView.OpsMigrationStage) error {
+	log.Infof("Ops migration %s: processing stage %s", d.ent.Id, stage)
+
+	d.ent.StagesExecution = append(d.ent.StagesExecution, mEntity.StageExecution{
+		Stage:       stage,
+		Start:       time.Now(),
+		End:         time.Time{},
+		BuildsCount: 0,
+	})
 	_, err := d.cp.GetConnection().Model(&mEntity.MigrationRunEntity{}).
 		Set("updated_at=now()").
 		Set("stage=?", stage).
+		Set("stages_execution = ?", d.ent.StagesExecution).
+		Where("id = ?", d.ent.Id).Update()
+	return err
+}
+
+func (d OpsMigration) handleStageFinish() error {
+	seInd := len(d.ent.StagesExecution) - 1
+	d.ent.StagesExecution[seInd].End = time.Now()
+
+	log.Infof("Ops migration %s: stage %s successfully finished. Processing took %s", d.ent.Id, d.ent.StagesExecution[seInd].Stage, time.Since(d.ent.StagesExecution[seInd].Start))
+
+	bc, err := d.cp.GetConnection().Model(&entity.BuildEntity{}).
+		Where("metadata->>'migration_id' = ?", d.ent.Id).
+		Where("metadata->>'migration_stage' = ?", d.ent.StagesExecution[seInd].Stage).
+		Count()
+	if err != nil {
+		return err
+	}
+
+	d.ent.StagesExecution[seInd].BuildsCount = bc
+
+	_, err = d.cp.GetConnection().Model(&mEntity.MigrationRunEntity{}).
+		Set("updated_at=now()").
+		Set("stages_execution = ?", d.ent.StagesExecution).
 		Where("id = ?", d.ent.Id).Update()
 	return err
 }

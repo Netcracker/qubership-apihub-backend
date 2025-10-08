@@ -28,3 +28,5 @@ CREATE TABLE IF NOT EXISTS public.migrated_version (
     CONSTRAINT migrated_version_package_group_id_fk FOREIGN KEY (package_id) REFERENCES public.package_group(id) ON DELETE CASCADE ON UPDATE CASCADE
     );
 
+alter table migration_run
+    drop column stages_execution;

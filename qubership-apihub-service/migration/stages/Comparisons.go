@@ -32,7 +32,7 @@ func (d OpsMigration) StageComparisonsOther() error {
 
 	query, params := makeComparisonsQuery(d.ent.PackageIds, d.ent.Versions, d.ent.Id, false)
 
-	count, err := d.createComparisonBuilds(query, params, d.ent.Id)
+	count, err := d.createComparisonBuilds(query, params, d.ent.Id, mView.MigrationStageComparisonsOther)
 	if err != nil {
 		return fmt.Errorf("migration %s stage %s round %d: %w", d.ent.Id, mView.MigrationStageComparisonsOther, 1, err)
 	}
@@ -55,7 +55,7 @@ func (d OpsMigration) StageComparisonsOnly() error {
 
 	query, params := makeComparisonsQuery(d.ent.PackageIds, d.ent.Versions, d.ent.Id, true)
 
-	count, err := d.createComparisonBuilds(query, params, d.ent.Id)
+	count, err := d.createComparisonBuilds(query, params, d.ent.Id, mView.MigrationStageComparisonsOnly)
 	if err != nil {
 		return fmt.Errorf("migration %s stage %s round %d: %w", d.ent.Id, mView.MigrationStageComparisonsOnly, 1, err)
 	}

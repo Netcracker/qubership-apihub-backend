@@ -36,7 +36,7 @@ import (
 const MigrationBuildPriority = -100
 const CancelledMigrationError = "cancelled"
 
-func (d OpsMigration) createBuilds(versionsQuery string, params []interface{}, migrationId string) (int, error) {
+func (d OpsMigration) createBuilds(versionsQuery string, params []interface{}, migrationId string, migrationStage mView.OpsMigrationStage) (int, error) {
 	var versions []entity.PublishedVersionEntity
 
 	_, err := d.cp.GetConnection().QueryContext(d.migrationCtx, &versions, versionsQuery, params...)
@@ -46,7 +46,7 @@ func (d OpsMigration) createBuilds(versionsQuery string, params []interface{}, m
 
 	buildsCreated := 0
 	for _, versionEnt := range versions {
-		buildId, err := d.addTaskToRebuild(migrationId, versionEnt, false)
+		buildId, err := d.addTaskToRebuild(migrationId, versionEnt, false, migrationStage)
 		if err != nil {
 			return buildsCreated, fmt.Errorf("failed to add task to rebuild version %+v: %w", versionEnt, err)
 		} else {
@@ -58,7 +58,7 @@ func (d OpsMigration) createBuilds(versionsQuery string, params []interface{}, m
 	return buildsCreated, nil
 }
 
-func (d OpsMigration) createComparisonBuilds(versionCompQuery string, params []interface{}, migrationId string) (int, error) {
+func (d OpsMigration) createComparisonBuilds(versionCompQuery string, params []interface{}, migrationId string, migrationStage mView.OpsMigrationStage) (int, error) {
 	var versionComps []entity.VersionComparisonEntity
 
 	_, err := d.cp.GetConnection().QueryContext(d.migrationCtx, &versionComps, versionCompQuery, params...)
@@ -68,7 +68,7 @@ func (d OpsMigration) createComparisonBuilds(versionCompQuery string, params []i
 
 	buildsCreated := 0
 	for _, ent := range versionComps {
-		buildId, err := d.addCompTaskToRebuild(migrationId, ent)
+		buildId, err := d.addCompTaskToRebuild(migrationId, ent, migrationStage)
 		if err != nil {
 			return buildsCreated, fmt.Errorf("failed to add task comparison to rebuild version %+v: %w", ent, err)
 		} else {
@@ -127,7 +127,7 @@ func (d OpsMigration) waitForBuilds(stage mView.OpsMigrationStage, round int) (i
 	}
 }
 
-func (d OpsMigration) addTaskToRebuild(migrationId string, versionEnt entity.PublishedVersionEntity, noChangelog bool) (string, error) {
+func (d OpsMigration) addTaskToRebuild(migrationId string, versionEnt entity.PublishedVersionEntity, noChangelog bool, migrationStage mView.OpsMigrationStage) (string, error) {
 	buildId := uuid.New().String()
 	log.Debugf("Start creating task %v to rebuild %v@%v@%v NoChangelog: %v", buildId, versionEnt.PackageId, versionEnt.Version, versionEnt.Revision, noChangelog)
 
@@ -147,6 +147,7 @@ func (d OpsMigration) addTaskToRebuild(migrationId string, versionEnt entity.Pub
 			"previous_version":            versionEnt.PreviousVersion,
 			"previous_version_package_id": versionEnt.PreviousVersionPackageId,
 			"migration_id":                migrationId,
+			"migration_stage":             migrationStage,
 		},
 	}
 
@@ -210,7 +211,7 @@ func (d OpsMigration) addTaskToRebuild(migrationId string, versionEnt entity.Pub
 	return buildId, nil
 }
 
-func (d OpsMigration) addCompTaskToRebuild(migrationId string, compEnt entity.VersionComparisonEntity) (string, error) {
+func (d OpsMigration) addCompTaskToRebuild(migrationId string, compEnt entity.VersionComparisonEntity, migrationStage mView.OpsMigrationStage) (string, error) {
 	buildId := uuid.New().String()
 
 	log.Debugf("Start creating task %v to rebuild comparison %v@%v@%v-%v@%v@%v",
@@ -245,6 +246,7 @@ func (d OpsMigration) addCompTaskToRebuild(migrationId string, compEnt entity.Ve
 			"previous_version":            config.PreviousVersion,
 			"previous_version_package_id": config.PreviousVersionPackageId,
 			"migration_id":                migrationId,
+			"migration_stage":             migrationStage,
 		},
 	}
 

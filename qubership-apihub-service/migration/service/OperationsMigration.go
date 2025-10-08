@@ -17,7 +17,10 @@ package service
 import (
 	"context"
 	"fmt"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
+	"math"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
@@ -195,11 +198,16 @@ func (d dbMigrationServiceImpl) GetMigrationReport(migrationId string, includeBu
 	}
 	_, err = d.cp.GetConnection().Query(pg.Scan(&result.SuspiciousBuildsCount),
 		`select count(*) from migrated_version_changes where migration_id = ?`, migrationId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query migrated_version_changes: %w", err)
+	}
+
+	result.Stages = makeStagesExecView(*mRunEnt, nil, true)
 
 	return &result, err
 }
 
-func (d dbMigrationServiceImpl) GetSuspiciousBuilds(migrationId string, changedField string, limit int, page int) ([]mView.SuspiciousMigrationBuild, error) {
+func (d *dbMigrationServiceImpl) GetSuspiciousBuilds(migrationId string, changedField string, limit int, page int) ([]mView.SuspiciousMigrationBuild, error) {
 	changedVersions := make([]mEntity.MigratedVersionChangesResultEntity, 0)
 	err := d.cp.GetConnection().Model(&changedVersions).
 		ColumnExpr(`migrated_version_changes.*,
@@ -222,4 +230,264 @@ func (d dbMigrationServiceImpl) GetSuspiciousBuilds(migrationId string, changedF
 		suspiciousBuilds = append(suspiciousBuilds, *mEntity.MakeSuspiciousBuildView(changedVersion))
 	}
 	return suspiciousBuilds, nil
+}
+
+func (d *dbMigrationServiceImpl) GetMigrationPerfReport(migrationId string, includeHourPackageData bool, stageFilter *mView.OpsMigrationStage) (*mView.MigrPerfData, error) {
+	var result = mView.MigrPerfData{
+		Stages:          nil,
+		BuildPerHour:    nil,
+		SlowBuilds:      make([]mView.SlowBuild, 0),
+		SlowComparisons: make([]mView.SlowComparison, 0),
+	}
+
+	mRunEnt, err := d.repo.GetMigrationRun(migrationId)
+	if mRunEnt == nil {
+		return nil, fmt.Errorf("migration with id=%s not found", migrationId)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	result.Stages = makeStagesExecView(*mRunEnt, stageFilter, false)
+
+	// TODO: fix includeHourPackageData, looks like time count is incorrect
+
+	type BuildTime struct {
+		BuildId string
+		TimeSec int
+	}
+	
+	var buildPerHour []mView.BuildPerHour
+	var publishTime []BuildTime
+	var comparisonTime []BuildTime
+	buildIdToBuild := make(map[string]entity.BuildEntity)
+	offset := 0
+	limit := 1000
+	for {
+		var builds []entity.BuildEntity
+
+		query := d.cp.GetConnection().Model(&builds).Where("metadata->>'migration_id' = ?", migrationId)
+		if stageFilter != nil {
+			query = query.Where("metadata->>'migration_stage' = ?", *stageFilter)
+		}
+
+		err := query.Order("created_at ASC").
+			Offset(offset).Limit(limit).Select()
+		if err != nil {
+			return nil, err
+		}
+		for _, build := range builds {
+			if build.LastActive == nil || build.StartedAt == nil || build.StartedAt.IsZero() || build.LastActive.IsZero() {
+				continue
+			}
+
+			buildType, ok := build.Metadata["build_type"]
+			if !ok {
+				buildType = "unknown"
+			}
+			if buildType.(string) == string(view.PublishType) {
+				publishTime = append(publishTime, BuildTime{
+					BuildId: build.BuildId,
+					TimeSec: int(math.Round(build.LastActive.Sub(*build.StartedAt).Seconds())),
+				})
+			}
+
+			if buildType.(string) == string(view.ChangelogType) {
+				comparisonTime = append(comparisonTime, BuildTime{
+					BuildId: build.BuildId,
+					TimeSec: int(math.Round(build.LastActive.Sub(*build.StartedAt).Seconds())),
+				})
+			}
+
+			buildIdToBuild[build.BuildId] = build
+			appendBuildPerHour(&buildPerHour, build, includeHourPackageData)
+		}
+
+		if len(builds) < 1000 {
+			break
+		}
+		offset += limit
+	}
+	result.BuildPerHour = buildPerHour
+
+	sort.SliceStable(publishTime, func(i, j int) bool {
+		return publishTime[i].TimeSec > publishTime[j].TimeSec
+	})
+
+	for _, bt := range publishTime {
+		build, ok := buildIdToBuild[bt.BuildId]
+		if !ok {
+			log.Warnf("GetMigrationPerfReport: missing build with id=%s in build map", bt.BuildId)
+			continue
+		}
+
+		if len(result.SlowBuilds) > 100 || bt.TimeSec < 30 {
+			continue
+		}
+		// TODO: []versions, averageTimeSec - aggregate versions in the same package!
+		result.SlowBuilds = append(result.SlowBuilds, mView.SlowBuild{
+			BuildId:     build.BuildId,
+			PackageId:   build.PackageId,
+			Version:     build.Version,
+			TimeSeconds: bt.TimeSec,
+		})
+
+	}
+
+	for _, bt := range comparisonTime {
+		build, ok := buildIdToBuild[bt.BuildId]
+		if !ok {
+			log.Warnf("GetMigrationPerfReport: missing build with id=%s in build map", bt.BuildId)
+			continue
+		}
+
+		if len(result.SlowBuilds) > 100 || bt.TimeSec < 30 {
+			continue
+		}
+
+		prevV, ok := build.Metadata["previous_version"]
+		if ok {
+			prevV = prevV.(string)
+		} else {
+			prevV = "unknown"
+		}
+
+		prevP, ok := build.Metadata["previous_version_package_id"]
+		if ok {
+			prevP = prevP.(string)
+		} else {
+			prevP = "unknown"
+		}
+
+		result.SlowComparisons = append(result.SlowComparisons, mView.SlowComparison{
+			BuildId:           build.BuildId,
+			PackageId:         build.PackageId,
+			Version:           build.Version,
+			PreviousPackageId: prevP.(string),
+			PreviousVersion:   prevV.(string),
+			TimeSeconds:       bt.TimeSec,
+		})
+	}
+
+	return &result, nil
+}
+
+func appendBuildPerHour(buildPerHour *[]mView.BuildPerHour, build entity.BuildEntity, includeHourPackageData bool) {
+	hour := time.Date(build.LastActive.Year(), build.LastActive.Month(), build.LastActive.Day(), build.LastActive.Hour(), 0, 0, 0, time.UTC)
+	buildTime := int(math.Round(build.LastActive.Sub(*build.StartedAt).Seconds()))
+
+	var buildStage mView.OpsMigrationStage
+	stStr, ok := build.Metadata["migration_stage"]
+	if ok {
+		buildStage = mView.OpsMigrationStage(stStr.(string))
+	} else {
+		buildStage = mView.MigrationStageUndefined
+	}
+
+	exists := false
+	for i, bph := range *buildPerHour {
+		if bph.Hour == hour {
+			exists = true
+			if includeHourPackageData {
+				packageIndex := -1
+				for j, bip := range bph.BuildsInPackages {
+					if bip.PackageId == build.PackageId {
+						packageIndex = j
+						break
+					}
+				}
+				if packageIndex == -1 {
+					bph.BuildsInPackages = append(bph.BuildsInPackages, mView.BuildsInPackage{
+						PackageId:      build.PackageId,
+						BuildCount:     1,
+						TotalTimeSec:   buildTime,
+						AverageTimeSec: buildTime,
+					})
+				} else {
+					bph.BuildsInPackages[packageIndex].BuildCount = bph.BuildsInPackages[packageIndex].BuildCount + 1
+					bph.BuildsInPackages[packageIndex].TotalTimeSec = bph.BuildsInPackages[packageIndex].TotalTimeSec + buildTime
+					bph.BuildsInPackages[packageIndex].AverageTimeSec = bph.BuildsInPackages[packageIndex].TotalTimeSec / bph.BuildsInPackages[packageIndex].BuildCount
+				}
+			}
+
+			stageExists := false
+			for _, stage := range bph.Stages {
+				if stage == buildStage {
+					stageExists = true
+					break
+				}
+			}
+			if !stageExists {
+				bph.Stages = append(bph.Stages, buildStage)
+			}
+
+			(*buildPerHour)[i] = mView.BuildPerHour{
+				Hour:             bph.Hour,
+				TotalCount:       bph.TotalCount + 1,
+				Stages:           bph.Stages,
+				BuildsInPackages: bph.BuildsInPackages,
+			}
+			break
+		}
+	}
+	if !exists {
+		var buildsInPackages []mView.BuildsInPackage
+		if includeHourPackageData {
+			buildsInPackages = []mView.BuildsInPackage{{
+				PackageId:      build.PackageId,
+				BuildCount:     1,
+				TotalTimeSec:   buildTime,
+				AverageTimeSec: buildTime,
+			}}
+		}
+
+		*buildPerHour = append(*buildPerHour, mView.BuildPerHour{
+			Hour:             hour,
+			TotalCount:       1,
+			Stages:           []mView.OpsMigrationStage{buildStage},
+			BuildsInPackages: buildsInPackages,
+		})
+	}
+}
+
+func makeStagesExecView(mRunEnt mEntity.MigrationRunEntity, stageFilter *mView.OpsMigrationStage, hideStartAndEnd bool) []mView.StageExecution {
+	var result []mView.StageExecution
+
+	for _, stage := range mRunEnt.StagesExecution {
+		if stageFilter != nil && stage.Stage != *stageFilter {
+			continue
+		}
+
+		var bc *int
+		if stage.BuildsCount > 0 {
+			bc = &stage.BuildsCount
+		}
+
+		elapsedTime := ""
+		timePercent := -1
+		if stage.End.IsZero() {
+			elapsedTime = time.Now().Sub(stage.Start).String() + " (in progress)"
+		} else {
+			elapsedTime = stage.End.Sub(stage.Start).String()
+			timePercent = int(math.Floor(stage.End.Sub(stage.Start).Seconds() / mRunEnt.UpdatedAt.Sub(mRunEnt.StartedAt).Seconds() * 100))
+		}
+
+		start := &stage.Start
+		end := &stage.End
+
+		if hideStartAndEnd {
+			start = nil
+			end = nil
+		}
+
+		result = append(result, mView.StageExecution{
+			Stage:       stage.Stage,
+			Start:       start,
+			End:         end,
+			ElapsedTime: elapsedTime,
+			TimePercent: timePercent,
+			BuildsCount: bc,
+		})
+	}
+	return result
 }

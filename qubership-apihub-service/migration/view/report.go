@@ -29,6 +29,7 @@ type MigrationReport struct {
 	ErrorBuildsCount      int               `json:"errorBuildsCount,omitempty"`
 	SuspiciousBuildsCount int               `json:"suspiciousBuildsCount,omitempty"`
 	ErrorDetails          string            `json:"errorDetails,omitempty"`
+	Stages                []StageExecution  `json:"stages,omitempty"`
 	ErrorBuilds           []MigrationError  `json:"errorBuilds,omitempty"`
 	MigrationChanges      []MigrationChange `json:"migrationChanges,omitempty"`
 	PostCheckResult       *PostCheckResult  `json:"postCheckResult,omitempty"`
@@ -84,6 +85,50 @@ type PostCheckResult struct {
 	NotMigratedComparisons []NotMigratedComparison `json:"notMigratedComparisons"`
 }
 
+type TimePerPhase struct {
+	Phase        time.Time `json:"phase"`
+	TimeSpentSec int       `json:"timeSpentSec"`
+}
+
+type BuildsInPackage struct {
+	PackageId      string `json:"packageId"`
+	BuildCount     int    `json:"buildCount"`
+	TotalTimeSec   int    `json:"totalTimeSec"`
+	AverageTimeSec int    `json:"averageTimeSec"`
+}
+
+type BuildPerHour struct {
+	Hour             time.Time           `json:"hour"`
+	TotalCount       int                 `json:"totalCount"`
+	Stages           []OpsMigrationStage `json:"stages"`
+	BuildsInPackages []BuildsInPackage   `json:"buildsInPackages,omitempty"`
+}
+
+type SlowBuild struct {
+	BuildId   string `json:"buildId"`
+	PackageId string `json:"packageId"`
+	// TODO: []versions, averageTimeSec - aggregate versions in the same package!
+	// TODO: time percent
+	Version     string `json:"version"`
+	TimeSeconds int    `json:"timeSeconds"`
+}
+
+type SlowComparison struct {
+	BuildId           string `json:"buildId"`
+	PackageId         string `json:"packageId"`
+	Version           string `json:"version"`
+	PreviousPackageId string `pg:"previous_package_id, type:varchar"`
+	PreviousVersion   string `pg:"previous_version, type:varchar"`
+	TimeSeconds       int    `json:"timeSeconds"`
+}
+
+type MigrPerfData struct {
+	Stages          []StageExecution `json:"stages"`
+	BuildPerHour    []BuildPerHour   `json:"buildPerHour"`
+	SlowBuilds      []SlowBuild      `json:"slowBuilds"`
+	SlowComparisons []SlowComparison `json:"slowComparisons"`
+}
+
 const MigrationStatusRunning = "running"
 const MigrationStatusComplete = "complete"
 const MigrationStatusFailed = "failed"
@@ -113,10 +158,11 @@ const MigrationStageUndefined OpsMigrationStage = "undefined"
 const MigrationStageCancelling OpsMigrationStage = "cancelling"
 const MigrationStageCancelled OpsMigrationStage = "cancelled"
 
-func MigrationStageFromString(stage string) OpsMigrationStage {
-	val := OpsMigrationStage(stage)
-	if val == "" {
-		return MigrationStageUndefined
-	}
-	return val
+type StageExecution struct {
+	Stage       OpsMigrationStage `json:"stage"`
+	Start       *time.Time        `json:"start,omitempty"`
+	End         *time.Time        `json:"end,omitempty"`
+	ElapsedTime string            `json:"elapsedTime"`
+	TimePercent int               `json:"timePercent"`
+	BuildsCount *int              `json:"buildsCount,omitempty"`
 }

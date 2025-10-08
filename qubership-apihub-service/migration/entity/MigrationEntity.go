@@ -50,6 +50,7 @@ type MigrationRunEntity struct {
 	InstanceId             string                 `pg:"instance_id, type:varchar"`
 	SequenceNumber         int                    `pg:"sequence_number, type:integer"`
 	RetryCount             int                    `pg:"retry_count, type:integer"`
+	StagesExecution        []StageExecution       `pg:"stages_execution, type:jsonb"`
 }
 
 type MigrationBuildResultEntity struct {
@@ -164,4 +165,11 @@ func MakePostCheckResultView(entity PostCheckResultEntity) *view.PostCheckResult
 		NotMigratedVersions:    notMigratedVersions,
 		NotMigratedComparisons: notMigratedComparisons,
 	}
+}
+
+type StageExecution struct {
+	Stage       view.OpsMigrationStage `json:"stage"`
+	Start       time.Time              `json:"start"`
+	End         time.Time              `json:"end"`
+	BuildsCount int                    `json:"buildsCount"`
 }

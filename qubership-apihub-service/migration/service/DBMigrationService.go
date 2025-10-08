@@ -48,6 +48,7 @@ type DBMigrationService interface {
 	GetSuspiciousBuilds(migrationId string, changedField string, limit int, page int) ([]mView.SuspiciousMigrationBuild, error)
 	IsMigrationInProgress() (bool, error)
 	StartOpsMigrationRestoreProc(ctx context.Context)
+	GetMigrationPerfReport(migrationId string, includeHourPackageData bool, stageFilter *mView.OpsMigrationStage) (*mView.MigrPerfData, error)
 }
 
 func NewDBMigrationService(cp db.ConnectionProvider, mRRepo mRepository.MigrationRunRepository,

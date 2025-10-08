@@ -19,3 +19,5 @@ alter table version_comparison
 
 drop table if exists public.migrated_version;
 
+alter table migration_run
+    add stages_execution jsonb;

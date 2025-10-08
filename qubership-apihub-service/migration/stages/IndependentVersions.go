@@ -31,7 +31,7 @@ func (d OpsMigration) StageIndependentVersionsLastRevisions() error {
 
 	getLatestIndependentVersionsQuery, params := makeIndependentVersionsQuery(d.ent.PackageIds, d.ent.Versions, true)
 
-	count, err := d.createBuilds(getLatestIndependentVersionsQuery, params, d.ent.Id)
+	count, err := d.createBuilds(getLatestIndependentVersionsQuery, params, d.ent.Id, mView.MigrationStageIndependentVersionsLastRevs)
 	if err != nil {
 		return fmt.Errorf("migration %s stage %s round %d: %w", d.ent.Id, mView.MigrationStageIndependentVersionsLastRevs, 1, err)
 	}
@@ -54,7 +54,7 @@ func (d OpsMigration) StageIndependentVersionsOldRevisions() error {
 
 	getOldIndependentVersionsQuery, params := makeIndependentVersionsQuery(d.ent.PackageIds, d.ent.Versions, false)
 
-	count, err := d.createBuilds(getOldIndependentVersionsQuery, params, d.ent.Id)
+	count, err := d.createBuilds(getOldIndependentVersionsQuery, params, d.ent.Id, mView.MigrationStageIndependentVersionsOldRevs)
 	if err != nil {
 		return fmt.Errorf("migration %s stage %s round %d: %w", d.ent.Id, mView.MigrationStageIndependentVersionsOldRevs, 1, err)
 	}
