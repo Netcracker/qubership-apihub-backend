@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp/providers"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service/cleanup"
 
 	"gopkg.in/natefinch/lumberjack.v2"
 
@@ -278,7 +279,7 @@ func main() {
 
 	lockService := service.NewLockService(lockRepo, systemInfoService.GetInstanceId())
 
-	cleanupService := service.NewCleanupService(cp)
+	cleanupService := cleanup.NewCleanupService(cp)
 	if err := cleanupService.CreateRevisionsCleanupJob(publishedRepository, migrationRunRepository, versionCleanupRepository, lockService, systemInfoService.GetInstanceId(), systemInfoService.GetRevisionsCleanupSchedule(), systemInfoService.GetRevisionsCleanupDeleteLastRevision(), systemInfoService.GetRevisionsCleanupDeleteReleaseRevisions(), systemInfoService.GetRevisionsTTLDays()); err != nil {
 		log.Error("Failed to start revisions cleaning job" + err.Error())
 	}

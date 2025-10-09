@@ -8,8 +8,8 @@ import (
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/db"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service/cleanup/logger"
 	"github.com/go-pg/pg/v10"
-	log "github.com/sirupsen/logrus"
 )
 
 type UnreferencedDataCleanupRepository interface {
@@ -77,14 +77,14 @@ func (u unreferencedDataCleanupRepositoryImpl) DeleteUnreferencedOperationData(c
 		if len(dataHash) == 0 {
 			return nil
 		}
-		log.Debugf("[unreferenced data cleanup] Found %d operation data entities to delete in current batch", len(dataHash))
+		logger.Debugf(ctx, "Found %d operation data entities to delete in current batch", len(dataHash))
 
 		err = u.countRelatedDataForOperationDataTx(ctx, tx, dataHash, &deletedItems)
 		if err != nil {
 			return fmt.Errorf("failed to count operation data related data: %w", err)
 		}
 
-		log.Tracef("[unreferenced data cleanup] Deleting operation data with hash: %v", dataHash)
+		logger.Tracef(ctx, "Deleting operation data with hash: %v", dataHash)
 		deleteOperationDataQuery := `
 			DELETE FROM operation_data
 			WHERE data_hash IN (?)`
@@ -122,7 +122,11 @@ func (u unreferencedDataCleanupRepositoryImpl) DeleteUnreferencedOperationData(c
 		return nil
 	})
 
-	return deletedItems.OperationData, err
+	return deletedItems.OperationData +
+		deletedItems.TSGQLOperationData +
+		deletedItems.TSRestOperationData +
+		deletedItems.TSRestOperationData +
+		deletedItems.FTSOperationData, err
 }
 
 func (u unreferencedDataCleanupRepositoryImpl) countRelatedDataForOperationDataTx(ctx context.Context, tx *pg.Tx, dataHash []string, deletedItems *entity.DeletedItemsCounts) error {
@@ -174,7 +178,7 @@ func (u unreferencedDataCleanupRepositoryImpl) DeleteUnreferencedOperationGroupT
 			return fmt.Errorf("failed to delete unreferenced operation group templates: %w", err)
 		}
 
-		log.Debugf("[unreferenced data cleanup] Deleted %d operation group templates in current batch", res.RowsAffected())
+		logger.Debugf(ctx, "Deleted %d operation group templates in current batch", res.RowsAffected())
 		if res.RowsAffected() == 0 {
 			return nil
 		}
@@ -226,7 +230,7 @@ func (u unreferencedDataCleanupRepositoryImpl) DeleteUnreferencedSrcArchives(ctx
 			return fmt.Errorf("failed to delete unreferenced source archives: %w", err)
 		}
 
-		log.Debugf("[unreferenced data cleanup] Deleted %d unreferenced source archives in current batch", res.RowsAffected())
+		logger.Debugf(ctx, "Deleted %d unreferenced source archives in current batch", res.RowsAffected())
 		if res.RowsAffected() == 0 {
 			return nil
 		}
@@ -278,7 +282,7 @@ func (u unreferencedDataCleanupRepositoryImpl) DeleteUnreferencedPublishedData(c
 			return fmt.Errorf("failed to delete unreferenced publish data: %w", err)
 		}
 
-		log.Debugf("[unreferenced data cleanup] Deleted %d unreferenced publish data in current batch", res.RowsAffected())
+		logger.Debugf(ctx, "Deleted %d unreferenced publish data in current batch", res.RowsAffected())
 		if res.RowsAffected() == 0 {
 			return nil
 		}
@@ -323,100 +327,100 @@ func (u unreferencedDataCleanupRepositoryImpl) VacuumAffectedTables(ctx context.
 	if cleanupEntity.DeletedItems != nil {
 		deletedItems := cleanupEntity.DeletedItems
 		if deletedItems.OperationData > 0 {
-			log.Debugf("Vacuuming 'operation_data' table for %d deleted entries (runId=%s)", deletedItems.OperationData, runId)
+			logger.Debugf(ctx, "Vacuuming 'operation_data' table for %d deleted entries", deletedItems.OperationData)
 			_, err = u.cp.GetConnection().ExecContext(ctx, "VACUUM FULL operation_data")
 			if err != nil {
 				errorMsg := fmt.Sprintf("Failed to vacuum 'operation_data' table: %v", err)
-				log.Warn(errorMsg)
+				logger.Warn(ctx, errorMsg)
 				vacuumErrors = append(vacuumErrors, errorMsg)
 			} else {
-				log.Tracef("Successfully vacuumed 'operation_data' table for cleanup run %s", runId)
+				logger.Trace(ctx, "Successfully vacuumed 'operation_data' table")
 			}
 		}
 		if deletedItems.TSGQLOperationData > 0 {
-			log.Debugf("Vacuuming 'ts_graphql_operation_data' table for %d deleted entries (runId=%s)", deletedItems.TSGQLOperationData, runId)
+			logger.Debugf(ctx, "Vacuuming 'ts_graphql_operation_data' table for %d deleted entries", deletedItems.TSGQLOperationData)
 			_, err = u.cp.GetConnection().ExecContext(ctx, "VACUUM FULL ts_graphql_operation_data")
 			if err != nil {
 				errorMsg := fmt.Sprintf("Failed to vacuum 'ts_graphql_operation_data' table: %v", err)
-				log.Warn(errorMsg)
+				logger.Warn(ctx, errorMsg)
 				vacuumErrors = append(vacuumErrors, errorMsg)
 			} else {
-				log.Tracef("Successfully vacuumed 'ts_graphql_operation_data' table for cleanup run %s", runId)
+				logger.Trace(ctx, "Successfully vacuumed 'ts_graphql_operation_data' table")
 			}
 		}
 		if deletedItems.TSRestOperationData > 0 {
-			log.Debugf("Vacuuming 'ts_rest_operation_data' table for %d deleted entries (runId=%s)", deletedItems.TSRestOperationData, runId)
+			logger.Debugf(ctx, "Vacuuming 'ts_rest_operation_data' table for %d deleted entries", deletedItems.TSRestOperationData)
 			_, err = u.cp.GetConnection().ExecContext(ctx, "VACUUM FULL ts_rest_operation_data")
 			if err != nil {
 				errorMsg := fmt.Sprintf("Failed to vacuum 'ts_rest_operation_data' table: %v", err)
-				log.Warn(errorMsg)
+				logger.Warn(ctx, errorMsg)
 				vacuumErrors = append(vacuumErrors, errorMsg)
 			} else {
-				log.Tracef("Successfully vacuumed 'ts_rest_operation_data' table for cleanup run %s", runId)
+				logger.Trace(ctx, "Successfully vacuumed 'ts_rest_operation_data' table")
 			}
 		}
 		if deletedItems.TSOperationData > 0 {
-			log.Debugf("Vacuuming 'ts_operation_data' table for %d deleted entries (runId=%s)", deletedItems.TSOperationData, runId)
+			logger.Debugf(ctx, "Vacuuming 'ts_operation_data' table for %d deleted entries", deletedItems.TSOperationData)
 			_, err = u.cp.GetConnection().ExecContext(ctx, "VACUUM FULL ts_operation_data")
 			if err != nil {
 				errorMsg := fmt.Sprintf("Failed to vacuum 'ts_operation_data' table: %v", err)
-				log.Warn(errorMsg)
+				logger.Warn(ctx, errorMsg)
 				vacuumErrors = append(vacuumErrors, errorMsg)
 			} else {
-				log.Tracef("Successfully vacuumed 'ts_operation_data' table for cleanup run %s", runId)
+				logger.Trace(ctx, "Successfully vacuumed 'ts_operation_data' table")
 			}
 		}
 		if deletedItems.FTSOperationData > 0 {
-			log.Debugf("Vacuuming 'fts_operation_data' table for %d deleted entries (runId=%s)", deletedItems.FTSOperationData, runId)
+			logger.Debugf(ctx, "Vacuuming 'fts_operation_data' table for %d deleted entries", deletedItems.FTSOperationData)
 			_, err = u.cp.GetConnection().ExecContext(ctx, "VACUUM FULL fts_operation_data")
 			if err != nil {
 				errorMsg := fmt.Sprintf("Failed to vacuum 'fts_operation_data' table: %v", err)
-				log.Warn(errorMsg)
+				logger.Warn(ctx, errorMsg)
 				vacuumErrors = append(vacuumErrors, errorMsg)
 			} else {
-				log.Tracef("Successfully vacuumed 'fts_operation_data' table for cleanup run %s", runId)
+				logger.Trace(ctx, "Successfully vacuumed 'fts_operation_data' table")
 			}
 		}
 		if deletedItems.OperationGroupTemplate > 0 {
-			log.Debugf("Vacuuming 'operation_group_template' table for %d deleted entries (runId=%s)", deletedItems.OperationGroupTemplate, runId)
+			logger.Debugf(ctx, "Vacuuming 'operation_group_template' table for %d deleted entries", deletedItems.OperationGroupTemplate)
 			_, err = u.cp.GetConnection().ExecContext(ctx, "VACUUM FULL operation_group_template")
 			if err != nil {
 				errorMsg := fmt.Sprintf("Failed to vacuum 'operation_group_template' table: %v", err)
-				log.Warn(errorMsg)
+				logger.Warn(ctx, errorMsg)
 				vacuumErrors = append(vacuumErrors, errorMsg)
 			} else {
-				log.Tracef("Successfully vacuumed 'operation_group_template' table for cleanup run %s", runId)
+				logger.Trace(ctx, "Successfully vacuumed 'operation_group_template' table")
 			}
 		}
 		if deletedItems.PublishedSrcArchives > 0 {
-			log.Debugf("Vacuuming 'published_sources_archives' table for %d deleted entries (runId=%s)", deletedItems.PublishedSrcArchives, runId)
+			logger.Debugf(ctx, "Vacuuming 'published_sources_archives' table for %d deleted entries", deletedItems.PublishedSrcArchives)
 			_, err = u.cp.GetConnection().ExecContext(ctx, "VACUUM FULL published_sources_archives")
 			if err != nil {
 				errorMsg := fmt.Sprintf("Failed to vacuum 'published_sources_archives' table: %v", err)
-				log.Warn(errorMsg)
+				logger.Warn(ctx, errorMsg)
 				vacuumErrors = append(vacuumErrors, errorMsg)
 			} else {
-				log.Tracef("Successfully vacuumed 'published_sources_archives' table for cleanup run %s", runId)
+				logger.Trace(ctx, "Successfully vacuumed 'published_sources_archives' table")
 			}
 		}
 		if deletedItems.PublishedData > 0 {
-			log.Debugf("Vacuuming 'published_data' table for %d deleted build results (runId=%s)", deletedItems.PublishedData, runId)
+			logger.Debugf(ctx, "Vacuuming 'published_data' table for %d deleted build results", deletedItems.PublishedData)
 			_, err = u.cp.GetConnection().ExecContext(ctx, "VACUUM FULL published_data")
 			if err != nil {
 				errorMsg := fmt.Sprintf("Failed to vacuum 'published_data' table: %v", err)
-				log.Warn(errorMsg)
+				logger.Warn(ctx, errorMsg)
 				vacuumErrors = append(vacuumErrors, errorMsg)
 			} else {
-				log.Tracef("Successfully vacuumed 'published_data' table for cleanup run %s", runId)
+				logger.Tracef(ctx, "Successfully vacuumed 'published_data' table")
 			}
 		}
 	} else {
-		log.Infof("No deleted items found for cleanup run %s - skipping vacuum operations", runId)
+		logger.Info(ctx, "No deleted items found - skipping vacuum operations")
 	}
 
 	if len(vacuumErrors) > 0 {
-		log.Errorf("Vacuum operations completed with %d errors for cleanup run %s: %s",
-			len(vacuumErrors), runId, strings.Join(vacuumErrors, "; "))
+		logger.Errorf(ctx, "Vacuum operations completed with %d errors: %s",
+			len(vacuumErrors), strings.Join(vacuumErrors, "; "))
 		return fmt.Errorf("vacuum operations failed: %s", strings.Join(vacuumErrors, "; "))
 	}
 
