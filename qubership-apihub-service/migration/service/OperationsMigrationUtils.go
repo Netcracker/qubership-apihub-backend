@@ -281,29 +281,31 @@ func (d dbMigrationServiceImpl) makeBuildSourceEntityFromPublishedFiles(migratio
 	configFiles := make([]view.BCFile, 0)
 
 	sourcesBuff := bytes.Buffer{}
-	zw := zip.NewWriter(&sourcesBuff)
-	for _, fileEnt := range fileEntities {
-		fw, err := zw.Create(fileEnt.FileId)
+	if len(fileEntities) > 0 {
+		zw := zip.NewWriter(&sourcesBuff)
+		for _, fileEnt := range fileEntities {
+			fw, err := zw.Create(fileEnt.FileId)
+			if err != nil {
+				return nil, err
+			}
+			_, err = fw.Write(fileEnt.Data)
+			if err != nil {
+				return nil, err
+			}
+			publish := true
+			configFiles = append(configFiles, view.BCFile{
+				FileId:  fileEnt.FileId,
+				Slug:    fileEnt.Slug,
+				Index:   fileEnt.Index,
+				Labels:  fileEnt.Metadata.GetLabels(),
+				Publish: &publish,
+				BlobId:  fileEnt.Metadata.GetBlobId(),
+			})
+		}
+		err = zw.Close()
 		if err != nil {
 			return nil, err
 		}
-		_, err = fw.Write(fileEnt.Data)
-		if err != nil {
-			return nil, err
-		}
-		publish := true
-		configFiles = append(configFiles, view.BCFile{
-			FileId:  fileEnt.FileId,
-			Slug:    fileEnt.Slug,
-			Index:   fileEnt.Index,
-			Labels:  fileEnt.Metadata.GetLabels(),
-			Publish: &publish,
-			BlobId:  fileEnt.Metadata.GetBlobId(),
-		})
-	}
-	err = zw.Close()
-	if err != nil {
-		return nil, err
 	}
 
 	config := view.BuildConfig{
