@@ -243,7 +243,7 @@ func (g *systemInfoServiceImpl) setDefaults() {
 	viper.SetDefault("cleanup.softDeletedData.schedule", "0 22 * * 5")  //at 10 PM on Friday
 	viper.SetDefault("cleanup.softDeletedData.timeoutMinutes", 600)     //10 hours
 	viper.SetDefault("cleanup.softDeletedData.ttlDays", 730)            // 2 years
-	viper.SetDefault("cleanup.unreferencedData.schedule", "0 15 * * 6") //at 10 PM on Friday
+	viper.SetDefault("cleanup.unreferencedData.schedule", "0 15 * * 6") //at 3 PM on Saturday
 	viper.SetDefault("cleanup.unreferencedData.timeoutMinutes", 360)    //6 hours
 }
 
