@@ -19,6 +19,10 @@ servers:
     description: Direct API call host
   - url: http://localhost:3000
     description: Local server
+security:
+  - BearerAuth: []
+  - CookieAuth: []
+  - api-key: []
 tags:
   - name: Export
     description: Export API documentation.
@@ -3022,7 +3026,3 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
-security:
-  - BearerAuth: []
-  - CookieAuth: []
-  - api-key: []
