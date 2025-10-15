@@ -23,6 +23,7 @@ security:
   - BearerAuth: []
   - CookieAuth: []
   - api-key: []
+  - PersonalAccessToken: []
 tags:
   - name: Export
     description: Export API documentation.
@@ -1657,6 +1658,7 @@ paths:
       summary: Handle gitlab event
       description: Handle gitlab event
       operationId: handleGitlabEvent
+      security: [{}]
       requestBody:
         description: Push or Tag event https://docs.gitlab.com/ee/user/project/integrations/webhook_events.html
         content:
@@ -2995,6 +2997,11 @@ components:
       type: http
       description: Login/password authentication
       scheme: basic
+    PersonalAccessToken:
+      type: apiKey
+      description: Authentication by personal access token.
+      name: X-Personal-Access-Token
+      in: header
   responses:
     badRequest400:
       description: Bad request
