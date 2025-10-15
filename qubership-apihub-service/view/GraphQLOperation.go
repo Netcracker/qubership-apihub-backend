@@ -48,11 +48,6 @@ type DeprecateGraphQLOperationView struct {
 	GraphQLOperationMetadata
 }
 
-type GraphQLOperationComparisonChangelogView_deprecated struct {
-	OperationComparisonChangelogView_deprecated
-	GraphQLOperationMetadata
-}
-
 type GraphQLOperationComparisonChangelogView_deprecated_2 struct {
 	OperationComparisonChangelogView_deprecated_2
 	GraphQLOperationMetadata

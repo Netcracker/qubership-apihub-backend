@@ -39,23 +39,6 @@ type SharedUrlResult_deprecated struct {
 	SharedId string `json:"sharedId"`
 }
 
-// deprecated
-type PublishedDocument_deprecated struct {
-	FieldId      string                          `json:"fileId"`
-	Slug         string                          `json:"slug"`
-	Type         string                          `json:"type"`
-	Format       string                          `json:"format"`
-	Title        string                          `json:"title,omitempty"`
-	Labels       []string                        `json:"labels,omitempty"`
-	Description  string                          `json:"description,omitempty"`
-	Version      string                          `json:"version,omitempty"`
-	Info         interface{}                     `json:"info,omitempty"`
-	ExternalDocs interface{}                     `json:"externalDocs,omitempty"`
-	Operations   []DocumentsOperation_deprecated `json:"operations,omitempty"`
-	Filename     string                          `json:"filename"`
-	Tags         []interface{}                   `json:"tags"`
-}
-
 type PublishedDocument struct {
 	FieldId      string        `json:"fileId"`
 	Slug         string        `json:"slug"`

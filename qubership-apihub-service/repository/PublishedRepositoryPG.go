@@ -275,38 +275,6 @@ func (p publishedRepositoryImpl) GetDeletedPackageLatestRevision(packageId, vers
 	return result.Revision, nil
 }
 
-func (p publishedRepositoryImpl) GetReadonlyVersion_deprecated(packageId string, versionName string) (*entity.ReadonlyPublishedVersionEntity_deprecated, error) {
-	getPackage, errGetPackage := p.GetPackage(packageId)
-	if errGetPackage != nil {
-		return nil, errGetPackage
-	}
-	if getPackage == nil {
-		return nil, nil
-	}
-	result := new(entity.ReadonlyPublishedVersionEntity_deprecated)
-	version, revision, err := SplitVersionRevision(versionName)
-	if err != nil {
-		return nil, err
-	}
-	query := `
-	select pv.*,get_latest_revision(coalesce(pv.previous_version_package_id,pv.package_id),pv.previous_version) as previous_version_revision, coalesce(usr.name, created_by) user_name from published_version as pv left join user_data usr on usr.user_id = created_by
-	where pv.package_id = ?
-	  and pv.version = ?
-	  and ((? = 0 and pv.revision = get_latest_revision(?,?)) or
-		   (? != 0 and pv.revision = ?))
-	  and deleted_at is null
-	limit 1
-	`
-	_, err = p.cp.GetConnection().QueryOne(result, query, packageId, version, revision, packageId, version, revision, revision)
-	if err != nil {
-		if err == pg.ErrNoRows {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return result, nil
-}
-
 func (p publishedRepositoryImpl) GetReadonlyVersion(packageId string, versionName string, showOnlyDeleted bool) (*entity.PackageVersionRevisionEntity, error) {
 	var getPackage *entity.PackageEntity
 	var errGetPackage error
@@ -383,31 +351,6 @@ limit 1
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetVersionRevisionsList_deprecated(searchQuery entity.PackageVersionSearchQueryEntity) ([]entity.PackageVersionRevisionEntity_deprecated, error) {
-	var ents []entity.PackageVersionRevisionEntity_deprecated
-	if searchQuery.TextFilter != "" {
-		searchQuery.TextFilter = "%" + utils.LikeEscaped(searchQuery.TextFilter) + "%"
-	}
-	query := `
-		select pv.*, us.email, us.name, us.avatar_url, coalesce(us.user_id, pv.created_by) as user_id, pv.revision != get_latest_revision(pv.package_id, pv.version) as not_latest_revision
-			from published_version as pv left join user_data as us on pv.created_by = us.user_id
-			where (?text_filter = ''
-				or exists(select 1 from unnest(pv.labels) as label where label ilike ?text_filter)
-				or pv.revision::text ilike ?text_filter
-				or exists(select user_id from user_data where user_id = pv.created_by and name ilike ?text_filter))
-			and pv.package_id = ?package_id
-			and pv.version = ?version
-			and pv.deleted_at is null
-			order by pv.revision desc
-			limit ?limit
-			offset ?offset;
- `
-	_, err := p.cp.GetConnection().Model(&searchQuery).Query(&ents, query)
-	if err != nil {
-		return nil, err
-	}
-	return ents, nil
-}
 func (p publishedRepositoryImpl) GetVersionRevisionsList(searchQuery entity.PackageVersionSearchQueryEntity) ([]entity.PackageVersionRevisionEntity, error) {
 	var ents []entity.PackageVersionRevisionEntity
 	if searchQuery.TextFilter != "" {
@@ -2003,121 +1946,6 @@ func (p publishedRepositoryImpl) GetPackageVersionsWithLimit(searchQuery entity.
 	return ents, nil
 }
 
-func (p publishedRepositoryImpl) GetReadonlyPackageVersionsWithLimit_deprecated(searchQuery entity.PublishedVersionSearchQueryEntity, checkRevisions bool) ([]entity.ReadonlyPublishedVersionEntity_deprecated, error) {
-	var ents []entity.ReadonlyPublishedVersionEntity_deprecated
-	if searchQuery.TextFilter != "" {
-		searchQuery.TextFilter = "%" + utils.LikeEscaped(searchQuery.TextFilter) + "%"
-	}
-	if searchQuery.Status != "" {
-		searchQuery.Status = "%" + utils.LikeEscaped(searchQuery.Status) + "%"
-	}
-	if searchQuery.SortBy == "" {
-		searchQuery.SortBy = entity.GetVersionSortByPG(view.VersionSortByCreatedAt)
-	}
-	if searchQuery.SortOrder == "" {
-		searchQuery.SortOrder = entity.GetVersionSortOrderPG(view.VersionSortOrderDesc)
-	}
-	if checkRevisions {
-		query := `
-		select pv.*, get_latest_revision(coalesce(pv.previous_version_package_id,pv.package_id), pv.previous_version) as previous_version_revision, coalesce(usr.name, pv.created_by) user_name from published_version pv
-			left join user_data usr
-			on usr.user_id = pv.created_by
-			where pv.deleted_at is null
-			and (pv.package_id = ?package_id)
-			and (?text_filter = '' or pv.version ilike ?text_filter OR EXISTS(SELECT 1 FROM unnest(pv.labels) as label WHERE label ILIKE ?text_filter))
-			and (?status = '' or pv.status ilike ?status)
-			and (?label = '' or ?label = any(pv.labels))
-			order by pv.published_at desc
-			`
-		_, err := p.cp.GetConnection().Model(&searchQuery).Query(&ents, query)
-		if err != nil {
-			if err == pg.ErrNoRows {
-				return nil, nil
-			}
-			return nil, err
-		}
-
-		result := make([]entity.ReadonlyPublishedVersionEntity_deprecated, 0)
-		latestRevNums := make(map[string]int)
-		latestRevVersions := make(map[string]entity.ReadonlyPublishedVersionEntity_deprecated)
-
-		for _, version := range ents {
-			if version.PackageId == searchQuery.PackageId && (version.DeletedAt == nil || version.DeletedAt.IsZero()) {
-				if maxRev, ok := latestRevNums[version.Version]; ok {
-					if version.Revision > maxRev {
-						latestRevNums[version.Version] = version.Revision
-						latestRevVersions[version.Version] = version
-					}
-				} else {
-					latestRevNums[version.Version] = version.Revision
-					latestRevVersions[version.Version] = version
-				}
-			}
-		}
-		for _, v := range latestRevVersions {
-			result = append(result, v)
-		}
-		sort.Slice(result, func(i, j int) bool {
-			switch searchQuery.SortBy {
-			case "published_at", "":
-				switch searchQuery.SortOrder {
-				case "desc", "":
-					return result[i].PublishedAt.Unix() > result[j].PublishedAt.Unix()
-				case "asc":
-					return result[i].PublishedAt.Unix() < result[j].PublishedAt.Unix()
-				}
-			case "version":
-				switch searchQuery.SortOrder {
-				case "desc", "":
-					return result[i].Version > result[j].Version
-				case "asc":
-					return result[i].Version < result[j].Version
-				}
-			}
-			return result[i].PublishedAt.Unix() > result[j].PublishedAt.Unix()
-		})
-
-		if len(result) <= searchQuery.Offset {
-			return make([]entity.ReadonlyPublishedVersionEntity_deprecated, 0), nil
-		} else if len(result) <= searchQuery.Limit+searchQuery.Offset {
-			return result[searchQuery.Offset:], nil
-		}
-		return result[searchQuery.Offset : searchQuery.Limit+searchQuery.Offset], nil
-	} else {
-		query := `
-			select pv.*, get_latest_revision(coalesce(pv.previous_version_package_id,pv.package_id), pv.previous_version) as previous_version_revision, coalesce(usr.name, pv.created_by) user_name from published_version pv
-			inner join (
-							select package_id, version, max(revision) as revision
-								from published_version
-								where (package_id = ?package_id)
-								group by package_id, version
-					  ) mx
-			on pv.package_id = mx.package_id
-			and pv.version = mx.version
-			and pv.revision = mx.revision
-			left join user_data usr
-			on usr.user_id = pv.created_by
-			where (?text_filter = '' or pv.version ilike ?text_filter OR EXISTS(SELECT 1 FROM unnest(pv.labels) as label WHERE label ILIKE ?text_filter))
-			and (?status = '' or pv.status ilike ?status)
-			and (?label = '' or ?label = any(pv.labels))
-			and pv.deleted_at is null
-			order by pv.%s %s
-			limit ?limit
-			offset ?offset
- `
-		_, err := p.cp.GetConnection().Model(&searchQuery).
-			Query(&ents, fmt.Sprintf(query, searchQuery.SortBy, searchQuery.SortOrder))
-		if err != nil {
-			if err == pg.ErrNoRows {
-				return nil, nil
-			}
-			return nil, err
-		}
-	}
-
-	return ents, nil
-}
-
 func (p publishedRepositoryImpl) GetReadonlyPackageVersionsWithLimit(searchQuery entity.PublishedVersionSearchQueryEntity, checkRevisions bool, showOnlyDeleted bool) ([]entity.PackageVersionRevisionEntity, error) {
 	var ents []entity.PackageVersionRevisionEntity
 	if searchQuery.TextFilter != "" {
@@ -2245,80 +2073,6 @@ func (p publishedRepositoryImpl) GetReadonlyPackageVersionsWithLimit(searchQuery
 	}
 
 	return ents, nil
-}
-
-// GetVersionRefs deprecated
-func (p publishedRepositoryImpl) GetVersionRefs(searchQuery entity.PackageVersionSearchQueryEntity) ([]entity.PackageVersionPublishedReference, error) {
-	var query string
-	if searchQuery.TextFilter != "" {
-		searchQuery.TextFilter = "%" + utils.LikeEscaped(searchQuery.TextFilter) + "%"
-	}
-	if searchQuery.ShowAllDescendants {
-		query = `
-			with refs as (
-				select distinct reference_id as package_id, reference_version as version, reference_revision as revision from published_version_reference
-					where package_id = ?package_id
-					and version = ?version
-					and revision = ?revision
-					and excluded = false
-			)
-		select pg.id as package_id,
-		 	pg.name as package_name,
-		  	pg.kind as kind,
-		   	pub_version.version as version,
-		    pub_version.status as version_status,
-			pub_version.revision as revision,
-			pub_version.deleted_at,
-			pub_version.deleted_by
-		from package_group as pg, published_version as pub_version, refs
-		where refs.package_id = pg.id
-			and (?text_filter = '' or pg.name ilike ?text_filter)
-			and (?kind = '' or pg.kind = ?kind)
-			and refs.package_id = pub_version.package_id
-			and refs.version = pub_version.version
-			and refs.revision = pub_version.revision
-			and not(refs.package_id = ?package_id and refs.version = ?version and refs.revision = ?revision)
-		offset ?offset
-		limit ?limit;
- 		`
-	} else {
-		query = `
-		with refs as (
-			select distinct reference_id as package_id, reference_version as version, reference_revision as revision from published_version_reference
-				where package_id = ?package_id
-				and version = ?version
-				and revision = ?revision
-				and parent_reference_id = ''
-				and excluded = false
-		)
-			select pg.id as package_id,
-			 	pg.name as package_name,
-			  	pg.kind as kind,
-			   	pub_version.version as version,
-			    pub_version.status as version_status,
-				pub_version.revision as revision,
-				pub_version.deleted_at,
-				pub_version.deleted_by
-			from package_group as pg, published_version as pub_version,refs
-			where pg.id = refs.package_id
-				and pub_version.package_id = refs.package_id
-				and pub_version.version = refs.version
-				and pub_version.revision = refs.revision
-				and (?text_filter = '' or pg.name ilike ?text_filter)
-				and (?kind = '' or pg.kind = ?kind)
-			offset ?offset
-			limit ?limit;`
-	}
-
-	var ents []entity.PackageVersionPublishedReference
-	_, err := p.cp.GetConnection().Model(&searchQuery).Query(&ents, query)
-	if err != nil {
-		if err == pg.ErrNoRows {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return ents, err
 }
 
 func (p publishedRepositoryImpl) GetVersionRefsV3(packageId string, version string, revision int) ([]entity.PublishedReferenceEntity, error) {

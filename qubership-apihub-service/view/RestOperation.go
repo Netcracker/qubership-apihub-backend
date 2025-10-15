@@ -35,18 +35,6 @@ type DeprecatedRestOperationView struct {
 	RestOperationMetadata
 }
 
-type OperationSummary struct {
-	Endpoints  int `json:"endpoints"`
-	Deprecated int `json:"deprecated"`
-	Created    int `json:"created"`
-	Deleted    int `json:"deleted"`
-}
-
-type RestOperationComparisonChangelogView_deprecated struct {
-	OperationComparisonChangelogView_deprecated
-	RestOperationMetadata
-}
-
 type RestOperationComparisonChangelogView struct {
 	GenericComparisonOperationView
 	RestOperationMetadata

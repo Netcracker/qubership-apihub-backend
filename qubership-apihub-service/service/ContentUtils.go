@@ -358,33 +358,3 @@ func convertEol(data []byte) []byte {
 	convertedData = strings.Replace(convertedData, "\r\n", "\n", -1)
 	return []byte(convertedData)
 }
-
-// replaces any {variable} with {*}
-func normalizeEndpointPath(path string) string {
-	if strings.IndexByte(path, '{') < 0 {
-		return path
-	}
-	var result strings.Builder
-	var isVariable bool
-
-	result.Grow(len(path))
-
-	for _, char := range path {
-		if isVariable {
-			if char == '}' {
-				//variable end
-				isVariable = false
-
-				result.WriteRune('*')
-				result.WriteRune('}')
-			}
-			continue
-		}
-		if char == '{' {
-			//variable start
-			isVariable = true
-		}
-		result.WriteRune(char)
-	}
-	return result.String()
-}

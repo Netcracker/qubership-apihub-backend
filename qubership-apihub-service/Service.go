@@ -476,7 +476,6 @@ func main() {
 	r.HandleFunc("/api/v1/debug/logs/checkLevel", security.Secure(logsController.CheckLogLevel)).Methods(http.MethodGet)
 
 	//Search
-	r.HandleFunc("/api/v2/search/{searchLevel}", security.Secure(searchController.Search_deprecated)).Methods(http.MethodPost) //deprecated
 	r.HandleFunc("/api/v3/search/{searchLevel}", security.Secure(searchController.Search)).Methods(http.MethodPost)
 
 	r.HandleFunc("/api/v2/builders/{builderId}/tasks", security.Secure(publishV2Controller.GetFreeBuild)).Methods(http.MethodPost)
@@ -509,15 +508,12 @@ func main() {
 	r.HandleFunc("/api/v2/packages/{packageId}/publish/{publishId}/status", security.Secure(publishV2Controller.GetPublishStatus)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/publish/statuses", security.Secure(publishV2Controller.GetPublishStatuses)).Methods(http.MethodPost)
 	r.HandleFunc("/api/v2/packages/{packageId}/publish", security.Secure(publishV2Controller.Publish)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v2/packages/{packageId}/publish/{publishId}/status", security.Secure(publishV2Controller.SetPublishStatus_deprecated)).Methods(http.MethodPost)
 	r.HandleFunc("/api/v3/packages/{packageId}/publish/{publishId}/status", security.Secure(publishV2Controller.SetPublishStatus)).Methods(http.MethodPost)
 	r.HandleFunc("/api/v1/packages/{packageId}/publish/withOperationsGroup", security.Secure(versionController.PublishFromCSV)).Methods(http.MethodPost)
 	r.HandleFunc("/api/v1/packages/{packageId}/publish/{publishId}/withOperationsGroup/status", security.Secure(versionController.GetCSVDashboardPublishStatus)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/packages/{packageId}/publish/{publishId}/withOperationsGroup/report", security.Secure(versionController.GetCSVDashboardPublishReport)).Methods(http.MethodGet)
 
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}", security.Secure(versionController.GetPackageVersionContent_deprecated)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}", security.Secure(versionController.GetPackageVersionContent)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions", security.Secure(versionController.GetPackageVersionsList_deprecated)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v3/packages/{packageId}/versions", security.Secure(versionController.GetPackageVersionsList)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}", security.Secure(versionController.DeleteVersion)).Methods(http.MethodDelete)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}", security.Secure(versionController.PatchVersion)).Methods(http.MethodPatch)
@@ -567,7 +563,6 @@ func main() {
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/operations/{operationId}", security.Secure(operationController.GetOperation)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/operations/{operationId}/changes", security.Secure(operationController.GetOperationChanges)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/operations/{operationId}/models/{modelName}/usages", security.Secure(operationController.GetOperationModelUsages)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/changes", security.Secure(operationController.GetOperationsChanges_deprecated)).Methods(http.MethodGet)  // deprecated
 	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/changes", security.Secure(operationController.GetOperationChanges_deprecated_2)).Methods(http.MethodGet) // deprecated
 	r.HandleFunc("/api/v4/packages/{packageId}/versions/{version}/{apiType}/changes", security.Secure(operationController.GetOperationsChanges)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/tags", security.Secure(operationController.GetOperationsTags)).Methods(http.MethodGet)
@@ -575,32 +570,21 @@ func main() {
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/operations/{operationId}/deprecatedItems", security.Secure(operationController.GetOperationDeprecatedItems)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/deprecated/summary", security.Secure(operationController.GetDeprecatedOperationsSummary)).Methods(http.MethodGet)
 
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/documents/{slug}", security.Secure(versionController.GetVersionedDocument_deprecated)).Methods(http.MethodGet) //deprecated
 	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/documents/{slug}", security.Secure(versionController.GetVersionedDocument)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/documents", security.Secure(versionController.GetVersionDocuments)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/references", security.Secure(versionController.GetVersionReferences)).Methods(http.MethodGet) // deprecated
 	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/references", security.Secure(versionController.GetVersionReferencesV3)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/sources", security.Secure(publishedController.GetVersionSources)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/revisions", security.Secure(versionController.GetVersionRevisionsList_deprecated)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/revisions", security.Secure(versionController.GetVersionRevisionsList)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/sourceData", security.Secure(publishedController.GetPublishedVersionSourceDataConfig)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/config", security.Secure(publishedController.GetPublishedVersionBuildConfig)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/copy", security.Secure(versionController.CopyVersion)).Methods(http.MethodPost)
 
-	r.HandleFunc("/api/v2/packages/{packageId}/activity", security.Secure(activityTrackingController.GetActivityHistoryForPackage_deprecated)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v3/packages/{packageId}/activity", security.Secure(activityTrackingController.GetActivityHistoryForPackage_deprecated_2)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v4/packages/{packageId}/activity", security.Secure(activityTrackingController.GetActivityHistoryForPackage)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/activity", security.Secure(activityTrackingController.GetActivityHistory_deprecated)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v3/activity", security.Secure(activityTrackingController.GetActivityHistory_deprecated_2)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v4/activity", security.Secure(activityTrackingController.GetActivityHistory)).Methods(http.MethodGet)
 
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/groups", security.Secure(operationGroupController.CreateOperationGroup_deprecated)).Methods(http.MethodPost)
 	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/groups", security.Secure(operationGroupController.CreateOperationGroup)).Methods(http.MethodPost)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}", security.Secure(operationGroupController.DeleteOperationGroup)).Methods(http.MethodDelete)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}", security.Secure(operationGroupController.ReplaceOperationGroup_deprecated)).Methods(http.MethodPut)
-	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}", security.Secure(operationGroupController.ReplaceOperationGroup)).Methods(http.MethodPut)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}", security.Secure(operationGroupController.GetGroupedOperations)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}", security.Secure(operationGroupController.UpdateOperationGroup_deprecated)).Methods(http.MethodPatch)
 	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}", security.Secure(operationGroupController.UpdateOperationGroup)).Methods(http.MethodPatch)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}/ghosts", security.Secure(operationGroupController.GetGroupedOperationGhosts_deprecated)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}/template", security.Secure(operationGroupController.GetGroupExportTemplate)).Methods(http.MethodGet)
@@ -640,9 +624,6 @@ func main() {
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/export/operations/deprecated", security.Secure(exportController.GenerateDeprecatedOperationsExcelReport)).Methods(http.MethodGet)
 
 	r.Path("/metrics").Handler(promhttp.Handler())
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}/transform", security.Secure(transformationController.TransformDocuments_deprecated)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/export/groups/{groupName}", security.Secure(exportController.ExportOperationGroupAsOpenAPIDocuments_deprecated)).Methods(http.MethodGet)                         //deprecated
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}/transformation/documents", security.Secure(transformationController.GetDataForDocumentsTransformation)).Methods(http.MethodGet)               //deprecated
 	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/build/groups/{groupName}/buildType/{buildType}", security.Secure(transformationController.TransformDocuments_deprecated_2)).Methods(http.MethodPost)             //deprecated
 	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/export/groups/{groupName}/buildType/{buildType}", security.Secure(exportController.ExportOperationGroupAsOpenAPIDocuments_deprecated_2)).Methods(http.MethodGet) //deprecated
 	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}/documents", security.Secure(transformationController.GetDataForDocumentsTransformation)).Methods(http.MethodGet)

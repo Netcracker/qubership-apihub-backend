@@ -33,28 +33,8 @@ type PublishedVersion struct {
 	VersionLabels            []string           `json:"versionLabels"`
 }
 
-type PublishedShortVersion struct {
-	PackageId   string        `json:"-"`
-	Version     string        `json:"-"`
-	Status      VersionStatus `json:"status"`
-	PublishedAt time.Time     `json:"publishedAt"`
-}
-
-type PublishedVersionListView_deprecated struct {
-	Version                  string        `json:"version"`
-	Status                   VersionStatus `json:"status"`
-	PublishedAt              time.Time     `json:"publishedAt"`
-	PreviousVersion          string        `json:"previousVersion"`
-	PreviousVersionPackageId string        `json:"previousVersionPackageId,omitempty"`
-	Revision                 int           `json:"revision"`
-}
-
 type PublishedVersions struct {
 	Versions []PublishedVersion `json:"versions"`
-}
-
-type PublishedVersionsView_deprecated struct {
-	Versions []PublishedVersionListView_deprecated `json:"versions"`
 }
 
 type PublishedVersionHistoryView struct {

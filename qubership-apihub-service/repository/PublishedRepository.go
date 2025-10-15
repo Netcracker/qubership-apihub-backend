@@ -26,7 +26,6 @@ type PublishedRepository interface {
 	MarkVersionDeleted(packageId string, versionName string, userId string) error
 	PatchVersion(packageId string, versionName string, status *string, versionLabels *[]string) (*entity.PublishedVersionEntity, error)
 	GetVersion(packageId string, versionName string) (*entity.PublishedVersionEntity, error)
-	GetReadonlyVersion_deprecated(packageId string, versionName string) (*entity.ReadonlyPublishedVersionEntity_deprecated, error)
 	GetReadonlyVersion(packageId string, versionName string, showOnlyDeleted bool) (*entity.PackageVersionRevisionEntity, error)
 	GetVersionByRevision(packageId string, versionName string, revision int) (*entity.PublishedVersionEntity, error)
 	GetVersionIncludingDeleted(packageId string, versionName string) (*entity.PublishedVersionEntity, error)
@@ -35,7 +34,6 @@ type PublishedRepository interface {
 	GetRichPackageVersion(packageId string, version string) (*entity.PackageVersionRichEntity, error)
 	GetRevisionContent(packageId string, versionName string, revision int) ([]entity.PublishedContentEntity, error)
 	GetRevisionContentWithLimit(packageId string, versionName string, revision int, skipRefs bool, searchQuery entity.PublishedContentSearchQueryEntity) ([]entity.PublishedContentEntity, error)
-	GetVersionRevisionsList_deprecated(searchQuery entity.PackageVersionSearchQueryEntity) ([]entity.PackageVersionRevisionEntity_deprecated, error)
 	GetVersionRevisionsList(searchQuery entity.PackageVersionSearchQueryEntity) ([]entity.PackageVersionRevisionEntity, error)
 	GetLatestContent(packageId string, versionName string, contentId string) (*entity.PublishedContentEntity, error)
 	GetLatestContentBySlug(packageId string, versionName string, slug string) (*entity.PublishedContentEntity, error)
@@ -54,12 +52,10 @@ type PublishedRepository interface {
 	GetContentData(packageId string, checksum string) (*entity.PublishedContentDataEntity, error)
 
 	GetRevisionRefs(packageId string, versionName string, revision int) ([]entity.PublishedReferenceEntity, error)
-	GetVersionRefs(searchQuery entity.PackageVersionSearchQueryEntity) ([]entity.PackageVersionPublishedReference, error) //deprecated
 	GetVersionRefsV3(packageId string, version string, revision int) ([]entity.PublishedReferenceEntity, error)
 	GetVersionsByPreviousVersion(previousPackageId string, previousVersionName string) ([]entity.PublishedVersionEntity, error)
 	GetPackageVersions(packageId string, filter string) ([]entity.PublishedVersionEntity, error)
 	GetPackageVersionsWithLimit(searchQuery entity.PublishedVersionSearchQueryEntity, checkRevisions bool) ([]entity.PublishedVersionEntity, error)
-	GetReadonlyPackageVersionsWithLimit_deprecated(searchQuery entity.PublishedVersionSearchQueryEntity, checkRevisions bool) ([]entity.ReadonlyPublishedVersionEntity_deprecated, error)
 	GetReadonlyPackageVersionsWithLimit(searchQuery entity.PublishedVersionSearchQueryEntity, checkRevisions bool, showOnlyDeleted bool) ([]entity.PackageVersionRevisionEntity, error)
 	GetLastVersions(ids []string) ([]entity.PublishedVersionEntity, error)
 	GetLastVersion(id string) (*entity.PublishedVersionEntity, error)
