@@ -186,17 +186,6 @@ func (d softDeletedDataCleanupRepositoryImpl) VacuumAffectedTables(ctx context.C
 				logger.Trace(ctx, "Successfully vacuumed 'favorite_packages' table")
 			}
 		}
-		if deletedItems.MigratedVersions > 0 {
-			logger.Debugf(ctx, "Vacuuming 'migrated_version' table for %d deleted migrated versions records", deletedItems.MigratedVersions)
-			_, err = d.cp.GetConnection().ExecContext(ctx, "VACUUM FULL migrated_version")
-			if err != nil {
-				errorMsg := fmt.Sprintf("Failed to vacuum 'migrated_version' table: %v", err)
-				logger.Warn(ctx, errorMsg)
-				vacuumErrors = append(vacuumErrors, errorMsg)
-			} else {
-				logger.Trace(ctx, "Successfully vacuumed 'migrated_version' table")
-			}
-		}
 		if deletedItems.Operations > 0 {
 			logger.Debugf(ctx, "Vacuuming 'operation' table for %d deleted operations", deletedItems.Operations)
 			_, err = d.cp.GetConnection().ExecContext(ctx, "VACUUM FULL operation")

@@ -5,11 +5,11 @@ go 1.24.7
 require (
 	github.com/buraksezer/olric v0.4.7
 	github.com/buraksezer/olric-cloud-plugin v0.3.0-beta.4
-	github.com/coreos/go-oidc/v3 v3.14.1
+	github.com/coreos/go-oidc/v3 v3.16.0
 	github.com/crewjam/saml v0.5.1
 	github.com/go-ldap/ldap v3.0.3+incompatible
 	github.com/go-pg/pg/v10 v10.15.0
-	github.com/go-playground/validator/v10 v10.27.0
+	github.com/go-playground/validator/v10 v10.28.0
 	github.com/go-resty/resty/v2 v2.16.5
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/handlers v1.5.2
@@ -30,12 +30,11 @@ require (
 	github.com/x-cray/logrus-prefixed-formatter v0.5.2
 	github.com/xanzy/go-gitlab v0.115.0
 	github.com/xuri/excelize/v2 v2.7.1
-	golang.org/x/crypto v0.42.0
-	golang.org/x/net v0.44.0
+	golang.org/x/crypto v0.43.0
+	golang.org/x/net v0.46.0
 	golang.org/x/sync v0.17.0
-	golang.org/x/time v0.13.0
+	golang.org/x/time v0.14.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
-	gopkg.in/resty.v1 v1.12.0
 )
 
 require (
@@ -44,8 +43,8 @@ require (
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
-	github.com/gabriel-vasile/mimetype v1.4.8 // indirect
-	github.com/go-jose/go-jose/v4 v4.0.5 // indirect
+	github.com/gabriel-vasile/mimetype v1.4.10 // indirect
+	github.com/go-jose/go-jose/v4 v4.1.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-viper/mapstructure/v2 v2.3.0 // indirect
 	github.com/google/s2a-go v0.1.8 // indirect
@@ -178,10 +177,10 @@ require (
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xuri/efp v0.0.0-20220603152613-6918739fd470 // indirect
 	github.com/xuri/nfp v0.0.0-20220409054826-5e722a1d9e22 // indirect
-	golang.org/x/oauth2 v0.31.0
-	golang.org/x/sys v0.36.0 // indirect
-	golang.org/x/term v0.35.0 // indirect
-	golang.org/x/text v0.29.0 // indirect
+	golang.org/x/oauth2 v0.32.0
+	golang.org/x/sys v0.37.0 // indirect
+	golang.org/x/term v0.36.0 // indirect
+	golang.org/x/text v0.30.0 // indirect
 	google.golang.org/api v0.215.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/grpc v1.71.0 // indirect
