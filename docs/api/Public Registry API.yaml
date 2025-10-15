@@ -356,7 +356,7 @@ paths:
         **Note: This endpoint is not available in production mode.**
       operationId: refreshToken
       security:
-        - BearerAuth: [] 
+        - BearerAuth: []
         - CookieAuth: []
       parameters:
         - name: redirectUri
@@ -3850,7 +3850,7 @@ paths:
                   $ref: "#/components/examples/InternalServerError"
   "/api/v1/packages/{packageId}/publish/withOperationsGroup":
     parameters:
-    - $ref: '#/components/parameters/packageId'
+      - $ref: '#/components/parameters/packageId'
     post:
       tags:
         - Publish
@@ -5441,8 +5441,8 @@ paths:
                           - title: RestOperation
                             type: object
                             required:
-                                - path
-                                - method
+                              - path
+                              - method
                             properties:
                               path:
                                 description: Operation endpoint path.
@@ -14953,14 +14953,14 @@ components:
           description: Operation summary/title.
           type: string
         apiType:
-        #  description: Type of the API.
-        #  type: string
-        #  enum:
-        #    - rest
-        #    - kafka
-        #    - grpc
-        #    - graphql
-        #    - protobuf
+          #  description: Type of the API.
+          #  type: string
+          #  enum:
+          #    - rest
+          #    - kafka
+          #    - grpc
+          #    - graphql
+          #    - protobuf
           $ref: "#/components/schemas/ApiType"
         dataHash:
           description: Operation hash.
@@ -15150,7 +15150,7 @@ components:
         type:
           description: Operation type
           type: string
-          enum: #open questions what types shall be supported?
+          enum: # open questions what types shall be supported?
             - unary
             - serverStreaming
             - clientStreaming
