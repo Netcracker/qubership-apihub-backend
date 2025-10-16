@@ -70,7 +70,6 @@ type SystemInfoService interface {
 	GetLdapOrganizationUnit() string
 	GetLdapSearchBase() string
 	GetBuildsCleanupSchedule() string
-	InsecureProxyEnabled() bool
 	GetMetricsGetterSchedule() string
 	MonitoringEnabled() bool
 	GetMinioAccessKeyId() string
@@ -105,6 +104,8 @@ type SystemInfoService interface {
 	GetSoftDeletedDataCleanupSchedule() string
 	GetSoftDeletedDataCleanupTimeout() int
 	GetSoftDeletedDataTTLDays() int
+	GetUnreferencedDataCleanupSchedule() string
+	GetUnreferencedDataCleanupTimeout() int
 	GetExtensions() []view.Extension
 }
 
@@ -236,11 +237,13 @@ func (g *systemInfoServiceImpl) setDefaults() {
 	viper.SetDefault("cleanup.revisions.deleteReleaseRevisions", false)
 	viper.SetDefault("cleanup.revisions.ttlDays", 365)
 	viper.SetDefault("cleanup.comparisons.schedule", "0 5 * * 0") //at 5:00 AM on Sunday
-	viper.SetDefault("cleanup.comparisons.timeoutMinutes", 720)   //12 hours
+	viper.SetDefault("cleanup.comparisons.timeoutMinutes", 360)   //6 hours
 	viper.SetDefault("cleanup.comparisons.ttlDays", 30)
-	viper.SetDefault("cleanup.softDeletedData.schedule", "0 22 * * 5") //at 10 PM on Friday
-	viper.SetDefault("cleanup.softDeletedData.timeoutMinutes", 1200)   //20 hours
-	viper.SetDefault("cleanup.softDeletedData.ttlDays", 730)           // 2 years
+	viper.SetDefault("cleanup.softDeletedData.schedule", "0 22 * * 5")  //at 10 PM on Friday
+	viper.SetDefault("cleanup.softDeletedData.timeoutMinutes", 600)     //10 hours
+	viper.SetDefault("cleanup.softDeletedData.ttlDays", 730)            // 2 years
+	viper.SetDefault("cleanup.unreferencedData.schedule", "0 15 * * 6") //at 3 PM on Saturday
+	viper.SetDefault("cleanup.unreferencedData.timeoutMinutes", 360)    //6 hours
 }
 
 func (g *systemInfoServiceImpl) GetConfigFolder() string {
@@ -279,7 +282,6 @@ func (g *systemInfoServiceImpl) postProcessConfig() {
 func (g *systemInfoServiceImpl) setBackendVersion() {
 	gitBranch := os.Getenv(GIT_BRANCH)
 	gitHash := os.Getenv(GIT_HASH)
-
 	if gitBranch == "" && gitHash == "" {
 		g.config.TechnicalParameters.BackendVersion = "unknown"
 	} else {
@@ -399,10 +401,6 @@ func (g *systemInfoServiceImpl) getSystemNotification() string {
 
 func (g *systemInfoServiceImpl) GetBuildsCleanupSchedule() string {
 	return g.config.Cleanup.Builds.Schedule
-}
-
-func (g *systemInfoServiceImpl) InsecureProxyEnabled() bool {
-	return g.config.Security.InsecureProxy
 }
 
 func (g *systemInfoServiceImpl) GetMetricsGetterSchedule() string {
@@ -612,6 +610,14 @@ func (g *systemInfoServiceImpl) GetSoftDeletedDataCleanupTimeout() int {
 
 func (g *systemInfoServiceImpl) GetSoftDeletedDataTTLDays() int {
 	return g.config.Cleanup.SoftDeletedData.TTLDays
+}
+
+func (g *systemInfoServiceImpl) GetUnreferencedDataCleanupSchedule() string {
+	return g.config.Cleanup.UnreferencedData.Schedule
+}
+
+func (g *systemInfoServiceImpl) GetUnreferencedDataCleanupTimeout() int {
+	return g.config.Cleanup.UnreferencedData.TimeoutMinutes
 }
 
 func (g *systemInfoServiceImpl) GetExtensions() []view.Extension {

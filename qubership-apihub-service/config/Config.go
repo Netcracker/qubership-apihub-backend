@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/base64"
 	"fmt"
+
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
@@ -34,7 +35,6 @@ type SecurityConfig struct {
 	ProductionMode            bool
 	Jwt                       JwtConfig
 	ApihubExternalUrl         string `validate:"required"`
-	InsecureProxy             bool
 	AllowedHostsForProxy      []string
 	AllowedOrigins            []string
 	AutoLogin                 bool
@@ -132,10 +132,11 @@ type OlricConfig struct {
 }
 
 type CleanupConfig struct {
-	Revisions       RevisionsCleanupConfig
-	Comparisons     ComparisonsCleanupConfig
-	SoftDeletedData SoftDeletedDataCleanupConfig
-	Builds          BuildsCleanupConfig
+	Revisions        RevisionsCleanupConfig
+	Comparisons      ComparisonsCleanupConfig
+	SoftDeletedData  SoftDeletedDataCleanupConfig
+	UnreferencedData UnreferencedDataCleanupConfig
+	Builds           BuildsCleanupConfig
 }
 
 type RevisionsCleanupConfig struct {
@@ -155,6 +156,11 @@ type SoftDeletedDataCleanupConfig struct {
 	Schedule       string
 	TimeoutMinutes int
 	TTLDays        int
+}
+
+type UnreferencedDataCleanupConfig struct {
+	Schedule       string
+	TimeoutMinutes int
 }
 
 type BuildsCleanupConfig struct {

@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp/providers"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service/cleanup"
 
 	"gopkg.in/natefinch/lumberjack.v2"
 
@@ -225,7 +226,6 @@ func main() {
 
 	roleRepository := repository.NewRoleRepository(cp)
 	operationRepository := repository.NewOperationRepository(cp)
-	agentRepository := repository.NewAgentRepository(cp)
 	businessMetricRepository := repository.NewBusinessMetricRepository(cp)
 
 	activityTrackingRepository := repository.NewActivityTrackingRepository(cp)
@@ -242,6 +242,8 @@ func main() {
 	systemStatsRepository := repository.NewSystemStatsRepository(cp)
 
 	deletedDataCleanupRepository := repository.NewSoftDeletedDataCleanupRepository(cp)
+
+	unreferencedDataCleanupRepository := repository.NewUnreferencedDataCleanupRepository(cp)
 
 	lockRepo := repository.NewLockRepository(cp)
 
@@ -276,7 +278,7 @@ func main() {
 
 	lockService := service.NewLockService(lockRepo, systemInfoService.GetInstanceId())
 
-	cleanupService := service.NewCleanupService(cp)
+	cleanupService := cleanup.NewCleanupService(cp)
 	if err := cleanupService.CreateRevisionsCleanupJob(publishedRepository, migrationRunRepository, versionCleanupRepository, lockService, systemInfoService.GetInstanceId(), systemInfoService.GetRevisionsCleanupSchedule(), systemInfoService.GetRevisionsCleanupDeleteLastRevision(), systemInfoService.GetRevisionsCleanupDeleteReleaseRevisions(), systemInfoService.GetRevisionsTTLDays()); err != nil {
 		log.Error("Failed to start revisions cleaning job" + err.Error())
 	}
@@ -285,6 +287,9 @@ func main() {
 	}
 	if err := cleanupService.CreateSoftDeletedDataCleanupJob(publishedRepository, migrationRunRepository, deletedDataCleanupRepository, lockService, systemInfoService.GetInstanceId(), systemInfoService.GetSoftDeletedDataCleanupSchedule(), systemInfoService.GetSoftDeletedDataCleanupTimeout(), systemInfoService.GetSoftDeletedDataTTLDays()); err != nil {
 		log.Error("Failed to start soft deleted data cleaning job" + err.Error())
+	}
+	if err := cleanupService.CreateUnreferencedDataCleanupJob(migrationRunRepository, unreferencedDataCleanupRepository, lockService, systemInfoService.GetInstanceId(), systemInfoService.GetUnreferencedDataCleanupSchedule(), systemInfoService.GetUnreferencedDataCleanupTimeout()); err != nil {
+		log.Error("Failed to start unreferenced data cleaning job" + err.Error())
 	}
 
 	monitoringService := service.NewMonitoringService(cp)
@@ -326,7 +331,6 @@ func main() {
 	versionService.SetBuildService(buildService)
 	operationGroupService.SetBuildService(buildService)
 
-	agentService := service.NewAgentRegistrationService(agentRepository)
 	excelService := service.NewExcelService(publishedRepository, versionService, operationService, packageService)
 	comparisonService := service.NewComparisonService(publishedRepository, operationRepository, packageVersionEnrichmentService)
 	businessMetricService := service.NewBusinessMetricService(businessMetricRepository)
@@ -370,9 +374,6 @@ func main() {
 	apihubApiKeyController := controller.NewApihubApiKeyController(apihubApiKeyService, roleService)
 	cleanupController := controller.NewCleanupController(cleanupService)
 
-	agentClient := client.NewAgentClient()
-	agentController := controller.NewAgentController(agentService, agentClient, roleService.IsSysadm)
-	agentProxyController := controller.NewAgentProxyController(agentService, systemInfoService)
 	playgroundProxyController := controller.NewPlaygroundProxyController(systemInfoService)
 	publishV2Controller := controller.NewPublishV2Controller(buildService, publishedService, buildResultService, roleService, systemInfoService)
 	exportController := controller.NewExportController(publishedService, portalService, searchService, roleService, excelService, versionService, monitoringService, exportService, packageService)
@@ -389,7 +390,7 @@ func main() {
 	operationController := controller.NewOperationController(roleService, operationService, buildService, monitoringService, ptHandler)
 	operationGroupController := controller.NewOperationGroupController(roleService, operationGroupService, versionService)
 	searchController := controller.NewSearchController(operationService, versionService, monitoringService)
-	tempMigrationController := mController.NewTempMigrationController(dbMigrationService, roleService.IsSysadm)
+	dataMigrationController := mController.NewTempMigrationController(dbMigrationService, roleService.IsSysadm)
 	activityTrackingController := controller.NewActivityTrackingController(activityTrackingService, roleService, ptHandler)
 	comparisonController := controller.NewComparisonController(operationService, versionService, buildService, roleService, comparisonService, monitoringService, ptHandler)
 	buildCleanupController := controller.NewBuildCleanupController(dbCleanupService, roleService.IsSysadm)
@@ -599,13 +600,6 @@ func main() {
 	r.HandleFunc("/api/v3/activity", security.Secure(activityTrackingController.GetActivityHistory_deprecated_2)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v4/activity", security.Secure(activityTrackingController.GetActivityHistory)).Methods(http.MethodGet)
 
-	r.HandleFunc("/api/v2/agents", security.Secure(agentController.ListAgents)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/agents", security.Secure(agentController.ProcessAgentSignal)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v2/agents/{id}", security.Secure(agentController.GetAgent)).Methods(http.MethodGet)
-
-	r.HandleFunc("/api/v2/agents/{agentId}/namespaces", security.Secure(agentController.GetAgentNamespaces)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/agents/{agentId}/namespaces/{namespace}/serviceNames", security.Secure(agentController.ListServiceNames))
-
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/groups", security.Secure(operationGroupController.CreateOperationGroup_deprecated)).Methods(http.MethodPost)
 	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/groups", security.Secure(operationGroupController.CreateOperationGroup)).Methods(http.MethodPost)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}", security.Secure(operationGroupController.DeleteOperationGroup)).Methods(http.MethodDelete)
@@ -616,13 +610,6 @@ func main() {
 	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}", security.Secure(operationGroupController.UpdateOperationGroup)).Methods(http.MethodPatch)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}/ghosts", security.Secure(operationGroupController.GetGroupedOperationGhosts_deprecated)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}/template", security.Secure(operationGroupController.GetGroupExportTemplate)).Methods(http.MethodGet)
-
-	const proxyPath = "/agents/{agentId}/namespaces/{name}/services/{serviceId}/proxy/"
-	if systemInfoService.InsecureProxyEnabled() {
-		r.PathPrefix(proxyPath).HandlerFunc(agentProxyController.Proxy)
-	} else {
-		r.PathPrefix(proxyPath).HandlerFunc(security.SecureAgentProxy(agentProxyController.Proxy))
-	}
 
 	r.HandleFunc("/playground/proxy", security.SecureProxy(playgroundProxyController.Proxy))
 
@@ -637,10 +624,11 @@ func main() {
 	r.HandleFunc("/api/v2/roles/changeOrder", security.Secure(roleController.SetRoleOrder)).Methods(http.MethodPost)
 	r.HandleFunc("/api/v2/packages/{packageId}/availableRoles", security.Secure(roleController.GetAvailablePackageRoles)).Methods(http.MethodGet)
 
-	r.HandleFunc("/api/internal/migrate/operations", security.Secure(tempMigrationController.StartOpsMigration)).Methods(http.MethodPost)
-	r.HandleFunc("/api/internal/migrate/operations/{migrationId}", security.Secure(tempMigrationController.GetMigrationReport)).Methods(http.MethodGet)
-	r.HandleFunc("/api/internal/migrate/operations/{migrationId}/suspiciousBuilds", security.Secure(tempMigrationController.GetSuspiciousBuilds)).Methods(http.MethodGet)
-	r.HandleFunc("/api/internal/migrate/operations/cancel", security.Secure(tempMigrationController.CancelRunningMigrations)).Methods(http.MethodPost)
+	r.HandleFunc("/api/internal/migrate/operations", security.Secure(dataMigrationController.StartOpsMigration)).Methods(http.MethodPost)
+	r.HandleFunc("/api/internal/migrate/operations/{migrationId}", security.Secure(dataMigrationController.GetMigrationReport)).Methods(http.MethodGet)
+	r.HandleFunc("/api/internal/migrate/operations/{migrationId}/suspiciousBuilds", security.Secure(dataMigrationController.GetSuspiciousBuilds)).Methods(http.MethodGet)
+	r.HandleFunc("/api/internal/migrate/operations/{migrationId}/perf", security.Secure(dataMigrationController.GetMigrationPerfReport)).Methods(http.MethodGet)
+	r.HandleFunc("/api/internal/migrate/operations/cancel", security.Secure(dataMigrationController.CancelRunningMigrations)).Methods(http.MethodPost)
 	r.HandleFunc("/api/internal/migrate/operations/cleanup", security.Secure(buildCleanupController.StartMigrationBuildCleanup)).Methods(http.MethodPost)
 	r.HandleFunc("/api/internal/migrate/operations/cleanup/{id}", security.Secure(buildCleanupController.GetMigrationBuildCleanupResult)).Methods(http.MethodGet)
 
@@ -798,6 +786,8 @@ func main() {
 	utils.SafeAsync(func() {
 		exportService.StartCleanupOldResultsJob()
 	})
+
+	dbMigrationService.StartOpsMigrationRestoreProc(context.Background())
 
 	log.Fatalf("Http server returned error: %v", srv.ListenAndServe())
 }
