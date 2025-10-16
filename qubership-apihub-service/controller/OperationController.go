@@ -33,7 +33,6 @@ type OperationController interface {
 	GetOperation(w http.ResponseWriter, r *http.Request)
 	GetOperationsTags(w http.ResponseWriter, r *http.Request)
 	GetOperationChanges(w http.ResponseWriter, r *http.Request)
-	GetOperationChanges_deprecated_2(w http.ResponseWriter, r *http.Request)
 	GetOperationsChanges(w http.ResponseWriter, r *http.Request)
 	GetDeprecatedOperationsList(w http.ResponseWriter, r *http.Request)
 	GetOperationDeprecatedItems(w http.ResponseWriter, r *http.Request)
@@ -569,71 +568,6 @@ func (o operationControllerImpl) GetOperationChanges(w http.ResponseWriter, r *h
 		}
 	}
 	changes, err := o.operationService.GetOperationChanges(packageId, versionName, operationId, previousVersionPackageId, previousVersion, severities)
-	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, o.ptHandler, packageId, "Failed to get operation changes", err)
-		return
-	}
-	utils.RespondWithJson(w, http.StatusOK, changes)
-}
-
-func (o operationControllerImpl) GetOperationChanges_deprecated_2(w http.ResponseWriter, r *http.Request) {
-	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
-	sufficientPrivileges, err := o.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
-	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, o.ptHandler, packageId, "Failed to check user privileges", err)
-		return
-	}
-	if !sufficientPrivileges {
-		utils.RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusForbidden,
-			Code:    exception.InsufficientPrivileges,
-			Message: exception.InsufficientPrivilegesMsg,
-		})
-		return
-	}
-	versionName, err := getUnescapedStringParam(r, "version")
-	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.InvalidURLEscape,
-			Message: exception.InvalidURLEscapeMsg,
-			Params:  map[string]interface{}{"param": "version"},
-			Debug:   err.Error(),
-		})
-		return
-	}
-	operationId, err := getUnescapedStringParam(r, "operationId")
-	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.InvalidURLEscape,
-			Message: exception.InvalidURLEscapeMsg,
-			Params:  map[string]interface{}{"param": "operationId"},
-			Debug:   err.Error(),
-		})
-		return
-	}
-
-	previousVersion := r.URL.Query().Get("previousVersion")
-	previousVersionPackageId := r.URL.Query().Get("previousVersionPackageId")
-	severities, customErr := getListFromParam(r, "severity")
-	if customErr != nil {
-		utils.RespondWithCustomError(w, customErr)
-		return
-	}
-	for _, severity := range severities {
-		if !view.ValidSeverity(severity) {
-			utils.RespondWithCustomError(w, &exception.CustomError{
-				Status:  http.StatusBadRequest,
-				Code:    exception.InvalidParameterValue,
-				Message: exception.InvalidParameterValueMsg,
-				Params:  map[string]interface{}{"param": "severity", "value": severity},
-			})
-			return
-		}
-	}
-	changes, err := o.operationService.GetOperationChanges_deprecated_2(packageId, versionName, operationId, previousVersionPackageId, previousVersion, severities)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, o.ptHandler, packageId, "Failed to get operation changes", err)
 		return

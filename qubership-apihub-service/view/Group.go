@@ -45,10 +45,3 @@ type GroupInfo struct {
 type Groups struct {
 	Groups []Group `json:"groups"`
 }
-
-type PublishGroupRequest struct {
-	Version         string `json:"version"`
-	PreviousVersion string `json:"previousVersion"`
-	Status          string `json:"status"`
-	Refs            []Ref  `json:"refs"`
-}

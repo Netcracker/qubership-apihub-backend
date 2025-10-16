@@ -14,14 +14,6 @@
 
 package view
 
-type Pageable struct {
-	Content      interface{} `json:"content"`
-	TotalItems   int         `json:"totalItems"`
-	TotalPages   int         `json:"totalPages"`
-	ItemsPerPage int         `json:"itemsPerPage"`
-	CurrentPage  int         `json:"currentPage"`
-}
-
 type PagingParams struct {
 	Page         int `json:"page"`
 	ItemsPerPage int `json:"itemsPerPage"`

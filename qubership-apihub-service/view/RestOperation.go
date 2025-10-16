@@ -40,11 +40,6 @@ type RestOperationComparisonChangelogView struct {
 	RestOperationMetadata
 }
 
-type RestOperationComparisonChangelogView_deprecated_2 struct {
-	OperationComparisonChangelogView_deprecated_2
-	RestOperationMetadata
-}
-
 type RestOperationComparisonChangesView struct {
 	OperationComparisonChangesView
 	RestOperationMetadata

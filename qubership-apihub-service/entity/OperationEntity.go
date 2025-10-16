@@ -196,13 +196,6 @@ type OperationTagsSearchQueryEntity struct {
 	Limit       int    `pg:"limit, type:integer, use_zero"`
 	Offset      int    `pg:"offset, type:integer, use_zero"`
 }
-type OperationSearchQueryEntity struct {
-	PackageId   string `pg:"package_id, type:varchar, use_zero"`
-	Version     string `pg:"version, type:varchar, use_zero"`
-	Revision    int    `pg:"revision, type:integer, use_zero"`
-	ApiType     string `pg:"type, type:varchar, use_zero"`
-	OperationId string `pg:"operation_id, type:varchar, use_zero"`
-}
 
 type OperationModelsEntity struct {
 	tableName struct{} `pg:"operation, alias:operation"`

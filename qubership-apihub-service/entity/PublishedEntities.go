@@ -102,15 +102,6 @@ type PublishedVersionEntity struct {
 	CreatedBy                string     `pg:"created_by, type:varchar"`
 }
 
-// todo remove this entity after migration createdBy:string -> createdBy:UserObject
-type ReadonlyPublishedVersionEntity_deprecated struct {
-	tableName struct{} `pg:"published_version, alias:published_version"`
-
-	PublishedVersionEntity
-	UserName                string `pg:"user_name, type:varchar"`
-	PreviousVersionRevision int    `pg:"previous_version_revision, type:integer"`
-}
-
 type PublishedVersionSearchQueryEntity struct {
 	PackageId  string `pg:"package_id, type:varchar, use_zero"`
 	Status     string `pg:"status, type:varchar, use_zero"`

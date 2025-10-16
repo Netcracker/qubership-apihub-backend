@@ -32,7 +32,6 @@ import (
 
 type OperationGroupController interface {
 	GetGroupedOperations(w http.ResponseWriter, r *http.Request)
-	GetGroupedOperationGhosts_deprecated(w http.ResponseWriter, r *http.Request)
 	CreateOperationGroup(w http.ResponseWriter, r *http.Request)
 	DeleteOperationGroup(w http.ResponseWriter, r *http.Request)
 	UpdateOperationGroup(w http.ResponseWriter, r *http.Request)
@@ -270,13 +269,6 @@ func (o operationGroupControllerImpl) GetGroupedOperations(w http.ResponseWriter
 		return
 	}
 	utils.RespondWithJson(w, http.StatusOK, groupedOperations)
-}
-
-func (o operationGroupControllerImpl) GetGroupedOperationGhosts_deprecated(w http.ResponseWriter, r *http.Request) {
-	utils.RespondWithJson(w, http.StatusOK, view.GroupedGhostOperations_deprecated{
-		GhostOperations: []interface{}{},
-		Packages:        map[string]view.PackageVersionRef{},
-	})
 }
 
 func (o operationGroupControllerImpl) CreateOperationGroup(w http.ResponseWriter, r *http.Request) {

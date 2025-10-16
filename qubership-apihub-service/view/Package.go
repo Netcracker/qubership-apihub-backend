@@ -42,29 +42,6 @@ type Packages_deprecated struct {
 	Packages []Package `json:"projects"` //todo replace with packages
 }
 
-type PackageInfo struct {
-	PackageId                string            `json:"packageId" validate:"required"`
-	ParentId                 string            `json:"-"`
-	Alias                    string            `json:"-"`
-	Version                  string            `json:"version" validate:"required"`
-	ServiceName              string            `json:"serviceName"`
-	Folder                   string            `json:"folder"`
-	PackageName              string            `json:"packageName"` // TODO: not used?
-	PreviousVersion          string            `json:"previousVersion"`
-	PreviousVersionPackageId string            `json:"previousVersionPackageId"`
-	Status                   string            `json:"status" validate:"required"`
-	Refs                     []PackageInfoRef  `json:"refs" validate:"dive,required"`
-	Files                    []PackageInfoFile `json:"files" validate:"dive,required"`
-	VersionLabels            []string          `json:"versionLabels"`
-	BranchName               string            `json:"branchName,omitempty"`
-	RepositoryUrl            string            `json:"repositoryUrl,omitempty"`
-}
-
-type PackageInfoRef struct {
-	RefPackageId string `json:"refId" validate:"required"`
-	RefVersion   string `json:"version" validate:"required"`
-}
-
 type SimplePackage struct {
 	Id                    string              `json:"packageId"`
 	Alias                 string              `json:"alias" validate:"required"`
@@ -87,13 +64,6 @@ type SimplePackage struct {
 	ReleaseVersionPattern string              `json:"releaseVersionPattern"`
 	ExcludeFromSearch     *bool               `json:"excludeFromSearch,omitempty"`
 	RestGroupingPrefix    string              `json:"restGroupingPrefix,omitempty"`
-}
-
-type GlobalPackage struct {
-	PackageId      string          `json:"packageId"`
-	Name           string          `json:"name"`
-	Description    string          `json:"description"`
-	ParentPackages []SimplePackage `json:"parentPackages"`
 }
 
 type Packages struct {
@@ -268,11 +238,6 @@ type BuilderNotificationsFile struct {
 	Notifications []BuilderNotification `json:"notifications" validate:"dive,required"`
 }
 
-type PackageRef struct {
-	RefId   string `json:"refId"`
-	Version string `json:"version"`
-}
-
 type PackageDocument struct {
 	FileId       string                 `json:"fileId" validate:"required"`
 	Type         string                 `json:"type" validate:"required"`
@@ -329,15 +294,4 @@ func MakePackageVersionRefKey(packageId string, version string) string {
 		return ""
 	}
 	return fmt.Sprintf("%v@%v", packageId, version)
-}
-
-type PackageV2 struct {
-	Id          string `json:"id"`
-	Alias       string `json:"alias" validate:"required"`
-	Name        string `json:"name" validate:"required"`
-	Kind        string `json:"kind" validate:"required"`
-	ParentId    string `json:"parentId" validate:"required"`
-	Description string `json:"description"`
-	ServiceName string `json:"serviceName"`
-	ImageUrl    string `json:"imageUrl"`
 }

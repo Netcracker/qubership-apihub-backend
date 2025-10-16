@@ -30,11 +30,6 @@ type PublishedContent struct {
 	Asyncapi    *Asyncapi    `json:"asyncapi,omitempty"`
 }
 
-type PublishedContentInfo struct {
-	FileId   string
-	Checksum string
-}
-
 type SharedUrlResult_deprecated struct {
 	SharedId string `json:"sharedId"`
 }
