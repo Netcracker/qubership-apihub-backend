@@ -529,3 +529,8 @@ components:
       description: Authentication by personal access token.
       name: X-Personal-Access-Token
       in: header
+    RefreshTokenAuth:
+      type: apiKey
+      in: cookie
+      name: apihub-refresh-token
+      description: Authentication via refresh token cookie

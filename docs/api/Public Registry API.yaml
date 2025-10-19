@@ -325,7 +325,8 @@ paths:
         In case of successful authentication, the response will contain an access token cookie and a refresh token cookie for future API calls.
         All subsequent APIHUB calls must use the access token cookie in **CookieAuth**.
       operationId: localLogin
-      security: [{}]
+      security:
+        - BasicAuth: []
       responses:
         "200":
           description: Success
@@ -356,8 +357,7 @@ paths:
         **Note: This endpoint is not available in production mode.**
       operationId: refreshToken
       security:
-        - BearerAuth: []
-        - CookieAuth: []
+        - RefreshTokenAuth: []
       parameters:
         - name: redirectUri
           in: query
@@ -393,6 +393,7 @@ paths:
       operationId: logoutUser
       security:
         - BearerAuth: []
+        - CookieAuth: []
       responses:
         "204":
           description: No content
@@ -17438,3 +17439,8 @@ components:
       description: Authentication by personal access token.
       name: X-Personal-Access-Token
       in: header
+    RefreshTokenAuth:
+      type: apiKey
+      in: cookie
+      name: apihub-refresh-token
+      description: Authentication via refresh token cookie

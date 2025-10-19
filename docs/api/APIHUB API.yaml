@@ -2985,7 +2985,7 @@ components:
       bearerFormat: JWT
     CookieAuth:
       type: apiKey
-      description: Authentication via the `apihub-access-token` cookie.
+      description: Authentication via Bearer token in the `apihub-access-token` cookie (default for UI).
       in: cookie
       name: apihub-access-token
     api-key:
