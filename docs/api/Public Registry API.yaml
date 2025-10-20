@@ -245,7 +245,9 @@ paths:
 
         If the request contained a valid refresh token, the authentication process will not be started and a new access token will be issued.
       operationId: ssoLogin
-      security: [{}]
+      security:
+        - {}
+        - RefreshTokenAuth: []
       parameters:
         - name: redirectUri
           in: query
