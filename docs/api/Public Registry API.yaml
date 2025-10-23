@@ -17014,9 +17014,9 @@ components:
                                   url:
                                     type: string
             version-internal-documents.json:
-              $ref: "#/components/schemas/BuildResultVersionInternalDocuments"
+              $ref: "#/components/schemas/BuildResultInternalDocuments"
             comparison-internal-documents.json:
-              $ref: "#/components/schemas/BuildResultComparisonInternalDocuments"
+              $ref: "#/components/schemas/BuildResultInternalDocuments"
             comparisons.json:
               $ref: "#/components/schemas/BuildResultComparisons"
             comparisons/{comparisonFileId}:
@@ -17155,7 +17155,7 @@ components:
                       type: string
                       example: "cloudQSS-release2"
             comparison-internal-documents.json:
-              $ref: "#/components/schemas/BuildResultComparisonInternalDocuments"
+              $ref: "#/components/schemas/BuildResultInternalDocuments"
             comparisons.json:
               $ref: "#/components/schemas/BuildResultComparisons"
             comparisons/{comparisonFileId}:
@@ -18116,21 +18116,12 @@ components:
           type: string
           description: File name (slug+extension).
           example: "qitmf-v5.11.json"
-    BuildResultVersionInternalDocuments:
+    BuildResultInternalDocuments:
       type: object
-      description: List of version internal documents data.
+      description: List of internal documents data.
       properties:
         documents:
-          description: List of internal documents for the version
-          type: array
-          items:
-            $ref: "#/components/schemas/InternalDocumentMetadata"
-    BuildResultComparisonInternalDocuments:
-      type: object
-      description: List of comparison internal documents data.
-      properties:
-        documents:
-          description: List of internal documents for the version comparison
+          description: List of internal documents
           type: array
           items:
             $ref: "#/components/schemas/InternalDocumentMetadata"
