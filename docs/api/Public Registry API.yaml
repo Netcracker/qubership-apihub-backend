@@ -5828,14 +5828,14 @@ paths:
                         - type: object
                           required:
                             - changeSummary
-                            - mergedDocumentId
+                            - comparisonInternalDocumentId
                           properties:
                             changeSummary:
                               allOf:
                                 - $ref: "#/components/schemas/ChangeSummary"
                                 - type: object
                                   description: Number of declarative changes in one specific operation.
-                            mergedDocumentId:
+                            comparisonInternalDocumentId:
                               description: >
                                 Unique string identifier of the internal merged document,
                                 where diffs between operation and previous operation are present.
@@ -12503,7 +12503,7 @@ paths:
               examples:
                 InternalServerError:
                   $ref: "#/components/examples/InternalServerError"
-  "/api/v1/packages/{packageId}/versions/{version}/internal-documents":
+  "/api/v1/packages/{packageId}/versions/{version}/version-internal-documents":
     parameters:
       - $ref: "#/components/parameters/packageId"
       - $ref: "#/components/parameters/version"
@@ -12514,7 +12514,7 @@ paths:
       summary: Get version internal documents
       description: |
         Get list of internal documents for the version. Internal documents are only supported for packages of kind `package`
-      operationId: getPackagesIdVersionsIdInternalDocuments
+      operationId: getPackagesIdVersionsIdVersionInternalDocuments
       security:
         - BearerAuth: []
         - CookieAuth: []
@@ -12525,7 +12525,7 @@ paths:
           content:
             application/json:
               schema:
-                description: List of internal documents in a package.
+                description: List of internal documents in a package version.
                 type: array
                 items:
                   allOf:
@@ -12555,6 +12555,92 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
               examples: {}
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                PackageNotFound:
+                  $ref: "#/components/examples/PackageNotFound"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v1/packages/{packageId}/versions/{version}/comparison-internal-documents":
+    parameters:
+      - $ref: "#/components/parameters/packageId"
+      - $ref: "#/components/parameters/version"
+      - name: previousVersionPackageId
+        in: query
+        description: |
+          Package unique identifier for previous version.\
+          If both previousVersion and previousVersionPackageId are not specified, then previous **release** version will be used
+        schema:
+          type: string
+          example: "QS.RUNENV.K8S-SERVER.CJM-QSS-DEV-2.Q-TMF"
+      - name: previousVersion
+        in: query
+        description: |
+          Package previous version.\
+          If both previousVersion and previousVersionPackageId are not specified, then previous **release** version will be used
+        schema:
+          type: string
+          example: "2022.3"
+    get:
+      tags:
+        - Internal Documents
+        - Changes
+      summary: Get version comparison internal documents
+      description: |
+        Get list of internal documents for the version comparison. Internal documents are only supported for packages of kind `package`
+      operationId: getPackagesIdVersionsIdComparisonInternalDocuments
+      security:
+        - BearerAuth: [ ]
+        - CookieAuth: [ ]
+        - api-key: [ ]
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                description: List of internal documents in a version comparison.
+                type: array
+                items:
+                  allOf:
+                    - $ref: "#/components/schemas/InternalDocumentMetadata"
+                    - type: object
+                      required:
+                        - hash
+                      properties:
+                        hash:
+                          description: Hash of the corresponding document content.
+                          type: string
+        "301":
+          description: Moved Permanently
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Current endpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: { }
         "404":
           description: Not found
           content:
@@ -15764,7 +15850,7 @@ components:
         - dataHash
         - apiAudience
         - apiKind
-        - preprocessedDocumentId
+        - versionInternalDocumentId
       properties:
         operationId:
           description: Operation unique identifier (slug). Not the same as operationId tag from the OpenAPI file.
@@ -15827,7 +15913,7 @@ components:
           items:
             type: string
           example: ["RestControllerV5"]
-        preprocessedDocumentId:
+        versionInternalDocumentId:
           description: >
             Unique string identifier of the preprocessed (validated, references resolved) internal document,
             where the operation is present.
@@ -16870,8 +16956,10 @@ components:
                                     type: string
                                   url:
                                     type: string
-            internal-documents.json:
-              $ref: "#/components/schemas/BuildResultInternalDocuments"
+            version-internal-documents.json:
+              $ref: "#/components/schemas/BuildResultVersionInternalDocuments"
+            comparison-internal-documents.json:
+              $ref: "#/components/schemas/BuildResultComparisonInternalDocuments"
             comparisons.json:
               $ref: "#/components/schemas/BuildResultComparisons"
             comparisons/{comparisonFileId}:
@@ -17009,8 +17097,8 @@ components:
                       description: Namespace of Agent's publication.
                       type: string
                       example: "cloudQSS-release2"
-            internal-documents.json:
-              $ref: "#/components/schemas/BuildResultInternalDocuments"
+            comparison-internal-documents.json:
+              $ref: "#/components/schemas/BuildResultComparisonInternalDocuments"
             comparisons.json:
               $ref: "#/components/schemas/BuildResultComparisons"
             comparisons/{comparisonFileId}:
@@ -17961,7 +18049,6 @@ components:
       required:
         - id
         - fileName
-        - format
       properties:
         id:
           description: Published file id.
@@ -17972,17 +18059,21 @@ components:
           type: string
           description: File name (slug+extension).
           example: "qitmf-v5.11.json"
-        format:
-          description: Format for the internal documents is always JSON
-          type: string
-          enum:
-            - json
-    BuildResultInternalDocuments:
+    BuildResultVersionInternalDocuments:
       type: object
-      description: List of internal documents data.
+      description: List of version internal documents data.
       properties:
         documents:
           description: List of internal documents for the version
+          type: array
+          items:
+            $ref: "#/components/schemas/InternalDocumentMetadata"
+    BuildResultComparisonInternalDocuments:
+      type: object
+      description: List of comparison internal documents data.
+      properties:
+        documents:
+          description: List of internal documents for the version comparison
           type: array
           items:
             $ref: "#/components/schemas/InternalDocumentMetadata"
@@ -18080,7 +18171,7 @@ components:
             required:
               - changes
               - changesSummary
-              - mergedDocumentId
+              - comparisonInternalDocumentId
             properties:
               operationId:
                 description: >-
@@ -18109,7 +18200,7 @@ components:
                 type: array
                 items:
                   $ref: "#/components/schemas/SingleOperationChange"
-              mergedDocumentId:
+              comparisonInternalDocumentId:
                 description: >
                   Unique string identifier of the internal merged document,
                   where diffs between operation and previous operation are present.
