@@ -32,7 +32,6 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/metrics"
-	midldleware "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
@@ -52,6 +51,8 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/repository"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/mcp"
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
@@ -81,7 +82,7 @@ func init() {
 	})
 	logLevel, err := log.ParseLevel(os.Getenv("LOG_LEVEL"))
 	if err != nil {
-		logLevel = log.InfoLevel
+		logLevel = log.DebugLevel
 	}
 	log.SetLevel(logLevel)
 	log.SetOutput(mw)
@@ -101,7 +102,7 @@ func main() {
 	migrationPassedChan := make(chan bool)
 	initSrvStoppedChan := make(chan bool)
 	r := mux.NewRouter()
-	r.Use(midldleware.PrometheusMiddleware)
+	// r.Use(midldleware.PrometheusMiddleware) todo figure out why breaks streaming
 	r.SkipClean(true)
 	r.UseEncodedPath()
 	healthController := controller.NewHealthController(readyChan)
@@ -697,6 +698,13 @@ func main() {
 
 		r.HandleFunc("/api/internal/minio/download", security.Secure(minioStorageController.DownloadFilesFromMinioToDatabase)).Methods(http.MethodPost)
 	}
+
+	mcpHandler, err := mcp.InitMcpHandler()
+	if err != nil {
+		log.Fatalf("Failed to initialize MCP handler: %s", err.Error())
+	}
+	r.Handle("/mcp/", mcpHandler)
+
 	debug.SetGCPercent(30)
 
 	r.HandleFunc("/v3/api-docs/swagger-config", apiDocsController.GetSpecsUrls).Methods(http.MethodGet)
