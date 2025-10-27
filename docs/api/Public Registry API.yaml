@@ -5839,7 +5839,7 @@ paths:
                               description: >
                                 Unique string identifier of the internal merged document,
                                 where diffs between operation and previous operation are present.
-                                Corresponds to slug field for the document in `internal-documents.json`
+                                Corresponds to `id` field for the document in `comparison-internal-documents.json`
                               type: string
                               pattern: "^[a-z0-9-]"
                               example: "qitmf-v5-11-qitmf-v5-12-merged-json"
@@ -12570,7 +12570,7 @@ paths:
         - Versions
       summary: Get version internal documents
       description: |
-        Get list of internal documents for the version. Internal documents are only supported for packages of kind `package`
+        Get list of version internal documents for the version. Version internal documents are only supported for packages of kind `package`
       operationId: getPackagesIdVersionsIdVersionInternalDocuments
       security:
         - BearerAuth: []
@@ -12672,7 +12672,7 @@ paths:
                 type: array
                 items:
                   allOf:
-                    - $ref: "#/components/schemas/InternalDocumentMetadata"
+                    - $ref: "#/components/schemas/ComparisonInternalDocumentMetadata"
                     - type: object
                       required:
                         - hash
@@ -15974,7 +15974,7 @@ components:
           description: >
             Unique string identifier of the preprocessed (validated, references resolved) internal document,
             where the operation is present.
-            Corresponds to `id` field for the document in `internal-documents.json`
+            Corresponds to `id` field for the document in `version-internal-documents.json`
           type: string
           pattern: "^[a-z0-9-]"
           example: "qitmf-v5-11-ref-resolved-json"
@@ -17014,9 +17014,23 @@ components:
                                   url:
                                     type: string
             version-internal-documents.json:
-              $ref: "#/components/schemas/BuildResultInternalDocuments"
+              type: object
+              description: List of version internal documents data. Only provided for packages of kind `package`.
+              properties:
+                documents:
+                  description: List of version internal documents
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/InternalDocumentMetadata"
             comparison-internal-documents.json:
-              $ref: "#/components/schemas/BuildResultInternalDocuments"
+              type: object
+              description: List of comparison internal documents data. Could be present for packages of kind `package` or `dashboard`.
+              properties:
+                documents:
+                  description: List of comparison internal documents
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/ComparisonInternalDocumentMetadata"
             comparisons.json:
               $ref: "#/components/schemas/BuildResultComparisons"
             comparisons/{comparisonFileId}:
@@ -18116,6 +18130,19 @@ components:
           type: string
           description: File name (slug+extension).
           example: "qitmf-v5.11.json"
+    ComparisonInternalDocumentMetadata:
+      allOf:
+        - $ref: "#/components/schemas/InternalDocumentMetadata"
+        - type: object
+          required:
+          - comparisonFileId
+          properties:
+            comparisonFileId:
+              type: string
+              description: Identifier of the comparison for which this internal document belongs.
+                Will be the same for all internal documents for package of kind `package`.
+                Could be different for package of kind `dashboard`.
+              example: "comparisonFile1.json"
     BuildResultInternalDocuments:
       type: object
       description: List of internal documents data.
@@ -18252,7 +18279,7 @@ components:
                 description: >
                   Unique string identifier of the internal merged document,
                   where diffs between operation and previous operation are present.
-                  Corresponds to `id` field for the document in `internal-documents.json`
+                  Corresponds to `id` field for the document in `comparison-internal-documents.json`
                 type: string
                 pattern: "^[a-z0-9-]"
                 example: "qitmf-v5-11-qitmf-v5-12-merged-json"
