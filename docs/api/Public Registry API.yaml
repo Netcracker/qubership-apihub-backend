@@ -12672,7 +12672,7 @@ paths:
                 type: array
                 items:
                   allOf:
-                    - $ref: "#/components/schemas/ComparisonInternalDocumentMetadata"
+                    - $ref: "#/components/schemas/InternalDocumentMetadata"
                     - type: object
                       required:
                         - hash
