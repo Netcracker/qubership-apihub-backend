@@ -69,6 +69,11 @@ type PublishedService interface {
 	PublishPackage(buildArc *archive.BuildResultArchive, buildSrcEnt *entity.BuildSourceEntity,
 		buildConfig *view.BuildConfig, existingPackage *entity.PackageEntity) error
 	PublishChanges(buildArc *archive.BuildResultArchive, publishId string) error
+
+	GetVersionInternalDocuments(packageId string, version string) ([]view.InternalDocument, error)
+	GetVersionInternalDocumentData(hash string) ([]byte, string, error)
+	GetComparisonInternalDocuments(packageId string, version string, previousPackageId string, previousVersion string) ([]view.InternalDocument, error)
+	GetComparisonInternalDocumentData(hash string) ([]byte, string, error)
 }
 
 func NewPublishedService(branchService BranchService,
@@ -913,6 +918,14 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 	if err != nil {
 		return err
 	}
+	err = buildArc.ReadVersionInternalDocuments(false)
+	if err != nil {
+		return err
+	}
+	err = buildArc.ReadComparisonInternalDocuments(false)
+	if err != nil {
+		return err
+	}
 	utils.PerfLog(time.Since(start).Milliseconds(), 400, "publishPackage: zip files read")
 
 	start = time.Now()
@@ -1001,12 +1014,22 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 		return err
 	}
 
-	operationsComparisonEntities, changedOperationEntities, versionComparisonsFromCache, err := buildArcEntitiesReader.ReadOperationComparisonsToEntities(operationsHashes, p.operationRepo)
+	operationsComparisonEntities, changedOperationEntities, versionComparisonsFromCache, comparisonFileIdToKeyMap, err := buildArcEntitiesReader.ReadOperationComparisonsToEntities(operationsHashes, p.operationRepo)
 	if err != nil {
 		return err
 	}
 
 	builderNotificationsEntities := buildArcEntitiesReader.ReadBuilderNotificationsToEntities(buildSrcEnt.BuildId)
+
+	versionInternalDocEntities, versionInternalDocDataEntities, err := buildArcEntitiesReader.ReadVersionInternalDocumentsToEntities()
+	if err != nil {
+		return err
+	}
+
+	comparisonInternalDocEntities, comparisonInternalDocDataEntities, err := buildArcEntitiesReader.ReadComparisonInternalDocumentsToEntities(comparisonFileIdToKeyMap)
+	if err != nil {
+		return err
+	}
 
 	var publishedSrcEntity *entity.PublishedSrcEntity
 	var publishedSrcArchiveEntity *entity.PublishedSrcArchiveEntity
@@ -1153,6 +1176,10 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 		newServiceName,
 		existingPackage,
 		versionComparisonsFromCache,
+		versionInternalDocEntities,
+		versionInternalDocDataEntities,
+		comparisonInternalDocEntities,
+		comparisonInternalDocDataEntities,
 	)
 	utils.PerfLog(time.Since(start).Milliseconds(), 15000, "publishPackage: CreateVersionWithData")
 	if err != nil {
@@ -1302,6 +1329,10 @@ func (p publishedServiceImpl) PublishChanges(buildArc *archive.BuildResultArchiv
 	if err = buildArc.ReadPackageComparisons(false); err != nil {
 		return err
 	}
+	err = buildArc.ReadComparisonInternalDocuments(false)
+	if err != nil {
+		return err
+	}
 
 	if err = validation.ValidatePublishBuildResult(buildArc); err != nil {
 		return err
@@ -1324,12 +1355,16 @@ func (p publishedServiceImpl) PublishChanges(buildArc *archive.BuildResultArchiv
 	}
 
 	buildArcEntitiesReader := archive.NewBuildResultToEntitiesReader(buildArc)
-	versionComparisonEntities, operationComparisonEntities, versionComparisonsFromCache, err := buildArcEntitiesReader.ReadOperationComparisonsToEntities(nil, p.operationRepo)
+	versionComparisonEntities, operationComparisonEntities, versionComparisonsFromCache, comparisonFileIdToKeyMap, err := buildArcEntitiesReader.ReadOperationComparisonsToEntities(nil, p.operationRepo)
+	if err != nil {
+		return err
+	}
+	comparisonInternalDocEntities, comparisonInternalDocDataEntities, err := buildArcEntitiesReader.ReadComparisonInternalDocumentsToEntities(comparisonFileIdToKeyMap)
 	if err != nil {
 		return err
 	}
 
-	err = p.publishedRepo.SaveVersionChanges(buildArc.PackageInfo, publishId, operationComparisonEntities, versionComparisonEntities, versionComparisonsFromCache)
+	err = p.publishedRepo.SaveVersionChanges(buildArc.PackageInfo, publishId, operationComparisonEntities, versionComparisonEntities, versionComparisonsFromCache, comparisonInternalDocEntities, comparisonInternalDocDataEntities)
 	if err != nil {
 		return err
 	}
@@ -1409,4 +1444,128 @@ func (p publishedServiceImpl) createChangelogBuild(config view.BuildConfig) erro
 		return err
 	}
 	return nil
+}
+
+func (p publishedServiceImpl) GetVersionInternalDocuments(packageId string, versionName string) ([]view.InternalDocument, error) {
+	versionEnt, err := p.publishedRepo.GetVersion(packageId, versionName)
+	if err != nil {
+		return nil, err
+	}
+	if versionEnt == nil {
+		return nil, &exception.CustomError{
+			Status:  http.StatusNotFound,
+			Code:    exception.PublishedPackageVersionNotFound,
+			Message: exception.PublishedPackageVersionNotFoundMsg,
+			Params:  map[string]interface{}{"version": versionName, "packageId": packageId},
+		}
+	}
+
+	docs, err := p.publishedRepo.GetVersionInternalDocuments(versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]view.InternalDocument, len(docs))
+	for _, doc := range docs {
+		result = append(result, *entity.MakeVersionInternalDocumentView(&doc))
+	}
+
+	return result, nil
+}
+
+func (p publishedServiceImpl) GetVersionInternalDocumentData(hash string) ([]byte, string, error) {
+	docData, err := p.publishedRepo.GetVersionInternalDocumentData(hash)
+	if err != nil {
+		return nil, "", err
+	}
+
+	//when the filename is empty, it means we did not find a record in the version_internal_document table using the specified hash,
+	//i.e., we are dealing with unref data, and we should not return such data
+	if docData == nil || docData.Filename == "" {
+		return nil, "", &exception.CustomError{
+			Status:  http.StatusNotFound,
+			Code:    exception.VersionInternalDocumentNotFound,
+			Message: exception.VersionInternalDocumentNotFoundMsg,
+			Params:  map[string]interface{}{"hash": hash},
+		}
+	}
+
+	return docData.Data, docData.Filename, nil
+}
+
+func (p publishedServiceImpl) GetComparisonInternalDocuments(packageId string, version string, previousPackageId string, previousVersion string) ([]view.InternalDocument, error) {
+	versionEnt, err := p.publishedRepo.GetVersion(packageId, version)
+	if err != nil {
+		return nil, err
+	}
+	if versionEnt == nil {
+		return nil, &exception.CustomError{
+			Status:  http.StatusNotFound,
+			Code:    exception.PublishedPackageVersionNotFound,
+			Message: exception.PublishedPackageVersionNotFoundMsg,
+			Params:  map[string]interface{}{"version": version, "packageId": packageId},
+		}
+	}
+
+	if previousVersion == "" || previousPackageId == "" {
+		if versionEnt.PreviousVersion == "" {
+			return nil, &exception.CustomError{
+				Status:  http.StatusNotFound,
+				Code:    exception.NoPreviousVersion,
+				Message: exception.NoPreviousVersionMsg,
+				Params:  map[string]interface{}{"version": version},
+			}
+		}
+		previousVersion = versionEnt.PreviousVersion
+		if versionEnt.PreviousVersionPackageId != "" {
+			previousPackageId = versionEnt.PreviousVersionPackageId
+		} else {
+			previousPackageId = packageId
+		}
+	}
+	previousVersionEnt, err := p.publishedRepo.GetVersion(previousPackageId, previousVersion)
+	if err != nil {
+		return nil, err
+	}
+	if previousVersionEnt == nil {
+		return nil, &exception.CustomError{
+			Status:  http.StatusNotFound,
+			Code:    exception.PublishedPackageVersionNotFound,
+			Message: exception.PublishedPackageVersionNotFoundMsg,
+			Params:  map[string]interface{}{"version": previousVersion, "packageId": previousPackageId},
+		}
+	}
+
+	docs, err := p.publishedRepo.GetComparisonInternalDocuments(versionEnt.PackageId, versionEnt.Version, versionEnt.Revision,
+		previousVersionEnt.PackageId, previousVersionEnt.Version, previousVersionEnt.Revision)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]view.InternalDocument, len(docs))
+	for _, doc := range docs {
+		result = append(result, *entity.MakeComparisonInternalDocumentView(&doc))
+	}
+
+	return result, nil
+}
+
+func (p publishedServiceImpl) GetComparisonInternalDocumentData(hash string) ([]byte, string, error) {
+	docData, err := p.publishedRepo.GetComparisonInternalDocumentData(hash)
+	if err != nil {
+		return nil, "", err
+	}
+
+	//when the filename is empty, it means we did not find a record in the comparison_internal_document table using the specified hash,
+	//i.e., we are dealing with unref data, and we should not return such data
+	if docData == nil || docData.Filename == "" {
+		return nil, "", &exception.CustomError{
+			Status:  http.StatusNotFound,
+			Code:    exception.ComparisonInternalDocumentNotFound,
+			Message: exception.ComparisonInternalDocumentNotFoundMsg,
+			Params:  map[string]interface{}{"hash": hash},
+		}
+	}
+
+	return docData.Data, docData.Filename, nil
 }

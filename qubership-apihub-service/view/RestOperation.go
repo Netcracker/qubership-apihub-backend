@@ -63,7 +63,8 @@ type RestOperationComparisonChangesView struct {
 }
 
 type RestOperationPairChangesView struct {
-	CurrentOperation  *RestOperationComparisonChangelogView `json:"currentOperation,omitempty"`
-	PreviousOperation *RestOperationComparisonChangelogView `json:"previousOperation,omitempty"`
-	ChangeSummary     ChangeSummary                         `json:"changeSummary"`
+	CurrentOperation             *RestOperationComparisonChangelogView `json:"currentOperation,omitempty"`
+	PreviousOperation            *RestOperationComparisonChangelogView `json:"previousOperation,omitempty"`
+	ChangeSummary                ChangeSummary                         `json:"changeSummary"`
+	ComparisonInternalDocumentId string                                `json:"comparisonInternalDocumentId"`
 }

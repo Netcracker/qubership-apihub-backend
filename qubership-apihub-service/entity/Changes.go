@@ -435,3 +435,37 @@ func (s OperationComparisonEntity) GetChanges(t OperationComparisonEntity) map[s
 
 	return changes
 }
+
+func (s VersionInternalDocumentEntity) GetChanges(t VersionInternalDocumentEntity) map[string]interface{} {
+	changes := make(map[string]interface{}, 0)
+	if s.Filename != t.Filename {
+		changes["Filename"] = map[string]interface{}{
+			"old": s.Filename,
+			"new": t.Filename,
+		}
+	}
+	if s.Hash != t.Hash {
+		changes["Hash"] = map[string]interface{}{
+			"old": s.Hash,
+			"new": t.Hash,
+		}
+	}
+	return changes
+}
+
+func (s ComparisonInternalDocumentEntity) GetChanges(t ComparisonInternalDocumentEntity) map[string]interface{} {
+	changes := make(map[string]interface{}, 0)
+	if s.Filename != t.Filename {
+		changes["Filename"] = map[string]interface{}{
+			"old": s.Filename,
+			"new": t.Filename,
+		}
+	}
+	if s.Hash != t.Hash {
+		changes["Hash"] = map[string]interface{}{
+			"old": s.Hash,
+			"new": t.Hash,
+		}
+	}
+	return changes
+}
