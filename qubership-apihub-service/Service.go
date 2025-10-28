@@ -699,7 +699,7 @@ func main() {
 		r.HandleFunc("/api/internal/minio/download", security.Secure(minioStorageController.DownloadFilesFromMinioToDatabase)).Methods(http.MethodPost)
 	}
 
-	mcpHandler, err := mcp.InitMcpHandler()
+	mcpHandler, err := mcp.InitMcpHandler(operationService)
 	if err != nil {
 		log.Fatalf("Failed to initialize MCP handler: %s", err.Error())
 	}
