@@ -31,7 +31,7 @@ type OperationEntity struct {
 	Version                   string                 `pg:"version, pk, type:varchar"`
 	Revision                  int                    `pg:"revision, pk, type:integer"`
 	OperationId               string                 `pg:"operation_id, pk, type:varchar"`
-	DataHash                  string                 `pg:"data_hash, type:varchar"`
+	DataHash                  *string                `pg:"data_hash, type:varchar"`
 	Deprecated                bool                   `pg:"deprecated, type:boolean, use_zero"`
 	Kind                      string                 `pg:"kind, type:varchar"`
 	Title                     string                 `pg:"title, type:varchar, use_zero"`
@@ -75,17 +75,15 @@ type OperationsTypeEntity struct {
 	ApiType string `pg:"type, type:varchar"`
 }
 
-type OperationsTypeDataHashEntity struct {
-	tableName struct{} `pg:"operation"`
-
-	ApiType        string            `pg:"type, type:varchar"`
-	OperationsHash map[string]string `pg:"operations_hash, type:json"`
+type OperationInfo struct {
+	ApiType  string  `json:"apiType"`
+	DataHash *string `json:"dataHash"`
 }
 
-type OperationsDataHashEntity struct {
+type OperationsInfoEntity struct {
 	tableName struct{} `pg:"operation"`
 
-	OperationsHashes map[string]string `pg:"operations_hashes, type:json"`
+	OperationsInfo map[string]OperationInfo `pg:"operations_info, type:json"`
 }
 
 type OperationDataEntity struct {
@@ -108,8 +106,8 @@ type OperationComparisonEntity struct {
 	PreviousRevision             int                    `pg:"previous_revision, type:integer, use_zero"`
 	PreviousOperationId          string                 `pg:"previous_operation_id, type:varchar, use_zero"`
 	ComparisonId                 string                 `pg:"comparison_id, type:varchar"`
-	DataHash                     string                 `pg:"data_hash, type:varchar"`
-	PreviousDataHash             string                 `pg:"previous_data_hash, type:varchar"`
+	DataHash                     *string                `pg:"data_hash, type:varchar"`
+	PreviousDataHash             *string                `pg:"previous_data_hash, type:varchar"`
 	ChangesSummary               view.ChangeSummary     `pg:"changes_summary, type:jsonb"`
 	Changes                      map[string]interface{} `pg:"changes, type:jsonb"`
 	ComparisonInternalDocumentId string                 `pg:"comparison_internal_document_id, type:varchar"`
@@ -635,65 +633,6 @@ func MakeOperationComparisonChangelogView(entity OperationComparisonChangelogEnt
 		return result
 	}
 	return nil
-}
-
-func MakeOperationComparisonChangelogView_deprecated_2(entity OperationComparisonChangelogEntity) interface{} {
-	var currentOperation *view.ComparisonOperationView_deprecated
-	var previousOperation *view.ComparisonOperationView_deprecated
-
-	if entity.DataHash != "" {
-		currentOperation = &view.ComparisonOperationView_deprecated{
-			Title:       entity.Title,
-			ApiKind:     entity.ApiKind,
-			ApiAudience: entity.ApiAudience,
-			PackageRef:  view.MakePackageRefKey(entity.PackageId, entity.Version, entity.Revision),
-		}
-	}
-	if entity.PreviousDataHash != "" {
-		previousOperation = &view.ComparisonOperationView_deprecated{
-			Title:       entity.PreviousTitle,
-			ApiKind:     entity.PreviousApiKind,
-			ApiAudience: entity.PreviousApiAudience,
-			PackageRef:  view.MakePackageRefKey(entity.PreviousPackageId, entity.PreviousVersion, entity.PreviousRevision),
-		}
-	}
-
-	operationComparisonChangelogView := view.OperationComparisonChangelogView_deprecated_2{
-		OperationId:       entity.OperationId,
-		CurrentOperation:  currentOperation,
-		PreviousOperation: previousOperation,
-		ChangeSummary:     entity.ChangesSummary,
-	}
-
-	switch entity.ApiType {
-	case string(view.RestApiType):
-		return view.RestOperationComparisonChangelogView_deprecated_2{
-			OperationComparisonChangelogView_deprecated_2: operationComparisonChangelogView,
-			RestOperationMetadata: view.RestOperationMetadata{
-				Path:   entity.Metadata.GetPath(),
-				Method: entity.Metadata.GetMethod(),
-				Tags:   entity.Metadata.GetTags(),
-			},
-		}
-	case string(view.GraphqlApiType):
-		return view.GraphQLOperationComparisonChangelogView_deprecated_2{
-			OperationComparisonChangelogView_deprecated_2: operationComparisonChangelogView,
-			GraphQLOperationMetadata: view.GraphQLOperationMetadata{
-				Type:   entity.Metadata.GetType(),
-				Method: entity.Metadata.GetMethod(),
-				Tags:   entity.Metadata.GetTags(),
-			},
-		}
-	case string(view.ProtobufApiType):
-		return view.ProtobufOperationComparisonChangelogView_deprecated_2{
-			OperationComparisonChangelogView_deprecated_2: operationComparisonChangelogView,
-			ProtobufOperationMetadata: view.ProtobufOperationMetadata{
-				Type:   entity.Metadata.GetType(),
-				Method: entity.Metadata.GetMethod(),
-			},
-		}
-	}
-	return operationComparisonChangelogView
 }
 
 func MakeOperationComparisonChangesView(entity OperationComparisonChangelogEntity) interface{} {

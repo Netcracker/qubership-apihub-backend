@@ -40,8 +40,7 @@ type OperationRepository interface {
 	SearchForOperations(searchQuery *entity.OperationSearchQuery) ([]entity.OperationSearchResult, error)
 	GetOperationsTypeCount(packageId string, version string, revision int, showOnlyDeleted bool) ([]entity.OperationsTypeCountEntity, error)
 	GetOperationsTypes(packageId string, version string, revision int) ([]entity.OperationsTypeEntity, error)
-	GetOperationsTypeDataHashes(packageId string, version string, revision int) ([]entity.OperationsTypeDataHashEntity, error)
-	GetOperationsDataHashes(packageId string, version string, revision int) (entity.OperationsDataHashEntity, error)
+	GetOperationsInfo(packageId string, version string, revision int) (entity.OperationsInfoEntity, error)
 	GetOperationDeprecatedItems(packageId string, version string, revision int, operationType string, operationId string) (*entity.OperationRichEntity, error)
 	GetDeprecatedOperationsSummary(packageId string, version string, revision int) ([]entity.DeprecatedOperationsSummaryEntity, error)
 	GetDeprecatedOperationsRefsSummary(packageId string, version string, revision int) ([]entity.DeprecatedOperationsSummaryEntity, error)
@@ -1425,41 +1424,20 @@ func (o operationRepositoryImpl) GetOperationsTypes(packageId string, version st
 	return result, nil
 }
 
-func (o operationRepositoryImpl) GetOperationsTypeDataHashes(packageId string, version string, revision int) ([]entity.OperationsTypeDataHashEntity, error) {
-	var result []entity.OperationsTypeDataHashEntity
-	operationsTypeOperationHashesQuery := `
-		select type, json_object_agg(operation_id, data_hash) operations_hash
-		from operation
-		where package_id = ?
-		and version = ?
-		and revision = ?
-		group by type;
-	`
-	_, err := o.cp.GetConnection().Query(&result,
-		operationsTypeOperationHashesQuery,
-		packageId, version, revision,
-	)
-	if err != nil {
-		if err == pg.ErrNoRows {
-			return nil, nil
-		}
-		return nil, err
-	}
-
-	return result, nil
-}
-
-func (o operationRepositoryImpl) GetOperationsDataHashes(packageId string, version string, revision int) (entity.OperationsDataHashEntity, error) {
-	var result entity.OperationsDataHashEntity
-	operationsHashesQuery := `
-		select json_object_agg(operation_id, data_hash) operations_hashes
+func (o operationRepositoryImpl) GetOperationsInfo(packageId string, version string, revision int) (entity.OperationsInfoEntity, error) {
+	var result entity.OperationsInfoEntity
+	operationsInfoQuery := `
+		select json_object_agg(
+			operation_id,
+			json_build_object('apiType', type, 'dataHash', data_hash)
+		) operations_info
 		from operation
 		where package_id = ?
 		and version = ?
 		and revision = ?;
 	`
 	_, err := o.cp.GetConnection().Query(&result,
-		operationsHashesQuery,
+		operationsInfoQuery,
 		packageId, version, revision,
 	)
 	if err != nil {
