@@ -286,6 +286,18 @@ func (s OperationEntity) GetChanges(t OperationEntity) map[string]interface{} {
 			"new": t.ApiAudience,
 		}
 	}
+	if s.DocumentId != t.DocumentId {
+		changes["DocumentId"] = map[string]interface{}{
+			"old": s.DocumentId,
+			"new": t.DocumentId,
+		}
+	}
+	if s.VersionInternalDocumentId != t.VersionInternalDocumentId {
+		changes["VersionInternalDocumentId"] = map[string]interface{}{
+			"old": s.VersionInternalDocumentId,
+			"new": t.VersionInternalDocumentId,
+		}
+	}
 	return changes
 }
 
@@ -430,6 +442,13 @@ func (s OperationComparisonEntity) GetChanges(t OperationComparisonEntity) map[s
 		json.Unmarshal(inrec, &tChanges)
 		if !reflect.DeepEqual(sChanges, tChanges) {
 			changes["Changes"] = "Changes field has changed"
+		}
+	}
+
+	if s.ComparisonInternalDocumentId != t.ComparisonInternalDocumentId {
+		changes["ComparisonInternalDocumentId"] = map[string]interface{}{
+			"old": s.ComparisonInternalDocumentId,
+			"new": t.ComparisonInternalDocumentId,
 		}
 	}
 
