@@ -26,6 +26,8 @@ import (
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
+
+	log "github.com/sirupsen/logrus"
 )
 
 func InitMcpHandler(operationService service.OperationService) (http.Handler, error) {
@@ -33,12 +35,11 @@ func InitMcpHandler(operationService service.OperationService) (http.Handler, er
 		"apihub-mcp",
 		"0.0.1",
 		mcpserver.WithToolCapabilities(false),
-		mcpserver.WithInstructions(`Use apihub-mcp if users asks for REST API operations - which operation can help to do something
+		mcpserver.WithInstructions(`Use apihub-mcp if users asks for REST API operations - which operation can help to do something.
 		                            You are an assistant for REST API documentation access. If users asks for avaialbe APIs, specifications, operations, ways how to create or get resources - 
 									at first call one of the following tools:
-									- search_rest_api_operations - full text search for REST API operations
-									- get_rest_api_operations_specification - when asks for OpenAPI spec for particular API operation
-									
+									- search_rest_api_operations - full text search for REST API operations (see description for this tool for more details);
+									- get_rest_api_operations_specification - when users asks for OpenAPI spec for particular API operation (see description for this tool for more details);
 									If user's query is generic - start with search_rest_api_operations.
 									Provide compact strucutrued asnwers.`),
 	)
@@ -53,15 +54,14 @@ func InitMcpHandler(operationService service.OperationService) (http.Handler, er
 func addTools(s *mcpserver.MCPServer, operationService service.OperationService) {
 	s.AddTool(mcp.Tool{
 		Name: "search_rest_api_operations",
-		Description: `Full-text search for REST API operations
-
-			IMPORTANT:
-			- Group methods by packageIds
-			- Remove duplicates
-			- Sort methods from newer to older (see 'version') field
-			- If user ask for more result - increase page and ask this tool again
-			- If user ask for more results from particular packageId - set parameter 'group' to this packageId and ask this tool again
-			- If users ask to provide details for concrete operation - ask tool get_rest_api_operations_specification`,
+		Description: `Full-text search for REST API operations.
+			LLM INSTRUCTIONS:
+			- Group methods by packageIds;
+			- If user ask for more result - increase page and ask this tool again;
+			- If user ask for more results from particular packageId - set parameter 'group' to this packageId and ask this tool again;
+			- If users ask to provide details for concrete operation - ask tool get_rest_api_operations_specification;
+			- Do not ask tool get_rest_api_operations_specification in advance, only if user asks for details for concrete operation;
+			- If user asks for release version - set parameter 'release' to this version and ask this tool again. Release version is in format YYYY.Q;`,
 		RawInputSchema: json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -92,8 +92,10 @@ func addTools(s *mcpserver.MCPServer, operationService service.OperationService)
 		}
 		limit := req.GetInt("limit", 100)
 		page := req.GetInt("page", 0)
-		group := req.GetString("group", "") // todo QS
+		group := req.GetString("group", "QS") // todo
 		releaseVersion := req.GetString("release", calculateNearestCompletedReleaseVersion())
+
+		log.Infof("search_rest_api_operations: query=%s, limit=%d, page=%d, group=%s, releaseVersion=%s", q, limit, page, group, releaseVersion)
 
 		var packageIds []string
 		if group != "" {
@@ -118,8 +120,6 @@ func addTools(s *mcpserver.MCPServer, operationService service.OperationService)
 			return nil, err
 		}
 
-		// todo: add json tranformation and add LLM instructions
-
 		operations := make([]view.RestOperationSearchResult, len(*searchResult.Operations))
 		for i, op := range *searchResult.Operations {
 			operations[i] = op.(view.RestOperationSearchResult)
@@ -131,12 +131,11 @@ func addTools(s *mcpserver.MCPServer, operationService service.OperationService)
 
 	s.AddTool(mcp.Tool{
 		Name: "get_rest_api_operations_specification",
-		Description: `Get OpenAPI specification file for REST API operation
-		
-		            IMPORTANT:
-					- The reponse is json with REST API specification - render it as a code block
-					- After code block add some human-redabale summary about REST operation and DTOs from this specification and 
-					- Also generate RequestBody and ResponseBody examples based on the specification and provide them to the user`,
+		Description: `Get OpenAPI specification file for REST API operation.
+		            LLM INSTRUCTIONS:
+					- The reponse is json with REST API specification - render it as a code block, maybe not full specification, but enough to understand the operation and DTOs;
+					- After code block add some human-redabale summary about REST operation and DTOs from this specification and provide it to the user;
+					- Also generate RequestBody and ResponseBody examples based on the specification and provide them to the user;`,
 		RawInputSchema: json.RawMessage(`{
 			"type": "object",
 			"properties": {
@@ -166,11 +165,13 @@ func addTools(s *mcpserver.MCPServer, operationService service.OperationService)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
+		log.Infof("get_rest_api_operations_specification: operationId=%s, packageId=%s, version=%s", operationId, packageId, version)
+
 		searchReq := view.OperationBasicSearchReq{
 			PackageId:   packageId,
 			Version:     version,
 			OperationId: operationId,
-			// Revision:    0,
+			// Revision:    0,  // todo
 			ApiType: string(view.RestApiType),
 		}
 
