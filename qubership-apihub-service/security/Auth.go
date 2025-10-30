@@ -20,8 +20,9 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"net/http"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -42,6 +43,7 @@ var userAuthStrategy union.Union
 var proxyAuthStrategy union.Union
 var jwtAuthStrategy union.Union
 var refreshTokenStrategy auth.Strategy
+var apiKeyStrategy auth.Strategy
 
 var keeper jwt.SecretsKeeper
 var integrationService service.IntegrationsService
@@ -76,7 +78,7 @@ func SetupGoGuardian(intService service.IntegrationsService, userServiceLocal se
 		return fmt.Errorf("can't parse pkcs8 private key to rsa.PrivateKey. Error - %s", err.Error())
 	}
 	keySize := privateKey.N.BitLen()
-	if keySize < 2048 || keySize > 4096 { 
+	if keySize < 2048 || keySize > 4096 {
 		return fmt.Errorf("RSA key length must be between 2048 and 4096 bits, got %d bits", keySize)
 	}
 	publicKey = x509.MarshalPKCS1PublicKey(&privateKey.PublicKey)
@@ -100,7 +102,7 @@ func SetupGoGuardian(intService service.IntegrationsService, userServiceLocal se
 	jwtAuthStrategy = union.New(bearerTokenStrategy, cookieTokenStrategy)
 	customJwtStrategy := NewCustomJWTStrategy(cache, jwtValidator)
 	proxyAuthStrategy = union.New(customJwtStrategy, cookieTokenStrategy)
-
+	apiKeyStrategy = apihubApiKeyStrategy
 	return nil
 }
 

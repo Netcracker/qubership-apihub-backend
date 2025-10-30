@@ -703,7 +703,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to initialize MCP handler: %s", err.Error())
 	}
-	r.Handle("/mcp/", mcpHandler)
+	r.Handle("/mcp/", security.SecureMCP(mcpHandler))
 
 	debug.SetGCPercent(30)
 
