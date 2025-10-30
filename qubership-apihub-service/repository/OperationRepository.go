@@ -909,38 +909,6 @@ func (o operationRepositoryImpl) SearchForOperations_deprecated(searchQuery *ent
 							ts.data_hash,
 							scope_rank rank
 							from
-							ts_graphql_operation_data ts,
-							filtered f,
-							to_tsquery(?search_filter) search_query,
-							--using coalesce to skip ts_rank evaluation for scopes that are not requested
-							coalesce(case when ?filter_annotation then null else 0 end, ts_rank(scope_annotation, search_query)) annotation_rank,
-							coalesce(case when ?filter_property then null else 0 end, ts_rank(scope_property, search_query)) property_rank,
-							coalesce(case when ?filter_argument then null else 0 end, ts_rank(scope_argument, search_query)) argument_rank,
-							coalesce(annotation_rank + property_rank + argument_rank) scope_rank
-							where ts.data_hash = f.data_hash
-							and
-							(
-								(?filter_annotation = false and ?filter_property = false and ?filter_argument = false) or
-								(?filter_annotation and search_query @@ scope_annotation) or
-								(?filter_property and search_query @@ scope_property) or
-								(?filter_argument and search_query @@ scope_argument)
-							)
-					) ts
-					group by ts.data_hash
-					order by max(rank) desc
-					limit ?limit
-					offset ?offset
-			) graphql_ts
-				on graphql_ts.data_hash = o.data_hash
-				and o.type = ?graphql_api_type
-				and ?filter_all = false
-			left join (
-					select ts.data_hash, max(rank) as rank from (
-							with filtered as (select data_hash from operations)
-							select
-							ts.data_hash,
-							scope_rank rank
-							from
 							ts_operation_data ts,
 							filtered f,
 							to_tsquery(?search_filter) search_query,
@@ -961,7 +929,7 @@ func (o operationRepositoryImpl) SearchForOperations_deprecated(searchQuery *ent
 				and oc.version = o.version
 				and oc.operation_id = o.operation_id,
 			coalesce(?title_weight * (o.title ilike ?text_filter)::int, 0) title_tf,
-			coalesce(?scope_weight * (coalesce(rest_ts.rank, 0) + coalesce(graphql_ts.rank, 0) + coalesce(all_ts.rank, 0)), 0) scope_tf,
+			coalesce(?scope_weight * (coalesce(rest_ts.rank, 0) + coalesce(all_ts.rank, 0)), 0) scope_tf,
 			coalesce(title_tf + scope_tf, 0) init_rank,
 			coalesce(
 				?version_status_release_weight * (o.version_status = ?version_status_release)::int +
@@ -1238,38 +1206,6 @@ func (o operationRepositoryImpl) SearchForOperations(searchQuery *entity.Operati
 							ts.data_hash,
 							scope_rank rank
 							from
-							ts_graphql_operation_data ts,
-							filtered f,
-							to_tsquery(?search_filter) search_query,
-							--using coalesce to skip ts_rank evaluation for scopes that are not requested
-							coalesce(case when ?filter_annotation then null else 0 end, ts_rank(scope_annotation, search_query)) annotation_rank,
-							coalesce(case when ?filter_property then null else 0 end, ts_rank(scope_property, search_query)) property_rank,
-							coalesce(case when ?filter_argument then null else 0 end, ts_rank(scope_argument, search_query)) argument_rank,
-							coalesce(annotation_rank + property_rank + argument_rank) scope_rank
-							where ts.data_hash = f.data_hash
-							and
-							(
-								(?filter_annotation = false and ?filter_property = false and ?filter_argument = false) or
-								(?filter_annotation and search_query @@ scope_annotation) or
-								(?filter_property and search_query @@ scope_property) or
-								(?filter_argument and search_query @@ scope_argument)
-							)
-					) ts
-					group by ts.data_hash
-					order by max(rank) desc
-					limit ?limit
-					offset ?offset
-			) graphql_ts
-				on graphql_ts.data_hash = o.data_hash
-				and o.type = ?graphql_api_type
-				and ?filter_all = false
-			left join (
-					select ts.data_hash, max(rank) as rank from (
-							with filtered as (select data_hash from operations)
-							select
-							ts.data_hash,
-							scope_rank rank
-							from
 							ts_operation_data ts,
 							filtered f,
 							to_tsquery(?search_filter) search_query,
@@ -1290,7 +1226,7 @@ func (o operationRepositoryImpl) SearchForOperations(searchQuery *entity.Operati
 				and oc.version = o.version
 				and oc.operation_id = o.operation_id,
 			coalesce(?title_weight * (o.title ilike ?text_filter)::int, 0) title_tf,
-			coalesce(?scope_weight * (coalesce(rest_ts.rank, 0) + coalesce(graphql_ts.rank, 0) + coalesce(all_ts.rank, 0)), 0) scope_tf,
+			coalesce(?scope_weight * (coalesce(rest_ts.rank, 0) + coalesce(all_ts.rank, 0)), 0) scope_tf,
 			coalesce(title_tf + scope_tf, 0) init_rank,
 			coalesce(
 				?version_status_release_weight * (o.version_status = ?version_status_release)::int +
