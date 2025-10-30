@@ -19,6 +19,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -90,12 +92,20 @@ func addTools(s *mcpserver.MCPServer, operationService service.OperationService)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+
+		mcpWorkspace := os.Getenv("MCP_WORKSPACE")
+
 		limit := req.GetInt("limit", 100)
 		page := req.GetInt("page", 0)
-		group := req.GetString("group", "QS") // todo
+		group := req.GetString("group", mcpWorkspace)
 		releaseVersion := req.GetString("release", calculateNearestCompletedReleaseVersion())
 
 		log.Infof("search_rest_api_operations: query=%s, limit=%d, page=%d, group=%s, releaseVersion=%s", q, limit, page, group, releaseVersion)
+
+		if !strings.HasPrefix(group, mcpWorkspace) {
+			log.Errorf("Group parameter should start with %s. Given: %s", mcpWorkspace, group)
+			return mcp.NewToolResultError(fmt.Sprintf("Requested package is not allowed for search, only packages from workspace %s are allowed", mcpWorkspace)), nil
+		}
 
 		var packageIds []string
 		if group != "" {
