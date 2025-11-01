@@ -171,12 +171,6 @@ func (j BuildCleanupJob) Run() {
 				return
 			}
 		}
-		//todo uncomment after improving performance of "delete" queries
-		// err = j.buildCleanupRepository.RemoveUnreferencedOperationData(lockId)
-		// if err != nil {
-		// 	log.Errorf("Failed to clean up unreferenced operation data: %v", err)
-		// 	return
-		// }
 
 		cleanupEnt, err := j.buildCleanupRepository.GetCleanup(lockId)
 		if err != nil {
@@ -202,9 +196,9 @@ func (c *dbCleanupServiceImpl) StartMigrationBuildDataCleanup() (string, error) 
 	utils.SafeAsync(func() {
 		var err error
 		var removedRowsCount int
+		ctx := context.Background()
 		if c.systemInfoService.IsMinioStorageActive() {
-			ctx := context.Background()
-			ids, err := c.cleanUpRepository.GetRemoveMigrationBuildIds()
+			ids, err := c.cleanUpRepository.GetRemoveMigrationBuildIds(ctx)
 			if err != nil {
 				c.saveErrorInfo(result, err, id, removedRowsCount)
 			}
@@ -212,12 +206,12 @@ func (c *dbCleanupServiceImpl) StartMigrationBuildDataCleanup() (string, error) 
 			if err != nil {
 				c.saveErrorInfo(result, err, id, removedRowsCount)
 			}
-			removedRowsCount, err = c.cleanUpRepository.RemoveMigrationBuildSourceData(ids)
+			removedRowsCount, err = c.cleanUpRepository.RemoveMigrationBuildSourceData(ctx, ids)
 			if err != nil {
 				c.saveErrorInfo(result, err, id, removedRowsCount)
 			}
 		} else {
-			removedRowsCount, err = c.cleanUpRepository.RemoveMigrationBuildData()
+			removedRowsCount, err = c.cleanUpRepository.RemoveMigrationBuildData(ctx)
 		}
 		c.saveErrorInfo(result, err, id, removedRowsCount)
 	})
