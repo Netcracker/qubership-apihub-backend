@@ -42,7 +42,6 @@ type DeletedItemsStats struct {
 	BuildSources                    int                         `json:"buildSources"`
 	BuilderNotifications            int                         `json:"builderNotifications"`
 	FavoritePackages                int                         `json:"favoritePackages"`
-	MigratedVersions                int                         `json:"migratedVersions"`
 	Operations                      int                         `json:"operations"`
 	OperationGroups                 int                         `json:"operationGroups"`
 	GroupedOperations               int                         `json:"groupedOperations"`
@@ -70,6 +69,16 @@ type PackageService struct {
 	ServiceName string `pg:"service_name" json:"serviceName"`
 }
 
+func NewDeletedItemsStats() *DeletedItemsStats {
+	return &DeletedItemsStats{
+		Packages:             []string{},
+		PackageRevisions:     []PublishedVersionKeyEntity{},
+		ApiKeys:              []ApihubApiKeyEntity{},
+		PackageMembersRoles:  []PackageMemberRoleEntity{},
+		PackageServices:      []PackageService{},
+	}
+}
+
 func (d *DeletedItemsStats) CalculateTotal() {
 	d.TotalRecords = len(d.Packages) +
 		len(d.PackageRevisions) +
@@ -81,7 +90,6 @@ func (d *DeletedItemsStats) CalculateTotal() {
 		d.BuildSources +
 		d.BuilderNotifications +
 		d.FavoritePackages +
-		d.MigratedVersions +
 		d.Operations +
 		d.OperationGroups +
 		d.GroupedOperations +
@@ -112,7 +120,6 @@ func (d *DeletedItemsStats) Add(other *DeletedItemsStats) {
 	d.BuildSources += other.BuildSources
 	d.BuilderNotifications += other.BuilderNotifications
 	d.FavoritePackages += other.FavoritePackages
-	d.MigratedVersions += other.MigratedVersions
 	d.Operations += other.Operations
 	d.OperationGroups += other.OperationGroups
 	d.GroupedOperations += other.GroupedOperations

@@ -248,14 +248,6 @@ func copyVersions(tx *pg.Tx, fromPkg, toPkg string) (int, error) {
 	}
 	objAffected += res.RowsAffected()
 
-	copyMigratedVersion := "insert into migrated_version (package_id, version, revision, error, build_id, migration_id, build_type, no_changelog) " +
-		"(select ?, version, revision, error, build_id, migration_id, build_type, no_changelog from migrated_version orig where orig.package_id = ?)  on conflict do nothing"
-	res, err = tx.Exec(copyMigratedVersion, toPkg, fromPkg)
-	if err != nil {
-		return 0, fmt.Errorf("failed to copy migrated version from %s to %s: %w", fromPkg, toPkg, err)
-	}
-	objAffected += res.RowsAffected()
-
 	copyPVOC := "insert into published_version_open_count (package_id, version, open_count) " +
 		"(select ?, version, open_count from " +
 		"published_version_open_count orig where orig.package_id = ?) on conflict do nothing"
@@ -491,12 +483,6 @@ func deleteVersionsData(tx *pg.Tx, fromPkg string) error {
 	_, err = tx.Exec(query, fromPkg)
 	if err != nil {
 		return fmt.Errorf("failed to delete orig(%s) from operation: %w", fromPkg, err)
-	}
-
-	query = "delete from migrated_version where package_id = ?"
-	_, err = tx.Exec(query, fromPkg)
-	if err != nil {
-		return fmt.Errorf("failed to delete orig(%s) from migrated_version: %w", fromPkg, err)
 	}
 
 	query = "delete from operation_comparison where package_id = ?"

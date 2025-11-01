@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp/providers"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service/cleanup"
 
 	"gopkg.in/natefinch/lumberjack.v2"
 
@@ -214,6 +215,8 @@ func main() {
 
 	deletedDataCleanupRepository := repository.NewSoftDeletedDataCleanupRepository(cp)
 
+	unreferencedDataCleanupRepository := repository.NewUnreferencedDataCleanupRepository(cp)
+
 	lockRepo := repository.NewLockRepository(cp)
 
 	olricProvider, err := cache.NewOlricProvider(systemInfoService.GetOlricConfig())
@@ -227,7 +230,7 @@ func main() {
 
 	lockService := service.NewLockService(lockRepo, systemInfoService.GetInstanceId())
 
-	cleanupService := service.NewCleanupService(cp)
+	cleanupService := cleanup.NewCleanupService(cp)
 	if err := cleanupService.CreateRevisionsCleanupJob(publishedRepository, migrationRunRepository, versionCleanupRepository, lockService, systemInfoService.GetInstanceId(), systemInfoService.GetRevisionsCleanupSchedule(), systemInfoService.GetRevisionsCleanupDeleteLastRevision(), systemInfoService.GetRevisionsCleanupDeleteReleaseRevisions(), systemInfoService.GetRevisionsTTLDays()); err != nil {
 		log.Error("Failed to start revisions cleaning job" + err.Error())
 	}
@@ -236,6 +239,9 @@ func main() {
 	}
 	if err := cleanupService.CreateSoftDeletedDataCleanupJob(publishedRepository, migrationRunRepository, deletedDataCleanupRepository, lockService, systemInfoService.GetInstanceId(), systemInfoService.GetSoftDeletedDataCleanupSchedule(), systemInfoService.GetSoftDeletedDataCleanupTimeout(), systemInfoService.GetSoftDeletedDataTTLDays()); err != nil {
 		log.Error("Failed to start soft deleted data cleaning job" + err.Error())
+	}
+	if err := cleanupService.CreateUnreferencedDataCleanupJob(migrationRunRepository, unreferencedDataCleanupRepository, lockService, systemInfoService.GetInstanceId(), systemInfoService.GetUnreferencedDataCleanupSchedule(), systemInfoService.GetUnreferencedDataCleanupTimeout()); err != nil {
+		log.Error("Failed to start unreferenced data cleaning job" + err.Error())
 	}
 
 	monitoringService := service.NewMonitoringService(cp)
@@ -315,7 +321,7 @@ func main() {
 	operationController := controller.NewOperationController(roleService, operationService, buildService, monitoringService, ptHandler)
 	operationGroupController := controller.NewOperationGroupController(roleService, operationGroupService, versionService)
 	searchController := controller.NewSearchController(operationService, versionService, monitoringService)
-	tempMigrationController := mController.NewTempMigrationController(dbMigrationService, roleService.IsSysadm)
+	dataMigrationController := mController.NewTempMigrationController(dbMigrationService, roleService.IsSysadm)
 	activityTrackingController := controller.NewActivityTrackingController(activityTrackingService, roleService, ptHandler)
 	comparisonController := controller.NewComparisonController(operationService, versionService, buildService, roleService, comparisonService, monitoringService, ptHandler)
 	buildCleanupController := controller.NewBuildCleanupController(dbCleanupService, roleService.IsSysadm)
@@ -462,10 +468,11 @@ func main() {
 	r.HandleFunc("/api/v2/roles/changeOrder", security.Secure(roleController.SetRoleOrder)).Methods(http.MethodPost)
 	r.HandleFunc("/api/v2/packages/{packageId}/availableRoles", security.Secure(roleController.GetAvailablePackageRoles)).Methods(http.MethodGet)
 
-	r.HandleFunc("/api/internal/migrate/operations", security.Secure(tempMigrationController.StartOpsMigration)).Methods(http.MethodPost)
-	r.HandleFunc("/api/internal/migrate/operations/{migrationId}", security.Secure(tempMigrationController.GetMigrationReport)).Methods(http.MethodGet)
-	r.HandleFunc("/api/internal/migrate/operations/{migrationId}/suspiciousBuilds", security.Secure(tempMigrationController.GetSuspiciousBuilds)).Methods(http.MethodGet)
-	r.HandleFunc("/api/internal/migrate/operations/cancel", security.Secure(tempMigrationController.CancelRunningMigrations)).Methods(http.MethodPost)
+	r.HandleFunc("/api/internal/migrate/operations", security.Secure(dataMigrationController.StartOpsMigration)).Methods(http.MethodPost)
+	r.HandleFunc("/api/internal/migrate/operations/{migrationId}", security.Secure(dataMigrationController.GetMigrationReport)).Methods(http.MethodGet)
+	r.HandleFunc("/api/internal/migrate/operations/{migrationId}/suspiciousBuilds", security.Secure(dataMigrationController.GetSuspiciousBuilds)).Methods(http.MethodGet)
+	r.HandleFunc("/api/internal/migrate/operations/{migrationId}/perf", security.Secure(dataMigrationController.GetMigrationPerfReport)).Methods(http.MethodGet)
+	r.HandleFunc("/api/internal/migrate/operations/cancel", security.Secure(dataMigrationController.CancelRunningMigrations)).Methods(http.MethodPost)
 	r.HandleFunc("/api/internal/migrate/operations/cleanup", security.Secure(buildCleanupController.StartMigrationBuildCleanup)).Methods(http.MethodPost)
 	r.HandleFunc("/api/internal/migrate/operations/cleanup/{id}", security.Secure(buildCleanupController.GetMigrationBuildCleanupResult)).Methods(http.MethodGet)
 
@@ -612,6 +619,8 @@ func main() {
 	utils.SafeAsync(func() {
 		exportService.StartCleanupOldResultsJob()
 	})
+
+	dbMigrationService.StartOpsMigrationRestoreProc(context.Background())
 
 	log.Fatalf("Http server returned error: %v", srv.ListenAndServe())
 }

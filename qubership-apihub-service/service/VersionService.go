@@ -1845,8 +1845,9 @@ func (v versionServiceImpl) publishFromCSV(ctx context.SecurityContext, dashboar
 			serviceInfo = &svcInfo
 			servicesMap[serviceName] = serviceInfo
 		}
+		versionKey := fmt.Sprintf("%v%v%v", serviceInfo.PackageId, stringSeparator, serviceVersion)
 		if serviceInfo.Version == "" {
-			if _, exists := notIncludedVersions[fmt.Sprintf("%v%v%v", serviceInfo.PackageId, stringSeparator, serviceVersion)]; exists {
+			if _, exists := notIncludedVersions[versionKey]; exists {
 				report[i] = append(report[i], "service version doesn't exist")
 				continue
 			}
@@ -1856,10 +1857,12 @@ func (v versionServiceImpl) publishFromCSV(ctx context.SecurityContext, dashboar
 				continue
 			}
 			if versionEnt == nil {
+				notIncludedVersions[versionKey] = struct{}{}
 				report[i] = append(report[i], "service version doesn't exist")
 				continue
 			}
 			if versionEnt.Status != string(view.Release) {
+				notIncludedVersions[versionKey] = struct{}{}
 				report[i] = append(report[i], fmt.Sprintf("service version not in '%v' status", view.Release))
 				continue
 			}
@@ -1867,6 +1870,7 @@ func (v versionServiceImpl) publishFromCSV(ctx context.SecurityContext, dashboar
 			serviceInfo.Revision = versionEnt.Revision
 		} else {
 			if serviceInfo.Version != serviceVersion {
+				notIncludedVersions[versionKey] = struct{}{}
 				report[i] = append(report[i], fmt.Sprintf("service already matched with '%v' version", serviceInfo.Version))
 				continue
 			}
@@ -1987,14 +1991,13 @@ func (v versionServiceImpl) publishFromCSV(ctx context.SecurityContext, dashboar
 	}
 	summary := ""
 	if notIncludedServicesCount > 0 {
-		summary = fmt.Sprintf(`%v services were not included into dashboard version`, notIncludedServicesCount)
+		summary = fmt.Sprintf(`%v services were not included into dashboard version; `, notIncludedServicesCount)
+	}
+	if len(notIncludedVersions) > 0 {
+		summary += fmt.Sprintf(`%v versions for services were not included into dashboard version; `, len(notIncludedVersions))
 	}
 	if notIncludedOperationsCount > 0 {
-		if summary != "" {
-			summary = fmt.Sprintf(`%v; %v operations were not included into %v operation group`, summary, notIncludedOperationsCount, dashboardName)
-		} else {
-			summary = fmt.Sprintf(`%v operations were not included into %v operation group`, notIncludedOperationsCount, dashboardName)
-		}
+		summary += fmt.Sprintf(`%v operations were not included into %v operation group`, notIncludedOperationsCount, dashboardName)
 	}
 
 	v.updateDashboardPublishProcess(publishEntity, string(view.StatusComplete), summary)
