@@ -463,11 +463,6 @@ type DocumentsForTransformationFilterReq struct {
 	Offset                 int
 	FilterByOperationGroup string
 }
-type ChangelogCalculationParams struct {
-	PreviousVersion          string `json:"previousVersion"`
-	PreviousVersionPackageId string `json:"previousVersionPackageId"`
-	ReCalculate              bool   `json:"reCalculate"`
-}
 
 type CalculationProcessStatus struct {
 	Status  string `json:"status,omitempty"`
@@ -496,8 +491,4 @@ type OperationModelUsages struct {
 type OperationModels struct {
 	OperationId string   `json:"operationId"`
 	ModelNames  []string `json:"modelNames"`
-}
-
-type CustomTags struct {
-	CustomTag map[string]interface{}
 }

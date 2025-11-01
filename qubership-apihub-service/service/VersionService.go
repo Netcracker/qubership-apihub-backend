@@ -70,9 +70,7 @@ type VersionService interface {
 	GetCSVDashboardPublishReport(publishId string) ([]byte, error)
 }
 
-func NewVersionService(gitClientProvider GitClientProvider,
-	repo repository.PrjGrpIntRepository,
-	favoritesRepo repository.FavoritesRepository,
+func NewVersionService(favoritesRepo repository.FavoritesRepository,
 	publishedRepo repository.PublishedRepository,
 	publishedService PublishedService,
 	operationRepo repository.OperationRepository,
@@ -85,8 +83,6 @@ func NewVersionService(gitClientProvider GitClientProvider,
 	versionCleanupRepository repository.VersionCleanupRepository,
 	operationGroupService OperationGroupService) VersionService {
 	return &versionServiceImpl{
-		gitClientProvider:               gitClientProvider,
-		pRepo:                           repo,
 		favoritesRepo:                   favoritesRepo,
 		publishedRepo:                   publishedRepo,
 		exportRepository:                exportRepository,
@@ -103,8 +99,6 @@ func NewVersionService(gitClientProvider GitClientProvider,
 }
 
 type versionServiceImpl struct {
-	gitClientProvider               GitClientProvider
-	pRepo                           repository.PrjGrpIntRepository
 	favoritesRepo                   repository.FavoritesRepository
 	publishedRepo                   repository.PublishedRepository
 	publishedService                PublishedService
@@ -1852,7 +1846,7 @@ func (v versionServiceImpl) publishFromCSV(ctx context.SecurityContext, dashboar
 			servicesMap[serviceName] = serviceInfo
 		}
 		if serviceInfo.Version == "" {
-			if _, exists := notIncludedVersions[fmt.Sprintf("%v%v%v", serviceInfo.PackageId, keySeparator, serviceVersion)]; exists {
+			if _, exists := notIncludedVersions[fmt.Sprintf("%v%v%v", serviceInfo.PackageId, stringSeparator, serviceVersion)]; exists {
 				report[i] = append(report[i], "service version doesn't exist")
 				continue
 			}

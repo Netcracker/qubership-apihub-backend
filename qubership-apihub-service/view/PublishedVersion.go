@@ -16,27 +16,6 @@ package view
 
 import "time"
 
-type PublishedVersion struct {
-	PackageId                string             `json:"-"`
-	Version                  string             `json:"-"`
-	Status                   VersionStatus      `json:"status"`
-	PublishedAt              time.Time          `json:"publishedAt"`
-	PreviousVersion          string             `json:"previousVersion"`
-	PreviousVersionPackageId string             `json:"previousVersionPackageId,omitempty"`
-	Changes                  Validation         `json:"changes,omitempty"`
-	Validations              ValidationsMap     `json:"validations,omitempty"`
-	DeletedAt                *time.Time         `json:"-"`
-	RelatedPackages          []PublishedRef     `json:"refs"`
-	Contents                 []PublishedContent `json:"files"`
-	Revision                 int                `json:"-"`
-	BranchName               string             `json:"-"`
-	VersionLabels            []string           `json:"versionLabels"`
-}
-
-type PublishedVersions struct {
-	Versions []PublishedVersion `json:"versions"`
-}
-
 type PublishedVersionHistoryView struct {
 	PackageId                string    `json:"packageId"`
 	Version                  string    `json:"version"`

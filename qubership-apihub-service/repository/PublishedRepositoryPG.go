@@ -425,21 +425,6 @@ func (p publishedRepositoryImpl) GetVersionIncludingDeleted(packageId string, ve
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) IsPublished(packageId string, branchName string) (bool, error) {
-	count, err := p.cp.GetConnection().Model(&entity.PublishedVersionEntity{PackageId: packageId}).
-		Where("package_id = ?", packageId).
-		Where("jsonb_extract_path_text(metadata, ?) = ?", entity.BRANCH_NAME_KEY, branchName).
-		Where("deleted_at is ?", nil).
-		Count()
-	if err != nil {
-		if err == pg.ErrNoRows {
-			return false, nil
-		}
-		return false, err
-	}
-	return count > 0, nil
-}
-
 func (p publishedRepositoryImpl) GetServiceOwner(workspaceId string, serviceName string) (string, error) {
 	var packageId string
 	serviceOwnerQuery := `SELECT package_id FROM package_service WHERE workspace_id = ? and service_name = ?`
@@ -1570,33 +1555,6 @@ func (p publishedRepositoryImpl) GetRevisionContent(packageId string, versionNam
 	return ents, err
 }
 
-func (p publishedRepositoryImpl) GetLatestContent(packageId string, versionName string, fileId string) (*entity.PublishedContentEntity, error) {
-	result := new(entity.PublishedContentEntity)
-	version, revision, err := SplitVersionRevision(versionName)
-	if err != nil {
-		return nil, err
-	}
-	query := p.cp.GetConnection().Model(result).
-		Where("package_id = ?", packageId).
-		Where("version = ?", version).
-		Where("file_id = ?", fileId)
-	//Where("deleted_at is ?", nil). // TODO: check that version wasn't deleted or not?
-
-	if revision > 0 {
-		query.Where("revision = ?", revision)
-	} else if revision == 0 {
-		query.Order("revision DESC")
-	}
-	err = query.First()
-	if err != nil {
-		if err == pg.ErrNoRows {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return result, nil
-}
-
 func (p publishedRepositoryImpl) GetLatestContentBySlug(packageId string, versionName string, slug string) (*entity.PublishedContentEntity, error) {
 	result := new(entity.PublishedContentEntity)
 	version, revision, err := SplitVersionRevision(versionName)
@@ -1655,33 +1613,6 @@ func (p publishedRepositoryImpl) GetContentData(packageId string, checksum strin
 		return nil, err
 	}
 	return result, nil
-}
-
-func (p publishedRepositoryImpl) GetLatestContentByVersion(packageId string, versionName string) ([]entity.PublishedContentEntity, error) {
-	var latestVersionRev entity.PublishedVersionEntity
-	version, _, err := SplitVersionRevision(versionName)
-	if err != nil {
-		return nil, err
-	}
-	query := `
-		SELECT p.*
-		FROM (
-		    SELECT max(revision) over (partition by package_id, version) AS _max_revision, p.*
-		    FROM published_version AS p
-		    WHERE p.package_id = ?
-		      AND p.version = ?
-			  AND p.deleted_at is null
-		)  p
-		WHERE p.revision = p._max_revision LIMIT 1;`
-	_, err = p.cp.GetConnection().Query(&latestVersionRev, query, packageId, version)
-	if err != nil {
-		if err == pg.ErrNoRows {
-			return nil, nil
-		}
-		return nil, err
-	}
-
-	return p.GetRevisionContent(packageId, version, latestVersionRev.Revision)
 }
 
 func (p publishedRepositoryImpl) GetVersionSources(packageId string, versionName string, revision int) (*entity.PublishedSrcArchiveEntity, error) {
@@ -1758,73 +1689,6 @@ func (p publishedRepositoryImpl) contentDataExists(tx *pg.Tx, packageId string, 
 	return true, nil
 }
 
-func (p publishedRepositoryImpl) GetRevisionRefs(packageId string, versionName string, revision int) ([]entity.PublishedReferenceEntity, error) {
-	var ents []entity.PublishedReferenceEntity
-	version, _, err := SplitVersionRevision(versionName)
-	if err != nil {
-		return nil, err
-	}
-	err = p.cp.GetConnection().Model(&ents).
-		Where("package_id = ?", packageId).
-		Where("version = ?", version).
-		Where("revision = ?", revision).
-		Where("excluded = false").
-		Select()
-	if err != nil {
-		if err == pg.ErrNoRows {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return ents, err
-}
-
-func (p publishedRepositoryImpl) GetPackageVersions(packageId string, filter string) ([]entity.PublishedVersionEntity, error) {
-	var ents []entity.PublishedVersionEntity
-
-	query := p.cp.GetConnection().Model(&ents).
-		Where("package_id = ?", packageId).
-		Where("deleted_at is ?", nil)
-
-	if filter != "" {
-		filter = "%" + utils.LikeEscaped(filter) + "%"
-		query.Where("version ilike ?", filter)
-	}
-
-	err := query.Select()
-	// TODO: try to get latest via query
-	if err != nil {
-		return nil, err
-	}
-
-	result := make([]entity.PublishedVersionEntity, 0)
-	latestRevNums := make(map[string]int)
-	latestRevVersions := make(map[string]entity.PublishedVersionEntity)
-
-	for _, version := range ents {
-		if version.PackageId == packageId && (version.DeletedAt == nil || version.DeletedAt.IsZero()) {
-			if maxRev, ok := latestRevNums[version.Version]; ok {
-				if version.Revision > maxRev {
-					latestRevNums[version.Version] = version.Revision
-					latestRevVersions[version.Version] = version
-				}
-			} else {
-				latestRevNums[version.Version] = version.Revision
-				latestRevVersions[version.Version] = version
-			}
-		}
-	}
-	for _, v := range latestRevVersions {
-		result = append(result, v)
-	}
-
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].PublishedAt.Unix() > result[j].PublishedAt.Unix()
-	})
-
-	return result, err
-}
-
 func (p publishedRepositoryImpl) GetVersionsByPreviousVersion(previousPackageId string, previousVersionName string) ([]entity.PublishedVersionEntity, error) {
 	var ents []entity.PublishedVersionEntity
 	previousVersion, _, err := SplitVersionRevision(previousVersionName)
@@ -1856,94 +1720,6 @@ func (p publishedRepositoryImpl) GetVersionsByPreviousVersion(previousPackageId 
 	}
 
 	return ents, err
-}
-
-func (p publishedRepositoryImpl) GetPackageVersionsWithLimit(searchQuery entity.PublishedVersionSearchQueryEntity, checkRevisions bool) ([]entity.PublishedVersionEntity, error) {
-	var ents []entity.PublishedVersionEntity
-	if searchQuery.TextFilter != "" {
-		searchQuery.TextFilter = "%" + utils.LikeEscaped(searchQuery.TextFilter) + "%"
-	}
-	if searchQuery.Status != "" {
-		searchQuery.Status = "%" + utils.LikeEscaped(searchQuery.Status) + "%"
-	}
-	if checkRevisions {
-		query := `
-		select * from published_version pv
-			where pv.deleted_at is null
-			and (pv.package_id = ?package_id)
-			and (?text_filter = '' or pv.version ilike ?text_filter OR EXISTS(SELECT 1 FROM unnest(pv.labels) as label WHERE label ILIKE ?text_filter))
-			and (?status = '' or pv.status ilike ?status)
-			and (?label = '' or ?label = any(pv.labels))
-			order by pv.published_at desc
-			`
-		_, err := p.cp.GetConnection().Model(&searchQuery).Query(&ents, query)
-		if err != nil {
-			if err == pg.ErrNoRows {
-				return nil, nil
-			}
-			return nil, err
-		}
-
-		result := make([]entity.PublishedVersionEntity, 0)
-		latestRevNums := make(map[string]int)
-		latestRevVersions := make(map[string]entity.PublishedVersionEntity)
-
-		for _, version := range ents {
-			if version.PackageId == searchQuery.PackageId && (version.DeletedAt == nil || version.DeletedAt.IsZero()) {
-				if maxRev, ok := latestRevNums[version.Version]; ok {
-					if version.Revision > maxRev {
-						latestRevNums[version.Version] = version.Revision
-						latestRevVersions[version.Version] = version
-					}
-				} else {
-					latestRevNums[version.Version] = version.Revision
-					latestRevVersions[version.Version] = version
-				}
-			}
-		}
-		for _, v := range latestRevVersions {
-			result = append(result, v)
-		}
-		sort.Slice(result, func(i, j int) bool {
-			return result[i].PublishedAt.Unix() > result[j].PublishedAt.Unix()
-		})
-
-		if len(result) <= searchQuery.Offset {
-			return make([]entity.PublishedVersionEntity, 0), nil
-		} else if len(result) <= searchQuery.Limit+searchQuery.Offset {
-			return result[searchQuery.Offset:], nil
-		}
-		return result[searchQuery.Offset : searchQuery.Limit+searchQuery.Offset], nil
-	} else {
-		query := `
-			select * from published_version pv
-			inner join (
-							select package_id, version, max(revision) as revision
-								from published_version
-								where (package_id = ?package_id)
-								group by package_id, version
-					  ) mx
-			on pv.package_id = mx.package_id
-			and pv.version = mx.version
-			and pv.revision = mx.revision
-			where (?text_filter = '' or pv.version ilike ?text_filter OR EXISTS(SELECT 1 FROM unnest(pv.labels) as label WHERE label ILIKE ?text_filter))
-			and (?status = '' or pv.status ilike ?status)
-			and (?label = '' or ?label = any(pv.labels))
-			and pv.deleted_at is null
-			order by pv.published_at desc
-			limit ?limit
-			offset ?offset
- `
-		_, err := p.cp.GetConnection().Model(&searchQuery).Query(&ents, query)
-		if err != nil {
-			if err == pg.ErrNoRows {
-				return nil, nil
-			}
-			return nil, err
-		}
-	}
-
-	return ents, nil
 }
 
 func (p publishedRepositoryImpl) GetReadonlyPackageVersionsWithLimit(searchQuery entity.PublishedVersionSearchQueryEntity, checkRevisions bool, showOnlyDeleted bool) ([]entity.PackageVersionRevisionEntity, error) {
@@ -2156,46 +1932,6 @@ func (p publishedRepositoryImpl) GetRevisionContentWithLimit(packageId string, v
 	}
 	return ents, err
 }
-func (p publishedRepositoryImpl) GetLastVersions(ids []string) ([]entity.PublishedVersionEntity, error) {
-	if len(ids) == 0 {
-		return nil, nil
-	}
-	var versions []entity.PublishedVersionEntity
-	selectMaxVersionQuery := `
-		SELECT p.*
-		FROM (
-		    SELECT max(published_at) over (partition by package_id) AS _max_published_at, p.*
-		    FROM published_version AS p
-		    WHERE package_id IN (?) AND deleted_at is null
-		)  p
-		WHERE p.published_at = p._max_published_at;`
-	_, err := p.cp.GetConnection().Query(&versions, selectMaxVersionQuery, pg.In(ids))
-	if err != nil {
-		if err != pg.ErrNoRows {
-			return nil, err
-		}
-	}
-	return versions, nil
-}
-
-func (p publishedRepositoryImpl) GetLastVersion(id string) (*entity.PublishedVersionEntity, error) {
-	version := new(entity.PublishedVersionEntity)
-	selectMaxVersionQuery := `
-		SELECT p.*
-		FROM (
-		    SELECT max(published_at) over (partition by package_id) AS _max_published_at, p.*
-		    FROM published_version AS p
-		    WHERE package_id = ? AND deleted_at is null
-		)  p
-		WHERE p.published_at = p._max_published_at LIMIT 1;`
-	_, err := p.cp.GetConnection().Query(version, selectMaxVersionQuery, id)
-	if err != nil {
-		if err != pg.ErrNoRows {
-			return nil, err
-		}
-	}
-	return version, nil
-}
 
 func (p publishedRepositoryImpl) GetDefaultVersion(packageId string, status string) (*entity.PublishedVersionEntity, error) {
 	result := new(entity.PublishedVersionEntity)
@@ -2226,14 +1962,6 @@ func (p publishedRepositoryImpl) GetDefaultVersion(packageId string, status stri
 		return nil, err
 	}
 	return result, nil
-}
-
-func (p publishedRepositoryImpl) CleanupDeleted() error {
-	var ents []entity.PublishedVersionEntity
-	_, err := p.cp.GetConnection().Model(&ents).
-		Where("deleted_at is not ?", nil).
-		Delete()
-	return err
 }
 
 func (p publishedRepositoryImpl) GetFileSharedInfo(packageId string, slug string, versionName string) (*entity.SharedUrlInfoEntity, error) {
@@ -2343,42 +2071,10 @@ func (p publishedRepositoryImpl) GetPackage(id string) (*entity.PackageEntity, e
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetPackageGroup(id string) (*entity.PackageEntity, error) {
-	result := new(entity.PackageEntity)
-	err := p.cp.GetConnection().Model(result).
-		Where("id = ?", id).
-		Where("kind in (?)", pg.In([]string{entity.KIND_GROUP, entity.KIND_WORKSPACE})).
-		Where("deleted_at is ?", nil).
-		First()
-	if err != nil {
-		if err == pg.ErrNoRows {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return result, nil
-}
-
 func (p publishedRepositoryImpl) GetDeletedPackage(id string) (*entity.PackageEntity, error) {
 	result := new(entity.PackageEntity)
 	err := p.cp.GetConnection().Model(result).
 		Where("id = ?", id).
-		Where("deleted_at is not ?", nil).
-		First()
-	if err != nil {
-		if err == pg.ErrNoRows {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return result, nil
-}
-
-func (p publishedRepositoryImpl) GetDeletedPackageGroup(id string) (*entity.PackageEntity, error) {
-	result := new(entity.PackageEntity)
-	err := p.cp.GetConnection().Model(result).
-		Where("id = ?", id).
-		Where("kind in (?)", pg.In([]string{entity.KIND_GROUP, entity.KIND_WORKSPACE})).
 		Where("deleted_at is not ?", nil).
 		First()
 	if err != nil {
@@ -2399,87 +2095,6 @@ func (p publishedRepositoryImpl) GetPackageIncludingDeleted(id string) (*entity.
 		if err == pg.ErrNoRows {
 			return nil, nil
 		}
-		return nil, err
-	}
-	return result, nil
-}
-
-func (p publishedRepositoryImpl) GetAllPackageGroups(name string, onlyFavorite bool, userId string) ([]entity.PackageFavEntity, error) {
-	var result []entity.PackageFavEntity
-	query := p.cp.GetConnection().Model(&result).
-		Where("kind in (?)", pg.In([]string{entity.KIND_GROUP, entity.KIND_WORKSPACE})).
-		Where("deleted_at is ?", nil)
-	if name != "" {
-		name = "%" + utils.LikeEscaped(name) + "%"
-		query.Where("name ilike ?", name)
-	}
-	query.Order("parent_id ASC", "name ASC")
-
-	query.ColumnExpr("package_group.*").
-		ColumnExpr("fav.user_id as user_id")
-	if onlyFavorite {
-		query.Join("INNER JOIN favorite_packages as fav")
-	} else {
-		query.Join("FULL OUTER JOIN favorite_packages as fav")
-	}
-	query.JoinOn("package_group.id = fav.package_id").
-		JoinOn("fav.user_id = ?", userId)
-
-	err := query.Select()
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
-func (p publishedRepositoryImpl) GetPackagesForPackageGroup(id string) ([]entity.PackageEntity, error) {
-	var result []entity.PackageEntity
-	err := p.cp.GetConnection().Model(&result).
-		Where("parent_id = ?", id).
-		Where("kind = ?", entity.KIND_PACKAGE).
-		Where("deleted_at is ?", nil).
-		Order("name ASC").
-		Select()
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
-func (p publishedRepositoryImpl) GetChildPackageGroups(parentId string, name string, onlyFavorite bool, userId string) ([]entity.PackageFavEntity, error) {
-	var result []entity.PackageFavEntity
-	query := p.cp.GetConnection().Model(&result).
-		Where("package_group.kind in (?)", pg.In([]string{entity.KIND_GROUP, entity.KIND_WORKSPACE})).
-		Where("package_group.deleted_at is ?", nil).
-		Distinct()
-	if parentId != "" {
-		query.Where("package_group.parent_id = ?", parentId)
-	} else {
-		query.Where("package_group.parent_id is ?", nil)
-	}
-	if name != "" {
-		name = "%" + utils.LikeEscaped(name) + "%"
-		query.Where("package_group.name ilike ?", name)
-	}
-	query.Order("package_group.parent_id ASC", "package_group.name ASC")
-
-	query.ColumnExpr("package_group.*").
-		ColumnExpr("fav.user_id as user_id")
-	if onlyFavorite {
-		query.Join("INNER JOIN favorite_packages as fav")
-	} else {
-		query.Join("FULL OUTER JOIN favorite_packages as fav")
-	}
-	query.JoinOn("package_group.id = fav.package_id").
-		JoinOn("fav.user_id = ?", userId)
-
-	query.Join("INNER JOIN project pr").
-		JoinOn("pr.id ilike (package_group.id || '%')")
-
-	err := query.Select()
-
-	if err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -2512,27 +2127,6 @@ func (p publishedRepositoryImpl) updateExcludeFromSearchForAllChildPackages(tx *
 		return err
 	}
 	return nil
-}
-
-func (p publishedRepositoryImpl) GetParentPackageGroups(id string) ([]entity.PackageEntity, error) {
-	var result []entity.PackageEntity
-
-	parentIds := utils.GetParentPackageIds(id)
-	if len(parentIds) == 0 {
-		return result, nil
-	}
-
-	err := p.cp.GetConnection().Model(&result).
-		Where("kind in (?)", pg.In([]string{entity.KIND_GROUP, entity.KIND_WORKSPACE})).
-		Where("deleted_at is ?", nil).
-		ColumnExpr("package_group.*").
-		Join("JOIN UNNEST(?::text[]) WITH ORDINALITY t(id, ord) USING (id)", pg.Array(parentIds)).
-		Order("t.ord").
-		Select()
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
 }
 
 func (p publishedRepositoryImpl) GetParentsForPackage(id string, includeDeleted bool) ([]entity.PackageEntity, error) {
@@ -2710,45 +2304,6 @@ func (p publishedRepositoryImpl) deleteGroup(tx *pg.Tx, packageId string, userId
 	return err
 }
 
-func (p publishedRepositoryImpl) GetPackageGroupsByName(name string) ([]entity.PackageEntity, error) {
-	var result []entity.PackageEntity
-	err := p.cp.GetConnection().Model(&result).
-		Where("name = ?", name).
-		Where("kind in (?)", pg.In([]string{entity.KIND_GROUP, entity.KIND_WORKSPACE})).
-		Where("deleted_at is ?", nil).
-		Order("name ASC").
-		Select()
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
-func (p publishedRepositoryImpl) GetFilteredPackages(filter string, parentId string) ([]entity.PackageEntity, error) {
-	var result []entity.PackageEntity
-	query := p.cp.GetConnection().Model(&result).
-		Where("deleted_at is ?", nil).
-		Where("kind = ?", entity.KIND_PACKAGE).
-		Order("name ASC")
-
-	if filter != "" {
-		filter = "%" + utils.LikeEscaped(filter) + "%"
-		query.WhereGroup(func(q *pg.Query) (*pg.Query, error) {
-			q = q.WhereOr("name ilike ?", filter).WhereOr("id ilike ?", filter)
-			return q, nil
-		})
-	}
-	if parentId != "" {
-		query.Where("parent_id = ?", parentId)
-	}
-
-	err := query.Select()
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
 func (p publishedRepositoryImpl) GetFilteredPackagesWithOffset(ctx context.Context, searchReq view.PackageListReq, userId string) ([]entity.PackageEntity, error) {
 	var result []entity.PackageEntity
 	query := p.cp.GetConnection().ModelContext(ctx, &result).
@@ -2824,21 +2379,6 @@ func (p publishedRepositoryImpl) GetFilteredDeletedPackages(ctx context.Context,
 
 	err := query.Select()
 	if err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
-func (p publishedRepositoryImpl) GetPackageForServiceName(serviceName string) (*entity.PackageEntity, error) {
-	result := new(entity.PackageEntity)
-	err := p.cp.GetConnection().Model(result).
-		Where("deleted_at is ?", nil).
-		Where("service_name = ?", serviceName).
-		First()
-	if err != nil {
-		if err == pg.ErrNoRows {
-			return nil, nil
-		}
 		return nil, err
 	}
 	return result, nil

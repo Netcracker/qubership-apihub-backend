@@ -17,7 +17,6 @@ package service
 import (
 	"bufio"
 	"bytes"
-	goctx "context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -25,89 +24,10 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
-
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/client"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 )
-
-func getApihubConfigFileId(projectId string) string {
-	return ApiHubBaseConfigPath + projectId + ".json"
-}
-
-func getApihubVersionPublishFileId(projectId string) string {
-	return ApiHubBaseConfigPath + projectId + "_version_publish.json"
-}
-
-func getApihubConfigRaw(configView *view.BranchGitConfigView) ([]byte, error) {
-	return json.MarshalIndent(configView, "", " ")
-}
-
-func getContentDataFromGit(ctx goctx.Context, client client.GitClient, projectGitId string, ref string, fileId string) (*view.ContentData, error) {
-	// TODO: should be context from the request
-	goCtx := context.CreateContextWithStacktrace(ctx, fmt.Sprintf("getContentDataFromGit(%s,%s,%s)", projectGitId, ref, fileId))
-
-	data, responseType, blobId, err := client.GetFileContent(goCtx, projectGitId, ref, fileId)
-	if err != nil {
-		return nil, err
-	}
-
-	if data == nil && responseType == "" {
-		return nil, &exception.CustomError{
-			Status:  http.StatusNotFound,
-			Code:    exception.FileByRefNotFound,
-			Message: exception.FileByRefNotFoundMsg,
-			Params: map[string]interface{}{
-				"fileId":       fileId,
-				"ref":          ref,
-				"projectGitId": projectGitId},
-		}
-	}
-	dataType := getMediaType(data)
-	return &view.ContentData{FileId: fileId, Data: data, DataType: dataType, BlobId: blobId}, nil
-}
-
-func getMediaType(data []byte) string {
-	return http.DetectContentType(data)
-}
-
-func validateFileInfo(fileId string, filePath string, fileName string) error {
-	if strings.Contains(fileId, "//") {
-		return &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.IncorrectFilePath,
-			Message: exception.IncorrectFilePathMsg,
-			Params:  map[string]interface{}{"path": fileId},
-		}
-	}
-	if strings.Contains(fileName, "/") {
-		return &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.IncorrectFileName,
-			Message: exception.IncorrectFileNameMsg,
-			Params:  map[string]interface{}{"name": fileName},
-		}
-	}
-	if strings.Contains(filePath, "//") {
-		return &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.IncorrectFilePath,
-			Message: exception.IncorrectFilePathMsg,
-			Params:  map[string]interface{}{"path": filePath},
-		}
-	}
-
-	return nil
-}
-
-func generateFileId(filePath string, fileName string) string {
-	filePath = utils.NormalizeFilePath(filePath)
-	fileId := utils.ConcatToFileId(filePath, fileName)
-
-	return fileId
-}
 
 func checkAvailability(fileId string, fileIds map[string]bool, folders map[string]bool) error {
 	if fileIds[fileId] {
@@ -157,11 +77,6 @@ func checkAvailability(fileId string, fileIds map[string]bool, folders map[strin
 	}
 
 	return nil
-}
-
-func getContentType(filePath string, data *[]byte) view.ShortcutType {
-	contentType, _ := GetContentInfo(filePath, data)
-	return contentType
 }
 
 func GetContentInfo(filePath string, data *[]byte) (view.ShortcutType, string) {
@@ -335,26 +250,4 @@ func getYamlContentType(data *[]byte) (view.ShortcutType, string) {
 	}
 
 	return contentType, contentTitle
-}
-
-func equalStringSets(first []string, second []string) bool {
-	if len(first) != len(second) {
-		return false
-	}
-	exists := make(map[string]bool)
-	for _, value := range first {
-		exists[value] = true
-	}
-	for _, value := range second {
-		if !exists[value] {
-			return false
-		}
-	}
-	return true
-}
-
-func convertEol(data []byte) []byte {
-	convertedData := string(data)
-	convertedData = strings.Replace(convertedData, "\r\n", "\n", -1)
-	return []byte(convertedData)
 }

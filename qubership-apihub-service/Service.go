@@ -44,9 +44,6 @@ import (
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/db"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
-
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/client"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/controller"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/repository"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security"
@@ -92,8 +89,6 @@ func main() {
 		panic(err)
 	}
 	basePath := systemInfoService.GetBasePath()
-
-	gitlabUrl := systemInfoService.GetGitlabUrl()
 
 	// Create router and server to expose live and ready endpoints during initialization
 	readyChan := make(chan bool)
@@ -178,24 +173,6 @@ func main() {
 	_ = <-initSrvStoppedChan // wait for the init srv to stop to avoid multiple servers started race condition
 	log.Infof("Migration step passed, continue initialization")
 
-	gitIntegrationRepository, err := repository.NewGitIntegrationRepositoryPG(cp)
-	if err != nil {
-		log.Error("Failed to create UserIntegrationsRepository: " + err.Error())
-		panic("Failed to create UserIntegrationsRepository: " + err.Error())
-	}
-
-	projectRepository, err := repository.NewPrjGrpIntRepositoryPG(cp)
-	if err != nil {
-		log.Error("Failed to create PrjGrpIntRepository: " + err.Error())
-		panic("Failed to create PrjGrpIntRepository: " + err.Error())
-	}
-
-	draftRepository, err := repository.NewDraftRepositoryPG(cp)
-	if err != nil {
-		log.Error("Failed to create DraftRepository: " + err.Error())
-		panic("Failed to create DraftRepository: " + err.Error())
-	}
-
 	favoritesRepository, err := repository.NewFavoritesRepositoryPG(cp)
 	if err != nil {
 		log.Error("Failed to create FavoriteRepository: " + err.Error())
@@ -211,11 +188,6 @@ func main() {
 	if err != nil {
 		log.Error("Failed to create ApihubApiKeyRepository: " + err.Error())
 		panic("Failed to create ApihubApiKeyRepository: " + err.Error())
-	}
-	branchRepository, err := repository.NewBranchRepositoryPG(cp)
-	if err != nil {
-		log.Error("Failed to create BranchRepository: " + err.Error())
-		panic("Failed to create BranchRepository: " + err.Error())
 	}
 	buildRepository, err := repository.NewBuildRepositoryPG(cp)
 	if err != nil {
@@ -250,28 +222,8 @@ func main() {
 		panic("Failed to create olricProvider: " + err.Error())
 	}
 
-	configs := []client.GitClientConfiguration{{Integration: view.GitlabIntegration, BaseUrl: gitlabUrl}}
-	tokenRevocationHandler := service.NewTokenRevocationHandler(gitIntegrationRepository, olricProvider)
-	tokenExpirationHandler := service.NewTokenExpirationHandler(gitIntegrationRepository, olricProvider, systemInfoService)
-	gitClientProvider, err := service.NewGitClientProvider(configs, gitIntegrationRepository, tokenRevocationHandler, tokenExpirationHandler, olricProvider)
-	if err != nil {
-		log.Error("Failed to create GitClientProvider: " + err.Error())
-		panic("Failed to create GitClientProvider: " + err.Error())
-	}
 	privateUserPackageService := service.NewPrivateUserPackageService(publishedRepository, usersRepository, roleRepository, favoritesRepository)
-	integrationsService := service.NewIntegrationsService(gitIntegrationRepository, gitClientProvider)
-	userService := service.NewUserService(usersRepository, gitClientProvider, systemInfoService, privateUserPackageService, integrationsService)
-
-	projectService := service.NewProjectService(gitClientProvider, projectRepository, favoritesRepository, publishedRepository)
-	groupService := service.NewGroupService(projectRepository, projectService, favoritesRepository, publishedRepository, usersRepository)
-
-	wsLoadBalancer, err := service.NewWsLoadBalancer(olricProvider)
-	if err != nil {
-		log.Error("Failed to create wsLoadBalancer: " + err.Error())
-		panic("Failed to create wsLoadBalancer: " + err.Error())
-	}
-
-	templateService := service.NewTemplateService()
+	userService := service.NewUserService(usersRepository, systemInfoService, privateUserPackageService)
 
 	lockService := service.NewLockService(lockRepo, systemInfoService.GetInstanceId())
 
@@ -291,26 +243,16 @@ func main() {
 	activityTrackingService := service.NewActivityTrackingService(activityTrackingRepository, publishedRepository, userService)
 	operationService := service.NewOperationService(operationRepository, publishedRepository, packageVersionEnrichmentService)
 	roleService := service.NewRoleService(roleRepository, userService, activityTrackingService, publishedRepository)
-	wsBranchService := service.NewWsBranchService(userService, wsLoadBalancer)
-	branchEditorsService := service.NewBranchEditorsService(userService, wsBranchService, branchRepository, olricProvider)
-	branchService := service.NewBranchService(projectService, draftRepository, gitClientProvider, publishedRepository, wsBranchService, branchEditorsService, branchRepository)
-	projectFilesService := service.NewProjectFilesService(gitClientProvider, projectRepository, branchService)
 	ptHandler := service.NewPackageTransitionHandler(transitionRepository)
 	publishNotificationService := service.NewPublishNotificationService(olricProvider)
-	publishedService := service.NewPublishedService(branchService, publishedRepository, projectRepository, buildRepository, gitClientProvider, wsBranchService, favoritesRepository, operationRepository, activityTrackingService, monitoringService, minioStorageService, systemInfoService, publishNotificationService)
-	contentService := service.NewContentService(draftRepository, projectService, branchService, gitClientProvider, wsBranchService, templateService, systemInfoService)
-	refService := service.NewRefService(draftRepository, projectService, branchService, publishedRepository, wsBranchService)
-	wsFileEditService := service.NewWsFileEditService(userService, contentService, branchEditorsService, wsLoadBalancer)
-	portalService := service.NewPortalService(basePath, publishedService, publishedRepository, projectRepository)
+	publishedService := service.NewPublishedService(publishedRepository, buildRepository, favoritesRepository, operationRepository, activityTrackingService, monitoringService, minioStorageService, systemInfoService, publishNotificationService)
+	portalService := service.NewPortalService(basePath, publishedService, publishedRepository)
 
 	operationGroupService := service.NewOperationGroupService(operationRepository, publishedRepository, exportRepository, packageVersionEnrichmentService, activityTrackingService)
-	versionService := service.NewVersionService(gitClientProvider, projectRepository, favoritesRepository, publishedRepository, publishedService, operationRepository, exportRepository, operationService, activityTrackingService, systemInfoService, packageVersionEnrichmentService, portalService, versionCleanupRepository, operationGroupService)
-	packageService := service.NewPackageService(gitClientProvider, projectRepository, favoritesRepository, publishedRepository, versionService, roleService, activityTrackingService, operationGroupService, usersRepository, ptHandler, systemInfoService)
+	versionService := service.NewVersionService(favoritesRepository, publishedRepository, publishedService, operationRepository, exportRepository, operationService, activityTrackingService, systemInfoService, packageVersionEnrichmentService, portalService, versionCleanupRepository, operationGroupService)
+	packageService := service.NewPackageService(favoritesRepository, publishedRepository, versionService, roleService, activityTrackingService, operationGroupService, usersRepository, ptHandler, systemInfoService)
 
 	logsService := service.NewLogsService()
-	internalWebsocketService := service.NewInternalWebsocketService(wsLoadBalancer, olricProvider)
-	commitService := service.NewCommitService(draftRepository, contentService, branchService, projectService, gitClientProvider, wsBranchService, wsFileEditService, branchEditorsService)
-	searchService := service.NewSearchService(projectService, publishedService, branchService, gitClientProvider, contentService)
 	apihubApiKeyService := service.NewApihubApiKeyService(apihubApiKeyRepository, publishedRepository, activityTrackingService, userService, roleRepository, roleService.IsSysadm, systemInfoService)
 
 	refResolverService := service.NewRefResolverService(publishedRepository)
@@ -337,8 +279,6 @@ func main() {
 	transitionService := service.NewTransitionService(transitionRepository, publishedRepository)
 	transformationService := service.NewTransformationService(publishedRepository, operationRepository, packageVersionEnrichmentService)
 
-	gitHookService := service.NewGitHookService(projectRepository, branchService, buildService, userService)
-
 	zeroDayAdminService := service.NewZeroDayAdminService(userService, roleService, usersRepository, systemInfoService)
 
 	personalAccessTokenService := service.NewPersonalAccessTokenService(personalAccessTokenRepository, userService, roleService)
@@ -352,15 +292,7 @@ func main() {
 		panic("Failed to initialize external IDP: " + err.Error())
 	}
 
-	integrationsController := controller.NewIntegrationsController(integrationsService)
-	projectController := controller.NewProjectController(projectService, groupService, searchService)
-	branchController := controller.NewBranchController(branchService, commitService, projectFilesService, searchService, publishedService, branchEditorsService, wsBranchService)
-	groupController := controller.NewGroupController(groupService, publishedService, roleService)
-	contentController := controller.NewContentController(contentService, branchService, searchService, wsFileEditService, wsBranchService, systemInfoService)
-	publishedController := controller.NewPublishedController(publishedService, portalService, searchService)
-	refController := controller.NewRefController(refService, wsBranchService)
-	branchWSController := controller.NewBranchWSController(branchService, wsLoadBalancer, internalWebsocketService)
-	fileWSController := controller.NewFileWSController(wsFileEditService, wsLoadBalancer, internalWebsocketService)
+	publishedController := controller.NewPublishedController(publishedService, portalService)
 
 	logsController := controller.NewLogsController(logsService, roleService)
 	systemInfoController := controller.NewSystemInfoController(systemInfoService, dbMigrationService)
@@ -370,16 +302,15 @@ func main() {
 
 	playgroundProxyController := controller.NewPlaygroundProxyController(systemInfoService)
 	publishV2Controller := controller.NewPublishV2Controller(buildService, publishedService, buildResultService, roleService, systemInfoService)
-	exportController := controller.NewExportController(publishedService, portalService, searchService, roleService, excelService, versionService, monitoringService, exportService, packageService)
+	exportController := controller.NewExportController(publishedService, portalService, roleService, excelService, versionService, monitoringService, exportService, packageService)
 
-	packageController := controller.NewPackageController(packageService, publishedService, portalService, searchService, roleService, monitoringService, ptHandler)
+	packageController := controller.NewPackageController(packageService, publishedService, portalService, roleService, monitoringService, ptHandler)
 	versionController := controller.NewVersionController(versionService, roleService, monitoringService, ptHandler, roleService.IsSysadm)
 	roleController := controller.NewRoleController(roleService)
 	samlAuthController := controller.NewSamlAuthController(userService, systemInfoService, idpManager) //deprecated
 	authController := controller.NewAuthController(systemInfoService, idpManager)
 	userController := controller.NewUserController(userService, privateUserPackageService, roleService)
 	jwtPubKeyController := controller.NewJwtPubKeyController()
-	oauthController := controller.NewOauth20Controller(integrationsService, userService, systemInfoService)
 	logoutController := controller.NewLogoutController(tokenRevocationService, systemInfoService)
 	operationController := controller.NewOperationController(roleService, operationService, buildService, monitoringService, ptHandler)
 	operationGroupController := controller.NewOperationGroupController(roleService, operationGroupService, versionService)
@@ -393,79 +324,9 @@ func main() {
 	apiDocsController := controller.NewApiDocsController(basePath)
 	transformationController := controller.NewTransformationController(roleService, buildService, versionService, transformationService, operationGroupService)
 	minioStorageController := controller.NewMinioStorageController(minioStorageCreds, minioStorageService)
-	gitHookController := controller.NewGitHookController(gitHookService)
 	personalAccessTokenController := controller.NewPersonalAccessTokenController(personalAccessTokenService)
 	packageExportConfigController := controller.NewPackageExportConfigController(roleService, packageExportConfigService, ptHandler)
 	systemStatsController := controller.NewSystemStatsController(systemStatsService, roleService)
-
-	if !systemInfoService.GetEditorDisabled() {
-		r.HandleFunc("/api/v1/integrations/{integrationId}/apikey", security.Secure(integrationsController.GetUserApiKeyStatus)).Methods(http.MethodGet)
-		r.HandleFunc("/api/v1/integrations/{integrationId}/apikey", security.Secure(integrationsController.SetUserApiKey)).Methods(http.MethodPut)
-		r.HandleFunc("/api/v1/integrations/{integrationId}/repositories", security.Secure(integrationsController.ListRepositories)).Methods(http.MethodGet)
-		r.HandleFunc("/api/v1/integrations/{integrationId}/repositories/{repositoryId}/branches", security.Secure(integrationsController.ListBranchesAndTags)).Methods(http.MethodGet)
-
-		r.HandleFunc("/api/v1/projects", security.Secure(projectController.GetFilteredProjects)).Methods(http.MethodGet)
-		r.HandleFunc("/api/v1/projects", security.Secure(projectController.AddProject)).Methods(http.MethodPost)
-		r.HandleFunc("/api/v1/projects/{projectId}", security.Secure(projectController.GetProject)).Methods(http.MethodGet)
-		r.HandleFunc("/api/v1/projects/{projectId}", security.Secure(projectController.UpdateProject)).Methods(http.MethodPut)
-		r.HandleFunc("/api/v1/projects/{projectId}", security.Secure(projectController.DeleteProject)).Methods(http.MethodDelete)
-		r.HandleFunc("/api/v1/projects/{projectId}/favor", security.Secure(projectController.FavorProject)).Methods(http.MethodPost)
-		r.HandleFunc("/api/v1/projects/{projectId}/disfavor", security.Secure(projectController.DisfavorProject)).Methods(http.MethodPost)
-
-		r.HandleFunc("/api/v1/groups", security.Secure(groupController.AddGroup)).Methods(http.MethodPost)
-		r.HandleFunc("/api/v1/groups/{groupId}", security.Secure(groupController.GetGroupInfo)).Methods(http.MethodGet)
-		r.HandleFunc("/api/v1/groups", security.Secure(groupController.GetAllGroups)).Methods(http.MethodGet)
-		r.HandleFunc("/api/v1/groups/{groupId}/favor", security.Secure(groupController.FavorGroup)).Methods(http.MethodPost)
-		r.HandleFunc("/api/v1/groups/{groupId}/disfavor", security.Secure(groupController.DisfavorGroup)).Methods(http.MethodPost)
-
-		r.HandleFunc("/api/v1/projects/{projectId}/branches", security.Secure(branchController.GetProjectBranches)).Methods(http.MethodGet)
-		r.HandleFunc("/api/v1/projects/{projectId}/branches/{branchName}", security.Secure(branchController.GetProjectBranchDetails)).Methods(http.MethodGet)
-		r.HandleFunc("/api/v1/projects/{projectId}/branches/{branchName}/config", security.Secure(branchController.GetProjectBranchConfigRaw)).Methods(http.MethodGet)
-		r.HandleFunc("/api/v1/projects/{projectId}/branches/{branchName}/save", security.Secure(branchController.CommitBranchDraftChanges)).Methods(http.MethodPost)
-		r.HandleFunc("/api/v1/projects/{projectId}/branches/{branchName}/zip", security.Secure(branchController.GetProjectBranchContentZip)).Methods(http.MethodGet)
-		r.HandleFunc("/api/v1/projects/{projectId}/branches/{branchName}/integration/files", security.Secure(branchController.GetProjectBranchFiles)).Methods(http.MethodGet)
-		r.HandleFunc("/api/v1/projects/{projectId}/branches/{branchName}/history", security.Secure(branchController.GetProjectBranchCommitHistory_deprecated)).Methods(http.MethodGet)
-		r.HandleFunc("/api/v1/projects/{projectId}/branches/{branchName}", security.Secure(branchController.DeleteBranch)).Methods(http.MethodDelete)
-		r.HandleFunc("/api/v1/projects/{projectId}/branches/{branchName}/clone", security.Secure(branchController.CloneBranch)).Methods(http.MethodPost)
-		r.HandleFunc("/api/v1/projects/{projectId}/branches/{branchName}/reset", security.Secure(branchController.DeleteBranchDraft)).Methods(http.MethodPost)
-		r.HandleFunc("/api/v1/projects/{projectId}/branches/{branchName}/conflicts", security.Secure(branchController.GetBranchConflicts)).Methods(http.MethodGet)
-		r.HandleFunc("/api/v1/projects/{projectId}/branches/{branchName}/integration/files", security.Secure(contentController.AddFile)).Methods(http.MethodPost)
-		r.HandleFunc("/api/v1/projects/{projectId}/branches/{branchName}/refs", security.Secure(refController.UpdateRefs)).Methods(http.MethodPatch)
-		r.HandleFunc("/api/v1/projects/{projectId}/branches/{branchName}/editors", security.Secure(branchController.AddBranchEditor)).Methods(http.MethodPost)
-		r.HandleFunc("/api/v1/projects/{projectId}/branches/{branchName}/editors", security.Secure(branchController.RemoveBranchEditor)).Methods(http.MethodDelete)
-
-		r.HandleFunc("/api/v1/projects/{projectId}/branches/{branchName}/files/{fileId}", security.Secure(contentController.GetContent)).Methods(http.MethodGet) //deprecated???
-		r.HandleFunc("/api/v1/projects/{projectId}/branches/{branchName}/files/{fileId}/file", security.Secure(contentController.GetContentAsFile)).Methods(http.MethodGet)
-		r.HandleFunc("/api/v1/projects/{projectId}/branches/{branchName}/files/{fileId}", security.Secure(contentController.UpdateContent)).Methods(http.MethodPut)
-		r.HandleFunc("/api/v1/projects/{projectId}/branches/{branchName}/upload", security.Secure(contentController.UploadContent)).Methods(http.MethodPost)
-		r.HandleFunc("/api/v1/projects/{projectId}/branches/{branchName}/files/{fileId}/history", security.Secure(contentController.GetContentHistory)).Methods(http.MethodGet)
-		r.HandleFunc("/api/v1/projects/{projectId}/branches/{branchName}/files/{fileId}/history/{commitId}", security.Secure(contentController.GetContentFromCommit)).Methods(http.MethodGet)
-		r.HandleFunc("/api/v1/projects/{projectId}/blobs/{blobId}", security.Secure(contentController.GetContentFromBlobId)).Methods(http.MethodGet)
-		r.HandleFunc("/api/v1/projects/{projectId}/branches/{branchName}/files/{fileId}/rename", security.Secure(contentController.MoveFile)).Methods(http.MethodPost)
-		r.HandleFunc("/api/v1/projects/{projectId}/branches/{branchName}/files/{fileId}/reset", security.Secure(contentController.ResetFile)).Methods(http.MethodPost)
-		r.HandleFunc("/api/v1/projects/{projectId}/branches/{branchName}/files/{fileId}/restore", security.Secure(contentController.RestoreFile)).Methods(http.MethodPost)
-		r.HandleFunc("/api/v1/projects/{projectId}/branches/{branchName}/files/{fileId}", security.Secure(contentController.DeleteFile)).Methods(http.MethodDelete)
-		r.HandleFunc("/api/v1/projects/{projectId}/branches/{branchName}/files/{fileId}/meta", security.Secure(contentController.UpdateMetadata)).Methods(http.MethodPatch)
-		r.HandleFunc("/api/v1/projects/{projectId}/branches/{branchName}/allfiles", security.Secure(contentController.GetAllContent)).Methods(http.MethodGet)
-
-		r.HandleFunc("/api/v1/projects/{packageId}/versions/{version}", security.Secure(publishedController.GetVersion)).Methods(http.MethodGet)
-		r.HandleFunc("/api/v1/projects/{packageId}/versions/{version}/documentation", security.Secure(publishedController.GenerateVersionDocumentation)).Methods(http.MethodGet)
-		r.HandleFunc("/api/v1/projects/{packageId}/versions/{version}/files/{slug}/documentation", security.Secure(publishedController.GenerateFileDocumentation)).Methods(http.MethodGet)
-		r.HandleFunc("/api/v1/projects/{packageId}/versions/{version}/files/{fileSlug}/share", security.Secure(publishedController.SharePublishedFile)).Methods(http.MethodPost)
-		r.HandleFunc("/api/v1/shared/{shared_id}", security.NoSecure(publishedController.GetSharedContentFile)).Methods(http.MethodGet)
-
-		r.HandleFunc("/api/v1/projects/{projectId}/versions/{version}/files/{fileSlug}/share", security.Secure(publishedController.SharePublishedFile)).Methods(http.MethodPost)
-
-		r.HandleFunc("/login/gitlab/callback", security.NoSecure(oauthController.GitlabOauthCallback)).Methods(http.MethodGet)
-		r.HandleFunc("/login/gitlab", security.NoSecure(oauthController.StartOauthProcessWithGitlab)).Methods(http.MethodGet)
-
-		r.HandleFunc("/api/v1/git/webhook", gitHookController.HandleEvent).Methods(http.MethodPost)
-		r.HandleFunc("/api/v1/projects/{projectId}/integration/hooks", security.Secure(gitHookController.SetGitLabToken)).Methods(http.MethodPut)
-
-		//websocket
-		r.HandleFunc("/ws/v1/projects/{projectId}/branches/{branchName}", security.SecureWebsocket(branchWSController.ConnectToProjectBranch))
-		r.HandleFunc("/ws/v1/projects/{projectId}/branches/{branchName}/files/{fileId}", security.SecureWebsocket(fileWSController.ConnectToFile))
-	}
 
 	r.HandleFunc("/api/v1/system/info", security.Secure(systemInfoController.GetSystemInfo)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/system/configuration", samlAuthController.GetSystemSSOInfo_deprecated).Methods(http.MethodGet) //deprecated
@@ -556,7 +417,8 @@ func main() {
 	r.HandleFunc("/api/v2/users/{userId}/space", security.Secure(userController.CreatePrivatePackageForUser)).Methods(http.MethodPost)
 	r.HandleFunc("/api/v2/space", security.SecureUser(userController.CreatePrivateUserPackage)).Methods(http.MethodPost)
 	r.HandleFunc("/api/v2/space", security.SecureUser(userController.GetPrivateUserPackage)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v1/user", security.SecureUser(userController.GetExtendedUser)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/user", security.SecureUser(userController.GetExtendedUser_deprecated)).Methods(http.MethodGet) //deprecated
+	r.HandleFunc("/api/v2/user", security.SecureUser(userController.GetExtendedUser)).Methods(http.MethodGet)
 
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/changes/summary", security.Secure(comparisonController.GetComparisonChangesSummary)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/operations", security.Secure(operationController.GetOperationList)).Methods(http.MethodGet)
@@ -649,14 +511,6 @@ func main() {
 
 	//debug + cleanup
 	if !systemInfoService.GetSystemInfo().ProductionMode {
-		if !systemInfoService.GetEditorDisabled() {
-			r.HandleFunc("/api/internal/websocket/branches/log", security.Secure(branchWSController.TestLogWebsocketClient)).Methods(http.MethodPost)
-			r.HandleFunc("/api/internal/websocket/branches/log", security.Secure(branchWSController.TestGetWebsocketClientMessages)).Methods(http.MethodGet)
-			r.HandleFunc("/api/internal/websocket/files/log", security.Secure(fileWSController.TestLogWebsocketClient)).Methods(http.MethodPost)
-			r.HandleFunc("/api/internal/websocket/files/log", security.Secure(fileWSController.TestGetWebsocketClientMessages)).Methods(http.MethodGet)
-			r.HandleFunc("/api/internal/websocket/files/send", security.Secure(fileWSController.TestSendMessageToWebsocket)).Methods(http.MethodPut)
-			r.HandleFunc("/api/internal/websocket/loadbalancer", security.Secure(branchWSController.DebugSessionsLoadBalance)).Methods(http.MethodGet)
-		}
 		r.HandleFunc("/api/internal/users/{userId}/systemRole", security.Secure(roleController.TestSetUserSystemRole)).Methods(http.MethodPost)
 		r.HandleFunc("/api/internal/users", security.NoSecure(userController.CreateInternalUser)).Methods(http.MethodPost)
 		r.HandleFunc("/api/v2/auth/local", security.NoSecure(security.CreateLocalUserToken_deprecated)).Methods(http.MethodPost) //deprecated
@@ -722,7 +576,7 @@ func main() {
 		}
 	})
 
-	err = security.SetupGoGuardian(integrationsService, userService, roleService, apihubApiKeyService, personalAccessTokenService, systemInfoService, tokenRevocationService)
+	err = security.SetupGoGuardian(userService, roleService, apihubApiKeyService, personalAccessTokenService, systemInfoService, tokenRevocationService)
 	if err != nil {
 		log.Fatalf("Can't setup go_guardian. Error - %s", err.Error())
 	}

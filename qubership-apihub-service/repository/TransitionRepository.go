@@ -30,7 +30,6 @@ import (
 )
 
 type TransitionRepository interface {
-	MoveAllData(fromPkg, toPkg string) (int, error)
 	MovePackage(fromPkg, toPkg string, overwriteHistory bool) (int, error)
 	MoveGroupingPackage(fromPkg, toPkg string) (int, error)
 
@@ -84,37 +83,6 @@ func (t transitionRepositoryImpl) MoveGroupingPackage(fromPkg, toPkg string) (in
 	})
 
 	return objAffected, err
-}
-
-func (t transitionRepositoryImpl) MoveAllData(fromPkg, toPkg string) (int, error) {
-	objAffected := 0
-	err := t.cp.GetConnection().RunInTransaction(context.Background(), func(tx *pg.Tx) error {
-		// Copy version data to satisfy constraints
-		affected, err := copyVersions(tx, fromPkg, toPkg)
-		if err != nil {
-			return err
-		}
-		objAffected += affected
-
-		affected, err = moveNonVersionsData(tx, fromPkg, toPkg)
-		if err != nil {
-			return err
-		}
-		objAffected += affected
-
-		// deleteVersionsData should affect the same rows as copy, so do not append it
-		err = deleteVersionsData(tx, fromPkg)
-		if err != nil {
-			return fmt.Errorf("MoveAllData: failed to delete orig pkg data: %w", err)
-		}
-
-		return nil
-	})
-	if err != nil {
-		return 0, err // transaction should be rolled back
-	} else {
-		return objAffected, nil
-	}
 }
 
 func (t transitionRepositoryImpl) MovePackage(fromPkg, toPkg string, overwriteHistory bool) (int, error) {
@@ -387,10 +355,10 @@ func moveNonVersionsData(tx *pg.Tx, fromPkg, toPkg string) (int, error) {
 
 	updateVersCompIdForRefs := `
 		with comp as (
-			select 
+			select
 			comparison_id,
-			md5(package_id||'@'||version||'@'||revision||'@'||previous_package_id||'@'||previous_version||'@'||previous_revision) as new_comparison_id 
-			from version_comparison 
+			md5(package_id||'@'||version||'@'||revision||'@'||previous_package_id||'@'||previous_version||'@'||previous_revision) as new_comparison_id
+			from version_comparison
 			where package_id = ? or previous_package_id = ?
 		)
 		update version_comparison b set refs = array_replace(refs, c.comparison_id, c.new_comparison_id::varchar)
@@ -404,10 +372,10 @@ func moveNonVersionsData(tx *pg.Tx, fromPkg, toPkg string) (int, error) {
 
 	updateVersCompId := `
 		with comp as (
-			select 
+			select
 			comparison_id,
-			md5(package_id||'@'||version||'@'||revision||'@'||previous_package_id||'@'||previous_version||'@'||previous_revision) as new_comparison_id 
-			from version_comparison 
+			md5(package_id||'@'||version||'@'||revision||'@'||previous_package_id||'@'||previous_version||'@'||previous_revision) as new_comparison_id
+			from version_comparison
 			where package_id = ? or previous_package_id = ?
 		)
 		update version_comparison b set comparison_id = c.new_comparison_id::varchar
@@ -614,7 +582,7 @@ func (t transitionRepositoryImpl) TrackTransitionFailed(id, details string) erro
 }
 
 func (t transitionRepositoryImpl) TrackTransitionCompleted(id string, affectedObjects int) error {
-	updateQuery := `update activity_tracking_transition 
+	updateQuery := `update activity_tracking_transition
 	set status = ?, affected_objects = ?, finished_at = ?, progress_percent = 100, completed_serial_number = nextval('activity_tracking_transition_completed_seq')
 	where id=?;`
 	_, err := t.cp.GetConnection().Exec(updateQuery, string(view.StatusComplete), affectedObjects, time.Now(), id)

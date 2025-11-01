@@ -77,14 +77,6 @@ type PackageVersionHistoryEntity struct {
 	ApiTypes []string `pg:"api_types, type:varchar[]"`
 }
 
-type PackageFavEntity struct {
-	tableName struct{} `pg:"package_group, alias:package_group"`
-
-	PackageEntity
-
-	UserId string `pg:"user_id, pk, type:varchar"`
-}
-
 type PublishedVersionEntity struct {
 	tableName struct{} `pg:"published_version"`
 
@@ -223,10 +215,6 @@ type PublishedReferenceEntity struct {
 	Excluded           bool   `pg:"excluded, type:boolean, use_zero"`
 }
 
-type PublishedReferenceContainer struct {
-	References map[string]PublishedReferenceEntity
-}
-
 type SharedUrlInfoEntity struct {
 	tableName struct{} `pg:"shared_url_info"`
 
@@ -295,36 +283,6 @@ func MakePublishedReferenceView(entity PublishedReferenceEntity) view.VersionRef
 		PackageRef:       view.MakePackageRefKey(entity.RefPackageId, entity.RefVersion, entity.RefRevision),
 		ParentPackageRef: view.MakePackageRefKey(entity.ParentRefPackageId, entity.ParentRefVersion, entity.ParentRefRevision),
 		Excluded:         entity.Excluded,
-	}
-}
-
-func MakePublishedVersionView(versionEnt *PublishedVersionEntity, contentEnts []PublishedContentEntity, refs []view.PublishedRef) *view.PublishedVersion {
-	contents := make([]view.PublishedContent, 0)
-	for _, ent := range contentEnts {
-		contents = append(contents, *MakePublishedContentView(&ent))
-	}
-
-	status, _ := view.ParseVersionStatus(versionEnt.Status)
-	var labels []string
-	if versionEnt.Labels != nil {
-		labels = versionEnt.Labels
-	} else {
-		labels = make([]string, 0)
-	}
-
-	return &view.PublishedVersion{
-		PackageId:                versionEnt.PackageId,
-		Version:                  versionEnt.Version,
-		Revision:                 versionEnt.Revision,
-		Status:                   status,
-		PublishedAt:              versionEnt.PublishedAt,
-		PreviousVersion:          versionEnt.PreviousVersion,
-		PreviousVersionPackageId: versionEnt.PreviousVersionPackageId,
-		DeletedAt:                versionEnt.DeletedAt,
-		BranchName:               versionEnt.Metadata.GetBranchName(),
-		Contents:                 contents,
-		RelatedPackages:          refs,
-		VersionLabels:            labels,
 	}
 }
 
@@ -428,12 +386,6 @@ func MakeContentDataViewPub(content *PublishedContentEntity, contentData *Publis
 	}
 }
 
-func MakeSharedUrlInfo(sui *SharedUrlInfoEntity) *view.SharedUrlResult_deprecated {
-	return &view.SharedUrlResult_deprecated{
-		SharedId: sui.SharedId,
-	}
-}
-
 func MakeSharedUrlInfoV2(sui *SharedUrlInfoEntity) *view.SharedUrlResult {
 	return &view.SharedUrlResult{
 		SharedFileId: sui.SharedId,
@@ -521,68 +473,6 @@ func MakeSimplePackageUpdateEntity(existingPackage *PackageEntity, packg *view.P
 	return &packageEntity
 }
 
-func MakePackageGroupEntity(group *view.Group) *PackageEntity {
-	kind := KIND_GROUP
-	if group.ParentId == "" {
-		kind = KIND_WORKSPACE
-	}
-	return &PackageEntity{
-		Id:          group.Id,
-		Kind:        kind,
-		Name:        group.Name,
-		ParentId:    group.ParentId,
-		Alias:       group.Alias,
-		Description: group.Description,
-		ImageUrl:    group.ImageUrl,
-		CreatedAt:   group.CreatedAt,
-		CreatedBy:   group.CreatedBy,
-		DeletedAt:   group.DeletedAt,
-		DeletedBy:   group.DeletedBy,
-		DefaultRole: view.ViewerRoleId, //todo remove after full v2 migration
-	}
-}
-
-func MakePackageGroupView(entity *PackageEntity) *view.Group {
-	return &view.Group{
-		Id:          entity.Id,
-		ParentId:    entity.ParentId,
-		Name:        entity.Name,
-		Alias:       entity.Alias,
-		Description: entity.Description,
-		ImageUrl:    entity.ImageUrl,
-		CreatedAt:   entity.CreatedAt,
-		CreatedBy:   entity.CreatedBy,
-		DeletedAt:   entity.DeletedAt,
-		DeletedBy:   entity.DeletedBy,
-		LastVersion: entity.LastVersion,
-	}
-}
-
-func MakePackageGroupFavView(entity *PackageFavEntity) *view.Group {
-	view := MakePackageGroupView(&entity.PackageEntity)
-	view.IsFavorite = entity.UserId != "" && entity.Id != ""
-	return view
-}
-
-func MakePackageGroupInfoView(entity *PackageEntity, parents []view.Group, isFavorite bool) *view.GroupInfo {
-	var parentsRes []view.Group
-	if parents == nil {
-		parentsRes = make([]view.Group, 0)
-	} else {
-		parentsRes = parents
-	}
-
-	return &view.GroupInfo{
-		GroupId:     entity.Id,
-		ParentId:    entity.ParentId,
-		Name:        entity.Name,
-		Alias:       entity.Alias,
-		ImageUrl:    entity.ImageUrl,
-		Parents:     parentsRes,
-		IsFavorite:  isFavorite,
-		LastVersion: entity.LastVersion,
-	}
-}
 func MakeSimplePackageView(entity *PackageEntity, parents []view.ParentPackageInfo, isFavorite bool, userPermissions []string) *view.SimplePackage {
 	var parentsRes []view.ParentPackageInfo
 	if parents == nil {
@@ -645,25 +535,6 @@ func MakePackagesInfo(entity *PackageEntity, defaultVersionDetails *view.Version
 	}
 
 	return &packageInfo
-}
-
-func MakePackageView(packageEntity *PackageEntity, isFavorite bool, groups []view.Group) *view.Package {
-	if groups == nil {
-		groups = make([]view.Group, 0)
-	}
-	return &view.Package{
-		Id:           packageEntity.Id,
-		GroupId:      packageEntity.ParentId,
-		Name:         packageEntity.Name,
-		Alias:        packageEntity.Alias,
-		Description:  packageEntity.Description,
-		IsFavorite:   isFavorite,
-		Groups:       groups,
-		DeletionDate: packageEntity.DeletedAt,
-		DeletedBy:    packageEntity.DeletedBy,
-		ServiceName:  packageEntity.ServiceName,
-		LastVersion:  packageEntity.LastVersion,
-	}
 }
 
 func MakePackageParentView(entity *PackageEntity) *view.ParentPackageInfo {
