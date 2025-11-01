@@ -1,3 +1,25 @@
+CREATE TABLE IF NOT EXISTS public.project (
+     id character varying NOT NULL,
+     name character varying NOT NULL,
+     alias character varying NOT NULL,
+     group_id character varying,
+     description text,
+     integration_type character varying,
+     default_branch character varying,
+     default_folder character varying,
+     repository_id character varying,
+     deleted_at timestamp without time zone,
+     repository_name character varying,
+     repository_url character varying,
+     deleted_by character varying,
+     package_id character varying,
+     secret_token character varying,
+     secret_token_user_id character varying,
+     CONSTRAINT "PK_project" PRIMARY KEY (id)
+);
+COMMENT ON COLUMN public.project.group_id IS 'Only for the GROUP kind';
+COMMENT ON COLUMN public.project.integration_type IS 'GitLab / Local storage';
+
 CREATE TABLE IF NOT EXISTS public.user_integration (
     user_id character varying NOT NULL,
     integration_type character varying NOT NULL,
@@ -68,25 +90,3 @@ CREATE TABLE IF NOT EXISTS public.favorite_projects (
     CONSTRAINT "FK_favorite_projects_project" FOREIGN KEY (project_id) REFERENCES public.project(id) ON DELETE CASCADE,
     CONSTRAINT "FK_favorite_projects_user_data" FOREIGN KEY (user_id) REFERENCES public.user_data(user_id) ON DELETE CASCADE
 );
-
-CREATE TABLE IF NOT EXISTS public.project (
-     id character varying NOT NULL,
-     name character varying NOT NULL,
-     alias character varying NOT NULL,
-     group_id character varying,
-     description text,
-     integration_type character varying,
-     default_branch character varying,
-     default_folder character varying,
-     repository_id character varying,
-     deleted_at timestamp without time zone,
-     repository_name character varying,
-     repository_url character varying,
-     deleted_by character varying,
-     package_id character varying,
-     secret_token character varying,
-     secret_token_user_id character varying,
-     CONSTRAINT "PK_project" PRIMARY KEY (id)
-);
-COMMENT ON COLUMN public.project.group_id IS 'Only for the GROUP kind';
-COMMENT ON COLUMN public.project.integration_type IS 'GitLab / Local storage';
