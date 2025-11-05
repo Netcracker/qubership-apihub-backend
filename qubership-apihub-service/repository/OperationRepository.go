@@ -32,7 +32,6 @@ type OperationRepository interface {
 	GetOperations(packageId string, version string, revision int, operationType string, skipRefs bool, searchReq view.OperationListReq) ([]entity.OperationRichEntity, error)
 	GetOperationById(packageId string, version string, revision int, operationType string, operationId string) (*entity.OperationRichEntity, error)
 	GetOperationsTags(searchQuery entity.OperationTagsSearchQueryEntity, skipRefs bool) ([]string, error)
-	GetAllOperations(packageId string, version string, revision int) ([]entity.OperationEntity, error)
 	GetOperationChanges(comparisonId string, operationId string, severities []string) (*entity.OperationComparisonEntity, error)
 	GetChangelog(searchQuery entity.ChangelogSearchQueryEntity) ([]entity.OperationComparisonChangelogEntity, error)
 	SearchForOperations(searchQuery *entity.OperationSearchQuery) ([]entity.OperationSearchResult, error)
@@ -480,22 +479,6 @@ func (o operationRepositoryImpl) GetOperationsTags(searchQuery entity.OperationT
 
 	for _, t := range tags {
 		result = append(result, t.Tag)
-	}
-	return result, nil
-}
-
-func (o operationRepositoryImpl) GetAllOperations(packageId string, version string, revision int) ([]entity.OperationEntity, error) {
-	var result []entity.OperationEntity
-	err := o.cp.GetConnection().Model(&result).
-		Where("package_id = ?", packageId).
-		Where("version = ?", version).
-		Where("revision = ?", revision).
-		Select()
-	if err != nil {
-		if err == pg.ErrNoRows {
-			return nil, nil
-		}
-		return nil, err
 	}
 	return result, nil
 }

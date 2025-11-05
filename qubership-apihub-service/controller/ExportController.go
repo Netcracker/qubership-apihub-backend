@@ -49,7 +49,6 @@ type ExportController interface {
 
 func NewExportController(publishedService service.PublishedService,
 	portalService service.PortalService,
-	searchService service.SearchService,
 	roleService service.RoleService,
 	excelService service.ExcelService,
 	versionService service.VersionService,
@@ -59,7 +58,6 @@ func NewExportController(publishedService service.PublishedService,
 	return &exportControllerImpl{
 		publishedService:  publishedService,
 		portalService:     portalService,
-		searchService:     searchService,
 		roleService:       roleService,
 		excelService:      excelService,
 		versionService:    versionService,
@@ -72,7 +70,6 @@ func NewExportController(publishedService service.PublishedService,
 type exportControllerImpl struct {
 	publishedService  service.PublishedService
 	portalService     service.PortalService
-	searchService     service.SearchService
 	roleService       service.RoleService
 	excelService      service.ExcelService
 	versionService    service.VersionService

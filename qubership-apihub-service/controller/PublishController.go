@@ -69,7 +69,7 @@ type publishV2ControllerImpl struct {
 	systemInfoService  service.SystemInfoService
 
 	publishArchiveSizeLimit int64
-	publishFileSizeLimit    int64
+	publishFileSizeLimit    int64 //TODO: why is not used?
 }
 
 func (p publishV2ControllerImpl) Publish(w http.ResponseWriter, r *http.Request) {

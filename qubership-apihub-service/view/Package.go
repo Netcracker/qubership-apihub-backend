@@ -22,26 +22,6 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 )
 
-type Package struct {
-	Id           string     `json:"projectId"` //todo replace with packageId
-	GroupId      string     `json:"groupId"`   //todo replace with parentId
-	Name         string     `json:"name"`
-	Alias        string     `json:"alias"`
-	Description  string     `json:"description"`
-	IsFavorite   bool       `json:"isFavorite"`
-	Groups       []Group    `json:"groups"`
-	DeletionDate *time.Time `json:"-"`
-	DeletedBy    string     `json:"-"`
-	CreatedBy    string     `json:"-"`
-	CreatedAt    time.Time  `json:"-"`
-	ServiceName  string     `json:"serviceName,omitempty"`
-	LastVersion  string     `json:"lastVersion,omitempty"`
-}
-
-type Packages_deprecated struct {
-	Packages []Package `json:"projects"` //todo replace with packages
-}
-
 type SimplePackage struct {
 	Id                    string              `json:"packageId"`
 	Alias                 string              `json:"alias" validate:"required"`
