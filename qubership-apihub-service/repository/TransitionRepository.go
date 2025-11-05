@@ -416,13 +416,6 @@ func moveNonVersionsData(tx *pg.Tx, fromPkg, toPkg string) (int, error) {
 	}
 	objAffected += res.RowsAffected()
 
-	updateProject := "update project set package_id = ? where package_id=?;"
-	res, err = tx.Exec(updateProject, toPkg, fromPkg)
-	if err != nil {
-		return 0, fmt.Errorf("MoveAllData: failed to update package_id in project from %s to %s: %w", fromPkg, toPkg, err)
-	}
-	objAffected += res.RowsAffected()
-
 	updateUserRoles := "update package_member_role set package_id = ? where package_id=?;"
 	res, err = tx.Exec(updateUserRoles, toPkg, fromPkg)
 	if err != nil {

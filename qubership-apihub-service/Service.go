@@ -536,7 +536,6 @@ func main() {
 	r.HandleFunc("/v3/api-docs/{specName}", apiDocsController.GetSpec).Methods(http.MethodGet)
 
 	portalFs := http.FileServer(http.Dir(basePath + "/static/portal"))
-	editorFs := http.FileServer(http.Dir(basePath + "/static/editor"))
 
 	knownPathPrefixes := []string{
 		"/api/",
@@ -562,22 +561,12 @@ func main() {
 		// TODO: return not implemented if request matches /api /ws
 		w.Header().Add("Cache-Control", "max-age=57600") // 16h
 		if r.URL.Path != "/" {
-			if strings.HasPrefix(r.URL.Path, "/editor") {
-				fullPath := basePath + "/static/" + strings.TrimPrefix(path.Clean(r.URL.Path), "/")
-				_, err := os.Stat(fullPath)
-				if err != nil { // Redirect unknown requests to frontend
-					r.URL.Path = "/editor"
-				}
-				r.URL.Path = strings.TrimPrefix(r.URL.Path, "/editor")
-				editorFs.ServeHTTP(w, r)
-			} else {
-				fullPath := basePath + "/static/portal/" + strings.TrimPrefix(path.Clean(r.URL.Path), "/")
-				_, err := os.Stat(fullPath)
-				if err != nil { // Redirect unknown requests to frontend
-					r.URL.Path = "/"
-				}
-				portalFs.ServeHTTP(w, r)
+			fullPath := basePath + "/static/portal/" + strings.TrimPrefix(path.Clean(r.URL.Path), "/")
+			_, err := os.Stat(fullPath)
+			if err != nil { // Redirect unknown requests to frontend
+				r.URL.Path = "/"
 			}
+			portalFs.ServeHTTP(w, r)
 		} else {
 			portalFs.ServeHTTP(w, r) // portal is default app
 		}
