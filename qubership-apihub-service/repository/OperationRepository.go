@@ -1363,7 +1363,10 @@ from operation o
 inner join published_version pv on o.package_id=pv.package_id and o.version=pv.version and o.revision=pv.revision
 inner join package_group pg on o.package_id=pg.id
 
-where all_ts.rank > 0
+where all_ts.rank > 0 and (?api_type = '' or o.type = ?api_type) and (?packages = '{}' or o.package_id like ANY(
+						select id from unnest(?packages::text[]) id
+						union
+						select id||'.%' from unnest(?packages::text[]) id))
 order by all_ts.rank desc, o.operation_id
 limit ?limit;
 `
