@@ -253,7 +253,9 @@ func (c *chatServiceImpl) Chat(ctx context.Context, req view.ChatRequest) (*view
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", "https://api.openai.com/v1/chat/completions", bytes.NewBuffer(reqBody))
+	baseURL := c.systemInfoService.GetOpenAIBaseURL()
+	apiURL := baseURL + "/chat/completions"
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(reqBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -287,7 +289,9 @@ func (c *chatServiceImpl) Chat(ctx context.Context, req view.ChatRequest) (*view
 			return nil, fmt.Errorf("failed to marshal request: %w", err)
 		}
 
-		httpReq, err := http.NewRequestWithContext(ctx, "POST", "https://api.openai.com/v1/chat/completions", bytes.NewBuffer(reqBody))
+		baseURL := c.systemInfoService.GetOpenAIBaseURL()
+		apiURL := baseURL + "/chat/completions"
+		httpReq, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(reqBody))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create request: %w", err)
 		}
@@ -467,7 +471,9 @@ func (c *chatServiceImpl) ChatStream(ctx context.Context, req view.ChatRequest, 
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", "https://api.openai.com/v1/chat/completions", bytes.NewBuffer(reqBody))
+	baseURL := c.systemInfoService.GetOpenAIBaseURL()
+	apiURL := baseURL + "/chat/completions"
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(reqBody))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}

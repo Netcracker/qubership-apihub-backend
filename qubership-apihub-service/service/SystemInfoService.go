@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strings"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/config"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
@@ -110,6 +111,7 @@ type SystemInfoService interface {
 	GetOpenAIApiKey() string
 	GetOpenAIModel() string
 	GetOpenAIProxyURL() string
+	GetOpenAIBaseURL() string
 }
 
 func (g *systemInfoServiceImpl) GetCredsFromEnv() *view.DbCredentials {
@@ -644,4 +646,13 @@ func (g *systemInfoServiceImpl) GetOpenAIModel() string {
 
 func (g *systemInfoServiceImpl) GetOpenAIProxyURL() string {
 	return g.config.OpenAI.ProxyURL
+}
+
+func (g *systemInfoServiceImpl) GetOpenAIBaseURL() string {
+	proxyURL := g.config.OpenAI.ProxyURL
+	if proxyURL == "" {
+		return "https://api.openai.com/v1"
+	}
+	proxyURL = strings.TrimSuffix(proxyURL, "/")
+	return proxyURL
 }
