@@ -41,40 +41,86 @@ const (
 
 // Tool descriptions for MCP server
 const (
-	ToolDescriptionSearchOperationsMCP = `Full-text search for REST API operations.
-		LLM INSTRUCTIONS:
-		- Group methods by packageIds;
-		- If user ask for more result - increase page and ask this tool again;
-		- If user ask for more results from particular packageId - set parameter 'group' to this packageId and ask this tool again;
-		- If users ask to provide details for concrete operation - ask tool get_rest_api_operations_specification. Use packageId as a parameter for this tool (not packageName);
-		- Do not ask tool get_rest_api_operations_specification in advance, only if user asks for details for concrete operation;
-		- If user asks for release version - set parameter 'release' to this version and ask this tool again. Release version is in format YYYY.Q;`
+	ToolDescriptionSearchOperationsMCP = `Search for REST API operations by text query.
 
-	ToolDescriptionGetOperationSpecMCP = `Get OpenAPI specification file for REST API operation.
-	            LLM INSTRUCTIONS:
-				- The reponse is json with REST API specification - render it as a code block, maybe not full specification, but enough to understand the operation and DTOs;
-				- After code block add some human-redabale summary about REST operation and DTOs from this specification and provide it to the user;
-				- Also generate RequestBody and ResponseBody examples based on the specification and provide them to the user;`
+IMPORTANT: The search is not full-text. For example, a query "create customer" may not find an operation "create new customer". Therefore, it is important to try different search query variations.
+
+LLM INSTRUCTIONS:
+- For the first call, use a large limit (100) to find as many options as possible
+- Consider simplifying the query to a single keyword (e.g., if query is "create customer", also try "customer")
+- Group results by packageId when displaying
+- Return all metadata that MCP returns (operationId, packageId, packageName, version, path, method, title, apiKind, apiType, apiAudience)
+- Return the most recent versions of operations (by default, search is performed in the latest completed version)
+- If the first call returned few unique operations - make repeated calls:
+  * Increase page number for pagination
+  * Simplify or generalize the search query
+  * Search in other packages (use 'group' parameter for a specific package)
+  * Search in older versions only if user explicitly requested it
+- If user asks for more results - increment page, simplify query, or search in other packages/versions
+- DO NOT use get_rest_api_operations_specification in advance - first show a list of operations to choose from, even if only one is found
+- Use get_rest_api_operations_specification only when user explicitly requests details about a specific operation
+- If user explicitly requests a specific version - use 'release' parameter in YYYY.Q format
+- If user requests results from a specific package - use 'group' parameter with packageId (not packageName)`
+
+	ToolDescriptionGetOperationSpecMCP = `Get OpenAPI specification for a specific REST API operation.
+
+Use this tool ONLY when the user explicitly requests details about a specific operation.
+
+LLM INSTRUCTIONS:
+- The response contains JSON with REST API specification - provide the full specification json in the response, display it as a code block
+- After the code block, add a human-readable description:
+  * Purpose and meaning of the operation
+  * Description of request parameters
+  * Description of response structure
+  * Specify the package (packageId) and version in which this operation is located
+- Generate RequestBody and ResponseBody examples based on the specification
+- Provide the user with complete information about the operation
+- Include the full OpenAPI specification json in the response`
 )
 
 // Tool descriptions for OpenAI
 const (
-	ToolDescriptionSearchOperationsOpenAI = `Full-text search for REST API operations.
-								LLM INSTRUCTIONS:
-								- Group methods by packageIds;
-								- Try to make initial search with big limit - 100;
-								- If user ask for more result - increase limit and page numbers and ask this tool again;
-								- If user ask for more results from particular packageId - set parameter 'group' to this packageId and ask this tool again;
-								- If users ask to provide details for concrete operation - ask tool get_rest_api_operations_specification. Use packageId as a parameter for this tool (not packageName);
-								- Do not ask tool get_rest_api_operations_specification in advance, only if user asks for details for concrete operation;
-								- If user asks for release version - set parameter 'release' to this version and ask this tool again. Release version is in format YYYY.Q;
-								- Please enrich each operation information with relative (with no base URL!) link to corresponding package in markdown format: [<packageID>](/portal/packages/<packageId>);`
+	ToolDescriptionSearchOperationsOpenAI = `Search for REST API operations by text query.
 
-	ToolDescriptionGetOperationSpecOpenAI = `Get OpenAPI specification file for REST API operation.
-								LLM INSTRUCTIONS:
-								- The reponse is json with REST API specification - render it as a code block, maybe not full specification, but enough to understand the operation and DTOs;
-								- After code block add some human-redabale summary about REST operation and DTOs from this specification and provide it to the user;
-								- Also generate RequestBody and ResponseBody examples based on the specification and provide them to the user;`
+IMPORTANT: The search is not full-text. For example, a query "create customer" may not find an operation "create new customer". Therefore, it is important to try different search query variations.
+
+LLM INSTRUCTIONS:
+- For the first call, use a large limit (100) to find as many options as possible
+- Consider simplifying the query to a single keyword (e.g., if query is "create customer", also try "customer")
+- Group results by packageId when displaying in markdown format
+- Return all metadata that MCP returns (operationId, packageId, packageName, version, path, method, title, apiKind, apiType, apiAudience)
+- Return the most recent versions of operations (by default, search is performed in the latest completed version)
+- If the first call returned few unique operations - make repeated calls:
+  * Increase page number for pagination
+  * Simplify or generalize the search query
+  * Search in other packages (use 'group' parameter for a specific package)
+  * Search in older versions only if user explicitly requested it
+- If user asks for more results - increment page, simplify query, or search in other packages/versions
+- DO NOT use get_rest_api_operations_specification in advance - first show a list of operations to choose from in markdown format, even if only one is found
+- Use get_rest_api_operations_specification only when user explicitly requests details about a specific operation
+- If user explicitly requests a specific version - use 'release' parameter in YYYY.Q format
+- If user requests results from a specific package - use 'group' parameter with packageId (not packageName)
+- REQUIRED: Convert metadata to markdown links (relative, without baseUrl):
+  * packageId -> [packageId](/portal/packages/<packageId>)
+  * operationId -> [operationId](/portal/packages/<packageId>/<version>/operations/rest/<operationId>)
+- Format responses in markdown with well-readable markup (headings, lists, tables)`
+
+	ToolDescriptionGetOperationSpecOpenAI = `Get OpenAPI specification for a specific REST API operation.
+
+Use this tool ONLY when the user explicitly requests details about a specific operation.
+
+LLM INSTRUCTIONS:
+- The response contains JSON with REST API specification - provide the full specification json in the response, display it as a code block
+- After the code block, add a human-readable description in markdown format:
+  * Purpose and meaning of the operation
+  * Description of request parameters
+  * Description of response structure
+  * Specify the package (packageId) and version in which this operation is located
+- Generate RequestBody and ResponseBody examples based on the specification in markdown code blocks
+- Provide the user with complete information about the operation in structured markdown format
+- Use markdown links for packageId and operationId:
+  * packageId -> [packageId](/portal/packages/<packageId>)
+  * operationId -> [operationId](/portal/packages/<packageId>/<version>/operations/rest/<operationId>)`
 )
 
 // Tool input schemas (shared between MCP and OpenAI)
@@ -124,16 +170,16 @@ var (
 func getParameterDescription(toolName, paramName string) string {
 	descriptions := map[string]map[string]string{
 		ToolNameSearchOperations: {
-			"query":   "Search query string",
-			"limit":   "Maximum number of results to return",
-			"page":    "Page number for pagination",
-			"release": "Release version in format YYYY.Q",
-			"group":   "Package group ID to filter by",
+			"query":   "Text search query for finding API operations. Important: search is not full-text, so it's worth trying different query variations (simplified, with keywords)",
+			"limit":   "Maximum number of results to return (10-100). For the first search, it's recommended to use 100",
+			"page":    "Page number for pagination (starts from 0). Use to get additional results",
+			"release": "Release version in YYYY.Q format (e.g., 2024.3). By default, the latest completed version is used. Specify only if user explicitly requests a specific version",
+			"group":   "Package ID (packageId) to filter search by a specific package. Use packageId from api-packages-list resource, not packageName",
 		},
 		ToolNameGetOperationSpec: {
-			"operationId": "Operation ID",
-			"packageId":   "Package ID",
-			"version":     "Version",
+			"operationId": "Unique operation identifier (operationId) from search results",
+			"packageId":   "Package ID (packageId) where the operation is located. Use packageId from search results or api-packages-list resource",
+			"version":     "Package version in YYYY.Q format (e.g., 2024.3) where the operation is located",
 		},
 	}
 
@@ -238,7 +284,7 @@ func AddResourcesToServer(s *mcpserver.MCPServer, packageService service.Package
 	s.AddResource(mcp.Resource{
 		URI:         "api-packages-list",
 		Name:        "API Packages List",
-		Description: "List of API packages and package groups in the workspace. Each item has: name (package/group name), id (package ID for use in tool calls), and type (either 'package' or 'group'). Use this resource to: get list of available packages, find package IDs by name. Package IDs from this resource should be used in the 'group' parameter of search_rest_api_operations tool.",
+		Description: "List of all API packages in the system. The resource returns a JSON array with elements containing: name (package/group name), id (package ID for use in tool calls), type (type: 'package' or 'group'). Package ID can serve as a hint to which domain the API belongs. Use this resource to: get a list of all available packages, find package ID by package name. Package IDs from this resource should be used in the 'group' parameter of the search_rest_api_operations tool.",
 		MIMEType:    "application/json",
 	}, func(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 		return GetPackagesList(ctx, packageService, mcpWorkspace)

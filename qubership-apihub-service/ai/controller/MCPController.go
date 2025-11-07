@@ -28,21 +28,37 @@ func InitMCPController(operationService service.OperationService, packageService
 		"apihub-mcp",
 		"0.0.1",
 		mcpserver.WithToolCapabilities(false),
-		mcpserver.WithInstructions(`Use apihub-mcp if users asks for REST API operations - which operation can help to do something.
-		                            You are an assistant for REST API documentation access. If users asks for avaialbe APIs, specifications, operations, ways how to create or get resources - 
-									at first call one of the following tools:
-									- search_rest_api_operations - full text search for REST API operations (see description for this tool for more details);
-									- get_rest_api_operations_specification - when users asks for OpenAPI spec for particular API operation (see description for this tool for more details);
-									If user's query is generic - start with search_rest_api_operations.
-									
-									AVAILABLE RESOURCES:
-									- api-packages-list - A resource containing the list of API packages and package groups in the workspace. Use this resource to:
-									  * Get a list of all available API packages when user asks "what packages are available", "list all APIs", "show me packages"
-									  * Find package IDs when user mentions package names but you need the ID for tool calls
-									  * The resource returns a JSON array with items containing: name, id, and type (package/group)
-									  * When searching for operations, use the package ID from this resource in the 'group' parameter of search_rest_api_operations tool
-									
-									Provide compact strucutrued asnwers.`),
+		mcpserver.WithInstructions(`The apihub-mcp MCP server provides information about REST API specifications.
+
+DATA STRUCTURE:
+- REST API specifications are organized into packages
+- Package ID can serve as a hint to which domain the API belongs
+- Each package contains API operations
+- Each package can have multiple versions in YYYY.Q format (e.g., 2024.3, 2024.4)
+
+WHEN TO USE THIS SERVER:
+Use apihub-mcp when the user asks about:
+- REST API operations and endpoints
+- Available API specifications
+- How to create or get resources via API
+- Detailed information about specific API operations
+
+AVAILABLE TOOLS:
+1. search_rest_api_operations - search for API operations (see tool description for details)
+2. get_rest_api_operations_specification - get OpenAPI specification for a specific operation (use only when user explicitly requests details)
+
+AVAILABLE RESOURCES:
+- api-packages-list - list of all packages in the system. Use this resource when:
+  * User asks "what packages are available", "show all APIs", "list packages"
+  * You need to find package ID by package name for use in tool calls
+  * The resource returns a JSON array with fields: name, id, type (package/group)
+  * Use package ID from this resource in the 'group' parameter of search_rest_api_operations tool
+
+RESPONSES:
+- Provide concise and structured answers
+- Return all metadata that MCP returns in responses
+- First show a list of operations to choose from, even if only one operation is found
+- Use get_rest_api_operations_specification only when user explicitly requests details about a specific operation`),
 	)
 
 	tools.AddToolsToServer(s, operationService)
