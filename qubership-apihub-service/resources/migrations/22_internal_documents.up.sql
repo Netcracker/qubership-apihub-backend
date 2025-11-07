@@ -44,3 +44,10 @@ CREATE TABLE IF NOT EXISTS public.comparison_internal_document (
 );
 
 CREATE INDEX IF NOT EXISTS comparison_internal_document_hash_idx ON public.comparison_internal_document(hash);
+
+ALTER TABLE operation
+    ADD COLUMN version_internal_document_id varchar;
+
+ALTER TABLE operation_comparison
+    ADD COLUMN comparison_internal_document_id varchar;
+
