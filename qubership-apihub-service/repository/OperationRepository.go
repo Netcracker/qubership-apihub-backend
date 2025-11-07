@@ -1367,6 +1367,7 @@ where all_ts.rank > 0 and (?api_type = '' or o.type = ?api_type) and (?packages 
 						select id from unnest(?packages::text[]) id
 						union
 						select id||'.%' from unnest(?packages::text[]) id))
+and pv.deleted_at is null
 order by all_ts.rank desc, o.operation_id
 limit ?limit;
 `
