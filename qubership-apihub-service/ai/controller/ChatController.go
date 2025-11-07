@@ -165,3 +165,4 @@ func (c *chatControllerImpl) ChatStream(w http.ResponseWriter, r *http.Request) 
 
 	flusher.Flush()
 }
+

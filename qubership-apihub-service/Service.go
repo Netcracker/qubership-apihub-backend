@@ -405,7 +405,7 @@ func main() {
 	personalAccessTokenController := controller.NewPersonalAccessTokenController(personalAccessTokenService)
 	packageExportConfigController := controller.NewPackageExportConfigController(roleService, packageExportConfigService, ptHandler)
 	systemStatsController := controller.NewSystemStatsController(systemStatsService, roleService)
-	chatController := controller.NewChatController(chatService)
+	chatController := aicontroller.NewChatController(chatService)
 
 	if !systemInfoService.GetEditorDisabled() {
 		r.HandleFunc("/api/v1/integrations/{integrationId}/apikey", security.Secure(integrationsController.GetUserApiKeyStatus)).Methods(http.MethodGet)
