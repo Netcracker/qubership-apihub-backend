@@ -107,6 +107,8 @@ type SystemInfoService interface {
 	GetUnreferencedDataCleanupSchedule() string
 	GetUnreferencedDataCleanupTimeout() int
 	GetExtensions() []view.Extension
+	GetOpenAIApiKey() string
+	GetOpenAIModel() string
 }
 
 func (g *systemInfoServiceImpl) GetCredsFromEnv() *view.DbCredentials {
@@ -244,6 +246,7 @@ func (g *systemInfoServiceImpl) setDefaults() {
 	viper.SetDefault("cleanup.softDeletedData.ttlDays", 730)            // 2 years
 	viper.SetDefault("cleanup.unreferencedData.schedule", "0 15 * * 6") //at 3 PM on Saturday
 	viper.SetDefault("cleanup.unreferencedData.timeoutMinutes", 360)    //6 hours
+	viper.SetDefault("openAI.model", "gpt-4o")
 }
 
 func (g *systemInfoServiceImpl) GetConfigFolder() string {
@@ -625,4 +628,15 @@ func (g *systemInfoServiceImpl) GetExtensions() []view.Extension {
 		return make([]view.Extension, 0)
 	}
 	return g.config.Extensions
+}
+
+func (g *systemInfoServiceImpl) GetOpenAIApiKey() string {
+	return g.config.OpenAI.ApiKey
+}
+
+func (g *systemInfoServiceImpl) GetOpenAIModel() string {
+	if g.config.OpenAI.Model == "" {
+		return "gpt-4o"
+	}
+	return g.config.OpenAI.Model
 }

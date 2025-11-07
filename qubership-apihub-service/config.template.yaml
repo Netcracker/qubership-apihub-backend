@@ -196,6 +196,13 @@ cleanup:
     # Optional; Schedule for the builds cleanup job. If not set, default value: "0 1 * * 0"; Example: "* * * * *"
     schedule: '0 1 * * 0'
 
+# Section with OpenAI configuration for AI-assisted chat
+openAI:
+  # Mandatory; OpenAI API key for chat functionality; If not set, default value: ""; Example: sk-...
+  apiKey: ''
+  # Optional; OpenAI model to use for chat; If not set, default value: gpt-4o; Example: gpt-4o
+  model: 'gpt-4o'
+
 # List of enabled extension services
 #extensions:
 #  - name: linter

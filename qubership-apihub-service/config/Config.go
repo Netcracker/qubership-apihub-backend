@@ -21,6 +21,7 @@ type Config struct {
 	Olric                OlricConfig
 	Cleanup              CleanupConfig
 	Extensions           []view.Extension
+	OpenAI               OpenAIConfig
 }
 
 type DatabaseConfig struct {
@@ -137,6 +138,11 @@ type CleanupConfig struct {
 	SoftDeletedData  SoftDeletedDataCleanupConfig
 	UnreferencedData UnreferencedDataCleanupConfig
 	Builds           BuildsCleanupConfig
+}
+
+type OpenAIConfig struct {
+	ApiKey string `validate:"required" sensitive:"true"`
+	Model  string
 }
 
 type RevisionsCleanupConfig struct {

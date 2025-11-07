@@ -47,6 +47,7 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/client"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/ai"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/controller"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/repository"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security"
@@ -297,6 +298,7 @@ func main() {
 	packageVersionEnrichmentService := service.NewPackageVersionEnrichmentService(publishedRepository)
 	activityTrackingService := service.NewActivityTrackingService(activityTrackingRepository, publishedRepository, userService)
 	operationService := service.NewOperationService(operationRepository, publishedRepository, packageVersionEnrichmentService)
+	chatService := ai.NewChatService(systemInfoService, operationService)
 	roleService := service.NewRoleService(roleRepository, userService, activityTrackingService, publishedRepository)
 	wsBranchService := service.NewWsBranchService(userService, wsLoadBalancer)
 	branchEditorsService := service.NewBranchEditorsService(userService, wsBranchService, branchRepository, olricProvider)
@@ -404,6 +406,7 @@ func main() {
 	personalAccessTokenController := controller.NewPersonalAccessTokenController(personalAccessTokenService)
 	packageExportConfigController := controller.NewPackageExportConfigController(roleService, packageExportConfigService, ptHandler)
 	systemStatsController := controller.NewSystemStatsController(systemStatsService, roleService)
+	chatController := controller.NewChatController(chatService)
 
 	if !systemInfoService.GetEditorDisabled() {
 		r.HandleFunc("/api/v1/integrations/{integrationId}/apikey", security.Secure(integrationsController.GetUserApiKeyStatus)).Methods(http.MethodGet)
@@ -485,6 +488,10 @@ func main() {
 	//Search
 	r.HandleFunc("/api/v2/search/{searchLevel}", security.Secure(searchController.Search_deprecated)).Methods(http.MethodPost) //deprecated
 	r.HandleFunc("/api/v3/search/{searchLevel}", security.Secure(searchController.Search)).Methods(http.MethodPost)
+
+	//Chat
+	r.HandleFunc("/api/v1/ai-chat", security.Secure(chatController.Chat)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v1/ai-chat/stream", security.Secure(chatController.ChatStream)).Methods(http.MethodPost)
 
 	r.HandleFunc("/api/v2/builders/{builderId}/tasks", security.Secure(publishV2Controller.GetFreeBuild)).Methods(http.MethodPost)
 
