@@ -846,7 +846,7 @@ func (o operationServiceImpl) SearchForOperations(searchReq view.SearchQueryReq)
 		VersionArchivedStatus:       string(view.Archived),
 		VersionArchivedStatusWeight: 0.1,
 	}
-	operationEntities, err := o.operationRepository.SearchForOperations(searchQuery)
+	operationEntities, err := o.operationRepository.LiteSearchForOperations(searchQuery)
 	if err != nil {
 		return nil, err
 	}

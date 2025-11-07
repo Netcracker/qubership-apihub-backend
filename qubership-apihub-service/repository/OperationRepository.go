@@ -38,6 +38,7 @@ type OperationRepository interface {
 	GetChangelog(searchQuery entity.ChangelogSearchQueryEntity) ([]entity.OperationComparisonChangelogEntity, error)
 	SearchForOperations_deprecated(searchQuery *entity.OperationSearchQuery) ([]entity.OperationSearchResult_deprecated, error)
 	SearchForOperations(searchQuery *entity.OperationSearchQuery) ([]entity.OperationSearchResult, error)
+	LiteSearchForOperations(searchQuery *entity.OperationSearchQuery) ([]entity.OperationSearchResult, error)
 	GetOperationsTypeCount(packageId string, version string, revision int, showOnlyDeleted bool) ([]entity.OperationsTypeCountEntity, error)
 	GetOperationsTypeDataHashes(packageId string, version string, revision int) ([]entity.OperationsTypeDataHashEntity, error)
 	GetOperationDeprecatedItems(packageId string, version string, revision int, operationType string, operationId string) (*entity.OperationRichEntity, error)
@@ -1303,6 +1304,70 @@ func (o operationRepositoryImpl) SearchForOperations(searchQuery *entity.Operati
 			order by rank desc, o.version_published_at desc, o.operation_id
 			limit ?limit;
 	`
+	_, err = o.cp.GetConnection().Model(searchQuery).Query(&result, operationsSearchQuery)
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func (o operationRepositoryImpl) LiteSearchForOperations(searchQuery *entity.OperationSearchQuery) ([]entity.OperationSearchResult, error) {
+
+	searchQuery.TextFilter = strings.TrimPrefix(searchQuery.TextFilter, "_")
+	searchQuery.OriginalTextInput = strings.TrimPrefix(searchQuery.OriginalTextInput, "_")
+
+	_, err := o.cp.GetConnection().Exec("select plainto_tsquery(?)", searchQuery.SearchString)
+	if err != nil {
+		return nil, fmt.Errorf("invalid search string: %v", err.Error())
+	}
+	searchQuery.TextFilter = "%" + utils.LikeEscaped(searchQuery.TextFilter) + "%"
+	var result []entity.OperationSearchResult
+
+	operationsSearchQuery := `
+select
+    o.package_id,
+    pg.name,
+    o.version,
+    o.revision,
+    pv.status,
+    o.operation_id,
+    o.title,
+    o.data_hash,
+    o.deprecated,
+    o.kind,
+    o.type,
+    o.metadata,
+    parent_package_names(o.package_id) parent_names
+from operation o
+         left join (
+    select ts.data_hash, max(rank) as rank from (
+                                                    select
+                                                        ts.data_hash,
+                                                        ts_rank(data_vector, search_query) rank
+                                                    from
+                                                        fts_latest_release_operation_data ts,
+                                                        phraseto_tsquery(?original_text_input) search_query
+                                                    where search_query @@ data_vector
+                                                    limit ?limit
+                                                ) ts
+    group by ts.data_hash
+    order by max(rank) desc
+    limit ?limit
+    offset ?offset
+) all_ts
+                   on all_ts.data_hash = o.data_hash
+inner join published_version pv on o.package_id=pv.package_id and o.version=pv.version and o.revision=pv.revision
+inner join package_group pg on o.package_id=pg.id
+
+where all_ts.rank > 0
+order by all_ts.rank desc, o.operation_id
+limit ?limit;
+`
+
 	_, err = o.cp.GetConnection().Model(searchQuery).Query(&result, operationsSearchQuery)
 	if err != nil {
 		if err == pg.ErrNoRows {
