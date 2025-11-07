@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package mcp
+package tools
 
 import (
 	"context"
@@ -25,6 +25,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
+	secctx "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 
@@ -148,6 +150,10 @@ func ExecuteSearchTool(ctx context.Context, req mcp.CallToolRequest, operationSe
 	}
 	payload := map[string]any{"items": transformOperations(operations)}
 
+	// Log MCP tool response at debug level
+	payloadJSON, _ := json.Marshal(payload)
+	log.Debugf("MCP tool search_rest_api_operations response: %s", string(payloadJSON))
+
 	return mcp.NewToolResultStructuredOnly(payload), nil
 }
 
@@ -183,6 +189,10 @@ func ExecuteGetSpecTool(ctx context.Context, req mcp.CallToolRequest, operationS
 	operationView := (*operationViewInterface.(*interface{})).(view.RestOperationSingleView)
 
 	payload := map[string]any{"operationData": operationView.Data}
+
+	// Log MCP tool response at debug level
+	payloadJSON, _ := json.Marshal(payload)
+	log.Debugf("MCP tool get_rest_api_operations_specification response: %s", string(payloadJSON))
 
 	return mcp.NewToolResultStructuredOnly(payload), nil
 }
@@ -288,11 +298,13 @@ func GetToolsForOpenAI() []map[string]interface{} {
 				"description": `Full-text search for REST API operations.
 								LLM INSTRUCTIONS:
 								- Group methods by packageIds;
-								- If user ask for more result - increase page and ask this tool again;
+								- Try to make initial search with big limit - 100;
+								- If user ask for more result - increase limit and page numbers and ask this tool again;
 								- If user ask for more results from particular packageId - set parameter 'group' to this packageId and ask this tool again;
 								- If users ask to provide details for concrete operation - ask tool get_rest_api_operations_specification. Use packageId as a parameter for this tool (not packageName);
 								- Do not ask tool get_rest_api_operations_specification in advance, only if user asks for details for concrete operation;
-								- If user asks for release version - set parameter 'release' to this version and ask this tool again. Release version is in format YYYY.Q;`,
+								- If user asks for release version - set parameter 'release' to this version and ask this tool again. Release version is in format YYYY.Q;
+								- Please enrich each operation information with relative (with no base URL!) link to corresponding package in markdown format: [<packageID>](/portal/packages/<packageId>);`,
 				"parameters": map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -353,4 +365,109 @@ func GetToolsForOpenAI() []map[string]interface{} {
 			},
 		},
 	}
+}
+
+// transformOperations transforms view.RestOperationSearchResult to TransformedOperation
+func transformOperations(items []view.RestOperationSearchResult) []TransformedOperation {
+	transformed := make([]TransformedOperation, len(items))
+
+	for i, item := range items {
+		transformed[i] = TransformedOperation{
+			OperationId: item.OperationId,
+			ApiKind:     item.ApiKind,
+			ApiType:     item.ApiType,
+			ApiAudience: item.ApiAudience,
+			Path:        item.Path,
+			Method:      item.Method,
+			PackageId:   item.PackageId,
+			PackageName: item.PackageName,
+			Version:     item.Version,
+			Title:       item.Title,
+		}
+	}
+
+	return transformed
+}
+
+// TransformedOperation represents a transformed operation for MCP response
+type TransformedOperation struct {
+	OperationId string `json:"operationId"`
+	ApiKind     string `json:"apiKind"`
+	ApiType     string `json:"apiType"`
+	ApiAudience string `json:"apiAudience"`
+	Path        string `json:"path"`
+	Method      string `json:"method"`
+	PackageId   string `json:"packageId"`
+	PackageName string `json:"packageName"`
+	Version     string `json:"version"`
+	Title       string `json:"title"`
+}
+
+// PackageHierarchyItem represents a package or package group in the hierarchy
+type PackageHierarchyItem struct {
+	Name string `json:"name"`
+	Id   string `json:"id"`
+	Type string `json:"type"` // "package" or "group"
+}
+
+// AddResourcesToServer registers MCP resources to the provided MCP server
+func AddResourcesToServer(s *mcpserver.MCPServer, packageService service.PackageService) {
+	mcpWorkspace := os.Getenv("MCP_WORKSPACE")
+	if mcpWorkspace == "" {
+		log.Warn("MCP_WORKSPACE environment variable is not set, skipping API packages resource registration")
+		return
+	}
+
+	// Register API packages resource
+	s.AddResource(mcp.Resource{
+		URI:         "api-packages-list",
+		Name:        "API Packages List",
+		Description: "List of API packages and package groups in the workspace. Each item has: name (package/group name), id (package ID for use in tool calls), and type (either 'package' or 'group'). Use this resource to: get list of available packages, find package IDs by name. Package IDs from this resource should be used in the 'group' parameter of search_rest_api_operations tool.",
+		MIMEType:    "application/json",
+	}, func(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+		return GetPackagesList(ctx, packageService, mcpWorkspace)
+	})
+}
+
+// GetPackagesList retrieves the list of packages from the workspace
+func GetPackagesList(ctx context.Context, packageService service.PackageService, workspaceId string) ([]mcp.ResourceContents, error) {
+	log.Infof("Getting packages list for workspace: %s", workspaceId)
+
+	// Create system context for service calls
+	secCtx := secctx.CreateSystemContext()
+
+	// Prepare request parameters as if called from packageControllerImpl.GetPackagesList
+	// kind=package&showAllDescendants=true&parentId=<MCP_WORKSPACE>
+	// showAllDescendants=true to get the full tree including all descendants
+	// parentId=workspaceId to start from workspace
+	packageListReq := view.PackageListReq{
+		Kind:               []string{entity.KIND_PACKAGE}, // As specified: kind=package
+		ShowAllDescendants: true,
+		ParentId:           workspaceId,
+		Limit:              10000, // Large limit to get all packages
+		Offset:             0,
+	}
+
+	// Get all packages from workspace
+	packages, err := packageService.GetPackagesList(secCtx, packageListReq, false)
+	if err != nil {
+		log.Errorf("Failed to get packages list: %v", err)
+		return nil, fmt.Errorf("failed to get packages list: %w", err)
+	}
+
+	jsonData, err := json.Marshal(packages)
+	if err != nil {
+		log.Errorf("Failed to marshal packages list: %v", err)
+		return nil, fmt.Errorf("failed to marshal packages list: %w", err)
+	}
+
+	log.Debugf("Packages list retrieved: %s", jsonData)
+
+	return []mcp.ResourceContents{
+		&mcp.TextResourceContents{
+			URI:      "api-packages-list",
+			MIMEType: "application/json",
+			Text:     string(jsonData),
+		},
+	}, nil
 }

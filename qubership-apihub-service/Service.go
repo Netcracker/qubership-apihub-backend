@@ -46,14 +46,13 @@ import (
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 
+	aicontroller "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/ai/controller"
+	aiservice "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/ai/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/client"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/ai"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/controller"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/repository"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
-
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/mcp"
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
@@ -298,7 +297,6 @@ func main() {
 	packageVersionEnrichmentService := service.NewPackageVersionEnrichmentService(publishedRepository)
 	activityTrackingService := service.NewActivityTrackingService(activityTrackingRepository, publishedRepository, userService)
 	operationService := service.NewOperationService(operationRepository, publishedRepository, packageVersionEnrichmentService)
-	chatService := ai.NewChatService(systemInfoService, operationService)
 	roleService := service.NewRoleService(roleRepository, userService, activityTrackingService, publishedRepository)
 	wsBranchService := service.NewWsBranchService(userService, wsLoadBalancer)
 	branchEditorsService := service.NewBranchEditorsService(userService, wsBranchService, branchRepository, olricProvider)
@@ -315,6 +313,7 @@ func main() {
 	operationGroupService := service.NewOperationGroupService(operationRepository, publishedRepository, exportRepository, packageVersionEnrichmentService, activityTrackingService)
 	versionService := service.NewVersionService(gitClientProvider, projectRepository, favoritesRepository, publishedRepository, publishedService, operationRepository, exportRepository, operationService, activityTrackingService, systemInfoService, packageVersionEnrichmentService, portalService, versionCleanupRepository, operationGroupService)
 	packageService := service.NewPackageService(gitClientProvider, projectRepository, favoritesRepository, publishedRepository, versionService, roleService, activityTrackingService, operationGroupService, usersRepository, ptHandler, systemInfoService)
+	chatService := aiservice.NewChatService(systemInfoService, operationService, packageService)
 
 	logsService := service.NewLogsService()
 	internalWebsocketService := service.NewInternalWebsocketService(wsLoadBalancer, olricProvider)
@@ -706,7 +705,7 @@ func main() {
 		r.HandleFunc("/api/internal/minio/download", security.Secure(minioStorageController.DownloadFilesFromMinioToDatabase)).Methods(http.MethodPost)
 	}
 
-	mcpHandler, err := mcp.InitMcpHandler(operationService)
+	mcpHandler, err := aicontroller.InitMCPController(operationService, packageService)
 	if err != nil {
 		log.Fatalf("Failed to initialize MCP handler: %s", err.Error())
 	}

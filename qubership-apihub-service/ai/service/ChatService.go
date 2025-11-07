@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ai
+package service
 
 import (
 	"bytes"
@@ -21,12 +21,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/mcp"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/ai/client"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/ai/tools"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	mcpgo "github.com/mark3labs/mcp-go/mcp"
-	mcpserver "github.com/mark3labs/mcp-go/server"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -39,22 +40,24 @@ type ChatService interface {
 func NewChatService(
 	systemInfoService service.SystemInfoService,
 	operationService service.OperationService,
+	packageService service.PackageService,
 ) ChatService {
+	// Create OpenAI client with proxy support and extended timeout
+	proxyURL := systemInfoService.GetOpenAIProxyURL()
+	httpClient := client.NewOpenAIClient(proxyURL)
+
 	service := &chatServiceImpl{
 		systemInfoService: systemInfoService,
 		operationService:  operationService,
-		httpClient:        &http.Client{},
+		packageService:    packageService,
+		httpClient:        httpClient,
 	}
 
-	// Initialize MCP server and tools
-	err := service.initMCPTools()
-	if err != nil {
-		log.Errorf("Failed to initialize MCP tools: %v", err)
-	} else {
-		log.Infof("ChatService initialized with %d MCP tools", len(service.mcpTools))
-		for _, tool := range service.mcpTools {
-			log.Debugf("MCP tool available: %s - %s", tool.Function.Name, tool.Function.Description)
-		}
+	// Initialize MCP tools (no need to create MCP server - tools are defined statically)
+	service.initMCPTools()
+	log.Infof("ChatService initialized with %d MCP tools", len(service.mcpTools))
+	for _, tool := range service.mcpTools {
+		log.Debugf("MCP tool available: %s - %s", tool.Function.Name, tool.Function.Description)
 	}
 
 	return service
@@ -63,8 +66,8 @@ func NewChatService(
 type chatServiceImpl struct {
 	systemInfoService service.SystemInfoService
 	operationService  service.OperationService
+	packageService    service.PackageService
 	httpClient        *http.Client
-	mcpServer         *mcpserver.MCPServer
 	mcpTools          []openAITool
 }
 
@@ -196,22 +199,10 @@ func (c *chatServiceImpl) Chat(ctx context.Context, req view.ChatRequest) (*view
 		}
 	}
 	if !hasSystemMessage {
+		systemContent := c.buildSystemMessage(ctx)
 		systemMsg := openAIMessage{
-			Role: "system",
-			Content: `You are a specialized assistant for REST API documentation and specifications. Your role is to help users find and understand API operations, endpoints, and their specifications.
-
-IMPORTANT RESTRICTIONS:
-- You MUST ONLY help with questions related to REST API documentation, API operations, endpoints, specifications, and related technical topics
-- If a user asks about topics unrelated to API documentation (such as general knowledge, history, current events, personal advice, etc.), you MUST politely decline and explain that you can only help with API-related questions
-- Example response for off-topic questions: "I'm sorry, but I'm specialized in helping with REST API documentation and specifications. I can't help with questions outside of this topic. Is there anything about APIs I can help you with instead?"
-
-YOUR CAPABILITIES:
-- Search for REST API operations using the search_rest_api_operations tool
-- Get detailed OpenAPI specifications for specific operations using the get_rest_api_operations_specification tool
-- Explain API endpoints, request/response formats, and data structures
-- Help users understand how to use specific APIs
-
-Always use the available tools when appropriate to provide accurate and up-to-date information about APIs.`,
+			Role:    "system",
+			Content: systemContent,
 		}
 		openAIReq.Messages = append([]openAIMessage{systemMsg}, openAIReq.Messages...)
 	}
@@ -422,22 +413,10 @@ func (c *chatServiceImpl) ChatStream(ctx context.Context, req view.ChatRequest, 
 		}
 	}
 	if !hasSystemMessage {
+		systemContent := c.buildSystemMessage(ctx)
 		systemMsg := openAIMessage{
-			Role: "system",
-			Content: `You are a specialized assistant for REST API documentation and specifications. Your role is to help users find and understand API operations, endpoints, and their specifications.
-
-IMPORTANT RESTRICTIONS:
-- You MUST ONLY help with questions related to REST API documentation, API operations, endpoints, specifications, and related technical topics
-- If a user asks about topics unrelated to API documentation (such as general knowledge, history, current events, personal advice, etc.), you MUST politely decline and explain that you can only help with API-related questions
-- Example response for off-topic questions: "I'm sorry, but I'm specialized in helping with REST API documentation and specifications. I can't help with questions outside of this topic. Is there anything about APIs I can help you with instead?"
-
-YOUR CAPABILITIES:
-- Search for REST API operations using the search_rest_api_operations tool
-- Get detailed OpenAPI specifications for specific operations using the get_rest_api_operations_specification tool
-- Explain API endpoints, request/response formats, and data structures
-- Help users understand how to use specific APIs
-
-Always use the available tools when appropriate to provide accurate and up-to-date information about APIs.`,
+			Role:    "system",
+			Content: systemContent,
 		}
 		openAIReq.Messages = append([]openAIMessage{systemMsg}, openAIReq.Messages...)
 	}
@@ -495,32 +474,12 @@ Always use the available tools when appropriate to provide accurate and up-to-da
 	return nil
 }
 
-func (c *chatServiceImpl) initMCPTools() error {
-	// Create MCP server same way as in McpHandler
-	s := mcpserver.NewMCPServer(
-		"apihub-mcp",
-		"0.0.1",
-		mcpserver.WithToolCapabilities(false),
-		mcpserver.WithInstructions(`Use apihub-mcp if users asks for REST API operations - which operation can help to do something.
-		                            You are an assistant for REST API documentation access. If users asks for avaialbe APIs, specifications, operations, ways how to create or get resources - 
-									at first call one of the following tools:
-									- search_rest_api_operations - full text search for REST API operations (see description for this tool for more details);
-									- if search request found nothing - need to try tesaurs for search query. User can provide search query in a human-readable phrases, make sense to make them be more machine-readable. For example: "API for customer creation" -> "create customer";
-									- get_rest_api_operations_specification - when users asks for OpenAPI spec for particular API operation (see description for this tool for more details);
-									If user's query is generic - start with search_rest_api_operations.
-									Provide compact strucutrued asnwers.`),
-	)
-
-	// Add tools using shared function from mcp package
-	mcp.AddToolsToServer(s, c.operationService)
-	c.mcpServer = s
-
-	// Convert MCP tools to OpenAI format using shared function
-	openAIToolsRaw := mcp.GetToolsForOpenAI()
-	tools := make([]openAITool, len(openAIToolsRaw))
+func (c *chatServiceImpl) initMCPTools() {
+	openAIToolsRaw := tools.GetToolsForOpenAI()
+	toolsList := make([]openAITool, len(openAIToolsRaw))
 	for i, toolRaw := range openAIToolsRaw {
 		functionRaw := toolRaw["function"].(map[string]interface{})
-		tools[i] = openAITool{
+		toolsList[i] = openAITool{
 			Type: toolRaw["type"].(string),
 			Function: openAIFunction{
 				Name:        functionRaw["name"].(string),
@@ -530,8 +489,53 @@ func (c *chatServiceImpl) initMCPTools() error {
 		}
 	}
 
-	c.mcpTools = tools
-	return nil
+	c.mcpTools = toolsList
+}
+
+// buildSystemMessage builds system message with MCP resource data included
+func (c *chatServiceImpl) buildSystemMessage(ctx context.Context) string {
+	baseContent := `You are a specialized assistant for REST API documentation and specifications. Your role is to help users find and understand API operations, endpoints, and their specifications.
+
+IMPORTANT RESTRICTIONS:
+- You MUST ONLY help with questions related to REST API documentation, API operations, endpoints, specifications, and related technical topics
+- If a user asks about topics unrelated to API documentation (such as general knowledge, history, current events, personal advice, etc.), you MUST politely decline and explain that you can only help with API-related questions
+- Example response for off-topic questions: "I'm sorry, but I'm specialized in helping with REST API documentation and specifications. I can't help with questions outside of this topic. Is there anything about APIs I can help you with instead?"
+
+YOUR CAPABILITIES:
+- Search for REST API operations using the search_rest_api_operations tool
+- Get detailed OpenAPI specifications for specific operations using the get_rest_api_operations_specification tool
+- Access the api-packages-list resource to get a list of all available API packages
+- Explain API endpoints, request/response formats, and data structures
+- Help users understand how to use specific APIs
+
+AVAILABLE RESOURCES:
+- api-packages-list: A resource containing the list of API packages and package groups in the workspace. This resource is useful when:
+  * User asks "what packages are available", "list all APIs", "show me packages"
+  * You need to find package IDs when user mentions package names (use the ID in tool calls)
+  * The resource returns a JSON array with items containing: name, id, and type (package/group)
+  * When searching for operations, use the package ID from this resource in the 'group' parameter of search_rest_api_operations tool
+
+Always use the available tools and resources when appropriate to provide accurate and up-to-date information about APIs.`
+
+	// Read MCP resource api-packages-list and include it in system message
+	mcpWorkspace := os.Getenv("MCP_WORKSPACE")
+	if mcpWorkspace != "" {
+		resourceContents, err := tools.GetPackagesList(ctx, c.packageService, mcpWorkspace)
+		if err != nil {
+			log.Warnf("Failed to read api-packages-list resource: %v", err)
+			return baseContent
+		}
+
+		if len(resourceContents) > 0 {
+			if textContent, ok := resourceContents[0].(*mcpgo.TextResourceContents); ok {
+				// Include resource data in system message
+				resourceData := textContent.Text
+				return baseContent + "\n\nCURRENT WORKSPACE PACKAGES (from api-packages-list resource):\n" + resourceData
+			}
+		}
+	}
+
+	return baseContent
 }
 
 func (c *chatServiceImpl) executeToolCalls(ctx context.Context, toolCalls []struct {
@@ -557,7 +561,7 @@ func (c *chatServiceImpl) executeToolCalls(ctx context.Context, toolCalls []stru
 
 		// Create MCP CallToolRequest using wrapper
 		argsBytes, _ := json.Marshal(args)
-		mcpReqWrapper := mcp.MCPToolRequestWrapper{
+		mcpReqWrapper := tools.MCPToolRequestWrapper{
 			Name:      toolCall.Function.Name,
 			Arguments: argsBytes,
 		}
@@ -570,9 +574,9 @@ func (c *chatServiceImpl) executeToolCalls(ctx context.Context, toolCalls []stru
 		var err error
 		switch toolCall.Function.Name {
 		case "search_rest_api_operations":
-			result, err = mcp.ExecuteSearchTool(ctx, mcpReq, c.operationService)
+			result, err = tools.ExecuteSearchTool(ctx, mcpReq, c.operationService)
 		case "get_rest_api_operations_specification":
-			result, err = mcp.ExecuteGetSpecTool(ctx, mcpReq, c.operationService)
+			result, err = tools.ExecuteGetSpecTool(ctx, mcpReq, c.operationService)
 		default:
 			results[i] = fmt.Sprintf("Unknown tool: %s", toolCall.Function.Name)
 			continue
@@ -583,6 +587,11 @@ func (c *chatServiceImpl) executeToolCalls(ctx context.Context, toolCalls []stru
 			results[i] = fmt.Sprintf("Error: %v", err)
 			continue
 		}
+
+		// Log MCP tool response at debug level
+		resultJSON, _ := json.Marshal(result.Content)
+		log.Debugf("MCP tool %s returned result (IsError=%v, Content length=%d): %s",
+			toolCall.Function.Name, result.IsError, len(result.Content), string(resultJSON))
 
 		// Convert result to string
 		if result.IsError {

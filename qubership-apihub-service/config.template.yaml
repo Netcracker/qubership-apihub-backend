@@ -202,6 +202,8 @@ openAI:
   apiKey: ''
   # Optional; OpenAI model to use for chat; If not set, default value: gpt-4o; Example: gpt-4o
   model: 'gpt-4o'
+  # Optional; Proxy server URL for OpenAI API requests; If not set, default value: ""; Example: 'http://proxy.example.com:8080'
+  proxyURL: ''
 
 # List of enabled extension services
 #extensions:

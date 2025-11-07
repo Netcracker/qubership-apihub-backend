@@ -109,6 +109,7 @@ type SystemInfoService interface {
 	GetExtensions() []view.Extension
 	GetOpenAIApiKey() string
 	GetOpenAIModel() string
+	GetOpenAIProxyURL() string
 }
 
 func (g *systemInfoServiceImpl) GetCredsFromEnv() *view.DbCredentials {
@@ -639,4 +640,8 @@ func (g *systemInfoServiceImpl) GetOpenAIModel() string {
 		return "gpt-4o"
 	}
 	return g.config.OpenAI.Model
+}
+
+func (g *systemInfoServiceImpl) GetOpenAIProxyURL() string {
+	return g.config.OpenAI.ProxyURL
 }

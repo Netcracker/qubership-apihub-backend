@@ -141,8 +141,9 @@ type CleanupConfig struct {
 }
 
 type OpenAIConfig struct {
-	ApiKey string `validate:"required" sensitive:"true"`
-	Model  string
+	ApiKey   string `validate:"required" sensitive:"true"`
+	Model    string
+	ProxyURL string // Optional proxy server URL for OpenAI API requests (e.g., "http://proxy.example.com:8080")
 }
 
 type RevisionsCleanupConfig struct {

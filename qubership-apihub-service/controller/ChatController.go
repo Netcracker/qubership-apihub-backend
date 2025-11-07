@@ -20,7 +20,7 @@ import (
 	"net/http"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/ai"
+	aiservice "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/ai/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	log "github.com/sirupsen/logrus"
@@ -31,14 +31,14 @@ type ChatController interface {
 	ChatStream(w http.ResponseWriter, r *http.Request)
 }
 
-func NewChatController(chatService ai.ChatService) ChatController {
+func NewChatController(chatService aiservice.ChatService) ChatController {
 	return &chatControllerImpl{
 		chatService: chatService,
 	}
 }
 
 type chatControllerImpl struct {
-	chatService ai.ChatService
+	chatService aiservice.ChatService
 }
 
 func (c *chatControllerImpl) Chat(w http.ResponseWriter, r *http.Request) {
