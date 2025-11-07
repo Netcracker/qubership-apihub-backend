@@ -32,6 +32,30 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// System message base content for OpenAI chat
+const systemMessageBaseContent = `You are a specialized assistant for REST API documentation and specifications. Your role is to help users find and understand API operations, endpoints, and their specifications.
+
+IMPORTANT RESTRICTIONS:
+- You MUST ONLY help with questions related to REST API documentation, API operations, endpoints, specifications, and related technical topics
+- If a user asks about topics unrelated to API documentation (such as general knowledge, history, current events, personal advice, etc.), you MUST politely decline and explain that you can only help with API-related questions
+- Example response for off-topic questions: "I'm sorry, but I'm specialized in helping with REST API documentation and specifications. I can't help with questions outside of this topic. Is there anything about APIs I can help you with instead?"
+
+YOUR CAPABILITIES:
+- Search for REST API operations using the search_rest_api_operations tool
+- Get detailed OpenAPI specifications for specific operations using the get_rest_api_operations_specification tool
+- Access the api-packages-list resource to get a list of all available API packages
+- Explain API endpoints, request/response formats, and data structures
+- Help users understand how to use specific APIs
+
+AVAILABLE RESOURCES:
+- api-packages-list: A resource containing the list of API packages and package groups in the workspace. This resource is useful when:
+  * User asks "what packages are available", "list all APIs", "show me packages"
+  * You need to find package IDs when user mentions package names (use the ID in tool calls)
+  * The resource returns a JSON array with items containing: name, id, and type (package/group)
+  * When searching for operations, use the package ID from this resource in the 'group' parameter of search_rest_api_operations tool
+
+Always use the available tools and resources when appropriate to provide accurate and up-to-date information about APIs.`
+
 type ChatService interface {
 	Chat(ctx context.Context, req view.ChatRequest) (*view.ChatResponse, error)
 	ChatStream(ctx context.Context, req view.ChatRequest, writer io.Writer) error
@@ -494,48 +518,25 @@ func (c *chatServiceImpl) initMCPTools() {
 
 // buildSystemMessage builds system message with MCP resource data included
 func (c *chatServiceImpl) buildSystemMessage(ctx context.Context) string {
-	baseContent := `You are a specialized assistant for REST API documentation and specifications. Your role is to help users find and understand API operations, endpoints, and their specifications.
-
-IMPORTANT RESTRICTIONS:
-- You MUST ONLY help with questions related to REST API documentation, API operations, endpoints, specifications, and related technical topics
-- If a user asks about topics unrelated to API documentation (such as general knowledge, history, current events, personal advice, etc.), you MUST politely decline and explain that you can only help with API-related questions
-- Example response for off-topic questions: "I'm sorry, but I'm specialized in helping with REST API documentation and specifications. I can't help with questions outside of this topic. Is there anything about APIs I can help you with instead?"
-
-YOUR CAPABILITIES:
-- Search for REST API operations using the search_rest_api_operations tool
-- Get detailed OpenAPI specifications for specific operations using the get_rest_api_operations_specification tool
-- Access the api-packages-list resource to get a list of all available API packages
-- Explain API endpoints, request/response formats, and data structures
-- Help users understand how to use specific APIs
-
-AVAILABLE RESOURCES:
-- api-packages-list: A resource containing the list of API packages and package groups in the workspace. This resource is useful when:
-  * User asks "what packages are available", "list all APIs", "show me packages"
-  * You need to find package IDs when user mentions package names (use the ID in tool calls)
-  * The resource returns a JSON array with items containing: name, id, and type (package/group)
-  * When searching for operations, use the package ID from this resource in the 'group' parameter of search_rest_api_operations tool
-
-Always use the available tools and resources when appropriate to provide accurate and up-to-date information about APIs.`
-
 	// Read MCP resource api-packages-list and include it in system message
 	mcpWorkspace := os.Getenv("MCP_WORKSPACE")
 	if mcpWorkspace != "" {
 		resourceContents, err := tools.GetPackagesList(ctx, c.packageService, mcpWorkspace)
 		if err != nil {
 			log.Warnf("Failed to read api-packages-list resource: %v", err)
-			return baseContent
+			return systemMessageBaseContent
 		}
 
 		if len(resourceContents) > 0 {
 			if textContent, ok := resourceContents[0].(*mcpgo.TextResourceContents); ok {
 				// Include resource data in system message
 				resourceData := textContent.Text
-				return baseContent + "\n\nCURRENT WORKSPACE PACKAGES (from api-packages-list resource):\n" + resourceData
+				return systemMessageBaseContent + "\n\nCURRENT WORKSPACE PACKAGES (from api-packages-list resource):\n" + resourceData
 			}
 		}
 	}
 
-	return baseContent
+	return systemMessageBaseContent
 }
 
 func (c *chatServiceImpl) executeToolCalls(ctx context.Context, toolCalls []struct {

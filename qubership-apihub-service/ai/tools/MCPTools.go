@@ -33,72 +33,255 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// Tool names constants
+const (
+	ToolNameSearchOperations = "search_rest_api_operations"
+	ToolNameGetOperationSpec = "get_rest_api_operations_specification"
+)
+
+// Tool descriptions for MCP server
+const (
+	ToolDescriptionSearchOperationsMCP = `Full-text search for REST API operations.
+		LLM INSTRUCTIONS:
+		- Group methods by packageIds;
+		- If user ask for more result - increase page and ask this tool again;
+		- If user ask for more results from particular packageId - set parameter 'group' to this packageId and ask this tool again;
+		- If users ask to provide details for concrete operation - ask tool get_rest_api_operations_specification. Use packageId as a parameter for this tool (not packageName);
+		- Do not ask tool get_rest_api_operations_specification in advance, only if user asks for details for concrete operation;
+		- If user asks for release version - set parameter 'release' to this version and ask this tool again. Release version is in format YYYY.Q;`
+
+	ToolDescriptionGetOperationSpecMCP = `Get OpenAPI specification file for REST API operation.
+	            LLM INSTRUCTIONS:
+				- The reponse is json with REST API specification - render it as a code block, maybe not full specification, but enough to understand the operation and DTOs;
+				- After code block add some human-redabale summary about REST operation and DTOs from this specification and provide it to the user;
+				- Also generate RequestBody and ResponseBody examples based on the specification and provide them to the user;`
+)
+
+// Tool descriptions for OpenAI
+const (
+	ToolDescriptionSearchOperationsOpenAI = `Full-text search for REST API operations.
+								LLM INSTRUCTIONS:
+								- Group methods by packageIds;
+								- Try to make initial search with big limit - 100;
+								- If user ask for more result - increase limit and page numbers and ask this tool again;
+								- If user ask for more results from particular packageId - set parameter 'group' to this packageId and ask this tool again;
+								- If users ask to provide details for concrete operation - ask tool get_rest_api_operations_specification. Use packageId as a parameter for this tool (not packageName);
+								- Do not ask tool get_rest_api_operations_specification in advance, only if user asks for details for concrete operation;
+								- If user asks for release version - set parameter 'release' to this version and ask this tool again. Release version is in format YYYY.Q;
+								- Please enrich each operation information with relative (with no base URL!) link to corresponding package in markdown format: [<packageID>](/portal/packages/<packageId>);`
+
+	ToolDescriptionGetOperationSpecOpenAI = `Get OpenAPI specification file for REST API operation.
+								LLM INSTRUCTIONS:
+								- The reponse is json with REST API specification - render it as a code block, maybe not full specification, but enough to understand the operation and DTOs;
+								- After code block add some human-redabale summary about REST operation and DTOs from this specification and provide it to the user;
+								- Also generate RequestBody and ResponseBody examples based on the specification and provide them to the user;`
+)
+
+// Tool input schemas (shared between MCP and OpenAI)
+var (
+	searchOperationsSchema = json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"query": {
+				"type": "string"
+			},
+			"limit": {
+				"type": "integer",
+				"minimum": 10,
+				"maximum": 100
+			},
+			"page": {
+			    "type": "integer"
+			},
+			"release": {
+				"type": "string"
+			},
+			"group": {
+				"type": "string"
+			}
+		},
+		"required": ["query"]
+	}`)
+
+	getOperationSpecSchema = json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"operationId": {
+				"type": "string"
+			},
+			"packageId": {
+				"type": "string"
+			},
+			"version": {
+				"type": "string"
+			}
+		},
+		"required": ["operationId","packageId","version"]
+	}`)
+)
+
+// getParameterDescription returns description for a parameter
+func getParameterDescription(toolName, paramName string) string {
+	descriptions := map[string]map[string]string{
+		ToolNameSearchOperations: {
+			"query":   "Search query string",
+			"limit":   "Maximum number of results to return",
+			"page":    "Page number for pagination",
+			"release": "Release version in format YYYY.Q",
+			"group":   "Package group ID to filter by",
+		},
+		ToolNameGetOperationSpec: {
+			"operationId": "Operation ID",
+			"packageId":   "Package ID",
+			"version":     "Version",
+		},
+	}
+
+	if toolDescs, ok := descriptions[toolName]; ok {
+		if desc, ok := toolDescs[paramName]; ok {
+			return desc
+		}
+	}
+	return ""
+}
+
+// Tool metadata structure
+type toolMetadata struct {
+	name              string
+	schema            json.RawMessage
+	descriptionMCP    string
+	descriptionOpenAI string
+}
+
+// getToolMetadata returns metadata for all tools
+func getToolMetadata() []toolMetadata {
+	return []toolMetadata{
+		{
+			name:              ToolNameSearchOperations,
+			schema:            searchOperationsSchema,
+			descriptionMCP:    ToolDescriptionSearchOperationsMCP,
+			descriptionOpenAI: ToolDescriptionSearchOperationsOpenAI,
+		},
+		{
+			name:              ToolNameGetOperationSpec,
+			schema:            getOperationSpecSchema,
+			descriptionMCP:    ToolDescriptionGetOperationSpecMCP,
+			descriptionOpenAI: ToolDescriptionGetOperationSpecOpenAI,
+		},
+	}
+}
+
 // AddToolsToServer registers MCP tools to the provided MCP server
 func AddToolsToServer(s *mcpserver.MCPServer, operationService service.OperationService) {
+	toolsMetadata := getToolMetadata()
+
 	// Add search_rest_api_operations tool
+	searchMeta := toolsMetadata[0]
 	s.AddTool(mcp.Tool{
-		Name: "search_rest_api_operations",
-		Description: `Full-text search for REST API operations.
-			LLM INSTRUCTIONS:
-			- Group methods by packageIds;
-			- If user ask for more result - increase page and ask this tool again;
-			- If user ask for more results from particular packageId - set parameter 'group' to this packageId and ask this tool again;
-			- If users ask to provide details for concrete operation - ask tool get_rest_api_operations_specification. Use packageId as a parameter for this tool (not packageName);
-			- Do not ask tool get_rest_api_operations_specification in advance, only if user asks for details for concrete operation;
-			- If user asks for release version - set parameter 'release' to this version and ask this tool again. Release version is in format YYYY.Q;`,
-		RawInputSchema: json.RawMessage(`{
-			"type": "object",
-			"properties": {
-				"query": {
-					"type": "string"
-				},
-				"limit": {
-					"type": "integer",
-					"minimum": 10,
-					"maximum": 100
-				},
-				"page": {
-				    "type": "integer"
-				},
-				"release": {
-					"type": "string"
-				},
-				"group": {
-					"type": "string"
-				}
-			},
-			"required": ["query"]
-		}`),
+		Name:           searchMeta.name,
+		Description:    searchMeta.descriptionMCP,
+		RawInputSchema: searchMeta.schema,
 	}, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return ExecuteSearchTool(ctx, req, operationService)
 	})
 
 	// Add get_rest_api_operations_specification tool
+	specMeta := toolsMetadata[1]
 	s.AddTool(mcp.Tool{
-		Name: "get_rest_api_operations_specification",
-		Description: `Get OpenAPI specification file for REST API operation.
-		            LLM INSTRUCTIONS:
-					- The reponse is json with REST API specification - render it as a code block, maybe not full specification, but enough to understand the operation and DTOs;
-					- After code block add some human-redabale summary about REST operation and DTOs from this specification and provide it to the user;
-					- Also generate RequestBody and ResponseBody examples based on the specification and provide them to the user;`,
-		RawInputSchema: json.RawMessage(`{
-			"type": "object",
-			"properties": {
-				"operationId": {
-					"type": "string"
-				},
-				"packageId": {
-					"type": "string"
-				},
-				"version": {
-					"type": "string"
-				}
-			},
-			"required": ["operationId","packageId","version"]
-		}`),
+		Name:           specMeta.name,
+		Description:    specMeta.descriptionMCP,
+		RawInputSchema: specMeta.schema,
 	}, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return ExecuteGetSpecTool(ctx, req, operationService)
 	})
+}
+
+// GetToolsForOpenAI returns MCP tools in OpenAI format
+// This function extracts tool definitions from the MCP server and converts them to OpenAI format
+func GetToolsForOpenAI() []map[string]interface{} {
+	toolsMetadata := getToolMetadata()
+	result := make([]map[string]interface{}, len(toolsMetadata))
+
+	for i, meta := range toolsMetadata {
+		// Parse schema from JSON to map for OpenAI format
+		var schemaMap map[string]interface{}
+		if err := json.Unmarshal(meta.schema, &schemaMap); err != nil {
+			log.Errorf("Failed to unmarshal schema for tool %s: %v", meta.name, err)
+			continue
+		}
+
+		// Add descriptions to parameters for OpenAI format
+		enhancedSchema := enhanceSchemaWithDescriptions(schemaMap, meta.name)
+
+		result[i] = map[string]interface{}{
+			"type": "function",
+			"function": map[string]interface{}{
+				"name":        meta.name,
+				"description": meta.descriptionOpenAI,
+				"parameters":  enhancedSchema,
+			},
+		}
+	}
+
+	return result
+}
+
+// AddResourcesToServer registers MCP resources to the provided MCP server
+func AddResourcesToServer(s *mcpserver.MCPServer, packageService service.PackageService) {
+	mcpWorkspace := os.Getenv("MCP_WORKSPACE")
+	if mcpWorkspace == "" {
+		log.Warn("MCP_WORKSPACE environment variable is not set, skipping API packages resource registration")
+		return
+	}
+
+	// Register API packages resource
+	s.AddResource(mcp.Resource{
+		URI:         "api-packages-list",
+		Name:        "API Packages List",
+		Description: "List of API packages and package groups in the workspace. Each item has: name (package/group name), id (package ID for use in tool calls), and type (either 'package' or 'group'). Use this resource to: get list of available packages, find package IDs by name. Package IDs from this resource should be used in the 'group' parameter of search_rest_api_operations tool.",
+		MIMEType:    "application/json",
+	}, func(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+		return GetPackagesList(ctx, packageService, mcpWorkspace)
+	})
+}
+
+// GetPackagesList retrieves the list of packages from the workspace
+func GetPackagesList(ctx context.Context, packageService service.PackageService, workspaceId string) ([]mcp.ResourceContents, error) {
+	log.Infof("Getting packages list for workspace: %s", workspaceId)
+
+	// Create system context for service calls
+	secCtx := secctx.CreateSystemContext()
+
+	packageListReq := view.PackageListReq{
+		Kind:               []string{entity.KIND_PACKAGE}, // As specified: kind=package
+		ShowAllDescendants: true,
+		ParentId:           workspaceId,
+		Limit:              10000, // Large limit to get all packages
+		Offset:             0,
+	}
+
+	// Get all packages from workspace
+	packages, err := packageService.GetPackagesList(secCtx, packageListReq, false)
+	if err != nil {
+		log.Errorf("Failed to get packages list: %v", err)
+		return nil, fmt.Errorf("failed to get packages list: %w", err)
+	}
+
+	jsonData, err := json.Marshal(packages)
+	if err != nil {
+		log.Errorf("Failed to marshal packages list: %v", err)
+		return nil, fmt.Errorf("failed to marshal packages list: %w", err)
+	}
+
+	log.Debugf("Packages list retrieved: %s", jsonData)
+
+	return []mcp.ResourceContents{
+		&mcp.TextResourceContents{
+			URI:      "api-packages-list",
+			MIMEType: "application/json",
+			Text:     string(jsonData),
+		},
+	}, nil
 }
 
 // ExecuteSearchTool executes the search_rest_api_operations tool
@@ -287,84 +470,40 @@ func (r *MCPToolRequestWrapper) GetInt(key string, defaultValue int) int {
 	return defaultValue
 }
 
-// GetToolsForOpenAI returns MCP tools in OpenAI format
-// This function extracts tool definitions from the MCP server and converts them to OpenAI format
-func GetToolsForOpenAI() []map[string]interface{} {
-	return []map[string]interface{}{
-		{
-			"type": "function",
-			"function": map[string]interface{}{
-				"name": "search_rest_api_operations",
-				"description": `Full-text search for REST API operations.
-								LLM INSTRUCTIONS:
-								- Group methods by packageIds;
-								- Try to make initial search with big limit - 100;
-								- If user ask for more result - increase limit and page numbers and ask this tool again;
-								- If user ask for more results from particular packageId - set parameter 'group' to this packageId and ask this tool again;
-								- If users ask to provide details for concrete operation - ask tool get_rest_api_operations_specification. Use packageId as a parameter for this tool (not packageName);
-								- Do not ask tool get_rest_api_operations_specification in advance, only if user asks for details for concrete operation;
-								- If user asks for release version - set parameter 'release' to this version and ask this tool again. Release version is in format YYYY.Q;
-								- Please enrich each operation information with relative (with no base URL!) link to corresponding package in markdown format: [<packageID>](/portal/packages/<packageId>);`,
-				"parameters": map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"query": map[string]interface{}{
-							"type":        "string",
-							"description": "Search query string",
-						},
-						"limit": map[string]interface{}{
-							"type":        "integer",
-							"minimum":     10,
-							"maximum":     100,
-							"description": "Maximum number of results to return",
-						},
-						"page": map[string]interface{}{
-							"type":        "integer",
-							"description": "Page number for pagination",
-						},
-						"release": map[string]interface{}{
-							"type":        "string",
-							"description": "Release version in format YYYY.Q",
-						},
-						"group": map[string]interface{}{
-							"type":        "string",
-							"description": "Package group ID to filter by",
-						},
-					},
-					"required": []string{"query"},
-				},
-			},
-		},
-		{
-			"type": "function",
-			"function": map[string]interface{}{
-				"name": "get_rest_api_operations_specification",
-				"description": `Get OpenAPI specification file for REST API operation.
-								LLM INSTRUCTIONS:
-								- The reponse is json with REST API specification - render it as a code block, maybe not full specification, but enough to understand the operation and DTOs;
-								- After code block add some human-redabale summary about REST operation and DTOs from this specification and provide it to the user;
-								- Also generate RequestBody and ResponseBody examples based on the specification and provide them to the user;`,
-				"parameters": map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"operationId": map[string]interface{}{
-							"type":        "string",
-							"description": "Operation ID",
-						},
-						"packageId": map[string]interface{}{
-							"type":        "string",
-							"description": "Package ID",
-						},
-						"version": map[string]interface{}{
-							"type":        "string",
-							"description": "Version",
-						},
-					},
-					"required": []string{"operationId", "packageId", "version"},
-				},
-			},
-		},
+// enhanceSchemaWithDescriptions adds descriptions to schema properties for OpenAI format
+func enhanceSchemaWithDescriptions(schema map[string]interface{}, toolName string) map[string]interface{} {
+	// Create a copy to avoid modifying original
+	enhanced := make(map[string]interface{})
+	for k, v := range schema {
+		enhanced[k] = v
 	}
+
+	// Add descriptions to properties
+	if properties, ok := enhanced["properties"].(map[string]interface{}); ok {
+		enhancedProperties := make(map[string]interface{})
+		for propName, propValue := range properties {
+			propMap, ok := propValue.(map[string]interface{})
+			if !ok {
+				enhancedProperties[propName] = propValue
+				continue
+			}
+
+			// Add description if not present
+			if _, hasDesc := propMap["description"]; !hasDesc {
+				propMapCopy := make(map[string]interface{})
+				for k, v := range propMap {
+					propMapCopy[k] = v
+				}
+				propMapCopy["description"] = getParameterDescription(toolName, propName)
+				enhancedProperties[propName] = propMapCopy
+			} else {
+				enhancedProperties[propName] = propValue
+			}
+		}
+		enhanced["properties"] = enhancedProperties
+	}
+
+	return enhanced
 }
 
 // transformOperations transforms view.RestOperationSearchResult to TransformedOperation
@@ -401,73 +540,4 @@ type TransformedOperation struct {
 	PackageName string `json:"packageName"`
 	Version     string `json:"version"`
 	Title       string `json:"title"`
-}
-
-// PackageHierarchyItem represents a package or package group in the hierarchy
-type PackageHierarchyItem struct {
-	Name string `json:"name"`
-	Id   string `json:"id"`
-	Type string `json:"type"` // "package" or "group"
-}
-
-// AddResourcesToServer registers MCP resources to the provided MCP server
-func AddResourcesToServer(s *mcpserver.MCPServer, packageService service.PackageService) {
-	mcpWorkspace := os.Getenv("MCP_WORKSPACE")
-	if mcpWorkspace == "" {
-		log.Warn("MCP_WORKSPACE environment variable is not set, skipping API packages resource registration")
-		return
-	}
-
-	// Register API packages resource
-	s.AddResource(mcp.Resource{
-		URI:         "api-packages-list",
-		Name:        "API Packages List",
-		Description: "List of API packages and package groups in the workspace. Each item has: name (package/group name), id (package ID for use in tool calls), and type (either 'package' or 'group'). Use this resource to: get list of available packages, find package IDs by name. Package IDs from this resource should be used in the 'group' parameter of search_rest_api_operations tool.",
-		MIMEType:    "application/json",
-	}, func(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
-		return GetPackagesList(ctx, packageService, mcpWorkspace)
-	})
-}
-
-// GetPackagesList retrieves the list of packages from the workspace
-func GetPackagesList(ctx context.Context, packageService service.PackageService, workspaceId string) ([]mcp.ResourceContents, error) {
-	log.Infof("Getting packages list for workspace: %s", workspaceId)
-
-	// Create system context for service calls
-	secCtx := secctx.CreateSystemContext()
-
-	// Prepare request parameters as if called from packageControllerImpl.GetPackagesList
-	// kind=package&showAllDescendants=true&parentId=<MCP_WORKSPACE>
-	// showAllDescendants=true to get the full tree including all descendants
-	// parentId=workspaceId to start from workspace
-	packageListReq := view.PackageListReq{
-		Kind:               []string{entity.KIND_PACKAGE}, // As specified: kind=package
-		ShowAllDescendants: true,
-		ParentId:           workspaceId,
-		Limit:              10000, // Large limit to get all packages
-		Offset:             0,
-	}
-
-	// Get all packages from workspace
-	packages, err := packageService.GetPackagesList(secCtx, packageListReq, false)
-	if err != nil {
-		log.Errorf("Failed to get packages list: %v", err)
-		return nil, fmt.Errorf("failed to get packages list: %w", err)
-	}
-
-	jsonData, err := json.Marshal(packages)
-	if err != nil {
-		log.Errorf("Failed to marshal packages list: %v", err)
-		return nil, fmt.Errorf("failed to marshal packages list: %w", err)
-	}
-
-	log.Debugf("Packages list retrieved: %s", jsonData)
-
-	return []mcp.ResourceContents{
-		&mcp.TextResourceContents{
-			URI:      "api-packages-list",
-			MIMEType: "application/json",
-			Text:     string(jsonData),
-		},
-	}, nil
 }
