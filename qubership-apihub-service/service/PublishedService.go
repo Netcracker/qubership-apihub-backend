@@ -1465,7 +1465,7 @@ func (p publishedServiceImpl) GetVersionInternalDocuments(packageId string, vers
 		return nil, err
 	}
 
-	result := make([]view.InternalDocument, len(docs))
+	result := make([]view.InternalDocument, 0, len(docs))
 	for _, doc := range docs {
 		result = append(result, *entity.MakeVersionInternalDocumentView(&doc))
 	}
@@ -1542,7 +1542,7 @@ func (p publishedServiceImpl) GetComparisonInternalDocuments(packageId string, v
 		return nil, err
 	}
 
-	result := make([]view.InternalDocument, len(docs))
+	result := make([]view.InternalDocument, 0, len(docs))
 	for _, doc := range docs {
 		result = append(result, *entity.MakeComparisonInternalDocumentView(&doc))
 	}
