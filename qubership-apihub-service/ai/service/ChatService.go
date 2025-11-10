@@ -15,19 +15,21 @@
 package service
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
+	"sync"
+	"time"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/ai/client"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/ai/tools"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	mcpgo "github.com/mark3labs/mcp-go/mcp"
+	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/shared"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -83,14 +85,20 @@ func NewChatService(
 	packageService service.PackageService,
 ) ChatService {
 	// Create OpenAI client with proxy support and extended timeout
+	apiKey := systemInfoService.GetOpenAIApiKey()
 	proxyURL := systemInfoService.GetOpenAIProxyURL()
-	httpClient := client.NewOpenAIClient(proxyURL)
+
+	openAIClient, err := client.NewOpenAIClient(apiKey, proxyURL)
+	if err != nil {
+		log.Errorf("Failed to create OpenAI client: %v", err)
+		panic(fmt.Sprintf("Failed to create OpenAI client: %v", err))
+	}
 
 	service := &chatServiceImpl{
 		systemInfoService: systemInfoService,
 		operationService:  operationService,
 		packageService:    packageService,
-		httpClient:        httpClient,
+		openAIClient:      openAIClient,
 	}
 
 	// Initialize MCP tools (no need to create MCP server - tools are defined statically)
@@ -107,24 +115,15 @@ type chatServiceImpl struct {
 	systemInfoService service.SystemInfoService
 	operationService  service.OperationService
 	packageService    service.PackageService
-	httpClient        *http.Client
+	openAIClient      openai.Client
 	mcpTools          []openAITool
-}
 
-type openAIMessage struct {
-	Role       string           `json:"role"`
-	Content    string           `json:"content,omitempty"`
-	ToolCalls  []openAIToolCall `json:"tool_calls,omitempty"`
-	ToolCallID string           `json:"tool_call_id,omitempty"`
-}
-
-type openAIToolCall struct {
-	ID       string `json:"id"`
-	Type     string `json:"type"`
-	Function struct {
-		Name      string `json:"name"`
-		Arguments string `json:"arguments"`
-	} `json:"function"`
+	// Cache for api-packages-list resource
+	packagesListCache struct {
+		mu        sync.RWMutex
+		data      string
+		expiresAt time.Time
+	}
 }
 
 type openAITool struct {
@@ -138,64 +137,46 @@ type openAIFunction struct {
 	Parameters  map[string]interface{} `json:"parameters"`
 }
 
-type openAIRequest struct {
-	Model       string          `json:"model"`
-	Messages    []openAIMessage `json:"messages"`
-	Tools       []openAITool    `json:"tools,omitempty"`
-	ToolChoice  interface{}     `json:"tool_choice,omitempty"`
-	Stream      bool            `json:"stream,omitempty"`
-	Temperature float64         `json:"temperature,omitempty"`
+// convertToOpenAIMessageParams converts view.ChatMessage to openai.ChatCompletionMessageParamUnion
+func (c *chatServiceImpl) convertToOpenAIMessageParams(messages []view.ChatMessage) []openai.ChatCompletionMessageParamUnion {
+	result := make([]openai.ChatCompletionMessageParamUnion, len(messages))
+	for i, msg := range messages {
+		switch msg.Role {
+		case "system":
+			result[i] = openai.SystemMessage(msg.Content)
+		case "user":
+			result[i] = openai.UserMessage(msg.Content)
+		case "assistant":
+			result[i] = openai.AssistantMessage(msg.Content)
+		case "tool":
+			// Tool messages need tool_call_id, but we don't have it in view.ChatMessage
+			// This will be handled separately when adding tool results
+			result[i] = openai.ToolMessage(msg.Content, "")
+		default:
+			result[i] = openai.UserMessage(msg.Content)
+		}
+	}
+	return result
 }
 
-type openAIResponse struct {
-	ID      string `json:"id"`
-	Object  string `json:"object"`
-	Created int64  `json:"created"`
-	Model   string `json:"model"`
-	Choices []struct {
-		Index   int `json:"index"`
-		Message struct {
-			Role      string `json:"role"`
-			Content   string `json:"content"`
-			ToolCalls []struct {
-				ID       string `json:"id"`
-				Type     string `json:"type"`
-				Function struct {
-					Name      string `json:"name"`
-					Arguments string `json:"arguments"`
-				} `json:"function"`
-			} `json:"tool_calls,omitempty"`
-		} `json:"message"`
-		FinishReason string `json:"finish_reason"`
-	} `json:"choices"`
-	Usage struct {
-		PromptTokens     int `json:"prompt_tokens"`
-		CompletionTokens int `json:"completion_tokens"`
-		TotalTokens      int `json:"total_tokens"`
-	} `json:"usage"`
-}
+// convertToOpenAIToolParams converts internal openAITool to openai.ChatCompletionToolUnionParam
+func (c *chatServiceImpl) convertToOpenAIToolParams(tools []openAITool) []openai.ChatCompletionToolUnionParam {
+	result := make([]openai.ChatCompletionToolUnionParam, len(tools))
+	for i, tool := range tools {
+		// Convert parameters to shared.FunctionParameters
+		paramsBytes, _ := json.Marshal(tool.Function.Parameters)
+		var params shared.FunctionParameters
+		json.Unmarshal(paramsBytes, &params)
 
-type openAIStreamChunk struct {
-	ID      string `json:"id"`
-	Object  string `json:"object"`
-	Created int64  `json:"created"`
-	Model   string `json:"model"`
-	Choices []struct {
-		Index int `json:"index"`
-		Delta struct {
-			Role      string `json:"role"`
-			Content   string `json:"content"`
-			ToolCalls []struct {
-				ID       string `json:"id"`
-				Type     string `json:"type"`
-				Function struct {
-					Name      string `json:"name"`
-					Arguments string `json:"arguments"`
-				} `json:"function"`
-			} `json:"tool_calls,omitempty"`
-		} `json:"delta"`
-		FinishReason string `json:"finish_reason"`
-	} `json:"choices"`
+		functionDef := shared.FunctionDefinitionParam{
+			Name:        tool.Function.Name,
+			Description: openai.String(tool.Function.Description),
+			Parameters:  params,
+		}
+
+		result[i] = openai.ChatCompletionFunctionTool(functionDef)
+	}
+	return result
 }
 
 func (c *chatServiceImpl) Chat(ctx context.Context, req view.ChatRequest) (*view.ChatResponse, error) {
@@ -214,105 +195,48 @@ func (c *chatServiceImpl) Chat(ctx context.Context, req view.ChatRequest) (*view
 	log.Debugf("Using %d MCP tools for this request", len(mcpTools))
 
 	// Convert messages
-	messages := make([]openAIMessage, len(req.Messages))
-	for i, msg := range req.Messages {
-		messages[i] = openAIMessage{
-			Role:    msg.Role,
-			Content: msg.Content,
-		}
-	}
-
-	// Build OpenAI request
-	openAIReq := openAIRequest{
-		Model:       c.systemInfoService.GetOpenAIModel(),
-		Messages:    messages,
-		Tools:       mcpTools,
-		Temperature: 0.7,
-	}
+	messages := c.convertToOpenAIMessageParams(req.Messages)
 
 	// Add system message if not present
 	hasSystemMessage := false
 	for _, msg := range messages {
-		if msg.Role == "system" {
+		if msg.OfSystem != nil {
 			hasSystemMessage = true
 			break
 		}
 	}
 	if !hasSystemMessage {
 		systemContent := c.buildSystemMessage(ctx)
-		systemMsg := openAIMessage{
-			Role:    "system",
-			Content: systemContent,
-		}
-		openAIReq.Messages = append([]openAIMessage{systemMsg}, openAIReq.Messages...)
+		systemMsg := openai.SystemMessage(systemContent)
+		messages = append([]openai.ChatCompletionMessageParamUnion{systemMsg}, messages...)
 	}
 
-	// Make request to OpenAI
-	reqBody, err := json.Marshal(openAIReq)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	baseURL := c.systemInfoService.GetOpenAIBaseURL()
-	apiURL := baseURL + "/chat/completions"
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(reqBody))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.systemInfoService.GetOpenAIApiKey())
+	// Convert tools
+	openAITools := c.convertToOpenAIToolParams(mcpTools)
 
 	// Process tool calls in a loop until we get a final response
-	currentMessages := openAIReq.Messages
-	var finalResponse *openAIResponse
+	currentMessages := messages
+	var finalResponse *openai.ChatCompletion
 	maxIterations := 10 // Limit to prevent infinite loops
-	totalUsage := openAIResponse{Usage: struct {
-		PromptTokens     int `json:"prompt_tokens"`
-		CompletionTokens int `json:"completion_tokens"`
-		TotalTokens      int `json:"total_tokens"`
-	}{}}
+	var totalUsage openai.CompletionUsage
 
 	for iteration := 0; iteration < maxIterations; iteration++ {
 		// Trim message history if it gets too long to avoid context window overflow
 		// Keep system message, recent conversation, and all tool-related messages from current session
-		currentMessages = c.trimMessageHistory(currentMessages, iteration)
+		currentMessages = c.trimMessageHistoryOpenAIParams(currentMessages, iteration)
+
+		// Build OpenAI request
+		openAIReq := openai.ChatCompletionNewParams{
+			Model:       shared.ChatModel(c.systemInfoService.GetOpenAIModel()),
+			Messages:    currentMessages,
+			Tools:       openAITools,
+			Temperature: openai.Float(0.7),
+		}
 
 		// Make request to OpenAI
-		reqBody, err := json.Marshal(openAIRequest{
-			Model:       c.systemInfoService.GetOpenAIModel(),
-			Messages:    currentMessages,
-			Tools:       mcpTools,
-			Temperature: 0.7,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal request: %w", err)
-		}
-
-		baseURL := c.systemInfoService.GetOpenAIBaseURL()
-		apiURL := baseURL + "/chat/completions"
-		httpReq, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(reqBody))
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-
-		httpReq.Header.Set("Content-Type", "application/json")
-		httpReq.Header.Set("Authorization", "Bearer "+c.systemInfoService.GetOpenAIApiKey())
-
-		resp, err := c.httpClient.Do(httpReq)
+		openAIResp, err := c.openAIClient.Chat.Completions.New(ctx, openAIReq)
 		if err != nil {
 			return nil, fmt.Errorf("failed to make request to OpenAI: %w", err)
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(resp.Body)
-			return nil, fmt.Errorf("OpenAI API error: %d - %s", resp.StatusCode, string(body))
-		}
-
-		var openAIResp openAIResponse
-		if err := json.NewDecoder(resp.Body).Decode(&openAIResp); err != nil {
-			return nil, fmt.Errorf("failed to decode response: %w", err)
 		}
 
 		if len(openAIResp.Choices) == 0 {
@@ -320,66 +244,106 @@ func (c *chatServiceImpl) Chat(ctx context.Context, req view.ChatRequest) (*view
 		}
 
 		// Accumulate token usage
-		totalUsage.Usage.PromptTokens += openAIResp.Usage.PromptTokens
-		totalUsage.Usage.CompletionTokens += openAIResp.Usage.CompletionTokens
-		totalUsage.Usage.TotalTokens += openAIResp.Usage.TotalTokens
+		totalUsage.PromptTokens += openAIResp.Usage.PromptTokens
+		totalUsage.CompletionTokens += openAIResp.Usage.CompletionTokens
+		totalUsage.TotalTokens += openAIResp.Usage.TotalTokens
 
 		choice := openAIResp.Choices[0]
 		finishReason := choice.FinishReason
 
 		// If no tool calls, we have the final response
 		if len(choice.Message.ToolCalls) == 0 || finishReason != "tool_calls" {
-			finalResponse = &openAIResp
+			finalResponse = openAIResp
 			log.Debugf("Got final response after %d iterations. Finish reason: %s", iteration+1, finishReason)
 			break
 		}
 
 		// Handle tool calls
-		log.Debugf("Iteration %d: OpenAI requested %d tool calls", iteration+1, len(choice.Message.ToolCalls))
-		for i, toolCall := range choice.Message.ToolCalls {
-			log.Debugf("Tool call %d: %s with arguments: %s", i+1, toolCall.Function.Name, toolCall.Function.Arguments)
+		toolCalls := choice.Message.ToolCalls
+		log.Debugf("Iteration %d: OpenAI requested %d tool calls", iteration+1, len(toolCalls))
+
+		// Convert tool calls to internal format for execution
+		internalToolCalls := make([]struct {
+			ID       string `json:"id"`
+			Type     string `json:"type"`
+			Function struct {
+				Name      string `json:"name"`
+				Arguments string `json:"arguments"`
+			} `json:"function"`
+		}, 0, len(toolCalls))
+
+		for i, tc := range toolCalls {
+			// Tool calls are union types, check which variant we have
+			var toolCallID, toolCallType, functionName, functionArgs string
+
+			// Use type switch to determine the variant
+			switch variant := tc.AsAny().(type) {
+			case openai.ChatCompletionMessageFunctionToolCall:
+				toolCallID = variant.ID
+				toolCallType = string(variant.Type)
+				functionName = variant.Function.Name
+				functionArgs = variant.Function.Arguments
+			case openai.ChatCompletionMessageCustomToolCall:
+				// Custom tool call - not supported for now
+				log.Warnf("Tool call %d: Custom tool call not supported", i+1)
+				continue
+			default:
+				log.Warnf("Tool call %d: Unknown tool call type", i+1)
+				continue
+			}
+
+			log.Debugf("Tool call %d: %s with arguments: %s", i+1, functionName, functionArgs)
+
+			internalToolCalls = append(internalToolCalls, struct {
+				ID       string `json:"id"`
+				Type     string `json:"type"`
+				Function struct {
+					Name      string `json:"name"`
+					Arguments string `json:"arguments"`
+				} `json:"function"`
+			}{
+				ID:   toolCallID,
+				Type: toolCallType,
+				Function: struct {
+					Name      string `json:"name"`
+					Arguments string `json:"arguments"`
+				}{
+					Name:      functionName,
+					Arguments: functionArgs,
+				},
+			})
 		}
 
 		// Execute tool calls and get results
-		toolResults, err := c.executeToolCalls(ctx, choice.Message.ToolCalls)
+		toolResults, err := c.executeToolCalls(ctx, internalToolCalls)
 		if err != nil {
 			log.Errorf("Failed to execute tool calls: %v", err)
 			// Continue with empty tool results
-			toolResults = make([]string, len(choice.Message.ToolCalls))
+			toolResults = make([]string, len(internalToolCalls))
 		}
 		if len(toolResults) > 0 {
 			log.Debugf("Tool calls executed successfully, got %d results", len(toolResults))
 
-			// Add assistant message with tool calls (required by OpenAI)
-			toolCalls := make([]openAIToolCall, len(choice.Message.ToolCalls))
-			for i, tc := range choice.Message.ToolCalls {
-				toolCalls[i] = openAIToolCall{
-					ID:   tc.ID,
-					Type: tc.Type,
-					Function: struct {
-						Name      string `json:"name"`
-						Arguments string `json:"arguments"`
-					}{
-						Name:      tc.Function.Name,
-						Arguments: tc.Function.Arguments,
-					},
-				}
+			// Convert tool calls from response to param format
+			toolCallParams := make([]openai.ChatCompletionMessageToolCallUnionParam, 0, len(toolCalls))
+			for _, tc := range toolCalls {
+				toolCallParams = append(toolCallParams, tc.ToParam())
 			}
 
-			assistantMsg := openAIMessage{
-				Role:      "assistant",
-				Content:   "",
-				ToolCalls: toolCalls,
+			// Create assistant message with tool calls (required by OpenAI)
+			assistantContent := choice.Message.Content
+			assistantMsgParam := openai.ChatCompletionAssistantMessageParam{
+				Content: openai.ChatCompletionAssistantMessageParamContentUnion{
+					OfString: openai.String(assistantContent),
+				},
+				ToolCalls: toolCallParams,
 			}
+			assistantMsg := openai.ChatCompletionMessageParamUnion{OfAssistant: &assistantMsgParam}
 
 			// Add tool result messages (each must have tool_call_id)
-			toolMessages := make([]openAIMessage, 0, len(choice.Message.ToolCalls))
-			for i, toolCall := range choice.Message.ToolCalls {
-				toolMessages = append(toolMessages, openAIMessage{
-					Role:       "tool",
-					Content:    toolResults[i],
-					ToolCallID: toolCall.ID,
-				})
+			toolMessages := make([]openai.ChatCompletionMessageParamUnion, 0, len(internalToolCalls))
+			for i, internalToolCall := range internalToolCalls {
+				toolMessages = append(toolMessages, openai.ToolMessage(toolResults[i], internalToolCall.ID))
 			}
 
 			// Build next iteration messages: current messages + assistant with tool_calls + tool results
@@ -388,7 +352,7 @@ func (c *chatServiceImpl) Chat(ctx context.Context, req view.ChatRequest) (*view
 		} else {
 			// If no tool results, break to avoid infinite loop
 			log.Warnf("No tool results, breaking tool call loop")
-			finalResponse = &openAIResp
+			finalResponse = openAIResp
 			break
 		}
 	}
@@ -398,19 +362,20 @@ func (c *chatServiceImpl) Chat(ctx context.Context, req view.ChatRequest) (*view
 	}
 
 	choice := finalResponse.Choices[0]
+	content := choice.Message.Content
 	responseMessage := view.ChatMessage{
-		Role:    "assistant",
-		Content: choice.Message.Content,
+		Role:    string(choice.Message.Role),
+		Content: content,
 	}
 
-	log.Debugf("Chat response generated after processing. Content length: %d, Total tokens used: %d", len(responseMessage.Content), totalUsage.Usage.TotalTokens)
+	log.Debugf("Chat response generated after processing. Content length: %d, Total tokens used: %d", len(responseMessage.Content), totalUsage.TotalTokens)
 
 	return &view.ChatResponse{
 		Message: responseMessage,
 		Usage: &view.ChatUsage{
-			PromptTokens:     totalUsage.Usage.PromptTokens,
-			CompletionTokens: totalUsage.Usage.CompletionTokens,
-			TotalTokens:      totalUsage.Usage.TotalTokens,
+			PromptTokens:     int(totalUsage.PromptTokens),
+			CompletionTokens: int(totalUsage.CompletionTokens),
+			TotalTokens:      int(totalUsage.TotalTokens),
 		},
 	}, nil
 }
@@ -431,90 +396,58 @@ func (c *chatServiceImpl) ChatStream(ctx context.Context, req view.ChatRequest, 
 	log.Debugf("Using %d MCP tools for this stream request", len(mcpTools))
 
 	// Convert messages
-	messages := make([]openAIMessage, len(req.Messages))
-	for i, msg := range req.Messages {
-		messages[i] = openAIMessage{
-			Role:    msg.Role,
-			Content: msg.Content,
-		}
-	}
-
-	// Build OpenAI request
-	openAIReq := openAIRequest{
-		Model:       c.systemInfoService.GetOpenAIModel(),
-		Messages:    messages,
-		Tools:       mcpTools,
-		Stream:      true,
-		Temperature: 0.7,
-	}
+	messages := c.convertToOpenAIMessageParams(req.Messages)
 
 	// Add system message if not present
 	hasSystemMessage := false
 	for _, msg := range messages {
-		if msg.Role == "system" {
+		if msg.OfSystem != nil {
 			hasSystemMessage = true
 			break
 		}
 	}
 	if !hasSystemMessage {
 		systemContent := c.buildSystemMessage(ctx)
-		systemMsg := openAIMessage{
-			Role:    "system",
-			Content: systemContent,
-		}
-		openAIReq.Messages = append([]openAIMessage{systemMsg}, openAIReq.Messages...)
+		systemMsg := openai.SystemMessage(systemContent)
+		messages = append([]openai.ChatCompletionMessageParamUnion{systemMsg}, messages...)
 	}
 
-	// Make request to OpenAI
-	reqBody, err := json.Marshal(openAIReq)
-	if err != nil {
-		return fmt.Errorf("failed to marshal request: %w", err)
+	// Convert tools
+	openAITools := c.convertToOpenAIToolParams(mcpTools)
+
+	// Build OpenAI request
+	openAIReq := openai.ChatCompletionNewParams{
+		Model:       shared.ChatModel(c.systemInfoService.GetOpenAIModel()),
+		Messages:    messages,
+		Tools:       openAITools,
+		Temperature: openai.Float(0.7),
 	}
 
-	baseURL := c.systemInfoService.GetOpenAIBaseURL()
-	apiURL := baseURL + "/chat/completions"
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewBuffer(reqBody))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.systemInfoService.GetOpenAIApiKey())
-
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return fmt.Errorf("failed to make request to OpenAI: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("OpenAI API error: %d - %s", resp.StatusCode, string(body))
-	}
+	// Create stream
+	stream := c.openAIClient.Chat.Completions.NewStreaming(ctx, openAIReq)
+	defer stream.Close()
 
 	// Stream response
-	decoder := json.NewDecoder(resp.Body)
-	for {
-		var chunk openAIStreamChunk
-		if err := decoder.Decode(&chunk); err != nil {
-			if err == io.EOF {
-				break
-			}
-			return fmt.Errorf("failed to decode stream chunk: %w", err)
-		}
-
+	for stream.Next() {
+		chunk := stream.Current()
 		if len(chunk.Choices) > 0 {
-			delta := chunk.Choices[0].Delta.Content
+			choice := chunk.Choices[0]
+			delta := choice.Delta.Content
 			if delta != "" {
+				finishReason := choice.FinishReason
 				streamChunk := view.ChatStreamChunk{
 					Delta: delta,
-					Done:  chunk.Choices[0].FinishReason != "",
+					Done:  finishReason != "",
 				}
 				chunkJSON, _ := json.Marshal(streamChunk)
 				writer.Write(chunkJSON)
 				writer.Write([]byte("\n"))
 			}
 		}
+	}
+
+	if err := stream.Err(); err != nil {
+		return fmt.Errorf("stream error: %w", err)
 	}
 
 	return nil
@@ -540,22 +473,54 @@ func (c *chatServiceImpl) initMCPTools() {
 
 // buildSystemMessage builds system message with MCP resource data included
 func (c *chatServiceImpl) buildSystemMessage(ctx context.Context) string {
-	// Read MCP resource api-packages-list and include it in system message
 	mcpWorkspace := os.Getenv("MCP_WORKSPACE")
-	if mcpWorkspace != "" {
-		resourceContents, err := tools.GetPackagesList(ctx, c.packageService, mcpWorkspace)
-		if err != nil {
-			log.Warnf("Failed to read api-packages-list resource: %v", err)
-			return systemMessageBaseContent
-		}
+	if mcpWorkspace == "" {
+		return systemMessageBaseContent
+	}
 
-		if len(resourceContents) > 0 {
-			if textContent, ok := resourceContents[0].(*mcpgo.TextResourceContents); ok {
-				// Include resource data in system message
-				resourceData := textContent.Text
-				return systemMessageBaseContent + "\n\nCURRENT WORKSPACE PACKAGES (from api-packages-list resource):\n" + resourceData
-			}
+	// Check cache first
+	c.packagesListCache.mu.RLock()
+	cachedData := c.packagesListCache.data
+	cacheExpired := time.Now().After(c.packagesListCache.expiresAt)
+	c.packagesListCache.mu.RUnlock()
+
+	// If cache is valid, use it
+	if cachedData != "" && !cacheExpired {
+		log.Debugf("Using cached api-packages-list resource (expires at: %v)", c.packagesListCache.expiresAt)
+		return systemMessageBaseContent + "\n\nCURRENT WORKSPACE PACKAGES (from api-packages-list resource):\n" + cachedData
+	}
+
+	// Cache expired or empty, fetch fresh data
+	log.Debugf("Cache expired or empty, fetching fresh api-packages-list resource")
+	resourceContents, err := tools.GetPackagesList(ctx, c.packageService, mcpWorkspace)
+	if err != nil {
+		log.Warnf("Failed to read api-packages-list resource: %v", err)
+		// If we have cached data even though expired, use it as fallback
+		if cachedData != "" {
+			log.Debugf("Using expired cache as fallback")
+			return systemMessageBaseContent + "\n\nCURRENT WORKSPACE PACKAGES (from api-packages-list resource):\n" + cachedData
 		}
+		return systemMessageBaseContent
+	}
+
+	var resourceData string
+	if len(resourceContents) > 0 {
+		if textContent, ok := resourceContents[0].(*mcpgo.TextResourceContents); ok {
+			resourceData = textContent.Text
+		}
+	}
+
+	// Update cache with TTL of 1 day
+	if resourceData != "" {
+		c.packagesListCache.mu.Lock()
+		c.packagesListCache.data = resourceData
+		c.packagesListCache.expiresAt = time.Now().Add(24 * time.Hour)
+		c.packagesListCache.mu.Unlock()
+		log.Debugf("Updated api-packages-list cache (expires at: %v)", c.packagesListCache.expiresAt)
+	}
+
+	if resourceData != "" {
+		return systemMessageBaseContent + "\n\nCURRENT WORKSPACE PACKAGES (from api-packages-list resource):\n" + resourceData
 	}
 
 	return systemMessageBaseContent
@@ -651,13 +616,13 @@ func (c *chatServiceImpl) executeToolCalls(ctx context.Context, toolCalls []stru
 	return results, nil
 }
 
-// trimMessageHistory trims the message history to prevent context window overflow
+// trimMessageHistoryOpenAIParams trims the message history to prevent context window overflow
 // Strategy:
 // 1. Always keep system message (first message if it's system)
 // 2. Keep recent conversation messages (last N user/assistant pairs)
 // 3. Keep all tool-related messages (assistant with tool_calls and tool responses) from current session
 // 4. Maximum messages limit: 50 (configurable)
-func (c *chatServiceImpl) trimMessageHistory(messages []openAIMessage, currentIteration int) []openAIMessage {
+func (c *chatServiceImpl) trimMessageHistoryOpenAIParams(messages []openai.ChatCompletionMessageParamUnion, currentIteration int) []openai.ChatCompletionMessageParamUnion {
 	const maxMessages = 50             // Maximum number of messages to keep
 	const recentConversationPairs = 10 // Number of recent user/assistant pairs to keep
 
@@ -668,10 +633,10 @@ func (c *chatServiceImpl) trimMessageHistory(messages []openAIMessage, currentIt
 	log.Debugf("Trimming message history: %d messages -> max %d", len(messages), maxMessages)
 
 	// Find system message (usually first)
-	var systemMsg *openAIMessage
+	var systemMsg *openai.ChatCompletionMessageParamUnion
 	var systemMsgIndex = -1
 	for i, msg := range messages {
-		if msg.Role == "system" {
+		if msg.OfSystem != nil {
 			systemMsg = &messages[i]
 			systemMsgIndex = i
 			break
@@ -679,8 +644,8 @@ func (c *chatServiceImpl) trimMessageHistory(messages []openAIMessage, currentIt
 	}
 
 	// Separate messages into categories
-	var toolMessages []openAIMessage         // assistant with tool_calls and tool responses
-	var conversationMessages []openAIMessage // user and assistant without tool_calls
+	var toolMessages []openai.ChatCompletionMessageParamUnion         // assistant with tool_calls and tool responses
+	var conversationMessages []openai.ChatCompletionMessageParamUnion // user and assistant without tool_calls
 
 	// Start from after system message
 	startIdx := 0
@@ -691,8 +656,9 @@ func (c *chatServiceImpl) trimMessageHistory(messages []openAIMessage, currentIt
 	for i := startIdx; i < len(messages); i++ {
 		msg := messages[i]
 
-		// Tool-related messages: assistant with tool_calls or tool role
-		if msg.Role == "tool" || (msg.Role == "assistant" && len(msg.ToolCalls) > 0) {
+		// Tool-related messages: tool role or assistant (we keep all assistants as they might have tool calls)
+		isToolMessage := msg.OfTool != nil || msg.OfAssistant != nil
+		if isToolMessage {
 			toolMessages = append(toolMessages, msg)
 		} else {
 			// Regular conversation messages
@@ -701,7 +667,7 @@ func (c *chatServiceImpl) trimMessageHistory(messages []openAIMessage, currentIt
 	}
 
 	// Keep only recent conversation pairs
-	var trimmedConversation []openAIMessage
+	var trimmedConversation []openai.ChatCompletionMessageParamUnion
 	if len(conversationMessages) > recentConversationPairs*2 {
 		// Keep last N pairs (each pair = user + assistant)
 		trimmedConversation = conversationMessages[len(conversationMessages)-recentConversationPairs*2:]
@@ -711,7 +677,7 @@ func (c *chatServiceImpl) trimMessageHistory(messages []openAIMessage, currentIt
 	}
 
 	// Reconstruct message history: system + recent conversation + all tool messages
-	result := make([]openAIMessage, 0, len(trimmedConversation)+len(toolMessages)+1)
+	result := make([]openai.ChatCompletionMessageParamUnion, 0, len(trimmedConversation)+len(toolMessages)+1)
 
 	// Add system message first if exists
 	if systemMsg != nil {

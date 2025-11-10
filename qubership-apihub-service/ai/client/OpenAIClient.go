@@ -20,12 +20,15 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/option"
+
 	log "github.com/sirupsen/logrus"
 )
 
-// NewOpenAIClient creates a new HTTP client configured for OpenAI API requests
-// with proxy support, insecure skip verify, and extended timeout
-func NewOpenAIClient(proxyURL string) *http.Client {
+// NewOpenAIClient creates a new OpenAI client configured for OpenAI API requests
+// with proxy support, insecure skip verify, extended timeout and API key
+func NewOpenAIClient(apiKey, proxyURL string) (openai.Client, error) {
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
@@ -43,11 +46,18 @@ func NewOpenAIClient(proxyURL string) *http.Client {
 		}
 	}
 
-	client := &http.Client{
+	httpClient := &http.Client{
 		Transport: transport,
 		Timeout:   20 * time.Minute, // 20 minutes timeout
 	}
 
-	return client
-}
+	// Create OpenAI client with custom HTTP client
+	opts := []option.RequestOption{
+		option.WithAPIKey(apiKey),
+		option.WithHTTPClient(httpClient),
+	}
 
+	client := openai.NewClient(opts...)
+
+	return client, nil
+}
