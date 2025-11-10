@@ -313,7 +313,10 @@ func GetPackagesList(ctx context.Context, packageService service.PackageService,
 		return nil, fmt.Errorf("failed to get packages list: %w", err)
 	}
 
-	jsonData, err := json.Marshal(packages)
+	// Post-processing: filter and convert packages
+	packagesMCP := convertPackagesToMCP(packages)
+
+	jsonData, err := json.Marshal(packagesMCP)
 	if err != nil {
 		log.Errorf("Failed to marshal packages list: %v", err)
 		return nil, fmt.Errorf("failed to marshal packages list: %w", err)
@@ -550,6 +553,41 @@ func enhanceSchemaWithDescriptions(schema map[string]interface{}, toolName strin
 	}
 
 	return enhanced
+}
+
+// convertPackagesToMCP filters and converts Packages to PackagesMCP
+// Removes packages with packageId containing ".RUNENV." and excludes defaultRole, permissions, releaseVersionPattern, createdAt, IsFavorite, ImageUrl, DeletedAt fields
+func convertPackagesToMCP(packages *view.Packages) *view.PackagesMCP {
+	if packages == nil {
+		return &view.PackagesMCP{Packages: []view.PackagesInfoMCP{}}
+	}
+
+	// Filter out packages with packageId containing ".RUNENV."
+	filtered := make([]view.PackagesInfo, 0, len(packages.Packages))
+	for _, pkg := range packages.Packages {
+		if !strings.Contains(pkg.Id, ".RUNENV.") {
+			filtered = append(filtered, pkg)
+		}
+	}
+
+	// Convert to PackagesInfoMCP (excluding defaultRole, permissions, releaseVersionPattern, createdAt, IsFavorite, ImageUrl, DeletedAt)
+	converted := make([]view.PackagesInfoMCP, len(filtered))
+	for i, pkg := range filtered {
+		converted[i] = view.PackagesInfoMCP{
+			Id:                        pkg.Id,
+			Alias:                     pkg.Alias,
+			ParentId:                  pkg.ParentId,
+			Kind:                      pkg.Kind,
+			Name:                      pkg.Name,
+			Description:               pkg.Description,
+			ServiceName:               pkg.ServiceName,
+			Parents:                   pkg.Parents,
+			LastReleaseVersionDetails: pkg.LastReleaseVersionDetails,
+			RestGroupingPrefix:        pkg.RestGroupingPrefix,
+		}
+	}
+
+	return &view.PackagesMCP{Packages: converted}
 }
 
 // transformOperations transforms view.RestOperationSearchResult to TransformedOperation
