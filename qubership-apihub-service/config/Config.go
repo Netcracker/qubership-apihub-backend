@@ -141,9 +141,12 @@ type CleanupConfig struct {
 }
 
 type OpenAIConfig struct {
-	ApiKey   string `validate:"required" sensitive:"true"`
-	Model    string
-	ProxyURL string // Optional base URL for OpenAI API requests (replaces https://api.openai.com/v1); Example: "https://llmproxy.localdomain.com" or "https://llmproxy.localdomain.com/v1"
+	ApiKey          string `validate:"required" sensitive:"true"`
+	Model           string
+	ProxyURL        string  // Optional base URL for OpenAI API requests (replaces https://api.openai.com/v1); Example: "https://llmproxy.localdomain.com" or "https://llmproxy.localdomain.com/v1"
+	Temperature     float64 // Controls randomness of the model's output. Range: 0.0 to 2.0. Lower values = more focused, higher values = more random. Default: 1.0
+	ReasoningEffort string  // Controls depth of reasoning for reasoning models (gpt-5, o-series). Values: "minimal", "low", "medium", "high". Default: "medium"
+	Verbosity       string  // Controls verbosity and detail level of the model's response. Values: "low", "medium", "high". Default: "medium"
 }
 
 type RevisionsCleanupConfig struct {

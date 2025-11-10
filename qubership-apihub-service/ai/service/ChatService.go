@@ -17,6 +17,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -73,6 +74,38 @@ RESPONSE FORMAT:
 - Use get_rest_api_operations_specification only when user explicitly requests details about a specific operation
 
 Always use available tools and resources when appropriate to provide accurate and up-to-date information about APIs.`
+
+// Helper functions to convert string values from config to OpenAI library types
+
+// convertReasoningEffort converts string value from config to shared.ReasoningEffort type
+func convertReasoningEffort(value string) shared.ReasoningEffort {
+	switch value {
+	case "minimal":
+		return shared.ReasoningEffortMinimal
+	case "low":
+		return shared.ReasoningEffortLow
+	case "medium":
+		return shared.ReasoningEffortMedium
+	case "high":
+		return shared.ReasoningEffortHigh
+	default:
+		return shared.ReasoningEffortMedium // default fallback
+	}
+}
+
+// convertVerbosity converts string value from config to ChatCompletionNewParamsVerbosity type
+func convertVerbosity(value string) openai.ChatCompletionNewParamsVerbosity {
+	switch value {
+	case "low":
+		return openai.ChatCompletionNewParamsVerbosityLow
+	case "medium":
+		return openai.ChatCompletionNewParamsVerbosityMedium
+	case "high":
+		return openai.ChatCompletionNewParamsVerbosityHigh
+	default:
+		return openai.ChatCompletionNewParamsVerbosityMedium // default fallback
+	}
+}
 
 type ChatService interface {
 	Chat(ctx context.Context, req view.ChatRequest) (*view.ChatResponse, error)
@@ -227,15 +260,42 @@ func (c *chatServiceImpl) Chat(ctx context.Context, req view.ChatRequest) (*view
 
 		// Build OpenAI request
 		openAIReq := openai.ChatCompletionNewParams{
-			Model:       shared.ChatModel(c.systemInfoService.GetOpenAIModel()),
-			Messages:    currentMessages,
-			Tools:       openAITools,
-			Temperature: openai.Float(1),
+			Model:           shared.ChatModel(c.systemInfoService.GetOpenAIModel()),
+			Messages:        currentMessages,
+			Tools:           openAITools,
+			Temperature:     openai.Float(c.systemInfoService.GetOpenAITemperature()),
+			ReasoningEffort: convertReasoningEffort(c.systemInfoService.GetOpenAIReasoningEffort()),
+			Verbosity:       convertVerbosity(c.systemInfoService.GetOpenAIVerbosity()),
 		}
 
 		// Make request to OpenAI
 		openAIResp, err := c.openAIClient.Chat.Completions.New(ctx, openAIReq)
 		if err != nil {
+			// Log detailed error information for debugging
+			var apiErr *openai.Error
+			if errors.As(err, &apiErr) {
+				log.WithFields(log.Fields{
+					"error_type":     apiErr.Type,
+					"error_code":     apiErr.Code,
+					"error_message":  apiErr.Message,
+					"error_param":    apiErr.Param,
+					"status_code":    apiErr.StatusCode,
+					"request_url":    apiErr.Request.URL.String(),
+					"request_method": apiErr.Request.Method,
+					"raw_json":       apiErr.RawJSON(),
+				}).Errorf("OpenAI API error: %s %s returned status %d - %s (code: %s, param: %s)",
+					apiErr.Request.Method, apiErr.Request.URL.String(),
+					apiErr.StatusCode, apiErr.Message, apiErr.Code, apiErr.Param)
+
+				// Log request/response details at debug level
+				if log.IsLevelEnabled(log.DebugLevel) {
+					log.Debugf("OpenAI request details:\n%s", string(apiErr.DumpRequest(true)))
+					log.Debugf("OpenAI response details:\n%s", string(apiErr.DumpResponse(true)))
+				}
+			} else {
+				// Non-API error (network, timeout, etc.)
+				log.WithError(err).Errorf("OpenAI request failed with non-API error: %v", err)
+			}
 			return nil, fmt.Errorf("failed to make request to OpenAI: %w", err)
 		}
 
@@ -417,10 +477,12 @@ func (c *chatServiceImpl) ChatStream(ctx context.Context, req view.ChatRequest, 
 
 	// Build OpenAI request
 	openAIReq := openai.ChatCompletionNewParams{
-		Model:       shared.ChatModel(c.systemInfoService.GetOpenAIModel()),
-		Messages:    messages,
-		Tools:       openAITools,
-		Temperature: openai.Float(1),
+		Model:           shared.ChatModel(c.systemInfoService.GetOpenAIModel()),
+		Messages:        messages,
+		Tools:           openAITools,
+		Temperature:     openai.Float(c.systemInfoService.GetOpenAITemperature()),
+		ReasoningEffort: convertReasoningEffort(c.systemInfoService.GetOpenAIReasoningEffort()),
+		Verbosity:       convertVerbosity(c.systemInfoService.GetOpenAIVerbosity()),
 	}
 
 	// Create stream
@@ -447,6 +509,31 @@ func (c *chatServiceImpl) ChatStream(ctx context.Context, req view.ChatRequest, 
 	}
 
 	if err := stream.Err(); err != nil {
+		// Log detailed error information for debugging
+		var apiErr *openai.Error
+		if errors.As(err, &apiErr) {
+			log.WithFields(log.Fields{
+				"error_type":     apiErr.Type,
+				"error_code":     apiErr.Code,
+				"error_message":  apiErr.Message,
+				"error_param":    apiErr.Param,
+				"status_code":    apiErr.StatusCode,
+				"request_url":    apiErr.Request.URL.String(),
+				"request_method": apiErr.Request.Method,
+				"raw_json":       apiErr.RawJSON(),
+			}).Errorf("OpenAI stream API error: %s %s returned status %d - %s (code: %s, param: %s)",
+				apiErr.Request.Method, apiErr.Request.URL.String(),
+				apiErr.StatusCode, apiErr.Message, apiErr.Code, apiErr.Param)
+
+			// Log request/response details at debug level
+			if log.IsLevelEnabled(log.DebugLevel) {
+				log.Debugf("OpenAI stream request details:\n%s", string(apiErr.DumpRequest(true)))
+				log.Debugf("OpenAI stream response details:\n%s", string(apiErr.DumpResponse(true)))
+			}
+		} else {
+			// Non-API error (network, timeout, etc.)
+			log.WithError(err).Errorf("OpenAI stream failed with non-API error: %v", err)
+		}
 		return fmt.Errorf("stream error: %w", err)
 	}
 

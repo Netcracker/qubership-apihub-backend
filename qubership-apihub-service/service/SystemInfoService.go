@@ -112,6 +112,9 @@ type SystemInfoService interface {
 	GetOpenAIModel() string
 	GetOpenAIProxyURL() string
 	GetOpenAIBaseURL() string
+	GetOpenAITemperature() float64
+	GetOpenAIReasoningEffort() string
+	GetOpenAIVerbosity() string
 }
 
 func (g *systemInfoServiceImpl) GetCredsFromEnv() *view.DbCredentials {
@@ -250,6 +253,9 @@ func (g *systemInfoServiceImpl) setDefaults() {
 	viper.SetDefault("cleanup.unreferencedData.schedule", "0 15 * * 6") //at 3 PM on Saturday
 	viper.SetDefault("cleanup.unreferencedData.timeoutMinutes", 360)    //6 hours
 	viper.SetDefault("openAI.model", "gpt-4o")
+	viper.SetDefault("openAI.temperature", 1.0)
+	viper.SetDefault("openAI.reasoningEffort", "medium")
+	viper.SetDefault("openAI.verbosity", "medium")
 }
 
 func (g *systemInfoServiceImpl) GetConfigFolder() string {
@@ -655,4 +661,25 @@ func (g *systemInfoServiceImpl) GetOpenAIBaseURL() string {
 	}
 	proxyURL = strings.TrimSuffix(proxyURL, "/")
 	return proxyURL
+}
+
+func (g *systemInfoServiceImpl) GetOpenAITemperature() float64 {
+	if g.config.OpenAI.Temperature == 0 {
+		return 1.0 // default value
+	}
+	return g.config.OpenAI.Temperature
+}
+
+func (g *systemInfoServiceImpl) GetOpenAIReasoningEffort() string {
+	if g.config.OpenAI.ReasoningEffort == "" {
+		return "medium" // default value
+	}
+	return g.config.OpenAI.ReasoningEffort
+}
+
+func (g *systemInfoServiceImpl) GetOpenAIVerbosity() string {
+	if g.config.OpenAI.Verbosity == "" {
+		return "medium" // default value
+	}
+	return g.config.OpenAI.Verbosity
 }
