@@ -639,7 +639,7 @@ func (g *systemInfoServiceImpl) GetOpenAIApiKey() string {
 
 func (g *systemInfoServiceImpl) GetOpenAIModel() string {
 	if g.config.OpenAI.Model == "" {
-		return "gpt-4o"
+		return "gpt-5"
 	}
 	return g.config.OpenAI.Model
 }
