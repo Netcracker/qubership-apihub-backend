@@ -31,7 +31,6 @@ type SimplePackage struct {
 	Description           string              `json:"description"`
 	IsFavorite            bool                `json:"isFavorite"`
 	ServiceName           string              `json:"serviceName,omitempty"`
-	ImageUrl              string              `json:"imageUrl"`
 	Parents               []ParentPackageInfo `json:"parents"`
 	DefaultRole           string              `json:"defaultRole"`
 	UserPermissions       []string            `json:"permissions"`
@@ -59,7 +58,6 @@ type PackagesInfo struct {
 	Description               string              `json:"description"`
 	IsFavorite                bool                `json:"isFavorite,omitempty"`
 	ServiceName               string              `json:"serviceName,omitempty"`
-	ImageUrl                  string              `json:"imageUrl,omitempty"`
 	Parents                   []ParentPackageInfo `json:"parents"`
 	DefaultRole               string              `json:"defaultRole"`
 	UserPermissions           []string            `json:"permissions,omitempty"`
@@ -76,7 +74,6 @@ type ParentPackageInfo struct {
 	ParentId          string `json:"parentId"`
 	Kind              string `json:"kind"`
 	Name              string `json:"name"`
-	ImageUrl          string `json:"imageUrl,omitempty"`
 	HasReadPermission *bool  `json:"hasReadPermission,omitempty"`
 }
 
@@ -104,7 +101,6 @@ type PatchPackageReq struct {
 	Name                  *string `json:"name"`
 	Description           *string `json:"description"`
 	ServiceName           *string `json:"serviceName"`
-	ImageUrl              *string `json:"imageUrl"`
 	DefaultRole           *string `json:"defaultRole"`
 	DefaultReleaseVersion *string `json:"defaultReleaseVersion"`
 	ReleaseVersionPattern *string `json:"releaseVersionPattern"`

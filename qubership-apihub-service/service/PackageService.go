@@ -574,9 +574,6 @@ func (p packageServiceImpl) UpdatePackage(ctx context.SecurityContext, packg *vi
 	if packg.ServiceName != nil {
 		meta = append(meta, "serviceName")
 	}
-	if packg.ImageUrl != nil {
-		meta = append(meta, "imageUrl")
-	}
 	if packg.DefaultRole != nil {
 		meta = append(meta, "defaultRole")
 	}

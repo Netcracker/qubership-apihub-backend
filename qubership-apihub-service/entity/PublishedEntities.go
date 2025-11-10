@@ -36,7 +36,6 @@ type PackageEntity struct {
 	ParentId              string     `pg:"parent_id, type:varchar"`
 	Alias                 string     `pg:"alias, type:varchar"`
 	Description           string     `pg:"description, type:varchar"`
-	ImageUrl              string     `pg:"image_url, type:varchar"`
 	CreatedAt             time.Time  `pg:"created_at, type:timestamp without time zone"`
 	CreatedBy             string     `pg:"created_by, type:varchar"`
 	DeletedAt             *time.Time `pg:"deleted_at, type:timestamp without time zone"`
@@ -400,7 +399,6 @@ func MakePackageEntity(packg *view.SimplePackage) *PackageEntity {
 		ParentId:              packg.ParentId,
 		Alias:                 packg.Alias,
 		Description:           packg.Description,
-		ImageUrl:              packg.ImageUrl,
 		DefaultRole:           packg.DefaultRole,
 		CreatedAt:             packg.CreatedAt,
 		CreatedBy:             packg.CreatedBy,
@@ -434,11 +432,6 @@ func MakeSimplePackageUpdateEntity(existingPackage *PackageEntity, packg *view.P
 		packageEntity.Description = *packg.Description
 	} else {
 		packageEntity.Description = existingPackage.Description
-	}
-	if packg.ImageUrl != nil {
-		packageEntity.ImageUrl = *packg.ImageUrl
-	} else {
-		packageEntity.ImageUrl = existingPackage.ImageUrl
 	}
 	if packg.ServiceName != nil {
 		packageEntity.ServiceName = *packg.ServiceName
@@ -486,7 +479,6 @@ func MakeSimplePackageView(entity *PackageEntity, parents []view.ParentPackageIn
 		ParentId:              entity.ParentId,
 		Name:                  entity.Name,
 		Alias:                 entity.Alias,
-		ImageUrl:              entity.ImageUrl,
 		Parents:               parentsRes,
 		IsFavorite:            isFavorite,
 		ServiceName:           entity.ServiceName,
@@ -525,7 +517,6 @@ func MakePackagesInfo(entity *PackageEntity, defaultVersionDetails *view.Version
 	}
 
 	if !showOnlyDeleted {
-		packageInfo.ImageUrl = entity.ImageUrl
 		packageInfo.IsFavorite = isFavorite
 		packageInfo.UserPermissions = userPermissions
 		packageInfo.LastReleaseVersionDetails = defaultVersionDetails
@@ -543,7 +534,6 @@ func MakePackageParentView(entity *PackageEntity) *view.ParentPackageInfo {
 		ParentId: entity.ParentId,
 		Name:     entity.Name,
 		Alias:    entity.Alias,
-		ImageUrl: entity.ImageUrl,
 		Kind:     entity.Kind,
 	}
 }

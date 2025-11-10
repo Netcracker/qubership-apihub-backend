@@ -90,3 +90,6 @@ CREATE TABLE IF NOT EXISTS public.favorite_projects (
     CONSTRAINT "FK_favorite_projects_project" FOREIGN KEY (project_id) REFERENCES public.project(id) ON DELETE CASCADE,
     CONSTRAINT "FK_favorite_projects_user_data" FOREIGN KEY (user_id) REFERENCES public.user_data(user_id) ON DELETE CASCADE
 );
+
+ALTER TABLE public.package_group
+    ADD COLUMN image_url varchar;
