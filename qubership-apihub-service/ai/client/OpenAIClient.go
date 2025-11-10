@@ -17,13 +17,10 @@ package client
 import (
 	"crypto/tls"
 	"net/http"
-	"net/url"
 	"time"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
-
-	log "github.com/sirupsen/logrus"
 )
 
 // NewOpenAIClient creates a new OpenAI client configured for OpenAI API requests
@@ -35,17 +32,6 @@ func NewOpenAIClient(apiKey, proxyURL string) (openai.Client, error) {
 		},
 	}
 
-	// Configure proxy if provided
-	if proxyURL != "" {
-		proxy, err := url.Parse(proxyURL)
-		if err != nil {
-			log.Warnf("Failed to parse proxy URL '%s': %v. Continuing without proxy.", proxyURL, err)
-		} else {
-			transport.Proxy = http.ProxyURL(proxy)
-			log.Infof("OpenAI client configured with proxy: %s", proxyURL)
-		}
-	}
-
 	httpClient := &http.Client{
 		Transport: transport,
 		Timeout:   20 * time.Minute, // 20 minutes timeout
@@ -55,6 +41,10 @@ func NewOpenAIClient(apiKey, proxyURL string) (openai.Client, error) {
 	opts := []option.RequestOption{
 		option.WithAPIKey(apiKey),
 		option.WithHTTPClient(httpClient),
+	}
+
+	if proxyURL != "" {
+		opts = append(opts, option.WithBaseURL(proxyURL))
 	}
 
 	client := openai.NewClient(opts...)
