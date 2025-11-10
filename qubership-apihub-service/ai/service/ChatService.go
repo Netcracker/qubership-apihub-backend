@@ -230,7 +230,7 @@ func (c *chatServiceImpl) Chat(ctx context.Context, req view.ChatRequest) (*view
 			Model:       shared.ChatModel(c.systemInfoService.GetOpenAIModel()),
 			Messages:    currentMessages,
 			Tools:       openAITools,
-			Temperature: openai.Float(0.7),
+			Temperature: openai.Float(1),
 		}
 
 		// Make request to OpenAI
@@ -420,7 +420,7 @@ func (c *chatServiceImpl) ChatStream(ctx context.Context, req view.ChatRequest, 
 		Model:       shared.ChatModel(c.systemInfoService.GetOpenAIModel()),
 		Messages:    messages,
 		Tools:       openAITools,
-		Temperature: openai.Float(0.7),
+		Temperature: openai.Float(1),
 	}
 
 	// Create stream
