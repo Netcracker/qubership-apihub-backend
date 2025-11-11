@@ -17,12 +17,12 @@ package providers
 import (
 	"context"
 	"crypto/rsa"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/crewjam/saml"
 	"github.com/crewjam/saml/samlsp"
@@ -191,7 +191,7 @@ func CreateSAMLInstance(idpId string, samlConfig *idp.SAMLConfiguration) (*samls
 		return nil, err
 	}
 
-	tr := http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
+	tr := http.Transport{TLSClientConfig: utils.GetSecureTLSConfig()}
 	cl := http.Client{Transport: &tr, Timeout: time.Second * 60}
 	idpMetadata, err := samlsp.FetchMetadata(context.Background(), &cl, *idpMetadataURL)
 

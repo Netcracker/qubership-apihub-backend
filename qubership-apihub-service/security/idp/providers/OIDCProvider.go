@@ -18,7 +18,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"crypto/tls"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -423,7 +422,7 @@ func (o oidcProvider) downloadAvatar(ctx context.Context, avatarURL string, toke
 }
 
 func makeHttpClient() *http.Client {
-	tr := http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
+	tr := http.Transport{TLSClientConfig: utils.GetSecureTLSConfig()}
 	cl := http.Client{Transport: &tr, Timeout: time.Second * 60}
 	return &cl
 }
