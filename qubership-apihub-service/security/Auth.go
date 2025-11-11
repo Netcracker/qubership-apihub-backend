@@ -46,7 +46,6 @@ var refreshTokenStrategy auth.Strategy
 var apiKeyStrategy auth.Strategy
 
 var keeper jwt.SecretsKeeper
-var integrationService service.IntegrationsService
 var userService service.UserService
 var roleService service.RoleService
 
@@ -58,8 +57,7 @@ var publicKey []byte
 
 const gitIntegrationExt = "gitIntegration"
 
-func SetupGoGuardian(intService service.IntegrationsService, userServiceLocal service.UserService, roleServiceLocal service.RoleService, apiKeyService service.ApihubApiKeyService, patService service.PersonalAccessTokenService, systemInfoService service.SystemInfoService, tokenRevocationService service.TokenRevocationService) error {
-	integrationService = intService
+func SetupGoGuardian(userServiceLocal service.UserService, roleServiceLocal service.RoleService, apiKeyService service.ApihubApiKeyService, patService service.PersonalAccessTokenService, systemInfoService service.SystemInfoService, tokenRevocationService service.TokenRevocationService) error {
 	userService = userServiceLocal
 	roleService = roleServiceLocal
 	apihubApiKeyStrategy := NewApihubApiKeyStrategy(apiKeyService)
@@ -206,15 +204,7 @@ func issueTokenPair(dbUser view.User, withGitIntegration bool) (accessToken stri
 		extensions.Set(context.SystemRoleExt, systemRole)
 	}
 	if withGitIntegration {
-		status, err := integrationService.GetUserApiKeyStatus(view.GitlabIntegration, dbUser.Id)
-		if err != nil {
-			return "", "", fmt.Errorf("failed to check gitlab integration status: %v", err)
-		}
-		gitIntegrationExtensionValue := "false"
-		if status.Status == service.ApiKeyStatusPresent {
-			gitIntegrationExtensionValue = "true"
-		}
-		extensions.Set(gitIntegrationExt, gitIntegrationExtensionValue)
+		extensions.Set(gitIntegrationExt, "false") //TODO: can we remove it ?
 	}
 	user.SetExtensions(extensions)
 
