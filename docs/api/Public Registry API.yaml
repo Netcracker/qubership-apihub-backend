@@ -61,6 +61,42 @@ tags:
   - name: User profile
     description: APIs for user's personal settings.
 paths:
+  "/api/v1/system/configuration":
+    get:
+      tags:
+        - Auth
+      summary: System configuration
+      deprecated: true
+      description: Global parameters of system configuration.
+      operationId: getSystemConfiguration
+      security: [{}]
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - autoRedirect
+                properties:
+                  ssoIntegrationEnabled:
+                    type: boolean
+                  autoRedirect:
+                    type: boolean
+                  defaultWorkspaceId:
+                    description: Id of the workspace, which is used by default while working with the system.
+                    type: string
+                    example: WSPACE1
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
   "/api/v2/system/configuration":
     get:
       tags:
@@ -134,6 +170,57 @@ paths:
                           description: path for routing
                           type: string
                           example: api-linter
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v2/auth/saml":
+    post:
+      x-nc-api-audience: noBWC
+      tags:
+        - Auth
+      summary: SAML authentication
+      deprecated: true
+      description: |
+        Starts the SAML authentication process in APIHUB.
+
+        In case of successful authentication, the request will be redirected to the **redirectUri** and
+        the response will contain cookie with access token for future API calls.
+        All subsequent APIHUB calls must use this token in a **BearerAuth** authentication.
+      operationId: postAuthSAML
+      security: [{}]
+      parameters:
+        - name: redirectUri
+          in: query
+          description: URI, where user must be redirected in case of successful APIHUB authentication.
+          required: true
+          schema:
+            type: string
+            format: uri
+            example: "https://apihub.qubership.org/portal"
+      responses:
+        "302":
+          description: Found
+          headers:
+            Set-Cookie:
+              description: A base64 encoded userView cookie, containing the user data and access token.
+              schema:
+                type: string
+                example: "userView=eyJ0b2tlbiI6ImV5SmhiR2NpT2lKSVV6STFOaUlzSW10cFpDSTZJbk5sWTNKbGRDMXBaQ0lzSW5SNWNDSTZJa3BYVkNKOS5leUpGZUhSbGJuTnBiMjV6SWpwN2ZTd2lSM0p2ZFhCeklqcGJYU3dpU1VRaU9pSmxkbVZzTURJeE9TSXNJazVoYldVaU9pSmxkbVZzTURJeE9TSXNJbUYxWkNJNld5SWlYU3dpWlhod0lqb3hOamMwTURZNU1UVTRMQ0pwWVhRaU9qRTJOelF3TWpVNU5UZ3NJbTVpWmlJNk1UWTNOREF5TlRrMU9Dd2ljM1ZpSWpvaVpYWmxiREF5TVRraWZRLk45d2poeGhLRkoyTlEzNXpCaGw0VEs4VFBOS3RoeDE5czNQQnNheTNkclEiLCJyZW5ld1Rva2VuIjoiZXlKaGJHY2lPaUpJVXpJMU5pSXNJbXRwWkNJNkluTmxZM0psZEMxcFpDSXNJblI1Y0NJNklrcFhWQ0o5LmV5SkZlSFJsYm5OcGIyNXpJanA3ZlN3aVIzSnZkWEJ6SWpwYlhTd2lTVVFpT2lKbGRtVnNNREl4T1NJc0lrNWhiV1VpT2lKbGRtVnNNREl4T1NJc0ltRjFaQ0k2V3lJaVhTd2laWGh3SWpveE5qYzJOakUzT1RVNExDSnBZWFFpT2pFMk56UXdNalU1TlRnc0ltNWlaaUk2TVRZM05EQXlOVGsxT0N3aWMzVmlJam9pWlhabGJEQXlNVGtpZlEuUnRyZEEwNkJrN2lIQnA1bVRYUE1PSnVJdmhtQ0FudHRnVlBqNGZicXN6WSIsInVzZXIiOnsiaWQiOiJldmVsMDIxOSIsImVtYWlsIjoiZXZnZW5paS5lbGl6YXJvdkBuZXRjcmFja2VyLmNvbSIsIm5hbWUiOiJFdmdlbmlpIEVsaXphcm92IiwiYXZhdGFyVXJsIjoiL2FwaS92Mi91c2Vycy9ldmVsMDIxOS9wcm9maWxlL2F2YXRhciJ9fQ==;"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                IncorrectInputParams:
+                  $ref: "#/components/examples/IncorrectInputParameters"
         "500":
           description: Internal Server Error
           content:
@@ -4348,6 +4435,309 @@ paths:
               examples:
                 InternalServerError:
                   $ref: "#/components/examples/InternalServerError"
+  "/api/v3/packages/{packageId}/versions/{version}/{apiType}/build/groups/{groupName}/buildType/{buildType}":
+    parameters:
+      - $ref: "#/components/parameters/packageId"
+      - $ref: "#/components/parameters/version"
+      - name: apiType
+        description: Type of the API.
+        in: path
+        required: true
+        schema:
+          type: string
+          enum:
+            - rest
+      - name: buildType
+        description: |
+          Type of the build process for OpeanAPI specification tranformation. Available options are:
+          - **reducedSourceSpecifications** - proccess that finds source specifications for all operations from operation group and removes from these specifications operations other than those that are included into operation group.
+          - **mergedSpecification** - process the merges all operations from an operation group into one specification.
+        in: path
+        required: true
+        schema:
+          type: string
+          enum:
+            - reducedSourceSpecifications
+            - mergedSpecification
+      - name: groupName
+        in: path
+        required: true
+        description: Name of the operation group
+        schema:
+          type: string
+    post:
+      deprecated: true
+      x-deprecation-reason: POST /api/v1/export shall be used instead of the current operation.
+      tags:
+        - Versions
+        - Operation groups
+      summary: Async document transformation
+      description: |
+        Async task for document transformation. Document transformation is required for exporting operations group.
+        * **200 Documents transformation completed successfully** if documents were already transformed.
+
+        * **202 Accepted** will be returned after starting process for documents transformation.
+      operationId: postGenerateDocumentV3
+      parameters:
+      - name: clientBuild
+        in: query
+        description: Client-side package build will be used.
+        required: false
+        schema:
+          type: boolean
+          default: false
+      - name: builderId
+        in: query
+        required: false
+        description: Builder identifier. **Required** if clientBuild=true.
+        schema:
+          type: string
+      - name: reCalculate
+        in: query
+        description: |
+          Flag for the force document re-calculation.
+          May be used after the previous API call with **error** status.
+        schema:
+          type: boolean
+          default: false
+      - name: format
+        in: query
+        description: |
+          Format of the exported file.\
+          If buidType = reducedSourceSpecifications, then format can be yaml, json or html.\
+          If buidType = mergedspecification, then format can be yaml or json; html is not supported for this buildType.
+        schema:
+          type: string
+          enum:
+            - yaml
+            - json
+            - html
+          default: json
+      responses:
+        "200":
+          description: Documents transformation completed successfully
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                description: build config
+                properties:
+                  packageId:
+                    description: Package unique identifier (full alias).
+                    type: string
+                    example: QS.CQSS.CPQ.TMF
+                  version:
+                    description: |
+                      Package version.
+                      The mask <version>@<revision> will be used for return in a specific revision.
+                      If the @<revision> was not transmitted in the request - it won't be returned in response. Consider the version as the latest one.
+                    type: string
+                    example: "2022.3@3"
+                  apiType:
+                    description: Document transformation is available only for apiType = REST
+                    type: string
+                    enum:
+                      - rest
+                  groupName:
+                    description: Name of the group
+                    type: string
+                    example: v1
+                  buildType:
+                    description: |
+                      Type of the build process for OpeanAPI specification tranformation. Available options are:
+                      - **reducedSourceSpecifications** - proccess that finds source specifications for all operations from operation group and removes from these specifications operations other than those that are included into operation group.
+                      - **mergedSpecification** - process the merges all operations from an operation group into one specification.
+                    type: string
+                    enum:
+                      - reducedSourceSpecifications
+                      - mergedSpecification
+                  format:
+                    type: string
+                    enum:
+                      - yaml
+                      - json
+                      - html
+                  createdBy:
+                    description: The user who created the object
+                    type: string
+                  buildId:
+                    description: Id of the created build.
+                    type: string
+        "202":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    description: Calculation process status.
+                    type: string
+                    enum:
+                      - running
+                      - error
+                  message:
+                    description: The message for **error** status.
+                    type: string
+        "301":
+          description: Moved Permanently
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                IncorrectInputParams:
+                  $ref: "#/components/examples/IncorrectInputParameters"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v3/packages/{packageId}/versions/{version}/{apiType}/export/groups/{groupName}/buildType/{buildType}":
+    parameters:
+      - $ref: "#/components/parameters/packageId"
+      - $ref: "#/components/parameters/version"
+      - name: apiType
+        description: Type of the API.
+        in: path
+        required: true
+        schema:
+          type: string
+          enum:
+            - rest
+      - name: buildType
+        description: |
+          Type of the build process for OpeanAPI specification tranformation. Available options are:
+          - **reducedSourceSpecifications** - proccess that finds source specifications for all operations from operation group and removes from these specifications operations other than those that are included into operation group.
+          - **mergedSpecification** - process the merges all operations from an operation group into one specification.
+        in: path
+        required: true
+        schema:
+          type: string
+          enum:
+            - reducedSourceSpecifications
+            - mergedSpecification
+      - name: groupName
+        in: path
+        required: true
+        description: Name of the operation group
+        schema:
+          type: string
+    get:
+      deprecated: true
+      x-deprecation-reason: POST /api/v1/export shall be used instead of the current operation.
+      tags:
+        - Export
+        - Operation groups
+      summary: Export operations group as OpenAPI documents
+      description: |
+        Export all operations from an operations group (with apiType = REST API) as OpenAPI specification(s).
+      operationId: getPackagesIdVersionsIdExportGroupNameV3
+      parameters:
+        - name: format
+          in: query
+          required: true
+          description: |
+            Format of the exported file.\
+            If buidType = reducedSourceSpecifications, then format can be yaml, json or html.\
+            If buidType = mergedspecification, then format can be yaml or json; html is not supported for this buildType.
+          schema:
+            type: string
+            enum:
+              - yaml
+              - json
+              - html
+            default: json
+      responses:
+        "200":
+          description: Success
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+                description: ZIP file to download. ZIP will be returned if buildType = reducedSourceSpecifications
+            application/json:
+              schema:
+                type: string
+                format: binary
+                description: JSON file to download. JSON will be returned if buidType = mergedspecification and format = json
+            application/yaml:
+              schema:
+                type: string
+                format: binary
+                description: YAML file to download. YAML will be returned if buidType = mergedspecification and format = yaml
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                description: File name
+                example: attachment; filename="<groupName>_<package.id>_<version>.zip"
+        "301":
+          description: Moved Permanently
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                IncorrectInputParams:
+                  $ref: "#/components/examples/IncorrectInputParameters"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
   "/api/v2/packages/{packageId}/versions/{version}/files/{slug}/raw":
     parameters:
       - $ref: "#/components/parameters/packageId"
@@ -4405,6 +4795,92 @@ paths:
               examples:
                 PackageNotFound:
                   $ref: "#/components/examples/PackageNotFound"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v2/packages/{packageId}/versions/{version}/files/{slug}/doc":
+    parameters:
+      - $ref: "#/components/parameters/packageId"
+      - $ref: "#/components/parameters/version"
+      - $ref: "#/components/parameters/slug"
+    get:
+      deprecated: true
+      x-deprecation-reason: POST /api/v1/export shall be used instead of the current operation.
+      tags:
+        - Export
+      summary: Export offline API documentation by selected file
+      description: |
+        Export of offline API documentation by selected file as a zip archive.
+        Type of the documentation file is provided as input parameters:
+        - interactive - html document
+        - raw - yaml/json document.
+      operationId: getPackagesIdVersionsIdFilesSlugDoc
+      parameters:
+        - name: docType
+          in: query
+          description: Type of the exported documentation.
+          required: false
+          schema:
+            type: string
+            enum:
+              - interactive
+              - raw
+            default: interactive
+      responses:
+        "200":
+          description: Success
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+                description: Documentation ZIP file (if docType = interactive) or yaml/json (if docType = raw) to download
+        "301":
+          description: Moved Permanently
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                IncorrectInputParams:
+                  $ref: "#/components/examples/IncorrectInputParameters"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                PackageNotFound:
+                  $ref: "#/components/examples/PackageNotFound"
+                VersionNotFound:
+                  $ref: "#/components/examples/VersionNotFound"
+                FileNotFound:
+                  $ref: "#/components/examples/FileNotFound"
         "500":
           description: Internal Server Error
           content:
@@ -4476,6 +4952,87 @@ paths:
                   $ref: "#/components/examples/VersionNotFound"
                 FileNotFound:
                   $ref: "#/components/examples/FileNotFound"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v2/packages/{packageId}/versions/{version}/doc":
+    parameters:
+      - $ref: "#/components/parameters/packageId"
+      - $ref: "#/components/parameters/version"
+    get:
+      deprecated: true
+      x-deprecation-reason: POST /api/v1/export shall be used instead of the current operation.
+      tags:
+        - Export
+      summary: Export offline API documentation by selected versions
+      description: |
+        Export of offline API documentation by selected version (all files) as a zip archive.
+        Type of the documentation file is provided as input parameters:
+        * interactive - html document.
+      operationId: getPackagesIdVersionsIdDoc
+      parameters:
+        - name: docType
+          in: query
+          description: Type of the exported documentation.
+          required: false
+          schema:
+            type: string
+            enum:
+              - interactive
+            default: interactive
+      responses:
+        "200":
+          description: Success
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+                description: Documentation ZIP file to download
+        "301":
+          description: Moved Permanently
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                IncorrectInputParams:
+                  $ref: "#/components/examples/IncorrectInputParameters"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                PackageNotFound:
+                  $ref: "#/components/examples/PackageNotFound"
+                VersionNotFound:
+                  $ref: "#/components/examples/VersionNotFound"
         "500":
           description: Internal Server Error
           content:
@@ -5992,175 +6549,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
               examples: {}
-        "404":
-          description: Not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples: {}
-        "500":
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                InternalServerError:
-                  $ref: "#/components/examples/InternalServerError"
-  "/api/v2/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}/ghosts":
-    get:
-      tags:
-        - Versions
-      summary: Get list of ghost operations for operation group
-      description: |
-        Operation is considered a ghost operation if it was included in this group for previous version revision and was deleted in the current version revision
-      parameters:
-        - $ref: "#/components/parameters/apiType"
-        - $ref: "#/components/parameters/packageId"
-        - $ref: "#/components/parameters/version"
-        - $ref: "#/components/parameters/groupName"
-        - $ref: "#/components/parameters/apiAudience"
-        - name: textFilter
-          in: query
-          description: Filter by title/path/method.
-          schema:
-            type: string
-        - name: documentSlug
-          in: query
-          description: Filter by document
-          schema:
-            type: string
-            example: "billing-rating-catalog-integration-service1-json"
-        - name: tag
-          in: query
-          description: |
-            Name of the tag for filtering/grouping.
-            A full match is required. To get the list of available tags use GET /tags API.
-          schema:
-            type: string
-            example: RestControllerV5
-        - name: emptyTag
-          in: query
-          description: |
-            Flag, filtering the operations without tags at all.
-
-            In response will be returned the list of operations, on what the tag is not filled in.
-
-            This attribute has a higher priority than the **tag**. In case, then **emptyTag: true**, it will override the **tag** filter.
-          schema:
-            type: boolean
-            default: false
-        - name: kind
-          description: |
-            Operation kind.
-            * bwc - API with backward compatibility support (a.k.a. public).
-            * no-bwc - API without backward compatibility support (a.k.a. internal).
-            * experimental - APIs for feature testing. Usage is not recommended.
-          in: query
-          schema:
-            type: string
-            enum:
-              - all
-              - bwc
-              - no-bwc
-              - experimental
-            default: all
-        - name: deprecated
-          description: Filter operations by 'deprecated' status.
-          in: query
-          schema:
-            type: string
-            enum:
-              - "all"
-              - "true"
-              - "false"
-            default: all
-        - name: refPackageId
-          description: Filter by package id of ref package, shall be used in case of dashboard.
-          in: query
-          schema:
-            type: string
-        - $ref: "#/components/parameters/limit"
-        - $ref: "#/components/parameters/page"
-      responses:
-        "200":
-          description: Success
-          content:
-            application/json:
-              schema:
-                description: List of group ghost operations.
-                type: object
-                properties:
-                  ghostOperations:
-                    type: array
-                    description: |
-                      List of grouped operations that were present in the previous revision and are deleted in the current revision.
-                    items:
-                      allOf:
-                        - oneOf:
-                            - $ref: "#/components/schemas/RestOperation"
-                            - $ref: "#/components/schemas/GraphQLOperation"
-                            - $ref: "#/components/schemas/ProtobufOperation"
-                        - type: object
-                          properties:
-                            packageRef:
-                              description: |
-                                Parent package and version link.
-                                Created by the concatenation of the packageId and version name with At sign.
-                              type: string
-                              example: "QS.CloudQSS.CPQ.Q-TMF@2023.2"
-                  packages:
-                    description: |
-                      A mapped list of the packageId and version name concatenation with At sign to the package objects.
-                    type: object
-                    additionalProperties:
-                      allOf:
-                        - $ref: "#/components/schemas/ReferencedPackage"
-                        - type: object
-                      example:
-                        QS.CloudQSS.CPQ.Q-TMF@2023.2:
-                          refId: QS.CloudQSS.CPQ.Q-TMF
-                          kind: package
-                          name: Quote Management TMF648
-                          version: "2022.2@5"
-                          status: release
-                          parentPackages: ["qubership", "Qubership JSS", "Sample Management"]
-                          deletedAt: "2023-05-30T17:17:11.755146Z"
-                          deletedBy: "user1221"
-                          notLatestRevision: true
-        "301":
-          description: Moved Permanently
-          headers:
-            Location:
-              schema:
-                type: string
-              description: Current ednpoint with new packageId of moved package
-            X-New-Package-Id:
-              schema:
-                type: string
-              description: New packageId of moved package
-        "400":
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                IncorrectInputParams:
-                  $ref: "#/components/examples/IncorrectInputParameters"
-        "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: Not found
           content:
