@@ -129,6 +129,6 @@ type PublishedRepository interface {
 
 	GetVersionInternalDocuments(packageId string, version string, revision int) ([]entity.VersionInternalDocumentEntity, error)
 	GetVersionInternalDocumentData(hash string) (*entity.EnrichedVersionInternalDocumentDataEntity, error)
-	GetComparisonInternalDocuments(packageId string, version string, revision int, previousPackageId string, previousVersion string, previousRevision int) ([]entity.ComparisonInternalDocumentEntity, error)
+	GetComparisonInternalDocumentsByComparisons(comparisons []entity.VersionComparisonEntity) ([]entity.ComparisonInternalDocumentEntity, error)
 	GetComparisonInternalDocumentData(hash string) (*entity.EnrichedComparisonInternalDocumentDataEntity, error)
 }
