@@ -1503,7 +1503,8 @@ func (v versionServiceImpl) DeleteVersionsRecursively(ctx context.SecurityContex
 			}
 			if len(packages) == 0 {
 				if rootPackage.Kind == entity.KIND_PACKAGE || rootPackage.Kind == entity.KIND_DASHBOARD {
-					deleted, err := v.publishedRepo.DeletePackageRevisionsBeforeDate(context, rootPackage.Id, deleteBefore, true, false, "cleanup_job_"+jobId)
+					// deleteReleaseRevisions is false, so only draft revisions are deleted - no need to track release_versions_deleted metric
+					deleted, _, err := v.publishedRepo.DeletePackageRevisionsBeforeDate(context, rootPackage.Id, deleteBefore, true, false, "cleanup_job_"+jobId)
 					if err != nil {
 						log.Errorf("failed to delete versions of package %s during versions cleanup %s: %s", rootPackage.Id, jobId, err.Error())
 						finishedAt := time.Now()
@@ -1526,7 +1527,8 @@ func (v versionServiceImpl) DeleteVersionsRecursively(ctx context.SecurityContex
 				return
 			}
 			for _, pkg := range packages {
-				deleted, err := v.publishedRepo.DeletePackageRevisionsBeforeDate(context, pkg.Id, deleteBefore, true, false, "cleanup_job_"+jobId)
+				// deleteReleaseRevisions is false, so only draft revisions are deleted - no need to track release_versions_deleted metric
+				deleted, _, err := v.publishedRepo.DeletePackageRevisionsBeforeDate(context, pkg.Id, deleteBefore, true, false, "cleanup_job_"+jobId)
 				if err != nil {
 					log.Errorf("failed to delete versions of package %s during versions cleanup %s: %s", pkg.Id, jobId, err.Error())
 					finishedAt := time.Now()

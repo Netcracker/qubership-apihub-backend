@@ -89,7 +89,6 @@ func (d dbMigrationServiceImpl) fixReleaseVersionsPublishedMetricFromPatches() e
 			sc.package_id = pv.package_id AND
 			sc.version = pv.version AND
 			sc.revision = pv.revision
-		WHERE pv.deleted_at IS NULL
 		ORDER BY pv.published_at ASC`
 
 	_, err := d.cp.GetConnection().QueryContext(ctx, &changes, query)
@@ -99,7 +98,6 @@ func (d dbMigrationServiceImpl) fixReleaseVersionsPublishedMetricFromPatches() e
 
 	if len(changes) == 0 {
 		log.Infof("No status changes found, nothing to fix")
-		return nil
 	} else {
 		log.Infof("Found %d package revisions with status changes to process", len(changes))
 	}
@@ -185,6 +183,76 @@ func (d dbMigrationServiceImpl) fixReleaseVersionsPublishedMetricFromPatches() e
 		return fmt.Errorf("failed to process status changes: %w", err)
 	}
 
-	log.Infof("ReleaseVersionsPublished metric fix completed. Processed: %d, Skipped: %d", processed, skipped)
+	log.Infof("release_versions_published metric fix completed. Processed: %d, Skipped: %d", processed, skipped)
+
+	log.Infof("Starting release_versions_deleted metric creation for soft-deleted revisions...")
+
+	type deletedRevision struct {
+		PackageId string    `pg:"package_id"`
+		Version   string    `pg:"version"`
+		Revision  int       `pg:"revision"`
+		DeletedAt time.Time `pg:"deleted_at"`
+		DeletedBy string    `pg:"deleted_by"`
+	}
+
+	var deletedRevisions []deletedRevision
+	deletedQuery := `
+		SELECT
+			package_id,
+			version,
+			revision,
+			deleted_at,
+			deleted_by
+		FROM published_version
+		WHERE deleted_at IS NOT NULL
+			AND status = 'release'
+		ORDER BY deleted_at ASC`
+
+	_, err = d.cp.GetConnection().QueryContext(ctx, &deletedRevisions, deletedQuery)
+	if err != nil {
+		return fmt.Errorf("failed to query deleted revisions: %w", err)
+	}
+
+	if len(deletedRevisions) == 0 {
+		log.Infof("No deleted release revisions found")
+		return nil
+	}
+
+	log.Infof("Found %d deleted release revisions to process", len(deletedRevisions))
+
+	deletedProcessed := 0
+	err = d.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
+		for _, deleted := range deletedRevisions {
+			year := deleted.DeletedAt.Year()
+			month := int(deleted.DeletedAt.Month())
+			day := deleted.DeletedAt.Day()
+
+			increaseQuery := `
+				INSERT INTO business_metric (year, month, day, metric, data, user_id)
+				VALUES (?, ?, ?, ?, ?::jsonb, ?)
+				ON CONFLICT (year, month, day, user_id, metric)
+				DO UPDATE
+				SET data = coalesce(business_metric.data, '{}'::jsonb) ||
+					jsonb_build_object(?, coalesce((business_metric.data ->> ?)::int, 0) + 1)`
+
+			_, err := tx.Exec(increaseQuery,
+				year, month, day, metrics.ReleaseVersionsDeleted,
+				fmt.Sprintf(`{"%s": 1}`, deleted.PackageId), deleted.DeletedBy,
+				deleted.PackageId, deleted.PackageId)
+			if err != nil {
+				return fmt.Errorf("failed to create deleted metric for %s/%s@%d: %w",
+					deleted.PackageId, deleted.Version, deleted.Revision, err)
+			}
+			log.Debugf("Created deleted metric for %s/%s@%d", deleted.PackageId, deleted.Version, deleted.Revision)
+			deletedProcessed++
+		}
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to process deleted revisions: %w", err)
+	}
+
+	log.Infof("ReleaseVersionsDeleted metric creation completed. Processed: %d", deletedProcessed)
 	return nil
 }
