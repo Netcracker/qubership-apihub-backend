@@ -371,7 +371,7 @@ func ExecuteSearchTool(ctx context.Context, req mcp.CallToolRequest, operationSe
 		Page:  page,
 	}
 
-	searchResult, err := operationService.SearchForOperations(searchReq)
+	searchResult, err := operationService.LiteSearchForOperations(searchReq)
 	if err != nil {
 		return nil, err
 	}

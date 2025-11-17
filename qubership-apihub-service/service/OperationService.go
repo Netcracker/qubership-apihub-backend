@@ -34,6 +34,7 @@ type OperationService interface {
 	GetOperationChanges(packageId string, version string, operationId string, previousPackageId string, previousVersion string, severities []string) (*view.OperationChangesView, error)
 	GetVersionChanges(packageId string, version string, apiType string, searchReq view.VersionChangesReq) (*view.VersionChangesView, error)
 	SearchForOperations(searchReq view.SearchQueryReq) (*view.SearchResult, error)
+	LiteSearchForOperations(searchReq view.SearchQueryReq) (*view.SearchResult, error)
 	GetDeprecatedOperations(packageId string, version string, searchReq view.DeprecatedOperationListReq) (*view.Operations, error)
 	GetOperationDeprecatedItems(searchReq view.OperationBasicSearchReq) (*view.DeprecatedItems, error)
 	GetDeprecatedOperationsSummary(packageId string, version string) (*view.DeprecatedOperationsSummary, error)
@@ -571,6 +572,46 @@ func (o operationServiceImpl) GetVersionChanges(packageId string, version string
 }
 
 func (o operationServiceImpl) SearchForOperations(searchReq view.SearchQueryReq) (*view.SearchResult, error) {
+	searchQuery, err := entity.MakeOperationSearchQueryEntity(&searchReq)
+	if err != nil {
+		return nil, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidSearchParameters,
+			Message: exception.InvalidSearchParametersMsg,
+			Params:  map[string]interface{}{"error": err.Error()},
+		}
+	}
+	err = setOperationSearchParams(searchReq.OperationSearchParams, searchQuery)
+	if err != nil {
+		return nil, err
+	}
+	//todo maybe move to envs
+	searchQuery.OperationSearchWeight = entity.OperationSearchWeight{
+		ScopeWeight:     13,
+		TitleWeight:     3,
+		OpenCountWeight: 0.2,
+	}
+	searchQuery.VersionStatusSearchWeight = entity.VersionStatusSearchWeight{
+		VersionReleaseStatus:        string(view.Release),
+		VersionReleaseStatusWeight:  4,
+		VersionDraftStatus:          string(view.Draft),
+		VersionDraftStatusWeight:    0.6,
+		VersionArchivedStatus:       string(view.Archived),
+		VersionArchivedStatusWeight: 0.1,
+	}
+	operationEntities, err := o.operationRepository.SearchForOperations(searchQuery)
+	if err != nil {
+		return nil, err
+	}
+	operations := make([]interface{}, 0)
+	for _, ent := range operationEntities {
+		operations = append(operations, entity.MakeOperationSearchResultView(ent))
+	}
+
+	return &view.SearchResult{Operations: &operations}, nil
+}
+
+func (o operationServiceImpl) LiteSearchForOperations(searchReq view.SearchQueryReq) (*view.SearchResult, error) {
 	searchQuery, err := entity.MakeOperationSearchQueryEntity(&searchReq)
 	if err != nil {
 		return nil, &exception.CustomError{
