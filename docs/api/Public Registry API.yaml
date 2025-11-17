@@ -61,6 +61,26 @@ tags:
   - name: User profile
     description: APIs for user's personal settings.
 paths:
+  "api/v1/system/info":
+    get:
+      tags:
+        - Custom
+      summary: Get system info.
+      description: Get system info.
+      operationId: getInfo
+      parameters: []
+      responses:
+        "200":
+          description: Successful execution
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemInfo"
+              examples:
+                SystemInfo:
+                  $ref: "#/components/examples/SystemInfo"
+        "500":
+          $ref: "#/components/responses/internalServerError500"
   "/api/v1/system/configuration":
     get:
       tags:
@@ -9833,6 +9853,29 @@ components:
         type: string
         example: "CreateItemDto"
   schemas:
+    SystemInfo:
+      description: Information about the APIHUB product
+      type: object
+      properties:
+        backendVersion:
+          description: Current backend version
+          type: string
+          example: main-20220727.092034-53
+        productionMode:
+          description: Production environment flag
+          type: boolean
+        externalLinks:
+          description: List of links to the external resource, for example URL to the documentation or URL pointing to the contact information of support group.
+          type: array
+          items:
+            description: |
+              Title for the link and corresponding URL. Value must written in the following format <linkTitle>|<URL>. If array item does not contain vertical bar (|), then this item will be skipped.
+            type: string
+          example: [User guide|https://www.example.com/guide, Support team|https://www.example.com/support]
+        migrationInProgress:
+          description: Identifies if migration is currently in progress.
+          type: boolean
+          default: false
     AuthResponse:
       description: Auth response
       type: object
@@ -13506,6 +13549,15 @@ components:
               type: string
               example: cloudQSS-release2
   examples:
+    SystemInfo:
+      description: Example of the system description
+      value:
+        backendVersion: master-20250522.080756-379-RELEASE
+        productionMode: true
+        migrationInProgress: false
+        externalLinks:
+          - User guide|https://www.example.com/guide
+          - Support team|https://www.example.com/support]
     Package:
       description: Example of the package params
       value:
