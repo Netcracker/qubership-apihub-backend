@@ -34,6 +34,8 @@ COPY docs/api ./api
 
 RUN chmod -R a+rwx /app
 
+RUN mkdir cov
+
 USER 10001
 
 ENTRYPOINT ["GOCOVERDIR=./cov", "./qubership-apihub-service"]
