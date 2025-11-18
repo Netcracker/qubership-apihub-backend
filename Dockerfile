@@ -38,4 +38,5 @@ RUN mkdir cov
 
 USER 10001
 
-ENTRYPOINT ["GOCOVERDIR=./cov", "./qubership-apihub-service"]
+ENV GOCOVERDIR=./cov
+ENTRYPOINT ["./qubership-apihub-service"]
