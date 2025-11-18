@@ -32,9 +32,8 @@ COPY qubership-apihub-service/static ./static
 COPY qubership-apihub-service/resources ./resources
 COPY docs/api ./api
 
-RUN chmod -R a+rwx /app
-
 RUN mkdir cov
+RUN chmod -R a+rwx /app
 
 USER 10001
 
