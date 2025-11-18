@@ -10,7 +10,7 @@ COPY qubership-apihub-service qubership-apihub-service
 
 WORKDIR /workspace/qubership-apihub-service
 
-RUN GOSUMDB=off CGO_ENABLED=0 go mod tidy && go mod download && GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build .
+RUN GOSUMDB=off CGO_ENABLED=0 go mod tidy && go mod download && GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -cover -covermode=atomic -coverpkg=./... .
 
 FROM docker.io/alpine:3.22.1
 
@@ -36,4 +36,4 @@ RUN chmod -R a+rwx /app
 
 USER 10001
 
-ENTRYPOINT ["./qubership-apihub-service"]
+ENTRYPOINT ["GOCOVERDIR=./cov", "./qubership-apihub-service"]
