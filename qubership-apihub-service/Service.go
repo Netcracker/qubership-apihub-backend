@@ -21,6 +21,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"path"
+	"runtime/coverage"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -526,6 +527,11 @@ func main() {
 
 		r.HandleFunc("/api/internal/clear/{testId}", security.Secure(cleanupController.ClearTestData)).Methods(http.MethodDelete)
 
+		r.HandleFunc("/debug/flush-coverage", func(w http.ResponseWriter, r *http.Request) {
+			flushCoverage()
+			w.Write([]byte("ok"))
+		}).Methods(http.MethodGet)
+
 		r.PathPrefix("/debug/").Handler(http.DefaultServeMux)
 
 		r.HandleFunc("/api/internal/minio/download", security.Secure(minioStorageController.DownloadFilesFromMinioToDatabase)).Methods(http.MethodPost)
@@ -634,5 +640,17 @@ func makeServer(systemInfoService service.SystemInfoService, r *mux.Router) *htt
 		Addr:         listenAddr,
 		WriteTimeout: 300 * time.Second,
 		ReadTimeout:  30 * time.Second,
+	}
+}
+
+func flushCoverage() {
+	dir := os.Getenv("GOCOVERDIR")
+	log.Printf("coverage: flushing to %q", dir)
+
+	if err := coverage.WriteMetaDir(dir); err != nil {
+		log.Printf("coverage: WriteMetaDir error: %v", err)
+	}
+	if err := coverage.WriteCountersDir(dir); err != nil {
+		log.Printf("coverage: WriteCountersDir error: %v", err)
 	}
 }
