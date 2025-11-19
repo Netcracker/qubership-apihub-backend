@@ -61,7 +61,7 @@ tags:
   - name: User profile
     description: APIs for user's personal settings.
 paths:
-  "api/v1/system/info":
+  "/api/v1/system/info":
     get:
       tags:
         - Custom
@@ -80,7 +80,7 @@ paths:
                 SystemInfo:
                   $ref: "#/components/examples/SystemInfo"
         "500":
-          $ref: "#/components/responses/internalServerError500"
+          $ref: "#/components/examples/InternalServerError"
   "/api/v1/system/configuration":
     get:
       tags:
