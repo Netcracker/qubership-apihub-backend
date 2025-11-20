@@ -20,6 +20,7 @@ import (
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/archive"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 )
 
 func ValidatePublishSources(srcArc *archive.SourcesArchive) error {
@@ -65,7 +66,9 @@ func ValidatePublishBuildResult(buildArc *archive.BuildResultArchive) error {
 		documentsFileIds = append(documentsFileIds, configFile.Filename)
 	}
 	for _, configFile := range buildArc.PackageOperations.Operations {
-		operationsFileIds = append(operationsFileIds, configFile.OperationId)
+		if configFile.ApiType != string(view.GraphqlApiType) {
+			operationsFileIds = append(operationsFileIds, configFile.OperationId)
+		}
 	}
 	for _, configFile := range buildArc.PackageComparisons.Comparisons {
 		if configFile.ComparisonFileId != "" {

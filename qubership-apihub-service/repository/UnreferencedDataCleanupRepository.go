@@ -97,14 +97,6 @@ func (u unreferencedDataCleanupRepositoryImpl) DeleteUnreferencedOperationData(c
 
 		logger.Tracef(ctx, "Deleting related data for operation data with hash: %v", dataHash)
 
-		logger.Debug(ctx, "Deleting related data from ts_graphql_operation_data")
-		deleteGQLDataQuery := `DELETE FROM ts_graphql_operation_data WHERE data_hash IN (?)`
-		gqlResult, err := tx.ExecContext(ctx, deleteGQLDataQuery, pg.In(dataHash))
-		if err != nil {
-			return fmt.Errorf("failed to delete records from ts_graphql_operation_data: %w", err)
-		}
-		deletedItems.TSGQLOperationData = gqlResult.RowsAffected()
-
 		logger.Debug(ctx, "Deleting related data from ts_rest_operation_data")
 		deleteRestDataQuery := `DELETE FROM ts_rest_operation_data WHERE data_hash IN (?)`
 		restResult, err := tx.ExecContext(ctx, deleteRestDataQuery, pg.In(dataHash))
@@ -150,7 +142,6 @@ func (u unreferencedDataCleanupRepositoryImpl) DeleteUnreferencedOperationData(c
 			cleanupRun.DeletedItems = &deletedItems
 		} else {
 			cleanupRun.DeletedItems.OperationData += deletedItems.OperationData
-			cleanupRun.DeletedItems.TSGQLOperationData += deletedItems.TSGQLOperationData
 			cleanupRun.DeletedItems.TSRestOperationData += deletedItems.TSRestOperationData
 			cleanupRun.DeletedItems.TSOperationData += deletedItems.TSOperationData
 			cleanupRun.DeletedItems.FTSOperationData += deletedItems.FTSOperationData
@@ -167,7 +158,6 @@ func (u unreferencedDataCleanupRepositoryImpl) DeleteUnreferencedOperationData(c
 	})
 
 	return deletedItems.OperationData +
-		deletedItems.TSGQLOperationData +
 		deletedItems.TSRestOperationData +
 		deletedItems.TSOperationData +
 		deletedItems.FTSOperationData, err
@@ -455,21 +445,10 @@ func (u unreferencedDataCleanupRepositoryImpl) VacuumAffectedTables(ctx context.
 				logger.Warn(ctx, errorMsg)
 				vacuumErrors = append(vacuumErrors, errorMsg)
 			} else {
-				logger.Trace(ctx, "Successfully vacuumed 'operation_data' table")
-			}
+			logger.Trace(ctx, "Successfully vacuumed 'operation_data' table")
 		}
-		if deletedItems.TSGQLOperationData > 0 {
-			logger.Debugf(ctx, "Vacuuming 'ts_graphql_operation_data' table for %d deleted entries", deletedItems.TSGQLOperationData)
-			_, err = u.cp.GetConnection().ExecContext(ctx, "VACUUM FULL ts_graphql_operation_data")
-			if err != nil {
-				errorMsg := fmt.Sprintf("Failed to vacuum 'ts_graphql_operation_data' table: %v", err)
-				logger.Warn(ctx, errorMsg)
-				vacuumErrors = append(vacuumErrors, errorMsg)
-			} else {
-				logger.Trace(ctx, "Successfully vacuumed 'ts_graphql_operation_data' table")
-			}
-		}
-		if deletedItems.TSRestOperationData > 0 {
+	}
+	if deletedItems.TSRestOperationData > 0 {
 			logger.Debugf(ctx, "Vacuuming 'ts_rest_operation_data' table for %d deleted entries", deletedItems.TSRestOperationData)
 			_, err = u.cp.GetConnection().ExecContext(ctx, "VACUUM FULL ts_rest_operation_data")
 			if err != nil {
