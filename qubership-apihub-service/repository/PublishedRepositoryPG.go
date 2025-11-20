@@ -1016,16 +1016,55 @@ func (p publishedRepositoryImpl) getComparisonInternalDocumentsChanges(tx *pg.Tx
 			return nil, fmt.Errorf("failed to calculate previous version revision for comparison internal docs: %v", err.Error())
 		}
 	}
-	err = tx.Model(&oldComparisonInternalDocs).
-		Where("package_id = ?", packageInfo.PackageId).
-		Where("version = ?", packageInfo.Version).
-		Where("revision = ?", packageInfo.Revision).
-		Where("previous_package_id = ?", packageInfo.PreviousVersionPackageId).
-		Where("previous_version = ?", packageInfo.PreviousVersion).
-		Where("previous_revision = ?", packageInfo.PreviousVersionRevision).
-		Select()
+	// Fetch comparison internal documents for main comparison and refs
+	versionComparisonSnapshotTable := fmt.Sprintf(`migration."version_comparison_%s"`, packageInfo.MigrationId)
+	getComparisonInternalDocsQuery := fmt.Sprintf(`
+		with ref_comparisons as (
+			select
+				unnest(refs) as comparison_id
+			from %s
+			where package_id = ?
+				and version = ?
+				and revision = ?
+				and previous_package_id = ?
+				and previous_version = ?
+				and previous_revision = ?
+		),
+		ref_comparison_details as (
+			select
+				package_id,
+				version,
+				revision,
+				previous_package_id,
+				previous_version,
+				previous_revision
+			from %s
+			where comparison_id in (select comparison_id from ref_comparisons)
+		)
+		select * from comparison_internal_document
+		where (package_id, version, revision, previous_package_id, previous_version, previous_revision) in (
+			select ?, ?, ?, ?, ?, ?
+			union
+			select package_id, version, revision, previous_package_id, previous_version, previous_revision
+			from ref_comparison_details
+		)
+		`, versionComparisonSnapshotTable, versionComparisonSnapshotTable)
+	_, err = tx.Query(&oldComparisonInternalDocs, getComparisonInternalDocsQuery,
+		packageInfo.PackageId,
+		packageInfo.Version,
+		packageInfo.Revision,
+		packageInfo.PreviousVersionPackageId,
+		packageInfo.PreviousVersion,
+		packageInfo.PreviousVersionRevision,
+		packageInfo.PackageId,
+		packageInfo.Version,
+		packageInfo.Revision,
+		packageInfo.PreviousVersionPackageId,
+		packageInfo.PreviousVersion,
+		packageInfo.PreviousVersionRevision,
+	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get comparison internal documents from db: %v", err.Error())
 	}
 	comparisonInternalDocsChanges := make(map[string]interface{}, 0)
 	matchedComparisonInternalDocs := make(map[string]struct{}, 0)
@@ -4843,16 +4882,37 @@ func (p publishedRepositoryImpl) versionInternalDocumentDataExists(tx *pg.Tx, ha
 	return true, nil
 }
 
-func (p publishedRepositoryImpl) GetComparisonInternalDocuments(packageId string, version string, revision int, previousPackageId string, previousVersion string, previousRevision int) ([]entity.ComparisonInternalDocumentEntity, error) {
+func (p publishedRepositoryImpl) GetComparisonInternalDocumentsByComparisons(comparisons []entity.VersionComparisonEntity) ([]entity.ComparisonInternalDocumentEntity, error) {
+	if len(comparisons) == 0 {
+		return []entity.ComparisonInternalDocumentEntity{}, nil
+	}
+
 	var docs []entity.ComparisonInternalDocumentEntity
-	err := p.cp.GetConnection().Model(&docs).
-		Where("package_id = ?", packageId).
-		Where("version = ?", version).
-		Where("revision = ?", revision).
-		Where("previous_package_id = ?", previousPackageId).
-		Where("previous_version = ?", previousVersion).
-		Where("previous_revision = ?", previousRevision).
-		Select()
+	query := p.cp.GetConnection().Model(&docs)
+
+	for i, comparison := range comparisons {
+		if i == 0 {
+			query = query.WhereGroup(func(q *pg.Query) (*pg.Query, error) {
+				return q.Where("package_id = ?", comparison.PackageId).
+					Where("version = ?", comparison.Version).
+					Where("revision = ?", comparison.Revision).
+					Where("previous_package_id = ?", comparison.PreviousPackageId).
+					Where("previous_version = ?", comparison.PreviousVersion).
+					Where("previous_revision = ?", comparison.PreviousRevision), nil
+			})
+		} else {
+			query = query.WhereOrGroup(func(q *pg.Query) (*pg.Query, error) {
+				return q.Where("package_id = ?", comparison.PackageId).
+					Where("version = ?", comparison.Version).
+					Where("revision = ?", comparison.Revision).
+					Where("previous_package_id = ?", comparison.PreviousPackageId).
+					Where("previous_version = ?", comparison.PreviousVersion).
+					Where("previous_revision = ?", comparison.PreviousRevision), nil
+			})
+		}
+	}
+
+	err := query.Select()
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return []entity.ComparisonInternalDocumentEntity{}, nil

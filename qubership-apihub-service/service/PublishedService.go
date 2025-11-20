@@ -1465,7 +1465,7 @@ func (p publishedServiceImpl) GetVersionInternalDocuments(packageId string, vers
 		return nil, err
 	}
 
-	result := make([]view.InternalDocument, len(docs))
+	result := make([]view.InternalDocument, 0, len(docs))
 	for _, doc := range docs {
 		result = append(result, *entity.MakeVersionInternalDocumentView(&doc))
 	}
@@ -1536,13 +1536,48 @@ func (p publishedServiceImpl) GetComparisonInternalDocuments(packageId string, v
 		}
 	}
 
-	docs, err := p.publishedRepo.GetComparisonInternalDocuments(versionEnt.PackageId, versionEnt.Version, versionEnt.Revision,
-		previousVersionEnt.PackageId, previousVersionEnt.Version, previousVersionEnt.Revision)
+	comparisonId := view.MakeVersionComparisonId(
+		versionEnt.PackageId, versionEnt.Version, versionEnt.Revision,
+		previousVersionEnt.PackageId, previousVersionEnt.Version, previousVersionEnt.Revision,
+	)
+
+	versionComparison, err := p.publishedRepo.GetVersionComparison(comparisonId)
+	if err != nil {
+		return nil, err
+	}
+	if versionComparison == nil || versionComparison.NoContent {
+		return nil, &exception.CustomError{
+			Status:  http.StatusNotFound,
+			Code:    exception.ComparisonNotFound,
+			Message: exception.ComparisonNotFoundMsg,
+			Params: map[string]interface{}{
+				"comparisonId":      comparisonId,
+				"packageId":         versionEnt.PackageId,
+				"version":           versionEnt.Version,
+				"revision":          versionEnt.Revision,
+				"previousPackageId": previousVersionEnt.PackageId,
+				"previousVersion":   previousVersionEnt.Version,
+				"previousRevision":  previousVersionEnt.Revision,
+			},
+		}
+	}
+
+	comparisons := []entity.VersionComparisonEntity{*versionComparison}
+
+	if len(versionComparison.Refs) > 0 {
+		refsComparisons, err := p.publishedRepo.GetVersionRefsComparisons(comparisonId)
+		if err != nil {
+			return nil, err
+		}
+		comparisons = append(comparisons, refsComparisons...)
+	}
+
+	docs, err := p.publishedRepo.GetComparisonInternalDocumentsByComparisons(comparisons)
 	if err != nil {
 		return nil, err
 	}
 
-	result := make([]view.InternalDocument, len(docs))
+	result := make([]view.InternalDocument, 0, len(docs))
 	for _, doc := range docs {
 		result = append(result, *entity.MakeComparisonInternalDocumentView(&doc))
 	}
