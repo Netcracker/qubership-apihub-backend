@@ -38,16 +38,6 @@ type Operation struct {
 	VersionInternalDocumentId string                 `json:"versionInternalDocumentId" validate:"required"`
 }
 
-type DocumentsOperation_deprecated struct {
-	OperationId string      `json:"operationId" validate:"required"`
-	Title       string      `json:"title" validate:"required"`
-	ApiType     string      `json:"apiType" validate:"required"`
-	Deprecated  bool        `json:"deprecated"`
-	ApiKind     string      `json:"apiKind" validate:"required"`
-	Metadata    interface{} `json:"metadata" validate:"required"`
-	DocumentId  string      `json:"documentId"`
-}
-
 type SingleOperationView struct {
 	Data                      *orderedmap.OrderedMap `json:"data,omitempty"`
 	OperationId               string                 `json:"operationId"`
@@ -275,35 +265,12 @@ type VersionChangesView struct {
 	Packages                 map[string]PackageVersionRef `json:"packages,omitempty"`
 }
 
-type OperationComparisonChangelogView_deprecated struct {
-	OperationId               string        `json:"operationId"`
-	Title                     string        `json:"title"`
-	ApiKind                   string        `json:"apiKind,omitempty"`
-	ChangeSummary             ChangeSummary `json:"changeSummary"`
-	PackageRef                string        `json:"packageRef"`
-	PreviousVersionPackageRef string        `json:"previousVersionPackageRef"`
-}
-
 type GenericComparisonOperationView struct {
 	OperationId string `json:"operationId"`
 	Title       string `json:"title"`
 	ApiKind     string `json:"apiKind,omitempty"`
 	ApiAudience string `json:"apiAudience"`
 	PackageRef  string `json:"packageRef"`
-}
-
-type ComparisonOperationView_deprecated struct {
-	Title       string `json:"title"`
-	ApiKind     string `json:"apiKind,omitempty"`
-	ApiAudience string `json:"apiAudience"`
-	PackageRef  string `json:"packageRef"`
-}
-
-type OperationComparisonChangelogView_deprecated_2 struct {
-	OperationId       string                              `json:"operationId"`
-	CurrentOperation  *ComparisonOperationView_deprecated `json:"currentOperation,omitempty"`
-	PreviousOperation *ComparisonOperationView_deprecated `json:"previousOperation,omitempty"`
-	ChangeSummary     ChangeSummary                       `json:"changeSummary"`
 }
 
 type OperationComparisonChangesView struct {
@@ -333,11 +300,6 @@ type Operations struct {
 type GroupedOperations struct {
 	Operations []interface{}                `json:"operations"`
 	Packages   map[string]PackageVersionRef `json:"packages,omitempty"`
-}
-
-type GroupedGhostOperations_deprecated struct {
-	GhostOperations []interface{}                `json:"ghostOperations"`
-	Packages        map[string]PackageVersionRef `json:"packages,omitempty"`
 }
 
 type ChangeSummary struct {
@@ -500,11 +462,6 @@ type DocumentsForTransformationFilterReq struct {
 	Offset                 int
 	FilterByOperationGroup string
 }
-type ChangelogCalculationParams struct {
-	PreviousVersion          string `json:"previousVersion"`
-	PreviousVersionPackageId string `json:"previousVersionPackageId"`
-	ReCalculate              bool   `json:"reCalculate"`
-}
 
 type CalculationProcessStatus struct {
 	Status  string `json:"status,omitempty"`
@@ -533,8 +490,4 @@ type OperationModelUsages struct {
 type OperationModels struct {
 	OperationId string   `json:"operationId"`
 	ModelNames  []string `json:"modelNames"`
-}
-
-type CustomTags struct {
-	CustomTag map[string]interface{}
 }
