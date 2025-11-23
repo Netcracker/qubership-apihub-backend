@@ -239,6 +239,13 @@ func (a *BuildResultToEntitiesReader) ReadOperationsToEntities() ([]*entity.Oper
 			case string(view.ProtobufApiType):
 				metadata.SetType(operationMetadata.GetStringValue("type"))
 				metadata.SetMethod(operationMetadata.GetStringValue("method"))
+			case string(view.AsyncapiApiType):
+				if len(operation.Tags) > 0 {
+					metadata.SetTags(operation.Tags)
+				}
+				metadata.SetAction(operationMetadata.GetStringValue("action"))
+				metadata.SetChannel(operationMetadata.GetStringValue("channel"))
+				metadata.SetProtocol(operationMetadata.GetStringValue("protocol"))
 			}
 
 			customTags, err = operationMetadata.GetMapStringToInterface("customTags")

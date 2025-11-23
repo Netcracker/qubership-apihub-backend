@@ -226,6 +226,8 @@ func MakeDocumentsOperationView(operationEnt OperationEntity) interface{} {
 		return MakeGraphQLOperationView(&operationEnt)
 	case string(view.ProtobufApiType):
 		return MakeProtobufOperationView(&operationEnt)
+	case string(view.AsyncapiApiType):
+		return MakeAsyncAPIOperationView(&operationEnt)
 	}
 	return MakeCommonOperationView(&operationEnt)
 }
@@ -256,6 +258,12 @@ func MakeOperationView(operationEnt OperationRichEntity) interface{} {
 		protobufOperationView.Data = data
 		protobufOperationView.PackageRef = view.MakePackageRefKey(operationEnt.PackageId, operationEnt.Version, operationEnt.Revision)
 		return protobufOperationView
+
+	case string(view.AsyncapiApiType):
+		asyncapiOperationView := MakeAsyncAPIOperationView(&operationEnt.OperationEntity)
+		asyncapiOperationView.Data = data
+		asyncapiOperationView.PackageRef = view.MakePackageRefKey(operationEnt.PackageId, operationEnt.Version, operationEnt.Revision)
+		return asyncapiOperationView
 	}
 	return MakeCommonOperationView(&operationEnt.OperationEntity)
 }
@@ -315,6 +323,18 @@ func MakeProtobufOperationView(operationEnt *OperationEntity) view.ProtobufOpera
 	}
 }
 
+func MakeAsyncAPIOperationView(operationEnt *OperationEntity) view.AsyncAPIOperationView {
+	return view.AsyncAPIOperationView{
+		OperationListView: MakeCommonOperationView(operationEnt),
+		AsyncAPIOperationMetadata: view.AsyncAPIOperationMetadata{
+			Action:   operationEnt.Metadata.GetAction(),
+			Channel:  operationEnt.Metadata.GetChannel(),
+			Protocol: operationEnt.Metadata.GetProtocol(),
+			Tags:     operationEnt.Metadata.GetTags(),
+		},
+	}
+}
+
 func MakeDeprecatedOperationView(operationEnt OperationRichEntity, includeDeprecatedItems bool) interface{} {
 	operationView := view.DeprecatedOperationView{
 		OperationId:             operationEnt.OperationId,
@@ -358,6 +378,16 @@ func MakeDeprecatedOperationView(operationEnt OperationRichEntity, includeDeprec
 			ProtobufOperationMetadata: view.ProtobufOperationMetadata{
 				Type:   operationEnt.Metadata.GetType(),
 				Method: operationEnt.Metadata.GetMethod(),
+			},
+		}
+	case string(view.AsyncapiApiType):
+		return view.DeprecatedAsyncAPIOperationView{
+			DeprecatedOperationView: operationView,
+			AsyncAPIOperationMetadata: view.AsyncAPIOperationMetadata{
+				Action:   operationEnt.Metadata.GetAction(),
+				Channel:  operationEnt.Metadata.GetChannel(),
+				Protocol: operationEnt.Metadata.GetProtocol(),
+				Tags:     operationEnt.Metadata.GetTags(),
 			},
 		}
 	}
@@ -409,6 +439,16 @@ func MakeSingleOperationView(operationEnt OperationRichEntity) interface{} {
 			ProtobufOperationMetadata: view.ProtobufOperationMetadata{
 				Type:   operationEnt.Metadata.GetType(),
 				Method: operationEnt.Metadata.GetMethod(),
+			},
+		}
+	case string(view.AsyncapiApiType):
+		return view.AsyncAPIOperationSingleView{
+			SingleOperationView: operationView,
+			AsyncAPIOperationMetadata: view.AsyncAPIOperationMetadata{
+				Action:   operationEnt.Metadata.GetAction(),
+				Channel:  operationEnt.Metadata.GetChannel(),
+				Protocol: operationEnt.Metadata.GetProtocol(),
+				Tags:     operationEnt.Metadata.GetTags(),
 			},
 		}
 	}
@@ -540,6 +580,39 @@ func MakeOperationComparisonChangelogView(entity OperationComparisonChangelogEnt
 			ChangeSummary:     entity.ChangesSummary,
 		}
 		return result
+	case string(view.AsyncapiApiType):
+		var current *view.AsyncAPIOperationComparisonChangelogView
+		var previous *view.AsyncAPIOperationComparisonChangelogView
+
+		if entity.OperationId != "" {
+			current = &view.AsyncAPIOperationComparisonChangelogView{
+				GenericComparisonOperationView: currentGenericView,
+				AsyncAPIOperationMetadata: view.AsyncAPIOperationMetadata{
+					Action:   entity.Metadata.GetAction(),
+					Channel:  entity.Metadata.GetChannel(),
+					Protocol: entity.Metadata.GetProtocol(),
+					Tags:     entity.Metadata.GetTags(),
+				},
+			}
+		}
+		if entity.PreviousOperationId != "" {
+			previous = &view.AsyncAPIOperationComparisonChangelogView{
+				GenericComparisonOperationView: previousGenericView,
+				AsyncAPIOperationMetadata: view.AsyncAPIOperationMetadata{
+					Action:   entity.PreviousMetadata.GetAction(),
+					Channel:  entity.PreviousMetadata.GetChannel(),
+					Protocol: entity.PreviousMetadata.GetProtocol(),
+					Tags:     entity.PreviousMetadata.GetTags(),
+				},
+			}
+		}
+
+		result := &view.AsyncAPIOperationPairChangesView{
+			CurrentOperation:  current,
+			PreviousOperation: previous,
+			ChangeSummary:     entity.ChangesSummary,
+		}
+		return result
 	}
 	return nil
 }
@@ -630,6 +703,28 @@ func MakeOperationComparisonChangesView(entity OperationComparisonChangelogEntit
 				ProtobufOperationMetadata: view.ProtobufOperationMetadata{
 					Type:   entity.Metadata.GetType(),
 					Method: entity.Metadata.GetMethod(),
+				},
+			}
+		}
+	case string(view.AsyncapiApiType):
+		if action == view.ChangelogActionRemove {
+			return view.AsyncAPIOperationComparisonChangesView{
+				OperationComparisonChangesView: operationComparisonChangelogView,
+				AsyncAPIOperationMetadata: view.AsyncAPIOperationMetadata{
+					Action:   entity.PreviousMetadata.GetAction(),
+					Channel:  entity.PreviousMetadata.GetChannel(),
+					Protocol: entity.PreviousMetadata.GetProtocol(),
+					Tags:     entity.PreviousMetadata.GetTags(),
+				},
+			}
+		} else {
+			return view.AsyncAPIOperationComparisonChangesView{
+				OperationComparisonChangesView: operationComparisonChangelogView,
+				AsyncAPIOperationMetadata: view.AsyncAPIOperationMetadata{
+					Action:   entity.Metadata.GetAction(),
+					Channel:  entity.Metadata.GetChannel(),
+					Protocol: entity.Metadata.GetProtocol(),
+					Tags:     entity.Metadata.GetTags(),
 				},
 			}
 		}
