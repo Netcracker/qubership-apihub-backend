@@ -540,17 +540,17 @@ func main() {
 	discoveryResult := specExposer.Discover()
 	if len(discoveryResult.Errors) > 0 {
 		for _, err := range discoveryResult.Errors {
-			log.Errorf("Error during API discovery: %v", err)
+			log.Errorf("Error during API specifications discovery: %v", err)
 		}
-		panic("Failed to discover API specifications")
+		panic("Failed to expose API specifications")
 	}
 	if len(discoveryResult.Warnings) > 0 {
 		for _, warning := range discoveryResult.Warnings {
-			log.Warnf("Warning during API discovery: %s", warning)
+			log.Warnf("Warning during API specifications discovery: %s", warning)
 		}
 	}
 	for _, endpointConfig := range discoveryResult.Endpoints {
-		log.Debugf("Registering endpoint: %v %+v", endpointConfig.Path, endpointConfig.SpecMetadata)
+		log.Debugf("Registering API specification endpoint with path: %s and spec metadata: %+v", endpointConfig.Path, endpointConfig.SpecMetadata)
 		r.HandleFunc(endpointConfig.Path, endpointConfig.Handler).Methods(http.MethodGet)
 	}
 
