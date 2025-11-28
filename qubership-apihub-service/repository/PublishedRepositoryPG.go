@@ -1227,19 +1227,43 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 			// Restore grouped operations
 			start = time.Now()
 
-			// Check that every grouped operation still exists in the new list
-			opMap := make(map[string]struct{})
+			currentOpIds := make(map[string]struct{})
+			oldToNewOpIds := make(map[string][]string)
+
 			for _, op := range operations {
-				opMap[op.OperationId] = struct{}{}
+				currentOpIds[op.OperationId] = struct{}{}
+
+				oldOpId := op.Metadata.GetOperationIdV1()
+				if oldOpId != "" && oldOpId != op.OperationId {
+					// OperationId has changed, add mapping
+					oldToNewOpIds[oldOpId] = append(oldToNewOpIds[oldOpId], op.OperationId)
+				}
 			}
+
 			var groupedOperationsToRestore []entity.GroupedOperationEntity
 			for _, groupedOperation := range existingGroupedOperations {
-				if _, ok := opMap[groupedOperation.OperationId]; ok {
+				if _, ok := currentOpIds[groupedOperation.OperationId]; ok {
+					// OperationId is not changed, use existing grouped operation for restore
 					groupedOperationsToRestore = append(groupedOperationsToRestore, groupedOperation)
-				} else {
-					log.Warnf("Grouped operation with id %s is not found in the operations list and will not be restored. PackageId=%s, version=%s, revision=%d",
-						groupedOperation.OperationId, version.PackageId, version.Version, version.Revision)
+					continue
 				}
+
+				if newOpIds, ok := oldToNewOpIds[groupedOperation.OperationId]; ok {
+					// OperationId has changed, add new grouped operations for restore
+					for _, newOpId := range newOpIds {
+						groupedOperationsToRestore = append(groupedOperationsToRestore, entity.GroupedOperationEntity{
+							GroupId:     groupedOperation.GroupId,
+							PackageId:   groupedOperation.PackageId,
+							Version:     groupedOperation.Version,
+							Revision:    groupedOperation.Revision,
+							OperationId: newOpId,
+						})
+					}
+					continue
+				}
+
+				log.Warnf("Grouped operation with id %s is not found in the operations list and will not be restored. PackageId=%s, version=%s, revision=%d",
+					groupedOperation.OperationId, version.PackageId, version.Version, version.Revision)
 			}
 
 			_, err = tx.Model(&groupedOperationsToRestore).Insert()

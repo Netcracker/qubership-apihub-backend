@@ -241,6 +241,10 @@ func (a *BuildResultToEntitiesReader) ReadOperationsToEntities() ([]*entity.Oper
 				metadata.SetMethod(operationMetadata.GetStringValue("method"))
 			}
 
+			if operationMetadata.GetOperationIdV1() != "" {
+				metadata.SetOperationIdV1(operationMetadata.GetOperationIdV1())
+			}
+
 			customTags, err = operationMetadata.GetMapStringToInterface("customTags")
 			if err != nil {
 				return nil, nil, nil, &exception.CustomError{
