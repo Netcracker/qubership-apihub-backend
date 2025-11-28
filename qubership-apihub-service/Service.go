@@ -333,6 +333,7 @@ func main() {
 	personalAccessTokenController := controller.NewPersonalAccessTokenController(personalAccessTokenService)
 	packageExportConfigController := controller.NewPackageExportConfigController(roleService, packageExportConfigService, ptHandler)
 	systemStatsController := controller.NewSystemStatsController(systemStatsService, roleService)
+	internalDocsController := controller.NewInternalDocumentController(publishedService, roleService)
 
 	r.HandleFunc("/api/v1/system/info", security.Secure(systemInfoController.GetSystemInfo)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/system/configuration", samlAuthController.GetSystemSSOInfo_deprecated).Methods(http.MethodGet) //deprecated
@@ -515,6 +516,11 @@ func main() {
 	r.HandleFunc("/api/v1/deleted/packages", security.Secure(packageController.GetDeletedPackagesList)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/deleted/packages/{packageId}/versions", security.Secure(versionController.GetDeletedPackageVersionsList)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/deleted/packages/{packageId}/versions/{version}", security.Secure(versionController.GetDeletedPackageVersionContent)).Methods(http.MethodGet)
+
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/version-internal-documents", security.Secure(internalDocsController.GetVersionInternalDocuments)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/version-internal-documents/{hash}", security.Secure(internalDocsController.GetVersionInternalDocumentData)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/comparison-internal-documents", security.Secure(internalDocsController.GetComparisonInternalDocuments)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/comparison-internal-documents/{hash}", security.Secure(internalDocsController.GetComparisonInternalDocumentData)).Methods(http.MethodGet)
 
 	//debug + cleanup
 	if !systemInfoService.GetSystemInfo().ProductionMode {

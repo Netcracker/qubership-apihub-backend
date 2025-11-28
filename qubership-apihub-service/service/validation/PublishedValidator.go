@@ -64,6 +64,14 @@ func (p publishedValidatorImpl) ValidatePackage(buildArc *archive.BuildResultArc
 		return err
 	}
 
+	if err := p.validateVersionInternalDocuments(buildArc); err != nil {
+		return err
+	}
+
+	if err := p.validateComparisonInternalDocuments(buildArc); err != nil {
+		return err
+	}
+
 	if len(buildArc.PackageDocuments.Documents) == 0 && len(buildArc.PackageInfo.Refs) == 0 {
 		return &exception.CustomError{
 			Status:  http.StatusBadRequest,
@@ -297,6 +305,10 @@ func (p publishedValidatorImpl) ValidateChanges(buildArc *archive.BuildResultArc
 				}
 			}
 		}
+	}
+
+	if err := p.validateComparisonInternalDocuments(buildArc); err != nil {
+		return err
 	}
 
 	return nil
@@ -543,19 +555,6 @@ func (p publishedValidatorImpl) validatePackageOperations(buildArc *archive.Buil
 						"file":  "operations",
 						"error": fmt.Sprintf("object with operationId = %v is incorrect: %v", operation.OperationId, "Metadata.Method for operation is missing"),
 					},
-				}
-			}
-			for scope := range operation.SearchScopes {
-				if !view.ValidGraphqlOperationScope(scope) {
-					return &exception.CustomError{
-						Status:  http.StatusBadRequest,
-						Code:    exception.InvalidPackagedFile,
-						Message: exception.InvalidPackagedFileMsg,
-						Params: map[string]interface{}{
-							"file":  "operations",
-							"error": fmt.Sprintf("object with operationId = %v is incorrect: search scope %v doesn't exist for %v api type", operation.OperationId, scope, apiType),
-						},
-					}
 				}
 			}
 		case view.ProtobufApiType:
@@ -805,6 +804,30 @@ func (p publishedValidatorImpl) validatePackageBuilderNotifications(buildArc *ar
 			Code:    exception.InvalidPackagedFile,
 			Message: exception.InvalidPackagedFileMsg,
 			Params:  map[string]interface{}{"file": "notifications", "error": err.Error()},
+		}
+	}
+	return nil
+}
+
+func (p publishedValidatorImpl) validateVersionInternalDocuments(buildArc *archive.BuildResultArchive) error {
+	if err := utils.ValidateObject(buildArc.VersionInternalDocuments); err != nil {
+		return &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidPackagedFile,
+			Message: exception.InvalidPackagedFileMsg,
+			Params:  map[string]interface{}{"file": "version-internal-documents", "error": err.Error()},
+		}
+	}
+	return nil
+}
+
+func (p publishedValidatorImpl) validateComparisonInternalDocuments(buildArc *archive.BuildResultArchive) error {
+	if err := utils.ValidateObject(buildArc.ComparisonInternalDocuments); err != nil {
+		return &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidPackagedFile,
+			Message: exception.InvalidPackagedFileMsg,
+			Params:  map[string]interface{}{"file": "comparison-internal-documents", "error": err.Error()},
 		}
 	}
 	return nil
