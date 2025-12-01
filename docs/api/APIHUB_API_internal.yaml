@@ -15,13 +15,13 @@ servers:
   - url: https://{apihub}.qubership.org
     description: APIHUB server
     variables:
-    apihub:
-      description: Name of the APIHUB server.
-      enum:
-        - apihub
-        - dev.apihub
-        - staging.apihub
-      default: apihub
+      apihub:
+        description: Name of the APIHUB server.
+        enum:
+          - apihub
+          - dev.apihub
+          - staging.apihub
+        default: apihub
 security:
   - BearerAuth: []
   - CookieAuth: []
