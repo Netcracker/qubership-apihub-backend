@@ -5638,7 +5638,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ExtendedUser"
+                $ref: "#/components/schemas/ExtendedUserV2"
         "401":
           description: Unauthorized
           content:
@@ -9423,6 +9423,21 @@ components:
             gitIntegrationStatus:
               type: boolean
               description: Indicates if the user has active git integration.
+            systemRole:
+              type: string
+              description: System role of the user.
+            accessTokenTTLSeconds:
+              type: integer
+              format: int32
+              nullable: true
+              description: Optional access token time-to-live in seconds.
+    ExtendedUserV2:
+      allOf:
+        - $ref: "#/components/schemas/User"
+        - type: object
+          required:
+            - systemRole
+          properties:
             systemRole:
               type: string
               description: System role of the user.
