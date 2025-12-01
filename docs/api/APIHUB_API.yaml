@@ -5585,7 +5585,49 @@ paths:
         - Users
       summary: Get Extended User Information
       description: Retrieves detailed information about the authenticated user.
+      deprecated: true
       operationId: getExtendedUser
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+        - PersonalAccessToken: []
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtendedUser"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
+        "404":
+          description: User Not Found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v2/user":
+    get:
+      tags:
+        - Users
+      summary: Get Extended User Information
+      description: Retrieves detailed information about the authenticated user.
+      operationId: getExtendedUserV2
       security:
         - BearerAuth: []
         - CookieAuth: []
