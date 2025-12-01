@@ -589,6 +589,49 @@ func (p publishedValidatorImpl) validatePackageOperations(buildArc *archive.Buil
 				}
 			}
 			//todo validate protobuf search scopes
+		case view.AsyncapiApiType:
+			if operationMetadata.GetChannel() == "" {
+				return &exception.CustomError{
+					Status:  http.StatusBadRequest,
+					Code:    exception.InvalidPackagedFile,
+					Message: exception.InvalidPackagedFileMsg,
+					Params: map[string]interface{}{
+						"file":  "operations",
+						"error": fmt.Sprintf("object with operationId = %v is incorrect: %v", operation.OperationId, "Metadata.Channel for operation is missing"),
+					},
+				}
+			}
+			if operationMetadata.GetAction() == "" {
+				return &exception.CustomError{
+					Status:  http.StatusBadRequest,
+					Code:    exception.InvalidPackagedFile,
+					Message: exception.InvalidPackagedFileMsg,
+					Params: map[string]interface{}{
+						"file":  "operations",
+						"error": fmt.Sprintf("object with operationId = %v is incorrect: %v", operation.OperationId, "Metadata.Action for operation is missing"),
+					},
+				}
+			}
+			if !view.ValidAsyncAPIAction(operationMetadata.GetAction()) {
+				return &exception.CustomError{
+					Status:  http.StatusBadRequest,
+					Code:    exception.InvalidAsyncAPIOperationAction,
+					Message: exception.InvalidAsyncAPIOperationActionMsg,
+					Params:  map[string]interface{}{"action": operationMetadata.GetAction()},
+				}
+			}
+			if operationMetadata.GetProtocol() == "" {
+				return &exception.CustomError{
+					Status:  http.StatusBadRequest,
+					Code:    exception.InvalidPackagedFile,
+					Message: exception.InvalidPackagedFileMsg,
+					Params: map[string]interface{}{
+						"file":  "operations",
+						"error": fmt.Sprintf("object with operationId = %v is incorrect: %v", operation.OperationId, "Metadata.Protocol for operation is missing"),
+					},
+				}
+			}
+			//TODO: add validation for search scopes when they will be supported
 		default:
 
 		}

@@ -14,6 +14,19 @@
 
 package view
 
+const (
+	SendAction    string = "send"
+	ReceiveAction string = "receive"
+)
+
+func ValidAsyncAPIAction(actionValue string) bool {
+	switch actionValue {
+	case SendAction, ReceiveAction:
+		return true
+	}
+	return false
+}
+
 type AsyncAPIOperationMetadata struct {
 	Action   string   `json:"action"`
 	Channel  string   `json:"channel"`
@@ -51,4 +64,3 @@ type AsyncAPIOperationPairChangesView struct {
 	PreviousOperation *AsyncAPIOperationComparisonChangelogView `json:"previousOperation,omitempty"`
 	ChangeSummary     ChangeSummary                             `json:"changeSummary"`
 }
-
