@@ -348,6 +348,7 @@ type ApiType string
 const RestApiType ApiType = "rest"
 const GraphqlApiType ApiType = "graphql"
 const ProtobufApiType ApiType = "protobuf"
+const AsyncapiApiType ApiType = "asyncapi"
 
 func ParseApiType(s string) (ApiType, error) {
 	switch s {
@@ -357,6 +358,8 @@ func ParseApiType(s string) (ApiType, error) {
 		return GraphqlApiType, nil
 	case string(ProtobufApiType):
 		return ProtobufApiType, nil
+	case string(AsyncapiApiType):
+		return AsyncapiApiType, nil
 	default:
 		return "", fmt.Errorf("unknown API Type: %v", s)
 	}
@@ -370,6 +373,8 @@ func GetDocumentTypesForApiType(apiType string) []string {
 		return []string{GraphQLSchemaType, GraphAPIType, IntrospectionType}
 	case string(ProtobufApiType):
 		return []string{Protobuf3Type}
+	case string(AsyncapiApiType):
+		return []string{Asyncapi30Type}
 	default:
 		return []string{}
 	}
