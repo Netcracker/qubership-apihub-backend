@@ -60,7 +60,8 @@ type AsyncAPIOperationComparisonChangesView struct {
 }
 
 type AsyncAPIOperationPairChangesView struct {
-	CurrentOperation  *AsyncAPIOperationComparisonChangelogView `json:"currentOperation,omitempty"`
-	PreviousOperation *AsyncAPIOperationComparisonChangelogView `json:"previousOperation,omitempty"`
-	ChangeSummary     ChangeSummary                             `json:"changeSummary"`
+	CurrentOperation             *AsyncAPIOperationComparisonChangelogView `json:"currentOperation,omitempty"`
+	PreviousOperation            *AsyncAPIOperationComparisonChangelogView `json:"previousOperation,omitempty"`
+	ChangeSummary                ChangeSummary                             `json:"changeSummary"`
+	ComparisonInternalDocumentId string                                    `json:"comparisonInternalDocumentId"`
 }

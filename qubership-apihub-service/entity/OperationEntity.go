@@ -614,9 +614,10 @@ func MakeOperationComparisonChangelogView(entity OperationComparisonChangelogEnt
 		}
 
 		result := &view.AsyncAPIOperationPairChangesView{
-			CurrentOperation:  current,
-			PreviousOperation: previous,
-			ChangeSummary:     entity.ChangesSummary,
+			CurrentOperation:             current,
+			PreviousOperation:            previous,
+			ChangeSummary:                entity.ChangesSummary,
+			ComparisonInternalDocumentId: entity.ComparisonInternalDocumentId,
 		}
 		return result
 	}
