@@ -3404,6 +3404,17 @@ paths:
                                 $ref: "#/components/schemas/GqlOperationInfoFromDifferentVersions"
                               currentOperation:
                                 $ref: "#/components/schemas/GqlOperationInfoFromDifferentVersions"
+                          - title: AsyncAPIOperation
+                            type: object
+                            required:
+                              - action
+                              - channel
+                              - protocol
+                            properties:
+                              previousOperation:
+                                $ref: "#/components/schemas/AsyncAPIOperationInfoFromDifferentVersions"
+                              currentOperation:
+                                $ref: "#/components/schemas/AsyncAPIOperationInfoFromDifferentVersions"
                         - type: object
                           required:
                             - changeSummary
@@ -5907,6 +5918,7 @@ paths:
                             - $ref: "#/components/schemas/RestOperation"
                             - $ref: "#/components/schemas/GraphQLOperation"
                             - $ref: "#/components/schemas/ProtobufOperation"
+                            - $ref: "#/components/schemas/AsyncAPIOperation"
                         - type: object
                           properties:
                             data:
@@ -6274,6 +6286,7 @@ paths:
                             - $ref: "#/components/schemas/RestOperationMeta"
                             - $ref: "#/components/schemas/GraphQLOperationMeta"
                             - $ref: "#/components/schemas/ProtobufOperationMeta"
+                            - $ref: "#/components/schemas/AsyncAPIOperationMeta"
                   packages:
                     description: >
                       A mapped list of the packageId and version name
@@ -6743,6 +6756,7 @@ paths:
                       - $ref: "#/components/schemas/RestOperation"
                       - $ref: "#/components/schemas/GraphQLOperation"
                       - $ref: "#/components/schemas/ProtobufOperation"
+                      - $ref: "#/components/schemas/AsyncAPIOperation"
                   - type: object
                     required:
                       - data
@@ -8833,6 +8847,7 @@ components:
           - rest
           - graphql
           - protobuf
+          - asyncapi
     apiTypeQueryParam:
       name: apiType
       in: query
@@ -8844,6 +8859,7 @@ components:
           - rest
           - graphql
           - protobuf
+          - asyncapi
     groupName:
       name: groupName
       in: path
@@ -9006,6 +9022,7 @@ components:
         - rest
         - graphql
         - protobuf
+        - asyncapi
     ExportVersion:
       type: object
       title: Export entire version
@@ -9982,6 +9999,7 @@ components:
         - openapi-3-1
         - openapi-3-0
         - openapi-2-0
+        - asyncapi-3-0
         - json-schema
         - markdown
         - graphql-schema
@@ -10070,6 +10088,7 @@ components:
             * in rest, tag is OpenAPI tag.
             * in graphql, tag is root schema type - query, mutation, subscription.
             * in protobuf, tag is service of method.
+            * in asyncapi, tag is AsyncAPI tag.
           type: array
           items:
             type: string
@@ -10092,6 +10111,12 @@ components:
       allOf:
         - $ref: "#/components/schemas/Operation"
         - $ref: "#/components/schemas/GraphQLOperationMeta"
+    AsyncAPIOperation:
+      description: AsyncAPI operation object.
+      title: AsyncAPIOperation
+      allOf:
+        - $ref: "#/components/schemas/Operation"
+        - $ref: "#/components/schemas/AsyncAPIOperationMeta"
     RestOperationMeta:
       description: Specific parameters for REST operation.
       title: RestOperationMeta
@@ -10172,6 +10197,36 @@ components:
           description: Operation title (same as method name but with adding spaces between capital letters)
           type: string
           example: List Action Log Items
+    AsyncAPIOperationMeta:
+      description: Specific parameters for AsyncAPI operation.
+      title: AsyncAPIOperationMeta
+      required:
+        - action
+        - channel
+        - protocol
+      type: object
+      properties:
+        action:
+          description: AsyncAPI operation action (e.g., send, receive).
+          type: string
+          example: send
+        channel:
+          description: AsyncAPI channel name.
+          type: string
+          example: "user/signedup"
+        protocol:
+          description: Communication protocol used (e.g., kafka, mqtt, amqp).
+          type: string
+          example: kafka
+        tags:
+          description: AsyncAPI operation tags.
+          type: array
+          items:
+            type: string
+          example: ["user", "events"]
+        customTags:
+          description: Custom tags.
+          type: object
     OperationInfoFromDifferentVersionsV2:
       description: Operation info from previous/current version.
       type: object
@@ -10269,6 +10324,28 @@ components:
               description: GraphQL operation method.
               type: string
               example: getPaymentMethodSpecificationCore
+    AsyncAPIOperationInfoFromDifferentVersions:
+      description: Operation info from previous/current version.
+      allOf:
+        - $ref: "#/components/schemas/OperationInfoFromDifferentVersionsV2"
+        - type: object
+          required:
+            - action
+            - channel
+            - protocol
+          properties:
+            action:
+              description: AsyncAPI operation action (e.g., send, receive).
+              type: string
+              example: send
+            channel:
+              description: AsyncAPI channel name.
+              type: string
+              example: "user/signedup"
+            protocol:
+              description: Communication protocol used (e.g., kafka, mqtt, amqp).
+              type: string
+              example: kafka
     BusinessMetric:
       description: Business metric
       title: BusinessMetric
