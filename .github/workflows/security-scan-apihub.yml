@@ -71,6 +71,13 @@ jobs:
         if: ${{ steps.ghcr.outputs.has-packages == 'true' }}
         run: echo "Packages found!"
 
+      - name: No packages found, fail the job
+        if: ${{ steps.ghcr.outputs.has-packages != 'true' }}
+        run: |
+          echo "No packages found in GHCR for this repository."
+          exit 1
+
+
   security-scan-matrix:
     needs: debug-packages
     if: ${{ inputs.image == '' || inputs.image == null }}
