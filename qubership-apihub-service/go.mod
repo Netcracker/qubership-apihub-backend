@@ -3,7 +3,7 @@ module github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service
 go 1.24.7
 
 require (
-	github.com/Netcracker/qubership-apihub-commons-go/api-spec-exposer v0.0.0-20251121133701-a8c7c0a39ad0
+	github.com/Netcracker/qubership-apihub-commons-go v0.0.1
 	github.com/buraksezer/olric v0.4.7
 	github.com/buraksezer/olric-cloud-plugin v0.3.0-beta.4
 	github.com/coreos/go-oidc/v3 v3.16.0
