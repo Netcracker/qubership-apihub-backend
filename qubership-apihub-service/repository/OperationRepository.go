@@ -998,23 +998,29 @@ select
     o.metadata,
     parent_package_names(o.package_id) parent_names
 from operation o
-         left join (
-    select ts.data_hash, max(rank) as rank from (
-                                                    select
-                                                        ts.data_hash,
-                                                        ts_rank(data_vector, search_query) rank
-                                                    from
-                                                        fts_latest_release_operation_data ts,
-                                                        phraseto_tsquery(?original_text_input) search_query
-                                                    where search_query @@ data_vector
-                                                    limit ?limit
-                                                ) ts
-    group by ts.data_hash
-    order by max(rank) desc
-    limit ?limit
-    offset ?offset
+         inner join (
+    SELECT DISTINCT ON (rank, package_id, operation_id)
+        ts_rank(data_vector, search_query) as rank,
+        ts.package_id   as package_id,
+        ts.operation_id as operation_id,
+        ts.version      as version,
+        ts.revision     as revision
+
+    FROM fts_latest_release_operation_data ts,
+         phraseto_tsquery(?original_text_input) search_query
+    WHERE search_query @@ data_vector
+    ORDER BY ts_rank(data_vector, search_query) DESC,
+             package_id,
+             operation_id desc,
+             version DESC,
+             revision DESC
+    LIMIT ?limit OFFSET ?offset
 ) all_ts
-                   on all_ts.data_hash = o.data_hash
+                   on all_ts.package_id = o.package_id and
+                      all_ts.version = o.version and
+                      all_ts.revision = o.revision and
+		all_ts.operation_id = o.operation_id
+
 inner join published_version pv on o.package_id=pv.package_id and o.version=pv.version and o.revision=pv.revision
 inner join package_group pg on o.package_id=pg.id
 
