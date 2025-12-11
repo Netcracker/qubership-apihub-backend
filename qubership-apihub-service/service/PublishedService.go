@@ -471,12 +471,12 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 		return err
 	}
 
-	operationEntities, operationDataEntities, operationsHashes, err := buildArcEntitiesReader.ReadOperationsToEntities()
+	operationEntities, operationDataEntities, operationsInfo, err := buildArcEntitiesReader.ReadOperationsToEntities()
 	if err != nil {
 		return err
 	}
 
-	operationsComparisonEntities, changedOperationEntities, versionComparisonsFromCache, comparisonFileIdToKeyMap, err := buildArcEntitiesReader.ReadOperationComparisonsToEntities(operationsHashes, p.operationRepo)
+	operationsComparisonEntities, changedOperationEntities, versionComparisonsFromCache, comparisonFileIdToKeyMap, err := buildArcEntitiesReader.ReadOperationComparisonsToEntities(operationsInfo, p.operationRepo)
 	if err != nil {
 		return err
 	}

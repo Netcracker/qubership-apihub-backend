@@ -1377,24 +1377,6 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 				if err != nil {
 					return fmt.Errorf("failed to insert ts_rest_operation_data: %w", err)
 				}
-				calculateGraphqlTextSearchDataQuery := `
-				insert into ts_graphql_operation_data
-					select data_hash,
-					to_tsvector(jsonb_extract_path_text(search_scope, ?)) scope_argument,
-					to_tsvector(jsonb_extract_path_text(search_scope, ?)) scope_property,
-					to_tsvector(jsonb_extract_path_text(search_scope, ?)) scope_annotation
-					from operation_data
-					where data_hash in (select distinct data_hash from operation where package_id = ? and version = ? and revision = ? and type = ?)
-				on conflict (data_hash) do update
-				set scope_argument = EXCLUDED.scope_argument,
-				scope_property = EXCLUDED.scope_property,
-				scope_annotation = EXCLUDED.scope_annotation;`
-				_, err = tx.Exec(calculateGraphqlTextSearchDataQuery,
-					view.GraphqlScopeArgument, view.GraphqlScopeProperty, view.GraphqlScopeAnnotation,
-					version.PackageId, version.Version, version.Revision, view.GraphqlApiType)
-				if err != nil {
-					return fmt.Errorf("failed to insert ts_grahpql_operation_data: %w", err)
-				}
 				calculateAllTextSearchDataQuery := `
 				insert into ts_operation_data
 					select data_hash,

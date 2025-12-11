@@ -15,14 +15,13 @@ type UnreferencedDataCleanupEntity struct {
 }
 
 type DeletedItemsCounts struct {
-	OperationData                 int `json:"operationData"`
-	TSGQLOperationData            int `json:"tsGQLOperationData"`
-	TSRestOperationData           int `json:"tsRestOperationData"`
-	TSOperationData               int `json:"tsOperationData"`
-	FTSOperationData              int `json:"ftsOperationData"`
-	OperationGroupTemplate        int `json:"operationGroupTemplate"`
-	PublishedSrcArchives          int `json:"publishedSrcArchives"`
-	PublishedData                 int `json:"publishedData"`
-	VersionInternalDocumentData   int `json:"versionInternalDocumentData"`
+	OperationData                  int `json:"operationData"`
+	TSRestOperationData            int `json:"tsRestOperationData"`
+	TSOperationData                int `json:"tsOperationData"`
+	FTSOperationData               int `json:"ftsOperationData"`
+	OperationGroupTemplate         int `json:"operationGroupTemplate"`
+	PublishedSrcArchives           int `json:"publishedSrcArchives"`
+	PublishedData                  int `json:"publishedData"`
+	VersionInternalDocumentData    int `json:"versionInternalDocumentData"`
 	ComparisonInternalDocumentData int `json:"comparisonInternalDocumentData"`
 }
