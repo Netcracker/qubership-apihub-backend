@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS fts_latest_release_operation_data
     version character varying NOT NULL,
     revision integer NOT NULL,
     operation_id character varying NOT NULL,
-
+    api_type character varying NOT NULL,
     data_vector tsvector,
 
     CONSTRAINT pk_fts_latest_release_operation_data PRIMARY KEY (package_id,version,revision,operation_id)
@@ -39,7 +39,7 @@ with maxrev as
                                   and v.version = o.version
                                   and v.revision = o.revision),
      operations_data as
-         (select o.package_id, o.version, o.revision, o.operation_id, od.*
+         (select o.package_id, o.version, o.revision, o.operation_id, o.type, od.*
           from operation_data od
                    inner join operations o
                               on od.data_hash = o.data_hash)
@@ -49,5 +49,6 @@ select operations_data.package_id,
        operations_data.version,
        operations_data.revision,
        operations_data.operation_id,
+       operations_data.type,
        to_tsvector(convert_from(operations_data.data, 'UTF-8')) data_vector
 from operations_data;
