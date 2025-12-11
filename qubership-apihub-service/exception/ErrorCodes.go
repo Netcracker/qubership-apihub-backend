@@ -794,3 +794,6 @@ const VersionInternalDocumentNotFoundMsg = "Version internal document with hash 
 
 const ComparisonInternalDocumentNotFound = "7601"
 const ComparisonInternalDocumentNotFoundMsg = "Comparison internal document with hash $hash not found"
+
+const InvalidAsyncAPIOperationAction = "7700"
+const InvalidAsyncAPIOperationActionMsg = "Unexpected async API operation action '$action'"
