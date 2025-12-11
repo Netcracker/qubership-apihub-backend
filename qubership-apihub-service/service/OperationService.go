@@ -599,7 +599,26 @@ func (o operationServiceImpl) SearchForOperations(searchReq view.SearchQueryReq)
 		VersionArchivedStatus:       string(view.Archived),
 		VersionArchivedStatusWeight: 0.1,
 	}
-	operationEntities, err := o.operationRepository.SearchForOperations(searchQuery)
+
+	var operationEntities []entity.OperationSearchResult
+
+	if strings.HasPrefix(searchQuery.OriginalTextInput, "_") {
+		searchQuery.TextFilter = strings.TrimPrefix(searchQuery.TextFilter, "_")
+		searchQuery.OriginalTextInput = strings.TrimPrefix(searchQuery.OriginalTextInput, "_")
+		if strings.HasPrefix(searchQuery.OriginalTextInput, "_") {
+			// experimental 2: lite search
+			searchQuery.TextFilter = strings.TrimPrefix(searchQuery.TextFilter, "_")
+			searchQuery.OriginalTextInput = strings.TrimPrefix(searchQuery.OriginalTextInput, "_")
+			operationEntities, err = o.operationRepository.LiteSearchForOperations(searchQuery)
+		} else {
+			// experimental: full text search
+			operationEntities, err = o.operationRepository.FullTextSearchForOperations(searchQuery)
+		}
+	} else {
+		// old prod search
+		operationEntities, err = o.operationRepository.SearchForOperations(searchQuery)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -621,24 +640,7 @@ func (o operationServiceImpl) LiteSearchForOperations(searchReq view.SearchQuery
 			Params:  map[string]interface{}{"error": err.Error()},
 		}
 	}
-	err = setOperationSearchParams(searchReq.OperationSearchParams, searchQuery)
-	if err != nil {
-		return nil, err
-	}
-	//todo maybe move to envs
-	searchQuery.OperationSearchWeight = entity.OperationSearchWeight{
-		ScopeWeight:     13,
-		TitleWeight:     3,
-		OpenCountWeight: 0.2,
-	}
-	searchQuery.VersionStatusSearchWeight = entity.VersionStatusSearchWeight{
-		VersionReleaseStatus:        string(view.Release),
-		VersionReleaseStatusWeight:  4,
-		VersionDraftStatus:          string(view.Draft),
-		VersionDraftStatusWeight:    0.6,
-		VersionArchivedStatus:       string(view.Archived),
-		VersionArchivedStatusWeight: 0.1,
-	}
+
 	operationEntities, err := o.operationRepository.LiteSearchForOperations(searchQuery)
 	if err != nil {
 		return nil, err
