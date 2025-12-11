@@ -43,6 +43,7 @@ type OperationEntity struct {
 	Models                  map[string]string      `pg:"models, type:jsonb, use_zero"`
 	CustomTags              map[string]interface{} `pg:"custom_tags, type:jsonb, use_zero"`
 	ApiAudience             string                 `pg:"api_audience, type:varchar, use_zero"`
+	DocumentId              string                 `pg:"document_id, type:varchar"`
 }
 
 type OperationsTypeCountEntity struct {
@@ -67,11 +68,23 @@ type DeprecatedOperationsSummaryEntity struct {
 	DeprecatedCount int      `pg:"deprecated_count, type:integer"`
 }
 
+type OperationsTypeEntity struct {
+	tableName struct{} `pg:"operation"`
+
+	ApiType string `pg:"type, type:varchar"`
+}
+
 type OperationsTypeDataHashEntity struct {
 	tableName struct{} `pg:"operation"`
 
 	ApiType        string            `pg:"type, type:varchar"`
 	OperationsHash map[string]string `pg:"operations_hash, type:json"`
+}
+
+type OperationsDataHashEntity struct {
+	tableName struct{} `pg:"operation"`
+
+	OperationsHashes map[string]string `pg:"operations_hashes, type:json"`
 }
 
 type OperationDataEntity struct {
@@ -260,12 +273,12 @@ func MakeCommonOperationView(operationEnt *OperationEntity) view.OperationListVi
 		CommonOperationView: view.CommonOperationView{
 			OperationId: operationEnt.OperationId,
 			Title:       operationEnt.Title,
-			DataHash:    operationEnt.DataHash,
 			Deprecated:  operationEnt.Deprecated,
 			ApiKind:     operationEnt.Kind,
 			ApiType:     operationEnt.Type,
 			CustomTags:  operationEnt.CustomTags,
 			ApiAudience: operationEnt.ApiAudience,
+			DocumentId:  operationEnt.DocumentId,
 		},
 	}
 }
@@ -306,7 +319,6 @@ func MakeDeprecatedOperationView(operationEnt OperationRichEntity, includeDeprec
 	operationView := view.DeprecatedOperationView{
 		OperationId:             operationEnt.OperationId,
 		Title:                   operationEnt.Title,
-		DataHash:                operationEnt.DataHash,
 		Deprecated:              operationEnt.Deprecated,
 		ApiKind:                 operationEnt.Kind,
 		ApiType:                 operationEnt.Type,
@@ -315,6 +327,7 @@ func MakeDeprecatedOperationView(operationEnt OperationRichEntity, includeDeprec
 		DeprecatedCount:         len(operationEnt.DeprecatedItems),
 		PreviousReleaseVersions: operationEnt.PreviousReleaseVersions,
 		ApiAudience:             operationEnt.ApiAudience,
+		DocumentId:              operationEnt.DocumentId,
 	}
 	if includeDeprecatedItems {
 		operationView.DeprecatedItems = operationEnt.DeprecatedItems
@@ -362,13 +375,13 @@ func MakeSingleOperationView(operationEnt OperationRichEntity) interface{} {
 	operationView := view.SingleOperationView{
 		OperationId: operationEnt.OperationId,
 		Title:       operationEnt.Title,
-		DataHash:    operationEnt.DataHash,
 		Deprecated:  operationEnt.Deprecated,
 		ApiKind:     operationEnt.Kind,
 		ApiType:     operationEnt.Type,
 		Data:        data,
 		CustomTags:  operationEnt.CustomTags,
 		ApiAudience: operationEnt.ApiAudience,
+		DocumentId:  operationEnt.DocumentId,
 	}
 
 	switch operationEnt.Type {
@@ -423,7 +436,6 @@ func MakeOperationComparisonChangelogView(entity OperationComparisonChangelogEnt
 		OperationId: entity.OperationId,
 		Title:       entity.Title,
 		ApiKind:     entity.ApiKind,
-		DataHash:    entity.DataHash,
 		PackageRef:  view.MakePackageRefKey(entity.PackageId, entity.Version, entity.Revision),
 	}
 
@@ -432,7 +444,6 @@ func MakeOperationComparisonChangelogView(entity OperationComparisonChangelogEnt
 		Title:       entity.PreviousTitle,
 		ApiKind:     entity.PreviousApiKind,
 		ApiAudience: entity.PreviousApiAudience,
-		DataHash:    entity.PreviousDataHash,
 		PackageRef:  view.MakePackageRefKey(entity.PreviousPackageId, entity.PreviousVersion, entity.PreviousRevision),
 	}
 
@@ -558,8 +569,6 @@ func MakeOperationComparisonChangesView(entity OperationComparisonChangelogEntit
 		Title:                     title,
 		ChangeSummary:             entity.ChangesSummary,
 		ApiKind:                   apiKind,
-		DataHash:                  entity.DataHash,
-		PreviousDataHash:          entity.PreviousDataHash,
 		PackageRef:                view.MakePackageRefKey(entity.PackageId, entity.Version, entity.Revision),
 		PreviousVersionPackageRef: view.MakePackageRefKey(entity.PreviousPackageId, entity.PreviousVersion, entity.PreviousRevision),
 		Changes:                   MakeOperationChangesListView(entity.OperationComparisonEntity),

@@ -458,12 +458,12 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 		return err
 	}
 
-	operationEntities, operationDataEntities, err := buildArcEntitiesReader.ReadOperationsToEntities()
+	operationEntities, operationDataEntities, operationsHashes, err := buildArcEntitiesReader.ReadOperationsToEntities()
 	if err != nil {
 		return err
 	}
 
-	operationsComparisonEntities, changedOperationEntities, versionComparisonsFromCache, err := buildArcEntitiesReader.ReadOperationComparisonsToEntities()
+	operationsComparisonEntities, changedOperationEntities, versionComparisonsFromCache, err := buildArcEntitiesReader.ReadOperationComparisonsToEntities(operationsHashes, p.operationRepo)
 	if err != nil {
 		return err
 	}
@@ -786,7 +786,7 @@ func (p publishedServiceImpl) PublishChanges(buildArc *archive.BuildResultArchiv
 	}
 
 	buildArcEntitiesReader := archive.NewBuildResultToEntitiesReader(buildArc)
-	versionComparisonEntities, operationComparisonEntities, versionComparisonsFromCache, err := buildArcEntitiesReader.ReadOperationComparisonsToEntities()
+	versionComparisonEntities, operationComparisonEntities, versionComparisonsFromCache, err := buildArcEntitiesReader.ReadOperationComparisonsToEntities(nil, p.operationRepo)
 	if err != nil {
 		return err
 	}
