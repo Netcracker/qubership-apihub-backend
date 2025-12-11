@@ -448,7 +448,8 @@ func (p publishedRepositoryImpl) GetServiceOwner(workspaceId string, serviceName
 }
 
 func (p publishedRepositoryImpl) validateMigrationResult(tx *pg.Tx, packageInfo view.PackageInfoFile, publishId string, version *entity.PublishedVersionEntity, content []*entity.PublishedContentEntity, contentData []*entity.PublishedContentDataEntity,
-	refs []*entity.PublishedReferenceEntity, src *entity.PublishedSrcEntity, operations []*entity.OperationEntity, operationData []*entity.OperationDataEntity, versionComparisons []*entity.VersionComparisonEntity, operationComparisons []*entity.OperationComparisonEntity, versionComparisonsFromCache []string) error {
+	refs []*entity.PublishedReferenceEntity, src *entity.PublishedSrcEntity, operations []*entity.OperationEntity, operationData []*entity.OperationDataEntity, versionComparisons []*entity.VersionComparisonEntity, operationComparisons []*entity.OperationComparisonEntity, versionComparisonsFromCache []string,
+	versionInternalDocs []*entity.VersionInternalDocumentEntity, versionInternalDocData []*entity.VersionInternalDocumentDataEntity, comparisonInternalDocs []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocData []*entity.ComparisonInternalDocumentDataEntity) error {
 	migrationRun := new(mEntity.MigrationRunEntity)
 
 	err := tx.Model(migrationRun).Where("id = ?", packageInfo.MigrationId).First()
@@ -717,6 +718,85 @@ func (p publishedRepositoryImpl) validateMigrationResult(tx *pg.Tx, packageInfo 
 			changes["operation_comparison"] = operationComparisonsChanges
 		}
 	}
+
+	currentTable = "version_internal_document"
+	oldVersionInternalDocs := make([]entity.VersionInternalDocumentEntity, 0)
+	err = tx.Model(&oldVersionInternalDocs).
+		Where("package_id = ?", version.PackageId).
+		Where("version = ?", version.Version).
+		Where("revision = ?", version.Revision).
+		Select()
+	if err != nil {
+		return err
+	}
+	versionInternalDocsChanges := make(map[string]interface{}, 0)
+	matchedVersionInternalDocs := make(map[string]struct{}, 0)
+	oldVersionInternalDocHashes := make(map[string]struct{}, 0)
+	for _, s := range oldVersionInternalDocs {
+		found := false
+		oldVersionInternalDocHashes[s.Hash] = struct{}{}
+		for _, t := range versionInternalDocs {
+			if s.DocumentId == t.DocumentId {
+				found = true
+				matchedVersionInternalDocs[s.DocumentId] = struct{}{}
+				if docChanges := s.GetChanges(*t); len(docChanges) > 0 {
+					versionInternalDocsChanges[s.DocumentId] = docChanges
+					changesOverview.setTableChanges(currentTable, docChanges)
+					continue
+				}
+			}
+		}
+		if !found {
+			versionInternalDocsChanges[s.DocumentId] = "version internal document not found in build archive"
+			changesOverview.setNotFoundEntry(currentTable)
+		}
+	}
+	for _, t := range versionInternalDocs {
+		if _, matched := matchedVersionInternalDocs[t.DocumentId]; !matched {
+			versionInternalDocsChanges[t.DocumentId] = "unexpected version internal document (not found in database)"
+			changesOverview.setUnexpectedEntry(currentTable)
+		}
+	}
+	if len(versionInternalDocsChanges) > 0 {
+		changes[currentTable] = versionInternalDocsChanges
+	}
+
+	currentTable = "version_internal_document_data"
+	versionInternalDocDataChanges := make(map[string]interface{}, 0)
+	matchedVersionInternalDocHashes := make(map[string]struct{}, 0)
+	for oldHash := range oldVersionInternalDocHashes {
+		found := false
+		for _, newDocData := range versionInternalDocData {
+			if oldHash == newDocData.Hash {
+				found = true
+				matchedVersionInternalDocHashes[oldHash] = struct{}{}
+			}
+		}
+		if !found {
+			versionInternalDocDataChanges[oldHash] = "version internal document data not found in build archive"
+			changesOverview.setNotFoundEntry(currentTable)
+		}
+	}
+	for _, newDocData := range versionInternalDocData {
+		if _, matched := matchedVersionInternalDocHashes[newDocData.Hash]; !matched {
+			versionInternalDocDataChanges[newDocData.Hash] = "unexpected version internal document data (not found in database)"
+			changesOverview.setUnexpectedEntry(currentTable)
+		}
+	}
+	if len(versionInternalDocDataChanges) > 0 {
+		changes[currentTable] = versionInternalDocDataChanges
+	}
+
+	if !packageInfo.NoChangelog && packageInfo.PreviousVersion != "" {
+		comparisonInternalDocsChanges, err := p.getComparisonInternalDocumentsChanges(tx, packageInfo, comparisonInternalDocs, comparisonInternalDocData, &changesOverview)
+		if err != nil {
+			return err
+		}
+		for tableName, tableChanges := range comparisonInternalDocsChanges {
+			changes[tableName] = tableChanges
+		}
+	}
+
 	if len(changes) > 0 {
 		ent := mEntity.MigratedVersionChangesEntity{
 			PackageId:     version.PackageId,
@@ -854,6 +934,135 @@ func (p publishedRepositoryImpl) getVersionComparisonsChanges(tx *pg.Tx, package
 	return versionComparisonsChanges, versionComparisonIds, nil
 }
 
+func (p publishedRepositoryImpl) getComparisonInternalDocumentsChanges(tx *pg.Tx, packageInfo view.PackageInfoFile, comparisonInternalDocs []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocData []*entity.ComparisonInternalDocumentDataEntity, changesOverview *PublishedBuildChangesOverview) (map[string]interface{}, error) {
+	var err error
+	allChanges := make(map[string]interface{}, 0)
+
+	currentTable := "comparison_internal_document"
+	oldComparisonInternalDocs := make([]entity.ComparisonInternalDocumentEntity, 0)
+	if packageInfo.PreviousVersionPackageId == "" {
+		packageInfo.PreviousVersionPackageId = packageInfo.PackageId
+	}
+	if packageInfo.PreviousVersionRevision == 0 {
+		_, err = tx.QueryOne(pg.Scan(&packageInfo.PreviousVersionRevision), `
+		select max(revision) from published_version
+			where package_id = ?
+			and version = ?`, packageInfo.PreviousVersionPackageId, packageInfo.PreviousVersion)
+		if err != nil {
+			return nil, fmt.Errorf("failed to calculate previous version revision for comparison internal docs: %v", err.Error())
+		}
+	}
+	// Fetch comparison internal documents for main comparison and refs
+	versionComparisonSnapshotTable := fmt.Sprintf(`migration."version_comparison_%s"`, packageInfo.MigrationId)
+	getComparisonInternalDocsQuery := fmt.Sprintf(`
+		with ref_comparisons as (
+			select
+				unnest(refs) as comparison_id
+			from %s
+			where package_id = ?
+				and version = ?
+				and revision = ?
+				and previous_package_id = ?
+				and previous_version = ?
+				and previous_revision = ?
+		),
+		ref_comparison_details as (
+			select
+				package_id,
+				version,
+				revision,
+				previous_package_id,
+				previous_version,
+				previous_revision
+			from %s
+			where comparison_id in (select comparison_id from ref_comparisons)
+		)
+		select * from comparison_internal_document
+		where (package_id, version, revision, previous_package_id, previous_version, previous_revision) in (
+			select ?, ?, ?, ?, ?, ?
+			union
+			select package_id, version, revision, previous_package_id, previous_version, previous_revision
+			from ref_comparison_details
+		)
+		`, versionComparisonSnapshotTable, versionComparisonSnapshotTable)
+	_, err = tx.Query(&oldComparisonInternalDocs, getComparisonInternalDocsQuery,
+		packageInfo.PackageId,
+		packageInfo.Version,
+		packageInfo.Revision,
+		packageInfo.PreviousVersionPackageId,
+		packageInfo.PreviousVersion,
+		packageInfo.PreviousVersionRevision,
+		packageInfo.PackageId,
+		packageInfo.Version,
+		packageInfo.Revision,
+		packageInfo.PreviousVersionPackageId,
+		packageInfo.PreviousVersion,
+		packageInfo.PreviousVersionRevision,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get comparison internal documents from db: %v", err.Error())
+	}
+	comparisonInternalDocsChanges := make(map[string]interface{}, 0)
+	matchedComparisonInternalDocs := make(map[string]struct{}, 0)
+	oldComparisonInternalDocHashes := make(map[string]struct{}, 0)
+	for _, s := range oldComparisonInternalDocs {
+		found := false
+		oldComparisonInternalDocHashes[s.Hash] = struct{}{}
+		for _, t := range comparisonInternalDocs {
+			if s.DocumentId == t.DocumentId {
+				found = true
+				matchedComparisonInternalDocs[s.DocumentId] = struct{}{}
+				if docChanges := s.GetChanges(*t); len(docChanges) > 0 {
+					comparisonInternalDocsChanges[s.DocumentId] = docChanges
+					changesOverview.setTableChanges(currentTable, docChanges)
+					continue
+				}
+			}
+		}
+		if !found {
+			comparisonInternalDocsChanges[s.DocumentId] = "comparison internal document not found in build archive"
+			changesOverview.setNotFoundEntry(currentTable)
+		}
+	}
+	for _, t := range comparisonInternalDocs {
+		if _, matched := matchedComparisonInternalDocs[t.DocumentId]; !matched {
+			comparisonInternalDocsChanges[t.DocumentId] = "unexpected comparison internal document (not found in database)"
+			changesOverview.setUnexpectedEntry(currentTable)
+		}
+	}
+	if len(comparisonInternalDocsChanges) > 0 {
+		allChanges[currentTable] = comparisonInternalDocsChanges
+	}
+
+	currentTable = "comparison_internal_document_data"
+	comparisonInternalDocDataChanges := make(map[string]interface{}, 0)
+	matchedComparisonInternalDocHashes := make(map[string]struct{}, 0)
+	for oldHash := range oldComparisonInternalDocHashes {
+		found := false
+		for _, newDocData := range comparisonInternalDocData {
+			if oldHash == newDocData.Hash {
+				found = true
+				matchedComparisonInternalDocHashes[oldHash] = struct{}{}
+			}
+		}
+		if !found {
+			comparisonInternalDocDataChanges[oldHash] = "comparison internal document data not found in build archive"
+			changesOverview.setNotFoundEntry(currentTable)
+		}
+	}
+	for _, newDocData := range comparisonInternalDocData {
+		if _, matched := matchedComparisonInternalDocHashes[newDocData.Hash]; !matched {
+			comparisonInternalDocDataChanges[newDocData.Hash] = "unexpected comparison internal document data (not found in database)"
+			changesOverview.setUnexpectedEntry(currentTable)
+		}
+	}
+	if len(comparisonInternalDocDataChanges) > 0 {
+		allChanges[currentTable] = comparisonInternalDocDataChanges
+	}
+
+	return allChanges, nil
+}
+
 func (p publishedRepositoryImpl) getOperationComparisonsChanges(tx *pg.Tx, packageInfo view.PackageInfoFile, operationComparisonEntities []*entity.OperationComparisonEntity, versionComparisonIds []string, changesOverview *PublishedBuildChangesOverview) (map[string]interface{}, error) {
 	var err error
 	currentTable := "operation_comparison"
@@ -934,7 +1143,9 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 	data []*entity.PublishedContentDataEntity, refs []*entity.PublishedReferenceEntity, src *entity.PublishedSrcEntity, srcArchive *entity.PublishedSrcArchiveEntity,
 	operations []*entity.OperationEntity, operationsData []*entity.OperationDataEntity,
 	operationComparisons []*entity.OperationComparisonEntity, builderNotifications []*entity.BuilderNotificationsEntity,
-	versionComparisons []*entity.VersionComparisonEntity, serviceName string, pkg *entity.PackageEntity, versionComparisonsFromCache []string) error {
+	versionComparisons []*entity.VersionComparisonEntity, serviceName string, pkg *entity.PackageEntity, versionComparisonsFromCache []string,
+	versionInternalDocEntities []*entity.VersionInternalDocumentEntity, versionInternalDocDataEntities []*entity.VersionInternalDocumentDataEntity,
+	comparisonInternalDocEntities []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocDataEntities []*entity.ComparisonInternalDocumentDataEntity) error {
 	if len(content) == 0 && len(refs) == 0 {
 		return nil
 	}
@@ -969,7 +1180,7 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 
 		if packageInfo.MigrationBuild {
 			start = time.Now()
-			err := p.validateMigrationResult(tx, packageInfo, buildId, version, content, data, refs, src, operations, operationsData, versionComparisons, operationComparisons, versionComparisonsFromCache)
+			err := p.validateMigrationResult(tx, packageInfo, buildId, version, content, data, refs, src, operations, operationsData, versionComparisons, operationComparisons, versionComparisonsFromCache, versionInternalDocEntities, versionInternalDocDataEntities, comparisonInternalDocEntities, comparisonInternalDocDataEntities)
 			if err != nil {
 				return fmt.Errorf("migration result validation failed: %v", err.Error())
 			}
@@ -1231,6 +1442,33 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 			utils.PerfLog(time.Since(start).Milliseconds(), 50, "CreateVersionWithData: builderNotifications insert")
 		}
 
+		start = time.Now()
+		for _, d := range versionInternalDocDataEntities {
+			exists, err := p.versionInternalDocumentDataExists(tx, d.Hash) // TODO: could be bulk select
+			if err != nil {
+				return err
+			}
+			if !exists {
+				_, err := tx.Model(d).OnConflict("(hash) DO UPDATE").Insert()
+				if err != nil {
+					return fmt.Errorf("failed to insert version_internal_document_data %+v: %w", d, err)
+				}
+			}
+		}
+		for _, c := range versionInternalDocEntities {
+			_, err := tx.Model(c).OnConflict("(package_id, version, revision, document_id) DO UPDATE").Insert()
+			if err != nil {
+				return fmt.Errorf("failed to insert version_internal_document %+v: %w", c, err)
+			}
+		}
+		utils.PerfLog(time.Since(start).Milliseconds(), 200, "CreateVersionWithData: version internal documents insert")
+		start = time.Now()
+		err = p.saveComparisonInternalDocumentsTx(tx, comparisonInternalDocEntities, comparisonInternalDocDataEntities)
+		if err != nil {
+			return err
+		}
+		utils.PerfLog(time.Since(start).Milliseconds(), 200, "CreateVersionWithData: comparison internal documents insert")
+
 		if len(existingGroupedOperations) > 0 {
 			// Restore grouped operations
 			start = time.Now()
@@ -1408,7 +1646,7 @@ func (p publishedRepositoryImpl) propagatePreviousOperationGroups(tx *pg.Tx, ver
 	return err
 }
 
-func (p publishedRepositoryImpl) validateChangelogMigrationResult(tx *pg.Tx, packageInfo view.PackageInfoFile, publishId string, versionComparisons []*entity.VersionComparisonEntity, operationComparisons []*entity.OperationComparisonEntity, versionComparisonsFromCache []string) error {
+func (p publishedRepositoryImpl) validateChangelogMigrationResult(tx *pg.Tx, packageInfo view.PackageInfoFile, publishId string, versionComparisons []*entity.VersionComparisonEntity, operationComparisons []*entity.OperationComparisonEntity, versionComparisonsFromCache []string, comparisonInternalDocs []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocData []*entity.ComparisonInternalDocumentDataEntity) error {
 	migrationRun := new(mEntity.MigrationRunEntity)
 	err := tx.Model(migrationRun).Where("id = ?", packageInfo.MigrationId).First()
 	if err != nil {
@@ -1436,6 +1674,15 @@ func (p publishedRepositoryImpl) validateChangelogMigrationResult(tx *pg.Tx, pac
 	if len(operationComparisonsChanges) > 0 {
 		changes["operation_comparison"] = operationComparisonsChanges
 	}
+
+	comparisonInternalDocsChanges, err := p.getComparisonInternalDocumentsChanges(tx, packageInfo, comparisonInternalDocs, comparisonInternalDocData, &changesOverview)
+	if err != nil {
+		return err
+	}
+	for tableName, tableChanges := range comparisonInternalDocsChanges {
+		changes[tableName] = tableChanges
+	}
+
 	if len(changes) > 0 {
 		ent := mEntity.MigratedVersionChangesEntity{
 			PackageId:     packageInfo.PackageId,
@@ -1467,7 +1714,7 @@ func (p publishedRepositoryImpl) validateChangelogMigrationResult(tx *pg.Tx, pac
 	return nil
 }
 
-func (p publishedRepositoryImpl) SaveVersionChanges(packageInfo view.PackageInfoFile, publishId string, operationComparisons []*entity.OperationComparisonEntity, versionComparisons []*entity.VersionComparisonEntity, versionComparisonsFromCache []string) error {
+func (p publishedRepositoryImpl) SaveVersionChanges(packageInfo view.PackageInfoFile, publishId string, operationComparisons []*entity.OperationComparisonEntity, versionComparisons []*entity.VersionComparisonEntity, versionComparisonsFromCache []string, comparisonInternalDocEntities []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocDataEntities []*entity.ComparisonInternalDocumentDataEntity) error {
 	ctx := context.Background()
 	return p.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
 		var ents []entity.BuildEntity
@@ -1487,13 +1734,18 @@ func (p publishedRepositoryImpl) SaveVersionChanges(packageInfo view.PackageInfo
 		}
 		if packageInfo.MigrationBuild && !packageInfo.NoChangelog {
 			start := time.Now()
-			err := p.validateChangelogMigrationResult(tx, packageInfo, publishId, versionComparisons, operationComparisons, versionComparisonsFromCache)
+			err := p.validateChangelogMigrationResult(tx, packageInfo, publishId, versionComparisons, operationComparisons, versionComparisonsFromCache, comparisonInternalDocEntities, comparisonInternalDocDataEntities)
 			if err != nil {
 				return err
 			}
 			utils.PerfLog(time.Since(start).Milliseconds(), 500, "SaveVersionChanges: validateChangelogMigrationResult")
 		}
 		err = p.saveVersionChangesTx(tx, operationComparisons, versionComparisons)
+		if err != nil {
+			return err
+		}
+
+		err = p.saveComparisonInternalDocumentsTx(tx, comparisonInternalDocEntities, comparisonInternalDocDataEntities)
 		if err != nil {
 			return err
 		}
@@ -1539,6 +1791,28 @@ func (p publishedRepositoryImpl) saveVersionChangesTx(tx *pg.Tx, operationCompar
 		_, err = tx.Model(&operationComparisons).Insert()
 		if err != nil {
 			return fmt.Errorf("failed to insert operation changes %+v: %w", operationComparisons, err)
+		}
+	}
+	return nil
+}
+
+func (p publishedRepositoryImpl) saveComparisonInternalDocumentsTx(tx *pg.Tx, comparisonInternalDocEntities []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocDataEntities []*entity.ComparisonInternalDocumentDataEntity) error {
+	for _, d := range comparisonInternalDocDataEntities {
+		exists, err := p.comparisonInternalDocumentDataExists(tx, d.Hash) // TODO: could be bulk select
+		if err != nil {
+			return err
+		}
+		if !exists {
+			_, err := tx.Model(d).OnConflict("(hash) DO UPDATE").Insert()
+			if err != nil {
+				return fmt.Errorf("failed to insert comparison_internal_document_data %+v: %w", d, err)
+			}
+		}
+	}
+	for _, c := range comparisonInternalDocEntities {
+		_, err := tx.Model(c).OnConflict("(package_id, version, revision, previous_package_id, previous_version, previous_revision, document_id) DO UPDATE").Insert()
+		if err != nil {
+			return fmt.Errorf("failed to insert comparison_internal_document %+v: %w", c, err)
 		}
 	}
 	return nil
@@ -3811,6 +4085,12 @@ func (p publishedRepositoryImpl) countRelatedDataForPackagesTx(ctx context.Conte
 		return err
 	}
 
+	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.VersionInternalDocument),
+		`SELECT COUNT(*) FROM version_internal_document WHERE package_id IN (?)`, pg.In(packageIds))
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -3880,5 +4160,134 @@ func (p publishedRepositoryImpl) countRelatedDataForPackageRevisionsTx(ctx conte
 		return err
 	}
 
+	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.VersionInternalDocument),
+		`SELECT COUNT(*) FROM version_internal_document WHERE (package_id, version, revision) IN (`+valuesClause+`)`, args...)
+	if err != nil {
+		return err
+	}
+
 	return nil
+}
+
+func (p publishedRepositoryImpl) GetVersionInternalDocuments(packageId string, version string, revision int) ([]entity.VersionInternalDocumentEntity, error) {
+	var docs []entity.VersionInternalDocumentEntity
+	err := p.cp.GetConnection().Model(&docs).
+		Where("package_id = ?", packageId).
+		Where("version = ?", version).
+		Where("revision = ?", revision).
+		Select()
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return []entity.VersionInternalDocumentEntity{}, nil
+		}
+		return nil, err
+	}
+	return docs, nil
+}
+
+func (p publishedRepositoryImpl) GetVersionInternalDocumentData(hash string) (*entity.EnrichedVersionInternalDocumentDataEntity, error) {
+	result := new(entity.EnrichedVersionInternalDocumentDataEntity)
+
+	err := p.cp.GetConnection().Model((*entity.VersionInternalDocumentDataEntity)(nil)).
+		TableExpr("version_internal_document_data").
+		ColumnExpr("version_internal_document_data.hash").
+		ColumnExpr("version_internal_document_data.data").
+		ColumnExpr("version_internal_document.filename").
+		Join("INNER JOIN version_internal_document ON version_internal_document.hash = version_internal_document_data.hash").
+		Where("version_internal_document_data.hash = ?", hash).
+		Limit(1).
+		Select(result)
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return result, nil
+}
+
+func (p publishedRepositoryImpl) versionInternalDocumentDataExists(tx *pg.Tx, hash string) (bool, error) {
+	err := tx.Model(&entity.VersionInternalDocumentDataEntity{}).
+		Where("hash = ?", hash).
+		First()
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+func (p publishedRepositoryImpl) GetComparisonInternalDocumentsByComparisons(comparisons []entity.VersionComparisonEntity) ([]entity.ComparisonInternalDocumentEntity, error) {
+	if len(comparisons) == 0 {
+		return []entity.ComparisonInternalDocumentEntity{}, nil
+	}
+
+	var docs []entity.ComparisonInternalDocumentEntity
+	query := p.cp.GetConnection().Model(&docs)
+
+	for i, comparison := range comparisons {
+		if i == 0 {
+			query = query.WhereGroup(func(q *pg.Query) (*pg.Query, error) {
+				return q.Where("package_id = ?", comparison.PackageId).
+					Where("version = ?", comparison.Version).
+					Where("revision = ?", comparison.Revision).
+					Where("previous_package_id = ?", comparison.PreviousPackageId).
+					Where("previous_version = ?", comparison.PreviousVersion).
+					Where("previous_revision = ?", comparison.PreviousRevision), nil
+			})
+		} else {
+			query = query.WhereOrGroup(func(q *pg.Query) (*pg.Query, error) {
+				return q.Where("package_id = ?", comparison.PackageId).
+					Where("version = ?", comparison.Version).
+					Where("revision = ?", comparison.Revision).
+					Where("previous_package_id = ?", comparison.PreviousPackageId).
+					Where("previous_version = ?", comparison.PreviousVersion).
+					Where("previous_revision = ?", comparison.PreviousRevision), nil
+			})
+		}
+	}
+
+	err := query.Select()
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return []entity.ComparisonInternalDocumentEntity{}, nil
+		}
+		return nil, err
+	}
+	return docs, nil
+}
+
+func (p publishedRepositoryImpl) GetComparisonInternalDocumentData(hash string) (*entity.EnrichedComparisonInternalDocumentDataEntity, error) {
+	result := new(entity.EnrichedComparisonInternalDocumentDataEntity)
+	err := p.cp.GetConnection().Model((*entity.ComparisonInternalDocumentEntity)(nil)).
+		TableExpr("comparison_internal_document_data").
+		ColumnExpr("comparison_internal_document_data.hash").
+		ColumnExpr("comparison_internal_document_data.data").
+		ColumnExpr("comparison_internal_document.filename").
+		Join("INNER JOIN comparison_internal_document ON comparison_internal_document.hash = comparison_internal_document_data.hash").
+		Where("comparison_internal_document_data.hash = ?", hash).
+		Limit(1).
+		Select(result)
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return result, nil
+}
+
+func (p publishedRepositoryImpl) comparisonInternalDocumentDataExists(tx *pg.Tx, hash string) (bool, error) {
+	err := tx.Model(&entity.ComparisonInternalDocumentDataEntity{}).
+		Where("hash = ?", hash).
+		First()
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }

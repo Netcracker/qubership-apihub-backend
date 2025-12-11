@@ -286,6 +286,18 @@ func (s OperationEntity) GetChanges(t OperationEntity) map[string]interface{} {
 			"new": t.ApiAudience,
 		}
 	}
+	if s.DocumentId != t.DocumentId {
+		changes["DocumentId"] = map[string]interface{}{
+			"old": s.DocumentId,
+			"new": t.DocumentId,
+		}
+	}
+	if s.VersionInternalDocumentId != t.VersionInternalDocumentId {
+		changes["VersionInternalDocumentId"] = map[string]interface{}{
+			"old": s.VersionInternalDocumentId,
+			"new": t.VersionInternalDocumentId,
+		}
+	}
 	return changes
 }
 
@@ -433,5 +445,46 @@ func (s OperationComparisonEntity) GetChanges(t OperationComparisonEntity) map[s
 		}
 	}
 
+	if s.ComparisonInternalDocumentId != t.ComparisonInternalDocumentId {
+		changes["ComparisonInternalDocumentId"] = map[string]interface{}{
+			"old": s.ComparisonInternalDocumentId,
+			"new": t.ComparisonInternalDocumentId,
+		}
+	}
+
+	return changes
+}
+
+func (s VersionInternalDocumentEntity) GetChanges(t VersionInternalDocumentEntity) map[string]interface{} {
+	changes := make(map[string]interface{}, 0)
+	if s.Filename != t.Filename {
+		changes["Filename"] = map[string]interface{}{
+			"old": s.Filename,
+			"new": t.Filename,
+		}
+	}
+	if s.Hash != t.Hash {
+		changes["Hash"] = map[string]interface{}{
+			"old": s.Hash,
+			"new": t.Hash,
+		}
+	}
+	return changes
+}
+
+func (s ComparisonInternalDocumentEntity) GetChanges(t ComparisonInternalDocumentEntity) map[string]interface{} {
+	changes := make(map[string]interface{}, 0)
+	if s.Filename != t.Filename {
+		changes["Filename"] = map[string]interface{}{
+			"old": s.Filename,
+			"new": t.Filename,
+		}
+	}
+	if s.Hash != t.Hash {
+		changes["Hash"] = map[string]interface{}{
+			"old": s.Hash,
+			"new": t.Hash,
+		}
+	}
 	return changes
 }

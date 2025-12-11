@@ -27,23 +27,24 @@ import (
 type OperationEntity struct {
 	tableName struct{} `pg:"operation"`
 
-	PackageId               string                 `pg:"package_id, pk, type:varchar"`
-	Version                 string                 `pg:"version, pk, type:varchar"`
-	Revision                int                    `pg:"revision, pk, type:integer"`
-	OperationId             string                 `pg:"operation_id, pk, type:varchar"`
-	DataHash                string                 `pg:"data_hash, type:varchar"`
-	Deprecated              bool                   `pg:"deprecated, type:boolean, use_zero"`
-	Kind                    string                 `pg:"kind, type:varchar"`
-	Title                   string                 `pg:"title, type:varchar, use_zero"`
-	Metadata                Metadata               `pg:"metadata, type:jsonb"`
-	Type                    string                 `pg:"type, type:varchar, use_zero"`
-	DeprecatedInfo          string                 `pg:"deprecated_info, type:varchar, use_zero"`
-	DeprecatedItems         []view.DeprecatedItem  `pg:"deprecated_items, type:jsonb, use_zero"`
-	PreviousReleaseVersions []string               `pg:"previous_release_versions, type:varchar[], use_zero"`
-	Models                  map[string]string      `pg:"models, type:jsonb, use_zero"`
-	CustomTags              map[string]interface{} `pg:"custom_tags, type:jsonb, use_zero"`
-	ApiAudience             string                 `pg:"api_audience, type:varchar, use_zero"`
-	DocumentId              string                 `pg:"document_id, type:varchar"`
+	PackageId                 string                 `pg:"package_id, pk, type:varchar"`
+	Version                   string                 `pg:"version, pk, type:varchar"`
+	Revision                  int                    `pg:"revision, pk, type:integer"`
+	OperationId               string                 `pg:"operation_id, pk, type:varchar"`
+	DataHash                  string                 `pg:"data_hash, type:varchar"`
+	Deprecated                bool                   `pg:"deprecated, type:boolean, use_zero"`
+	Kind                      string                 `pg:"kind, type:varchar"`
+	Title                     string                 `pg:"title, type:varchar, use_zero"`
+	Metadata                  Metadata               `pg:"metadata, type:jsonb"`
+	Type                      string                 `pg:"type, type:varchar, use_zero"`
+	DeprecatedInfo            string                 `pg:"deprecated_info, type:varchar, use_zero"`
+	DeprecatedItems           []view.DeprecatedItem  `pg:"deprecated_items, type:jsonb, use_zero"`
+	PreviousReleaseVersions   []string               `pg:"previous_release_versions, type:varchar[], use_zero"`
+	Models                    map[string]string      `pg:"models, type:jsonb, use_zero"`
+	CustomTags                map[string]interface{} `pg:"custom_tags, type:jsonb, use_zero"`
+	ApiAudience               string                 `pg:"api_audience, type:varchar, use_zero"`
+	DocumentId                string                 `pg:"document_id, type:varchar"`
+	VersionInternalDocumentId string                 `pg:"version_internal_document_id, type:varchar"`
 }
 
 type OperationsTypeCountEntity struct {
@@ -98,19 +99,20 @@ type OperationDataEntity struct {
 type OperationComparisonEntity struct {
 	tableName struct{} `pg:"operation_comparison"`
 
-	PackageId           string                 `pg:"package_id, type:varchar, use_zero"`
-	Version             string                 `pg:"version, type:varchar, use_zero"`
-	Revision            int                    `pg:"revision, type:integer, use_zero"`
-	OperationId         string                 `pg:"operation_id, type:varchar"`
-	PreviousPackageId   string                 `pg:"previous_package_id, type:varchar, use_zero"`
-	PreviousVersion     string                 `pg:"previous_version, type:varchar, use_zero"`
-	PreviousRevision    int                    `pg:"previous_revision, type:integer, use_zero"`
-	PreviousOperationId string                 `pg:"previous_operation_id, type:varchar, use_zero"`
-	ComparisonId        string                 `pg:"comparison_id, type:varchar"`
-	DataHash            string                 `pg:"data_hash, type:varchar"`
-	PreviousDataHash    string                 `pg:"previous_data_hash, type:varchar"`
-	ChangesSummary      view.ChangeSummary     `pg:"changes_summary, type:jsonb"`
-	Changes             map[string]interface{} `pg:"changes, type:jsonb"`
+	PackageId                    string                 `pg:"package_id, type:varchar, use_zero"`
+	Version                      string                 `pg:"version, type:varchar, use_zero"`
+	Revision                     int                    `pg:"revision, type:integer, use_zero"`
+	OperationId                  string                 `pg:"operation_id, type:varchar"`
+	PreviousPackageId            string                 `pg:"previous_package_id, type:varchar, use_zero"`
+	PreviousVersion              string                 `pg:"previous_version, type:varchar, use_zero"`
+	PreviousRevision             int                    `pg:"previous_revision, type:integer, use_zero"`
+	PreviousOperationId          string                 `pg:"previous_operation_id, type:varchar, use_zero"`
+	ComparisonId                 string                 `pg:"comparison_id, type:varchar"`
+	DataHash                     string                 `pg:"data_hash, type:varchar"`
+	PreviousDataHash             string                 `pg:"previous_data_hash, type:varchar"`
+	ChangesSummary               view.ChangeSummary     `pg:"changes_summary, type:jsonb"`
+	Changes                      map[string]interface{} `pg:"changes, type:jsonb"`
+	ComparisonInternalDocumentId string                 `pg:"comparison_internal_document_id, type:varchar"`
 }
 
 type VersionComparisonEntity struct {
@@ -271,14 +273,15 @@ func MakeOperationIdsSlice(operationEnt []OperationRichEntity) []string {
 func MakeCommonOperationView(operationEnt *OperationEntity) view.OperationListView {
 	return view.OperationListView{
 		CommonOperationView: view.CommonOperationView{
-			OperationId: operationEnt.OperationId,
-			Title:       operationEnt.Title,
-			Deprecated:  operationEnt.Deprecated,
-			ApiKind:     operationEnt.Kind,
-			ApiType:     operationEnt.Type,
-			CustomTags:  operationEnt.CustomTags,
-			ApiAudience: operationEnt.ApiAudience,
-			DocumentId:  operationEnt.DocumentId,
+			OperationId:               operationEnt.OperationId,
+			Title:                     operationEnt.Title,
+			Deprecated:                operationEnt.Deprecated,
+			ApiKind:                   operationEnt.Kind,
+			ApiType:                   operationEnt.Type,
+			CustomTags:                operationEnt.CustomTags,
+			ApiAudience:               operationEnt.ApiAudience,
+			DocumentId:                operationEnt.DocumentId,
+			VersionInternalDocumentId: operationEnt.VersionInternalDocumentId,
 		},
 	}
 }
@@ -317,17 +320,18 @@ func MakeProtobufOperationView(operationEnt *OperationEntity) view.ProtobufOpera
 
 func MakeDeprecatedOperationView(operationEnt OperationRichEntity, includeDeprecatedItems bool) interface{} {
 	operationView := view.DeprecatedOperationView{
-		OperationId:             operationEnt.OperationId,
-		Title:                   operationEnt.Title,
-		Deprecated:              operationEnt.Deprecated,
-		ApiKind:                 operationEnt.Kind,
-		ApiType:                 operationEnt.Type,
-		PackageRef:              view.MakePackageRefKey(operationEnt.PackageId, operationEnt.Version, operationEnt.Revision),
-		DeprecatedInfo:          operationEnt.DeprecatedInfo,
-		DeprecatedCount:         len(operationEnt.DeprecatedItems),
-		PreviousReleaseVersions: operationEnt.PreviousReleaseVersions,
-		ApiAudience:             operationEnt.ApiAudience,
-		DocumentId:              operationEnt.DocumentId,
+		OperationId:               operationEnt.OperationId,
+		Title:                     operationEnt.Title,
+		Deprecated:                operationEnt.Deprecated,
+		ApiKind:                   operationEnt.Kind,
+		ApiType:                   operationEnt.Type,
+		PackageRef:                view.MakePackageRefKey(operationEnt.PackageId, operationEnt.Version, operationEnt.Revision),
+		DeprecatedInfo:            operationEnt.DeprecatedInfo,
+		DeprecatedCount:           len(operationEnt.DeprecatedItems),
+		PreviousReleaseVersions:   operationEnt.PreviousReleaseVersions,
+		ApiAudience:               operationEnt.ApiAudience,
+		DocumentId:                operationEnt.DocumentId,
+		VersionInternalDocumentId: operationEnt.VersionInternalDocumentId,
 	}
 	if includeDeprecatedItems {
 		operationView.DeprecatedItems = operationEnt.DeprecatedItems
@@ -373,15 +377,16 @@ func MakeSingleOperationView(operationEnt OperationRichEntity) interface{} {
 		}
 	}
 	operationView := view.SingleOperationView{
-		OperationId: operationEnt.OperationId,
-		Title:       operationEnt.Title,
-		Deprecated:  operationEnt.Deprecated,
-		ApiKind:     operationEnt.Kind,
-		ApiType:     operationEnt.Type,
-		Data:        data,
-		CustomTags:  operationEnt.CustomTags,
-		ApiAudience: operationEnt.ApiAudience,
-		DocumentId:  operationEnt.DocumentId,
+		OperationId:               operationEnt.OperationId,
+		Title:                     operationEnt.Title,
+		Deprecated:                operationEnt.Deprecated,
+		ApiKind:                   operationEnt.Kind,
+		ApiType:                   operationEnt.Type,
+		Data:                      data,
+		CustomTags:                operationEnt.CustomTags,
+		ApiAudience:               operationEnt.ApiAudience,
+		DocumentId:                operationEnt.DocumentId,
+		VersionInternalDocumentId: operationEnt.VersionInternalDocumentId,
 	}
 
 	switch operationEnt.Type {
@@ -475,9 +480,10 @@ func MakeOperationComparisonChangelogView(entity OperationComparisonChangelogEnt
 		}
 
 		res := &view.RestOperationPairChangesView{
-			CurrentOperation:  current,
-			PreviousOperation: previous,
-			ChangeSummary:     entity.ChangesSummary,
+			CurrentOperation:             current,
+			PreviousOperation:            previous,
+			ChangeSummary:                entity.ChangesSummary,
+			ComparisonInternalDocumentId: entity.ComparisonInternalDocumentId,
 		}
 		return res
 	case string(view.GraphqlApiType):
@@ -506,9 +512,10 @@ func MakeOperationComparisonChangelogView(entity OperationComparisonChangelogEnt
 		}
 
 		result := &view.GraphqlOperationPairChangesView{
-			CurrentOperation:  current,
-			PreviousOperation: previous,
-			ChangeSummary:     entity.ChangesSummary,
+			CurrentOperation:             current,
+			PreviousOperation:            previous,
+			ChangeSummary:                entity.ChangesSummary,
+			ComparisonInternalDocumentId: entity.ComparisonInternalDocumentId,
 		}
 		return result
 	case string(view.ProtobufApiType):
@@ -535,9 +542,10 @@ func MakeOperationComparisonChangelogView(entity OperationComparisonChangelogEnt
 		}
 
 		result := &view.ProtobufOperationPairChangesView{
-			CurrentOperation:  current,
-			PreviousOperation: previous,
-			ChangeSummary:     entity.ChangesSummary,
+			CurrentOperation:             current,
+			PreviousOperation:            previous,
+			ChangeSummary:                entity.ChangesSummary,
+			ComparisonInternalDocumentId: entity.ComparisonInternalDocumentId,
 		}
 		return result
 	}
