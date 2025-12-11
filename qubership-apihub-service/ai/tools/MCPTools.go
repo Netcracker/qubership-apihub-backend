@@ -48,6 +48,7 @@ IMPORTANT: The search is not full-text. For example, a query "create customer" m
 LLM INSTRUCTIONS:
 - For the first call, use a large limit (100) to find as many options as possible
 - Consider simplifying the query to a single keyword (e.g., if query is "create customer", also try "customer")
+- Query string has special features: -word to force exclude a word from the search - it can help if search results are flooded with irrelevant results; "something certain"  - double quotes to strict search of a phrase/word
 - Group results by packageId when displaying
 - Return all metadata that MCP returns (operationId, packageId, packageName, version, path, method, title, apiKind, apiType, apiAudience)
 - Return the most recent versions of operations (by default, search is performed in the latest completed version)
@@ -87,6 +88,7 @@ IMPORTANT: The search is not full-text. For example, a query "create customer" m
 LLM INSTRUCTIONS:
 - For the first call, use a large limit (100) to find as many options as possible
 - Consider simplifying the query to a single keyword (e.g., if query is "create customer", also try "customer")
+- Query string has special features: -word to force exclude a word from the search - it can help if search results are flooded with irrelevant results; "something certain"  - double quotes to strict search of a phrase/word
 - Group results by packageId when displaying in markdown format
 - Return all metadata that MCP returns (operationId, packageId, packageName, version, path, method, title, apiKind, apiType, apiAudience)
 - Return the most recent versions of operations (by default, search is performed in the latest completed version)
