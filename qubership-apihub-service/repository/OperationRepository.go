@@ -975,13 +975,14 @@ func (o operationRepositoryImpl) LiteSearchForOperations(searchQuery *entity.Ope
 	searchQuery.TextFilter = strings.TrimPrefix(searchQuery.TextFilter, "_")
 	searchQuery.OriginalTextInput = strings.TrimPrefix(searchQuery.OriginalTextInput, "_")
 
-	_, err := o.cp.GetConnection().Exec("select plainto_tsquery(?)", searchQuery.SearchString)
+	_, err := o.cp.GetConnection().Exec("select websearch_to_tsquery(?)", searchQuery.OriginalTextInput)
 	if err != nil {
 		return nil, fmt.Errorf("invalid search string: %v", err.Error())
 	}
 	searchQuery.TextFilter = "%" + utils.LikeEscaped(searchQuery.TextFilter) + "%"
 	var result []entity.OperationSearchResult
 
+	// TODO need api_type in fts_latest_release_operation_data for correct limit work
 	operationsSearchQuery := `
 select
     o.package_id,
@@ -1007,8 +1008,12 @@ from operation o
         ts.revision     as revision
 
     FROM fts_latest_release_operation_data ts,
-         phraseto_tsquery(?original_text_input) search_query
-    WHERE search_query @@ data_vector
+         websearch_to_tsquery(?original_text_input) search_query
+    WHERE (?versions = '{}' or version like ANY(
+						select id from unnest(?versions::text[]) id)) and (?packages = '{}' or package_id like ANY(
+						select id from unnest(?packages::text[]) id
+						union
+						select id||'.%' from unnest(?packages::text[]) id)) and search_query @@ data_vector
     ORDER BY ts_rank(data_vector, search_query) DESC,
              package_id,
              operation_id desc,
@@ -1024,10 +1029,7 @@ from operation o
 inner join published_version pv on o.package_id=pv.package_id and o.version=pv.version and o.revision=pv.revision
 inner join package_group pg on o.package_id=pg.id
 
-where all_ts.rank > 0 and (?api_type = '' or o.type = ?api_type) and (?packages = '{}' or o.package_id like ANY(
-						select id from unnest(?packages::text[]) id
-						union
-						select id||'.%' from unnest(?packages::text[]) id))
+where all_ts.rank > 0 and (?api_type = '' or o.type = ?api_type)
 and pv.deleted_at is null
 order by all_ts.rank desc, o.operation_id
 limit ?limit;
