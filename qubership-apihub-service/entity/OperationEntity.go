@@ -86,12 +86,6 @@ type OperationsInfoEntity struct {
 	OperationsInfo map[string]OperationInfo `pg:"operations_info, type:json"`
 }
 
-type OperationsDataHashEntity struct {
-	tableName struct{} `pg:"operation"`
-
-	OperationsHashes map[string]string `pg:"operations_hashes, type:json"`
-}
-
 type OperationDataEntity struct {
 	tableName struct{} `pg:"operation_data, alias:operation_data"`
 
