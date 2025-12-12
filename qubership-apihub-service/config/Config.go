@@ -20,7 +20,7 @@ type Config struct {
 	Olric                OlricConfig
 	Cleanup              CleanupConfig
 	Extensions           []view.Extension
-	OpenAI               OpenAIConfig
+	Ai                   AIConfig
 }
 
 type DatabaseConfig struct {
@@ -131,8 +131,20 @@ type CleanupConfig struct {
 	Builds           BuildsCleanupConfig
 }
 
+type AIConfig struct {
+	MCP  MCPConfig
+	Chat ChatConfig
+}
+
+type MCPConfig struct {
+	Workspace string
+}
+type ChatConfig struct {
+	OpenAI OpenAIConfig
+}
+
 type OpenAIConfig struct {
-	ApiKey          string `validate:"required" sensitive:"true"`
+	ApiKey          string `sensitive:"true"`
 	Model           string
 	ProxyURL        string  // Optional base URL for OpenAI API requests (replaces https://api.openai.com/v1); Example: "https://llmproxy.localdomain.com" or "https://llmproxy.localdomain.com/v1"
 	Temperature     float64 // Controls randomness of the model's output. Range: 0.0 to 2.0. Lower values = more focused, higher values = more random. Default: 1.0
