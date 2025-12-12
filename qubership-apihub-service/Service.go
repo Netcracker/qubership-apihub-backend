@@ -540,11 +540,6 @@ func main() {
 	}
 
 	mcpHandler := mcpController.MakeMCPServer()
-
-	/*mcpHandler, err := controller.NewMCPHandler(operationService, packageService)
-	if err != nil {
-		log.Fatalf("Failed to initialize MCP handler: %s", err.Error())
-	}*/
 	r.Handle("/api/v1/mcp/", security.SecureMCP(mcpHandler))
 
 	r.HandleFunc("/v3/api-docs/swagger-config", apiDocsController.GetSpecsUrls).Methods(http.MethodGet)
