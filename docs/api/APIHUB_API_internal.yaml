@@ -379,71 +379,27 @@ paths:
               examples:
                 InternalServerError:
                   $ref: "#/components/examples/InternalServerError"
-  "/api/v2/admins":
+  "/api/v2/packages/{packageId}/versions/recursiveDelete":
+    parameters:
+      - $ref: "#/components/parameters/packageId"
     post:
-      x-nc-api-audience: noBWC
       tags:
-        - Roles
-      summary: Add a system administrator
-      description: |
-        Add an existing user as a system administrator.
-      operationId: postAdmins
+        - Versions
+      summary: Delete expired versions recursively
+      description: Recursively delete all expired versions in 'Draft' status under group or workspace
+      operationId: deleteExpiredVersionsRecursively
       requestBody:
+        description: Recursive delete parameters
         content:
           application/json:
             schema:
               type: object
-              required:
-                - userId
               properties:
-                userId:
-                  description: Login of the user.
+                olderThanDate:
+                  description: Versions published earlier than the date are going to be deleted.
                   type: string
-                  example: user1221
-      responses:
-        "201":
-          description: Created
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  admins:
-                    description: List of system administrators.
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/User"
-        "400":
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                IncorrectInputParams:
-                  $ref: "#/components/examples/IncorrectInputParameters"
-        "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                InternalServerError:
-                  $ref: "#/components/examples/InternalServerError"
-    get:
-      x-nc-api-audience: noBWC
-      tags:
-        - Roles
-      summary: Get list of system administrators
-      description: Get list of system administrators.
-      operationId: getAdmins
+                  format: 'date'
+                  example: '2023-05-12'
       responses:
         "200":
           description: Success
@@ -452,52 +408,9 @@ paths:
               schema:
                 type: object
                 properties:
-                  admins:
-                    description: List of system administrators.
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/User"
-        "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                InternalServerError:
-                  $ref: "#/components/examples/InternalServerError"
-  "/api/v2/admins/{userId}":
-    delete:
-      x-nc-api-audience: noBWC
-      tags:
-        - Roles
-      summary: Delete system administrator
-      description: Delete a user from the system administrators group.
-      operationId: deleteAdminsId
-      parameters:
-        - name: userId
-          description: Login of the user.
-          in: path
-          required: true
-          schema:
-            type: string
-            example: user1221
-      responses:
-        "204":
-          description: No content
-          content: {}
+                  jobId:
+                    description: Id of job deleting versions.
+                    type: string
         "401":
           description: Unauthorized
           content:
@@ -516,6 +429,68 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                PackageNotFound:
+                  $ref: "#/components/examples/PackageNotFound"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v2/builders/{builderId}/tasks":
+    parameters:
+      - $ref: "#/components/parameters/builderId"
+    post:
+      tags:
+        - Publish
+        - Admin
+      summary: Assign build task to Builder
+      description: |
+        Returns empty response 204 (in case of no free build task to assign) or multipart form (src+config, matching current start build payload)
+      operationId: postBuilderIdTasks
+      responses:
+        "200":
+          description: Build task assigned
+          content:
+            application/zip:
+              schema:
+                type: object
+                properties:
+                  sources/:
+                    type: string
+                    description: |
+                      Folder with source files for publish.
+                      **Required**, if the buidType = buid and "files" array is filled in config.
+                    format: binary
+                  config.json:
+                    oneOf:
+                      - $ref: "#/components/schemas/PublishBuildConfig"
+                      - $ref: "#/components/schemas/ExportVersionBuildConfig"
+                      - $ref: "#/components/schemas/ExportRestDocumentBuildConfig"
+                      - $ref: "#/components/schemas/ExportRestOperationsGroupBuildConfig"
+                    discriminator:
+                      propertyName: buildType
+        "204":
+          description: No content
+          content: {}
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
+        "410":
+          description: Gone
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
         "500":
           description: Internal Server Error
           content:
@@ -632,6 +607,15 @@ components:
       schema:
         type: number
         default: 0
+    builderId:
+      name: builderId
+      in: path
+      description: Builder unique identifier (UUID)
+      required: true
+      schema:
+        type: string
+        format: UUID
+        example: QS.CloudQSS.CPQ.Q-TMF
   schemas:
     DeprecatedItems:
       description: List of deprecated items in the operation.

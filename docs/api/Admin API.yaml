@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
-  title: APIHUB system administrators API
+  title: APIHUB system administrators API – External
   description: |
-    The API is for system administrators only.
+    External API contract for system administrators.
   license:
     name: qubership
     url: https://qubership.org
@@ -268,221 +268,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
               examples: {}
-        "500":
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                InternalServerError:
-                  $ref: "#/components/examples/InternalServerError"
-  /api/v2/admin/system/stats:
-    get:
-      tags:
-        - System
-      summary: Get system statistics
-      description: |
-        Retrieves system-wide statistics including business entities count, build statistics, and database size information.
-      operationId: getSystemStats
-      responses:
-        "200":
-          description: System statistics retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SystemStats"
-        "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples: {}
-        "403":
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples: {}
-        "500":
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                InternalServerError:
-                  $ref: "#/components/examples/InternalServerError"
-  "/api/v1/publishHistory":
-    get:
-      tags:
-        - Admin
-      summary: Get history of published version revisions
-      description: |
-        Returns all existing version revisions sorted by publish date from oldest to newest.
-        Only for system administrators.
-      operationId: getPublishHistory
-      x-api-kind: no-BWC
-      parameters:
-        - name: status
-          description: version status
-          in: query
-          required: false
-          schema:
-            $ref: "#/components/schemas/VersionStatusEnum"
-        - name: publishedBefore
-          description: Filter to include only revisions published before specific date
-          in: query
-          required: false
-          schema:
-            type: string
-            format: date-time
-            description: RFC3339 format
-            example: "2024-03-15T12:00:13.052715Z"
-        - name: publishedAfter
-          description: Filter to include only revisions published after specific date
-          in: query
-          required: false
-          schema:
-            type: string
-            format: date-time
-            description: RFC3339 format
-            example: "2024-03-15T12:00:13.052715Z"
-      responses:
-        "200":
-          description: Success
-          content:
-            application/json:
-              schema:
-                description: List of published versions
-                type: array
-                items:
-                  type: object
-                  properties:
-                    packageId:
-                      type: string
-                    version:
-                      type: string
-                    revision:
-                      type: integer
-                    previousVersionPackageId:
-                      type: string
-                    previousVersion:
-                      type: string
-                    publishedAt:
-                      type: string
-                      format: date-time
-                    apiTypes:
-                      type: array
-                      items:
-                        $ref: "#/components/schemas/ApiType"
-        "400":
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                IncorrectInputParams:
-                  $ref: "#/components/examples/IncorrectInputParameters"
-        "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                InternalServerError:
-                  $ref: "#/components/examples/InternalServerError"
-  "/api/v2/businessMetrics":
-    get:
-      tags:
-        - Admin
-      summary: Get business metrics report
-      description: |
-        Returns collected business metrics
-      operationId: getBusinessMetrics
-      parameters:
-        - name: format
-          description: Response format
-          in: query
-          required: false
-          schema:
-            type: string
-            default: json
-            enum:
-            - json
-            - xlsx
-        - name: parentPackageId
-          description: Return business metrics only for specific group\workspace
-          in: query
-          required: false
-          schema:
-            type: string
-            example: SD
-        - name: hierarchyLevel
-          description: Number of hierarchy levels for grouping packages (level=0 - packageId="SD.TL.TLQSS", level=1 - packageId="SD", level=2 - packageId="SD.TL")
-          in: query
-          required: false
-          schema:
-            type: integer
-            default: 0
-      responses:
-        "200":
-          description: Success
-          content:
-            application/json:
-              schema:
-                description: List of collected business metrics grouped by package
-                type: array
-                items:
-                  $ref: "#/components/schemas/BusinessMetric"
-            application/octet-stream:
-              schema:
-                type: string
-                format: binary
-                description: xlsx file to download
-          headers:
-            Content-Disposition:
-              schema:
-                type: string
-                description: xlsx file name (only filled when format=xlsx)
-                example: attachment; filename="business_metrics_2023-12-31.xlsx"
-        "400":
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                IncorrectInputParams:
-                  $ref: "#/components/examples/IncorrectInputParameters"
-        "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
         "500":
           description: Internal Server Error
           content:
@@ -847,6 +632,264 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/internal/migrate/operations":
+    post:
+      tags:
+        - Admin
+      summary: Start operations migration
+      description: |
+        Start operations migration process.
+      operationId: startOpsMigration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                packageIds:
+                  type: array
+                  items:
+                    type: string
+                  description: List of package IDs to migrate
+                versions:
+                  type: array
+                  items:
+                    type: string
+                  description: List of versions to migrate
+                rebuildChangelogOnly:
+                  type: boolean
+                  description: Rebuild changelog only
+                  default: false
+                skipValidation:
+                  type: boolean
+                  description: Skip validation
+                  default: false
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    description: Migration ID
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict - migration already running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/internal/migrate/operations/{migrationId}":
+    get:
+      tags:
+        - Admin
+      summary: Get migration status
+      description: |
+        Get migration report by migration ID.
+      operationId: getMigrationReport
+      parameters:
+        - name: migrationId
+          in: path
+          required: true
+          description: Migration ID
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Migration report
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/internal/migrate/operations/{migrationId}/suspiciousBuilds":
+    get:
+      tags:
+        - Admin
+      summary: Get suspicious builds
+      description: |
+        Get suspicious builds for migration.
+      operationId: getSuspiciousBuilds
+      parameters:
+        - name: migrationId
+          in: path
+          required: true
+          description: Migration ID
+          schema:
+            type: string
+        - name: changedField
+          in: query
+          required: false
+          description: Changed field filter
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          description: Limit
+          schema:
+            type: integer
+        - name: page
+          in: query
+          required: false
+          description: Page number
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/internal/migrate/operations/{migrationId}/perf":
+    get:
+      tags:
+        - Admin
+      summary: Get migration performance report
+      description: |
+        Get migration performance report.
+      operationId: getMigrationPerfReport
+      parameters:
+        - name: migrationId
+          in: path
+          required: true
+          description: Migration ID
+          schema:
+            type: string
+        - name: includeHourPackageData
+          in: query
+          required: false
+          description: Include hour package data
+          schema:
+            type: boolean
+        - name: stageFilter
+          in: query
+          required: false
+          description: Stage filter
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Performance report
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/internal/migrate/operations/cancel":
+    post:
+      tags:
+        - Admin
+      summary: Cancel running migrations
+      description: |
+        Cancel all running migrations.
+      operationId: cancelRunningMigrations
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+        "401":
+          description: Unauthorized
           content:
             application/json:
               schema:

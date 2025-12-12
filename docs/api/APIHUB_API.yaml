@@ -4693,6 +4693,51 @@ paths:
               examples:
                 InternalServerError:
                   $ref: "#/components/examples/InternalServerError"
+  "/api/v2/permissions":
+    get:
+      tags:
+        - Roles
+      summary: Get list of permissions
+      description: List of all permissions.
+      operationId: getPermissions
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  permissions:
+                    description: List of available permissions.
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        permission:
+                          $ref: "#/components/schemas/Permission"
+                        name:
+                          type: string
+                          description: Name of the permission
+                          example: Read content of public package
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   "/api/v2/roles":
     get:
       tags:
@@ -4745,51 +4790,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-  "/api/v2/permissions":
-    get:
-      tags:
-        - Roles
-      summary: Get list of permissions
-      description: List of all permissions.
-      operationId: getPermissions
-      responses:
-        "200":
-          description: Success
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  permissions:
-                    description: List of available permissions.
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        permission:
-                          $ref: "#/components/schemas/Permission"
-                        name:
-                          type: string
-                          description: Name of the permission
-                          example: Read content of public package
-        "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
   "/api/v2/packages/{packageId}/availableRoles":
     parameters:
       - $ref: "#/components/parameters/packageId"
@@ -5277,65 +5280,6 @@ paths:
               examples:
                 PackageNotFound:
                   $ref: "#/components/examples/PackageNotFound"
-        "410":
-          description: Gone
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples: {}
-        "500":
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                InternalServerError:
-                  $ref: "#/components/examples/InternalServerError"
-  "/api/v2/builders/{builderId}/tasks":
-    parameters:
-      - $ref: "#/components/parameters/builderId"
-    post:
-      tags:
-        - Publish
-        - Admin
-      summary: Assign build task to Builder
-      description: |
-        Returns empty response 204 (in case of no free build task to assign) or multipart form (src+config, matching current start build payload)
-      operationId: postBuilderIdTasks
-      responses:
-        "200":
-          description: Build task assigned
-          content:
-            application/zip:
-              schema:
-                type: object
-                properties:
-                  sources/:
-                    type: string
-                    description: |
-                      Folder with source files for publish.
-                      **Required**, if the buidType = buid and "files" array is filled in config.
-                    format: binary
-                  config.json:
-                    oneOf:
-                      - $ref: "#/components/schemas/PublishBuildConfig"
-                      - $ref: "#/components/schemas/ExportVersionBuildConfig"
-                      - $ref: "#/components/schemas/ExportRestDocumentBuildConfig"
-                      - $ref: "#/components/schemas/ExportRestOperationsGroupBuildConfig"
-                    discriminator:
-                      propertyName: buildType
-        "204":
-          description: No content
-          content: {}
-        "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples: {}
         "410":
           description: Gone
           content:
@@ -8051,68 +7995,6 @@ paths:
               examples:
                 InternalServerError:
                   $ref: "#/components/examples/InternalServerError"
-  "/api/v2/packages/{packageId}/versions/recursiveDelete":
-    parameters:
-      - $ref: "#/components/parameters/packageId"
-    post:
-      tags:
-        - Versions
-      summary: Delete expired versions recursively
-      description: Recursively delete all expired versions in 'Draft' status under group or workspace
-      operationId: deleteExpiredVersionsRecursively
-      requestBody:
-        description: Recursive delete parameters
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                olderThanDate:
-                  description: Versions published earlier than the date are going to be deleted.
-                  type: string
-                  format: 'date'
-                  example: '2023-05-12'
-      responses:
-        "200":
-          description: Success
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  jobId:
-                    description: Id of job deleting versions.
-                    type: string
-        "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "403":
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: Not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                PackageNotFound:
-                  $ref: "#/components/examples/PackageNotFound"
-        "500":
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                InternalServerError:
-                  $ref: "#/components/examples/InternalServerError"
   "/api/v2/packages/{packageId}/publish/availableStatuses":
     parameters:
       - $ref: "#/components/parameters/packageId"
@@ -8780,71 +8662,74 @@ paths:
             "*/*":
               schema:
                 description: Schema of any type
-  "/api/v2/businessMetrics":
+  /metrics:
     get:
       tags:
         - Admin
-      summary: Get business metrics report
+      summary: Get Prometheus metrics
       description: |
-        Returns collected business metrics
-      operationId: getBusinessMetrics
+        Returns Prometheus metrics in text format.
+      operationId: getMetrics
+      security: []
+      responses:
+        "200":
+          description: Success
+          content:
+            text/plain:
+              schema:
+                type: string
+                description: Prometheus metrics in text format
+  "/api/v2/packages/{packageId}/publish/statuses":
+    get:
+      tags:
+        - Publish
+      summary: Get builds statuses
+      description: |
+        Get statuses for multiple publish operations.
+        Note: In Service.go this endpoint is implemented as POST, but CSV specifies GET.
+      operationId: getPublishStatuses
       parameters:
-        - name: format
-          description: Response format
+        - $ref: "#/components/parameters/packageId"
+        - name: publishIds
           in: query
           required: false
+          description: List of publish IDs to get statuses for
           schema:
-            type: string
-            default: json
-            enum:
-            - json
-            - xlsx
-        - name: parentPackageId
-          description: Return business metrics only for specific group\workspace
-          in: query
-          required: false
-          schema:
-            type: string
-            example: SD
-        - name: hierarchyLevel
-          description: Number of hierarchy levels for grouping packages (level=0 - packageId="SD.TL.TLQSS", level=1 - packageId="SD", level=2 - packageId="SD.TL")
-          in: query
-          required: false
-          schema:
-            type: integer
-            default: 0
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
       responses:
         "200":
           description: Success
           content:
             application/json:
               schema:
-                description: List of collected business metrics grouped by package
                 type: array
                 items:
-                  $ref: "#/components/schemas/BusinessMetric"
-            application/octet-stream:
-              schema:
-                type: string
-                format: binary
-                description: xlsx file to download
-          headers:
-            Content-Disposition:
-              schema:
-                type: string
-                description: xlsx file name (only filled when format=xlsx)
-                example: attachment; filename="business_metrics_2023-12-31.xlsx"
+                  type: object
+                  properties:
+                    publishId:
+                      type: string
+                    status:
+                      type: string
+                    message:
+                      type: string
         "400":
           description: Bad request
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                IncorrectInputParams:
-                  $ref: "#/components/examples/IncorrectInputParameters"
         "401":
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
           content:
             application/json:
               schema:
@@ -8864,78 +8749,44 @@ paths:
               examples:
                 InternalServerError:
                   $ref: "#/components/examples/InternalServerError"
-  "/api/v1/publishHistory":
+  "/api/v2/packages/{packageId}/versions/{version}/changes":
     get:
       tags:
-        - Admin
-      summary: Get history of published version revisions
+        - Versions
+        - Changes
+      summary: Get version changes
       description: |
-        Returns all existing version revisions sorted by publish date from oldest to newest.
-        Only for system administrators.
-      operationId: getPublishHistory
-      x-api-kind: no-BWC
+        Get validation changes for a package version.
+      operationId: getVersionChanges
+      deprecated: true
       parameters:
-        - name: status
-          description: version status
-          in: query
-          required: false
-          schema:
-            $ref: "#/components/schemas/VersionStatusEnum"
-        - name: publishedBefore
-          description: Filter to include only revisions published before specific date
-          in: query
-          required: false
+        - $ref: "#/components/parameters/packageId"
+        - name: version
+          in: path
+          required: true
+          description: Version identifier
           schema:
             type: string
-            format: date-time
-            description: RFC3339 format
-            example: "2024-03-15T12:00:13.052715Z"
-        - name: publishedAfter
-          description: Filter to include only revisions published after specific date
-          in: query
-          required: false
-          schema:
-            type: string
-            format: date-time
-            description: RFC3339 format
-            example: "2024-03-15T12:00:13.052715Z"
       responses:
         "200":
           description: Success
           content:
             application/json:
               schema:
-                description: List of published versions
-                type: array
-                items:
-                  type: object
-                  properties:
-                    packageId:
-                      type: string
-                    version:
-                      type: string
-                    revision:
-                      type: integer
-                    previousVersionPackageId:
-                      type: string
-                    previousVersion:
-                      type: string
-                    publishedAt:
-                      type: string
-                      format: date-time
-                    apiTypes:
-                      type: array
-                      items:
-                        $ref: "#/components/schemas/ApiType"
-        "400":
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                IncorrectInputParams:
-                  $ref: "#/components/examples/IncorrectInputParameters"
+                type: object
+                properties:
+                  previousVersion:
+                    type: string
+                  previousVersionPackageId:
+                    type: string
+                  changes:
+                    type: array
+                    items:
+                      type: object
+                  bwcMessages:
+                    type: array
+                    items:
+                      type: object
         "401":
           description: Unauthorized
           content:
@@ -8944,6 +8795,68 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v2/packages/{packageId}/versions/{version}/problems":
+    get:
+      tags:
+        - Versions
+      summary: Get version problems
+      description: |
+        Get validation problems for a package version.
+      operationId: getVersionProblems
+      deprecated: true
+      parameters:
+        - $ref: "#/components/parameters/packageId"
+        - name: version
+          in: path
+          required: true
+          description: Version identifier
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      type: object
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
           content:
             application/json:
               schema:
