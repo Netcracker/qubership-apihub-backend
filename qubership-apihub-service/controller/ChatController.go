@@ -20,7 +20,7 @@ import (
 	"net/http"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
-	aiservice "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/ai/service"
+	aiservice "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	log "github.com/sirupsen/logrus"
@@ -165,4 +165,3 @@ func (c *chatControllerImpl) ChatStream(w http.ResponseWriter, r *http.Request) 
 
 	flusher.Flush()
 }
-

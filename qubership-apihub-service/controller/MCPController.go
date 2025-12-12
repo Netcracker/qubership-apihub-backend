@@ -19,11 +19,10 @@ import (
 
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/ai/tools"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 )
 
-func InitMCPController(operationService service.OperationService, packageService service.PackageService) (http.Handler, error) {
+func NewMCPHandler(operationService service.OperationService, packageService service.PackageService) (http.Handler, error) {
 	s := mcpserver.NewMCPServer(
 		"apihub-mcp",
 		"0.0.1",
@@ -61,8 +60,8 @@ RESPONSES:
 - Use get_rest_api_operations_specification only when user explicitly requests details about a specific operation`),
 	)
 
-	tools.AddToolsToServer(s, operationService)
-	tools.AddResourcesToServer(s, packageService)
+	service.AddToolsToServer(s, operationService)
+	service.AddResourcesToServer(s, packageService)
 
 	handler := mcpserver.NewStreamableHTTPServer(s)
 	return handler, nil

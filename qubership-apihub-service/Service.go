@@ -44,8 +44,6 @@ import (
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/db"
 
-	aicontroller "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/ai/controller"
-	aiservice "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/ai/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/controller"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/repository"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security"
@@ -258,7 +256,7 @@ func main() {
 	operationGroupService := service.NewOperationGroupService(operationRepository, publishedRepository, exportRepository, packageVersionEnrichmentService, activityTrackingService)
 	versionService := service.NewVersionService(favoritesRepository, publishedRepository, publishedService, operationRepository, exportRepository, operationService, activityTrackingService, systemInfoService, packageVersionEnrichmentService, portalService, versionCleanupRepository, operationGroupService)
 	packageService := service.NewPackageService(favoritesRepository, publishedRepository, versionService, roleService, activityTrackingService, operationGroupService, usersRepository, ptHandler, systemInfoService)
-	chatService := aiservice.NewChatService(systemInfoService, operationService, packageService)
+	chatService := service.NewChatService(systemInfoService, operationService, packageService)
 
 	logsService := service.NewLogsService()
 	apihubApiKeyService := service.NewApihubApiKeyService(apihubApiKeyRepository, publishedRepository, activityTrackingService, userService, roleRepository, roleService.IsSysadm, systemInfoService)
@@ -335,7 +333,7 @@ func main() {
 	personalAccessTokenController := controller.NewPersonalAccessTokenController(personalAccessTokenService)
 	packageExportConfigController := controller.NewPackageExportConfigController(roleService, packageExportConfigService, ptHandler)
 	systemStatsController := controller.NewSystemStatsController(systemStatsService, roleService)
-	chatController := aicontroller.NewChatController(chatService)
+	chatController := controller.NewChatController(chatService)
 
 	r.HandleFunc("/api/v1/system/info", security.Secure(systemInfoController.GetSystemInfo)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/system/configuration", samlAuthController.GetSystemSSOInfo_deprecated).Methods(http.MethodGet) //deprecated
@@ -347,10 +345,6 @@ func main() {
 
 	//Search
 	r.HandleFunc("/api/v3/search/{searchLevel}", security.Secure(searchController.Search)).Methods(http.MethodPost)
-
-	//Chat
-	r.HandleFunc("/api/v1/ai-chat", security.Secure(chatController.Chat)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v1/ai-chat/stream", security.Secure(chatController.ChatStream)).Methods(http.MethodPost)
 
 	r.HandleFunc("/api/v2/builders/{builderId}/tasks", security.Secure(publishV2Controller.GetFreeBuild)).Methods(http.MethodPost)
 
@@ -536,15 +530,16 @@ func main() {
 		r.PathPrefix("/debug/").Handler(http.DefaultServeMux)
 
 		r.HandleFunc("/api/internal/minio/download", security.Secure(minioStorageController.DownloadFilesFromMinioToDatabase)).Methods(http.MethodPost)
-	}
 
-	mcpHandler, err := aicontroller.InitMCPController(operationService, packageService)
+		//Chat
+		r.HandleFunc("/api/v1/ai-chat", security.Secure(chatController.Chat)).Methods(http.MethodPost)
+		r.HandleFunc("/api/v1/ai-chat/stream", security.Secure(chatController.ChatStream)).Methods(http.MethodPost)
+	}
+	mcpHandler, err := controller.NewMCPHandler(operationService, packageService)
 	if err != nil {
 		log.Fatalf("Failed to initialize MCP handler: %s", err.Error())
 	}
-	r.Handle("/api/mcp/", security.SecureMCP(mcpHandler))
-
-	debug.SetGCPercent(30)
+	r.Handle("/api/v1/mcp/", security.SecureMCP(mcpHandler))
 
 	r.HandleFunc("/v3/api-docs/swagger-config", apiDocsController.GetSpecsUrls).Methods(http.MethodGet)
 	r.HandleFunc("/v3/api-docs/{specName}", apiDocsController.GetSpec).Methods(http.MethodGet)
@@ -585,6 +580,8 @@ func main() {
 			portalFs.ServeHTTP(w, r) // portal is default app
 		}
 	})
+
+	debug.SetGCPercent(30)
 
 	err = security.SetupGoGuardian(userService, roleService, apihubApiKeyService, personalAccessTokenService, systemInfoService, tokenRevocationService)
 	if err != nil {

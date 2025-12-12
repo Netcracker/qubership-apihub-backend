@@ -24,9 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/ai/client"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/ai/tools"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/client"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	mcpgo "github.com/mark3labs/mcp-go/mcp"
 	"github.com/openai/openai-go/v3"
@@ -113,9 +111,9 @@ type ChatService interface {
 }
 
 func NewChatService(
-	systemInfoService service.SystemInfoService,
-	operationService service.OperationService,
-	packageService service.PackageService,
+	systemInfoService SystemInfoService,
+	operationService OperationService,
+	packageService PackageService,
 ) ChatService {
 	// Create OpenAI client with proxy support and extended timeout
 	apiKey := systemInfoService.GetOpenAIApiKey()
@@ -145,9 +143,9 @@ func NewChatService(
 }
 
 type chatServiceImpl struct {
-	systemInfoService service.SystemInfoService
-	operationService  service.OperationService
-	packageService    service.PackageService
+	systemInfoService SystemInfoService
+	operationService  OperationService
+	packageService    PackageService
 	openAIClient      openai.Client
 	mcpTools          []openAITool
 
@@ -541,7 +539,7 @@ func (c *chatServiceImpl) ChatStream(ctx context.Context, req view.ChatRequest, 
 }
 
 func (c *chatServiceImpl) initMCPTools() {
-	openAIToolsRaw := tools.GetToolsForOpenAI()
+	openAIToolsRaw := GetToolsForOpenAI()
 	toolsList := make([]openAITool, len(openAIToolsRaw))
 	for i, toolRaw := range openAIToolsRaw {
 		functionRaw := toolRaw["function"].(map[string]interface{})
@@ -579,7 +577,7 @@ func (c *chatServiceImpl) buildSystemMessage(ctx context.Context) string {
 
 	// Cache expired or empty, fetch fresh data
 	log.Debugf("Cache expired or empty, fetching fresh api-packages-list resource")
-	resourceContents, err := tools.GetPackagesList(ctx, c.packageService, mcpWorkspace)
+	resourceContents, err := GetPackagesList(ctx, c.packageService, mcpWorkspace)
 	if err != nil {
 		log.Warnf("Failed to read api-packages-list resource: %v", err)
 		// If we have cached data even though expired, use it as fallback
@@ -636,7 +634,7 @@ func (c *chatServiceImpl) executeToolCalls(ctx context.Context, toolCalls []stru
 
 		// Create MCP CallToolRequest using wrapper
 		argsBytes, _ := json.Marshal(args)
-		mcpReqWrapper := tools.MCPToolRequestWrapper{
+		mcpReqWrapper := view.MCPToolRequestWrapper{
 			Name:      toolCall.Function.Name,
 			Arguments: argsBytes,
 		}
@@ -649,9 +647,9 @@ func (c *chatServiceImpl) executeToolCalls(ctx context.Context, toolCalls []stru
 		var err error
 		switch toolCall.Function.Name {
 		case "search_rest_api_operations":
-			result, err = tools.ExecuteSearchTool(ctx, mcpReq, c.operationService)
+			result, err = ExecuteSearchTool(ctx, mcpReq, c.operationService)
 		case "get_rest_api_operations_specification":
-			result, err = tools.ExecuteGetSpecTool(ctx, mcpReq, c.operationService)
+			result, err = ExecuteGetSpecTool(ctx, mcpReq, c.operationService)
 		default:
 			results[i] = fmt.Sprintf("Unknown tool: %s", toolCall.Function.Name)
 			continue

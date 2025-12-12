@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package tools
+package service
 
 import (
 	"context"
@@ -27,7 +27,6 @@ import (
 
 	secctx "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 
 	log "github.com/sirupsen/logrus"
@@ -193,42 +192,34 @@ func getParameterDescription(toolName, paramName string) string {
 	return ""
 }
 
-// Tool metadata structure
-type toolMetadata struct {
-	name              string
-	schema            json.RawMessage
-	descriptionMCP    string
-	descriptionOpenAI string
-}
-
 // getToolMetadata returns metadata for all tools
-func getToolMetadata() []toolMetadata {
-	return []toolMetadata{
+func getToolMetadata() []view.ToolMetadata {
+	return []view.ToolMetadata{
 		{
-			name:              ToolNameSearchOperations,
-			schema:            searchOperationsSchema,
-			descriptionMCP:    ToolDescriptionSearchOperationsMCP,
-			descriptionOpenAI: ToolDescriptionSearchOperationsOpenAI,
+			Name:              ToolNameSearchOperations,
+			Schema:            searchOperationsSchema,
+			DescriptionMCP:    ToolDescriptionSearchOperationsMCP,
+			DescriptionOpenAI: ToolDescriptionSearchOperationsOpenAI,
 		},
 		{
-			name:              ToolNameGetOperationSpec,
-			schema:            getOperationSpecSchema,
-			descriptionMCP:    ToolDescriptionGetOperationSpecMCP,
-			descriptionOpenAI: ToolDescriptionGetOperationSpecOpenAI,
+			Name:              ToolNameGetOperationSpec,
+			Schema:            getOperationSpecSchema,
+			DescriptionMCP:    ToolDescriptionGetOperationSpecMCP,
+			DescriptionOpenAI: ToolDescriptionGetOperationSpecOpenAI,
 		},
 	}
 }
 
 // AddToolsToServer registers MCP tools to the provided MCP server
-func AddToolsToServer(s *mcpserver.MCPServer, operationService service.OperationService) {
+func AddToolsToServer(s *mcpserver.MCPServer, operationService OperationService) {
 	toolsMetadata := getToolMetadata()
 
 	// Add search_rest_api_operations tool
 	searchMeta := toolsMetadata[0]
 	s.AddTool(mcp.Tool{
-		Name:           searchMeta.name,
-		Description:    searchMeta.descriptionMCP,
-		RawInputSchema: searchMeta.schema,
+		Name:           searchMeta.Name,
+		Description:    searchMeta.DescriptionMCP,
+		RawInputSchema: searchMeta.Schema,
 	}, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return ExecuteSearchTool(ctx, req, operationService)
 	})
@@ -236,9 +227,9 @@ func AddToolsToServer(s *mcpserver.MCPServer, operationService service.Operation
 	// Add get_rest_api_operations_specification tool
 	specMeta := toolsMetadata[1]
 	s.AddTool(mcp.Tool{
-		Name:           specMeta.name,
-		Description:    specMeta.descriptionMCP,
-		RawInputSchema: specMeta.schema,
+		Name:           specMeta.Name,
+		Description:    specMeta.DescriptionMCP,
+		RawInputSchema: specMeta.Schema,
 	}, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return ExecuteGetSpecTool(ctx, req, operationService)
 	})
@@ -253,19 +244,19 @@ func GetToolsForOpenAI() []map[string]interface{} {
 	for i, meta := range toolsMetadata {
 		// Parse schema from JSON to map for OpenAI format
 		var schemaMap map[string]interface{}
-		if err := json.Unmarshal(meta.schema, &schemaMap); err != nil {
-			log.Errorf("Failed to unmarshal schema for tool %s: %v", meta.name, err)
+		if err := json.Unmarshal(meta.Schema, &schemaMap); err != nil {
+			log.Errorf("Failed to unmarshal schema for tool %s: %v", meta.Name, err)
 			continue
 		}
 
 		// Add descriptions to parameters for OpenAI format
-		enhancedSchema := enhanceSchemaWithDescriptions(schemaMap, meta.name)
+		enhancedSchema := enhanceSchemaWithDescriptions(schemaMap, meta.Name)
 
 		result[i] = map[string]interface{}{
 			"type": "function",
 			"function": map[string]interface{}{
-				"name":        meta.name,
-				"description": meta.descriptionOpenAI,
+				"name":        meta.Name,
+				"description": meta.DescriptionOpenAI,
 				"parameters":  enhancedSchema,
 			},
 		}
@@ -275,7 +266,7 @@ func GetToolsForOpenAI() []map[string]interface{} {
 }
 
 // AddResourcesToServer registers MCP resources to the provided MCP server
-func AddResourcesToServer(s *mcpserver.MCPServer, packageService service.PackageService) {
+func AddResourcesToServer(s *mcpserver.MCPServer, packageService PackageService) {
 	mcpWorkspace := os.Getenv("MCP_WORKSPACE")
 	if mcpWorkspace == "" {
 		log.Warn("MCP_WORKSPACE environment variable is not set, skipping API packages resource registration")
@@ -294,7 +285,7 @@ func AddResourcesToServer(s *mcpserver.MCPServer, packageService service.Package
 }
 
 // GetPackagesList retrieves the list of packages from the workspace
-func GetPackagesList(ctx context.Context, packageService service.PackageService, workspaceId string) ([]mcp.ResourceContents, error) {
+func GetPackagesList(ctx context.Context, packageService PackageService, workspaceId string) ([]mcp.ResourceContents, error) {
 	log.Infof("Getting packages list for workspace: %s", workspaceId)
 
 	// Create system context for service calls
@@ -336,7 +327,7 @@ func GetPackagesList(ctx context.Context, packageService service.PackageService,
 }
 
 // ExecuteSearchTool executes the search_rest_api_operations tool
-func ExecuteSearchTool(ctx context.Context, req mcp.CallToolRequest, operationService service.OperationService) (*mcp.CallToolResult, error) {
+func ExecuteSearchTool(ctx context.Context, req mcp.CallToolRequest, operationService OperationService) (*mcp.CallToolResult, error) {
 	q, err := req.RequireString("query")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -392,7 +383,7 @@ func ExecuteSearchTool(ctx context.Context, req mcp.CallToolRequest, operationSe
 }
 
 // ExecuteGetSpecTool executes the get_rest_api_operations_specification tool
-func ExecuteGetSpecTool(ctx context.Context, req mcp.CallToolRequest, operationService service.OperationService) (*mcp.CallToolResult, error) {
+func ExecuteGetSpecTool(ctx context.Context, req mcp.CallToolRequest, operationService OperationService) (*mcp.CallToolResult, error) {
 	operationId, err := req.RequireString("operationId")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -448,77 +439,6 @@ func CalculateNearestCompletedReleaseVersion() string {
 	}
 
 	return fmt.Sprintf("%d.%d", year, prevQuarter)
-}
-
-// MCPToolRequestWrapper wraps arguments for creating mcp.CallToolRequest
-type MCPToolRequestWrapper struct {
-	Name      string
-	Arguments []byte
-}
-
-// ToCallToolRequest converts the wrapper to mcp.CallToolRequest
-func (r *MCPToolRequestWrapper) ToCallToolRequest() mcp.CallToolRequest {
-	// Parse arguments as map[string]any for GetArguments() to work correctly
-	var args map[string]any
-	if err := json.Unmarshal(r.Arguments, &args); err != nil {
-		// If unmarshal fails, use empty map
-		args = make(map[string]any)
-	}
-
-	return mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Name:      r.Name,
-			Arguments: args,
-		},
-	}
-}
-
-func (r *MCPToolRequestWrapper) RequireString(key string) (string, error) {
-	var args map[string]interface{}
-	if err := json.Unmarshal(r.Arguments, &args); err != nil {
-		return "", fmt.Errorf("failed to unmarshal arguments: %w", err)
-	}
-	value, ok := args[key]
-	if !ok {
-		return "", fmt.Errorf("required parameter %s is missing", key)
-	}
-	str, ok := value.(string)
-	if !ok {
-		return "", fmt.Errorf("parameter %s is not a string", key)
-	}
-	return str, nil
-}
-
-func (r *MCPToolRequestWrapper) GetString(key string, defaultValue string) string {
-	var args map[string]interface{}
-	if err := json.Unmarshal(r.Arguments, &args); err != nil {
-		return defaultValue
-	}
-	value, ok := args[key]
-	if !ok {
-		return defaultValue
-	}
-	str, ok := value.(string)
-	if !ok {
-		return defaultValue
-	}
-	return str
-}
-
-func (r *MCPToolRequestWrapper) GetInt(key string, defaultValue int) int {
-	var args map[string]interface{}
-	if err := json.Unmarshal(r.Arguments, &args); err != nil {
-		return defaultValue
-	}
-	value, ok := args[key]
-	if !ok {
-		return defaultValue
-	}
-	// JSON numbers are unmarshaled as float64
-	if num, ok := value.(float64); ok {
-		return int(num)
-	}
-	return defaultValue
 }
 
 // enhanceSchemaWithDescriptions adds descriptions to schema properties for OpenAI format
@@ -593,11 +513,11 @@ func convertPackagesToMCP(packages *view.Packages) *view.PackagesMCP {
 }
 
 // transformOperations transforms view.RestOperationSearchResult to TransformedOperation
-func transformOperations(items []view.RestOperationSearchResult) []TransformedOperation {
-	transformed := make([]TransformedOperation, len(items))
+func transformOperations(items []view.RestOperationSearchResult) []view.TransformedOperation {
+	transformed := make([]view.TransformedOperation, len(items))
 
 	for i, item := range items {
-		transformed[i] = TransformedOperation{
+		transformed[i] = view.TransformedOperation{
 			OperationId: item.OperationId,
 			ApiKind:     item.ApiKind,
 			ApiType:     item.ApiType,
@@ -612,18 +532,4 @@ func transformOperations(items []view.RestOperationSearchResult) []TransformedOp
 	}
 
 	return transformed
-}
-
-// TransformedOperation represents a transformed operation for MCP response
-type TransformedOperation struct {
-	OperationId string `json:"operationId"`
-	ApiKind     string `json:"apiKind"`
-	ApiType     string `json:"apiType"`
-	ApiAudience string `json:"apiAudience"`
-	Path        string `json:"path"`
-	Method      string `json:"method"`
-	PackageId   string `json:"packageId"`
-	PackageName string `json:"packageName"`
-	Version     string `json:"version"`
-	Title       string `json:"title"`
 }
