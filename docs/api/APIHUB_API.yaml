@@ -8211,6 +8211,61 @@ paths:
               examples:
                 InternalServerError:
                   $ref: "#/components/examples/InternalServerError"
+  "/login/sso/saml":
+    get:
+      x-nc-api-audience: noBWC
+      tags:
+        - Auth
+      summary: SAML authentication (legacy)
+      deprecated: true
+      description: |
+        Starts the SAML authentication process in APIHUB (legacy endpoint).
+        
+        This is a deprecated endpoint. Use `/api/v1/login/sso/{idpId}` instead.
+        
+        In case of successful authentication, the request will be redirected to the **redirectUri** and
+        the response will contain cookie with access token for future API calls.
+        All subsequent APIHUB calls must use this token in a **CookieAuth** or **BearerAuth** authentication.
+      operationId: getLoginSsoSaml
+      security:
+        - {}
+        - RefreshTokenAuth: []
+      parameters:
+        - name: redirectUri
+          in: query
+          description: URI, where user must be redirected in case of successful APIHUB authentication.
+          required: false
+          schema:
+            type: string
+            format: uri
+            example: "https://apihub.qubership.org/portal"
+      responses:
+        "302":
+          description: Found - Redirect to SAML identity provider
+          headers:
+            Location:
+              description: URL of the SAML identity provider for authentication
+              schema:
+                type: string
+                format: uri
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                IncorrectInputParams:
+                  $ref: "#/components/examples/IncorrectInputParameters"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
   "/api/v2/auth/saml":
     post:
       x-nc-api-audience: noBWC
