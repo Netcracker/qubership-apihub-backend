@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"sync"
 	"time"
 
@@ -73,38 +72,6 @@ RESPONSE FORMAT:
 
 Always use available tools and resources when appropriate to provide accurate and up-to-date information about APIs.`
 
-// Helper functions to convert string values from config to OpenAI library types
-
-// convertReasoningEffort converts string value from config to shared.ReasoningEffort type
-func convertReasoningEffort(value string) shared.ReasoningEffort {
-	switch value {
-	case "minimal":
-		return shared.ReasoningEffortMinimal
-	case "low":
-		return shared.ReasoningEffortLow
-	case "medium":
-		return shared.ReasoningEffortMedium
-	case "high":
-		return shared.ReasoningEffortHigh
-	default:
-		return shared.ReasoningEffortMedium // default fallback
-	}
-}
-
-// convertVerbosity converts string value from config to ChatCompletionNewParamsVerbosity type
-func convertVerbosity(value string) openai.ChatCompletionNewParamsVerbosity {
-	switch value {
-	case "low":
-		return openai.ChatCompletionNewParamsVerbosityLow
-	case "medium":
-		return openai.ChatCompletionNewParamsVerbosityMedium
-	case "high":
-		return openai.ChatCompletionNewParamsVerbosityHigh
-	default:
-		return openai.ChatCompletionNewParamsVerbosityMedium // default fallback
-	}
-}
-
 type ChatService interface {
 	Chat(ctx context.Context, req view.ChatRequest) (*view.ChatResponse, error)
 	ChatStream(ctx context.Context, req view.ChatRequest, writer io.Writer) error
@@ -112,42 +79,39 @@ type ChatService interface {
 
 func NewChatService(
 	systemInfoService SystemInfoService,
-	operationService OperationService,
-	packageService PackageService,
+	mcpService MCPService,
 ) ChatService {
 	// Create OpenAI client with proxy support and extended timeout
-	apiKey := systemInfoService.GetOpenAIApiKey()
-	proxyURL := systemInfoService.GetOpenAIProxyURL()
+	apiKey := systemInfoService.GetAiChatConfig().OpenAI.ApiKey
+	proxyURL := systemInfoService.GetAiChatConfig().OpenAI.ProxyURL
 
 	openAIClient, err := client.NewOpenAIClient(apiKey, proxyURL)
 	if err != nil {
 		log.Errorf("Failed to create OpenAI client: %v", err)
 		panic(fmt.Sprintf("Failed to create OpenAI client: %v", err))
 	}
-
-	service := &chatServiceImpl{
-		systemInfoService: systemInfoService,
-		operationService:  operationService,
-		packageService:    packageService,
-		openAIClient:      openAIClient,
-	}
-
 	// Initialize MCP tools (no need to create MCP server - tools are defined statically)
-	service.initMCPTools()
-	log.Infof("ChatService initialized with %d MCP tools", len(service.mcpTools))
-	for _, tool := range service.mcpTools {
+	mcpTools := mcpService.MakeOpenAiMCPTools()
+
+	log.Infof("ChatService initialized with %d MCP tools", len(mcpTools))
+	for _, tool := range mcpTools {
 		log.Debugf("MCP tool available: %s - %s", tool.Function.Name, tool.Function.Description)
 	}
 
-	return service
+	return &chatServiceImpl{
+		systemInfoService: systemInfoService,
+		mcpService:        mcpService,
+		openAIClient:      openAIClient,
+		mcpTools:          mcpTools,
+	}
 }
 
 type chatServiceImpl struct {
 	systemInfoService SystemInfoService
-	operationService  OperationService
-	packageService    PackageService
-	openAIClient      openai.Client
-	mcpTools          []openAITool
+	mcpService        MCPService
+
+	openAIClient openai.Client
+	mcpTools     []openAITool
 
 	// Cache for api-packages-list resource
 	packagesListCache struct {
@@ -258,12 +222,12 @@ func (c *chatServiceImpl) Chat(ctx context.Context, req view.ChatRequest) (*view
 
 		// Build OpenAI request
 		openAIReq := openai.ChatCompletionNewParams{
-			Model:           shared.ChatModel(c.systemInfoService.GetOpenAIModel()),
+			Model:           shared.ChatModel(c.systemInfoService.GetAiChatConfig().OpenAI.Model),
 			Messages:        currentMessages,
 			Tools:           openAITools,
-			Temperature:     openai.Float(c.systemInfoService.GetOpenAITemperature()),
-			ReasoningEffort: convertReasoningEffort(c.systemInfoService.GetOpenAIReasoningEffort()),
-			Verbosity:       convertVerbosity(c.systemInfoService.GetOpenAIVerbosity()),
+			Temperature:     openai.Float(c.systemInfoService.GetAiChatConfig().OpenAI.Temperature),
+			ReasoningEffort: convertReasoningEffort(c.systemInfoService.GetAiChatConfig().OpenAI.ReasoningEffort),
+			Verbosity:       convertVerbosity(c.systemInfoService.GetAiChatConfig().OpenAI.Verbosity),
 		}
 
 		// Make request to OpenAI
@@ -475,12 +439,12 @@ func (c *chatServiceImpl) ChatStream(ctx context.Context, req view.ChatRequest, 
 
 	// Build OpenAI request
 	openAIReq := openai.ChatCompletionNewParams{
-		Model:           shared.ChatModel(c.systemInfoService.GetOpenAIModel()),
+		Model:           shared.ChatModel(c.systemInfoService.GetAiChatConfig().OpenAI.Model),
 		Messages:        messages,
 		Tools:           openAITools,
-		Temperature:     openai.Float(c.systemInfoService.GetOpenAITemperature()),
-		ReasoningEffort: convertReasoningEffort(c.systemInfoService.GetOpenAIReasoningEffort()),
-		Verbosity:       convertVerbosity(c.systemInfoService.GetOpenAIVerbosity()),
+		Temperature:     openai.Float(c.systemInfoService.GetAiChatConfig().OpenAI.Temperature),
+		ReasoningEffort: convertReasoningEffort(c.systemInfoService.GetAiChatConfig().OpenAI.ReasoningEffort),
+		Verbosity:       convertVerbosity(c.systemInfoService.GetAiChatConfig().OpenAI.Verbosity),
 	}
 
 	// Create stream
@@ -538,7 +502,7 @@ func (c *chatServiceImpl) ChatStream(ctx context.Context, req view.ChatRequest, 
 	return nil
 }
 
-func (c *chatServiceImpl) initMCPTools() {
+/*func (c *chatServiceImpl) initMCPTools() {
 	openAIToolsRaw := GetToolsForOpenAI()
 	toolsList := make([]openAITool, len(openAIToolsRaw))
 	for i, toolRaw := range openAIToolsRaw {
@@ -554,11 +518,11 @@ func (c *chatServiceImpl) initMCPTools() {
 	}
 
 	c.mcpTools = toolsList
-}
+}*/
 
 // buildSystemMessage builds system message with MCP resource data included
 func (c *chatServiceImpl) buildSystemMessage(ctx context.Context) string {
-	mcpWorkspace := os.Getenv("MCP_WORKSPACE")
+	mcpWorkspace := c.systemInfoService.GetAiMCPConfig().Workspace
 	if mcpWorkspace == "" {
 		return systemMessageBaseContent
 	}
@@ -577,7 +541,7 @@ func (c *chatServiceImpl) buildSystemMessage(ctx context.Context) string {
 
 	// Cache expired or empty, fetch fresh data
 	log.Debugf("Cache expired or empty, fetching fresh api-packages-list resource")
-	resourceContents, err := GetPackagesList(ctx, c.packageService, mcpWorkspace)
+	resourceContents, err := c.mcpService.GetPackagesList(ctx, mcpWorkspace)
 	if err != nil {
 		log.Warnf("Failed to read api-packages-list resource: %v", err)
 		// If we have cached data even though expired, use it as fallback
@@ -647,9 +611,9 @@ func (c *chatServiceImpl) executeToolCalls(ctx context.Context, toolCalls []stru
 		var err error
 		switch toolCall.Function.Name {
 		case "search_rest_api_operations":
-			result, err = ExecuteSearchTool(ctx, mcpReq, c.operationService)
+			result, err = c.mcpService.ExecuteSearchTool(ctx, mcpReq)
 		case "get_rest_api_operations_specification":
-			result, err = ExecuteGetSpecTool(ctx, mcpReq, c.operationService)
+			result, err = c.mcpService.ExecuteGetSpecTool(ctx, mcpReq)
 		default:
 			results[i] = fmt.Sprintf("Unknown tool: %s", toolCall.Function.Name)
 			continue
@@ -779,4 +743,36 @@ func (c *chatServiceImpl) trimMessageHistoryOpenAIParams(messages []openai.ChatC
 		len(messages), len(result), systemMsg != nil, len(trimmedConversation), len(toolMessages))
 
 	return result
+}
+
+// Helper functions to convert string values from config to OpenAI library types
+
+// convertReasoningEffort converts string value from config to shared.ReasoningEffort type
+func convertReasoningEffort(value string) shared.ReasoningEffort {
+	switch value {
+	case "minimal":
+		return shared.ReasoningEffortMinimal
+	case "low":
+		return shared.ReasoningEffortLow
+	case "medium":
+		return shared.ReasoningEffortMedium
+	case "high":
+		return shared.ReasoningEffortHigh
+	default:
+		return shared.ReasoningEffortMedium // default fallback
+	}
+}
+
+// convertVerbosity converts string value from config to ChatCompletionNewParamsVerbosity type
+func convertVerbosity(value string) openai.ChatCompletionNewParamsVerbosity {
+	switch value {
+	case "low":
+		return openai.ChatCompletionNewParamsVerbosityLow
+	case "medium":
+		return openai.ChatCompletionNewParamsVerbosityMedium
+	case "high":
+		return openai.ChatCompletionNewParamsVerbosityHigh
+	default:
+		return openai.ChatCompletionNewParamsVerbosityMedium // default fallback
+	}
 }

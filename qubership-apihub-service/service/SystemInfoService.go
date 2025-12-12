@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"os"
 	"reflect"
-	"strings"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/config"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
@@ -103,13 +102,17 @@ type SystemInfoService interface {
 	GetUnreferencedDataCleanupSchedule() string
 	GetUnreferencedDataCleanupTimeout() int
 	GetExtensions() []view.Extension
-	GetOpenAIApiKey() string
+	/*GetOpenAIApiKey() string
 	GetOpenAIModel() string
 	GetOpenAIProxyURL() string
 	GetOpenAIBaseURL() string
 	GetOpenAITemperature() float64
 	GetOpenAIReasoningEffort() string
 	GetOpenAIVerbosity() string
+	GetMCPWorkspace() string*/
+
+	GetAiChatConfig() config.ChatConfig
+	GetAiMCPConfig() config.MCPConfig
 }
 
 func (g *systemInfoServiceImpl) GetCredsFromEnv() *view.DbCredentials {
@@ -617,23 +620,32 @@ func (g *systemInfoServiceImpl) GetExtensions() []view.Extension {
 	return g.config.Extensions
 }
 
+func (g *systemInfoServiceImpl) GetAiChatConfig() config.ChatConfig {
+	return g.config.Ai.Chat
+}
+
+func (g *systemInfoServiceImpl) GetAiMCPConfig() config.MCPConfig {
+	return g.config.Ai.MCP
+}
+
+/*
 func (g *systemInfoServiceImpl) GetOpenAIApiKey() string {
-	return g.config.OpenAI.ApiKey
+	return g.config.Ai.Chat.OpenAI.ApiKey
 }
 
 func (g *systemInfoServiceImpl) GetOpenAIModel() string {
-	if g.config.OpenAI.Model == "" {
+	if g.config.Ai.Chat.OpenAI.Model == "" {
 		return "gpt-5"
 	}
-	return g.config.OpenAI.Model
+	return g.config.Ai.Chat.OpenAI.Model
 }
 
 func (g *systemInfoServiceImpl) GetOpenAIProxyURL() string {
-	return g.config.OpenAI.ProxyURL
+	return g.config.Ai.Chat.OpenAI.ProxyURL
 }
 
 func (g *systemInfoServiceImpl) GetOpenAIBaseURL() string {
-	proxyURL := g.config.OpenAI.ProxyURL
+	proxyURL := g.config.Ai.Chat.OpenAI.ProxyURL
 	if proxyURL == "" {
 		return "https://api.openai.com/v1"
 	}
@@ -642,22 +654,27 @@ func (g *systemInfoServiceImpl) GetOpenAIBaseURL() string {
 }
 
 func (g *systemInfoServiceImpl) GetOpenAITemperature() float64 {
-	if g.config.OpenAI.Temperature == 0 {
+	if g.config.Ai.Chat.OpenAI.Temperature == 0 {
 		return 1.0 // default value
 	}
-	return g.config.OpenAI.Temperature
+	return g.config.Ai.Chat.OpenAI.Temperature
 }
 
 func (g *systemInfoServiceImpl) GetOpenAIReasoningEffort() string {
-	if g.config.OpenAI.ReasoningEffort == "" {
+	if g.config.Ai.Chat.OpenAI.ReasoningEffort == "" {
 		return "medium" // default value
 	}
-	return g.config.OpenAI.ReasoningEffort
+	return g.config.Ai.Chat.OpenAI.ReasoningEffort
 }
 
 func (g *systemInfoServiceImpl) GetOpenAIVerbosity() string {
-	if g.config.OpenAI.Verbosity == "" {
+	if g.config.Ai.Chat.OpenAI.Verbosity == "" {
 		return "medium" // default value
 	}
-	return g.config.OpenAI.Verbosity
+	return g.config.Ai.Chat.OpenAI.Verbosity
 }
+
+func (g *systemInfoServiceImpl) GetMCPWorkspace() string {
+	return g.config.Ai.MCP.Workspace
+}
+*/
