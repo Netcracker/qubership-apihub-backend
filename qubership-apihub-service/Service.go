@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	exposer "github.com/!netcracker/qubership-apihub-commons-go/api-spec-exposer"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp/providers"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service/cleanup"
 	"github.com/Netcracker/qubership-apihub-commons-go/api-spec-exposer/config"
@@ -50,7 +51,6 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 
-	"github.com/Netcracker/qubership-apihub-commons-go/api-spec-exposer"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
@@ -79,7 +79,7 @@ func init() {
 	})
 	logLevel, err := log.ParseLevel(os.Getenv("LOG_LEVEL"))
 	if err != nil {
-		logLevel = log.DebugLevel
+		logLevel = log.InfoLevel
 	}
 	log.SetLevel(logLevel)
 	log.SetOutput(mw)
