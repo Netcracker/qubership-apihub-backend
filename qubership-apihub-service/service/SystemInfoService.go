@@ -102,17 +102,9 @@ type SystemInfoService interface {
 	GetUnreferencedDataCleanupSchedule() string
 	GetUnreferencedDataCleanupTimeout() int
 	GetExtensions() []view.Extension
-	/*GetOpenAIApiKey() string
-	GetOpenAIModel() string
-	GetOpenAIProxyURL() string
-	GetOpenAIBaseURL() string
-	GetOpenAITemperature() float64
-	GetOpenAIReasoningEffort() string
-	GetOpenAIVerbosity() string
-	GetMCPWorkspace() string*/
-
 	GetAiChatConfig() config.ChatConfig
 	GetAiMCPConfig() config.MCPConfig
+	GetApiSpecDirectory() string
 }
 
 func (g *systemInfoServiceImpl) GetCredsFromEnv() *view.DbCredentials {
@@ -310,6 +302,13 @@ func (g *systemInfoServiceImpl) setInstanceId() {
 
 func (g *systemInfoServiceImpl) GetBasePath() string {
 	return g.config.TechnicalParameters.BasePath
+}
+
+func (g *systemInfoServiceImpl) GetApiSpecDirectory() string {
+	if g.config.TechnicalParameters.ApiSpecDirectory != "" {
+		return g.config.TechnicalParameters.ApiSpecDirectory
+	}
+	return g.config.TechnicalParameters.BasePath + string(os.PathSeparator) + "api"
 }
 
 func (g *systemInfoServiceImpl) GetJwtPrivateKey() []byte {
@@ -627,54 +626,3 @@ func (g *systemInfoServiceImpl) GetAiChatConfig() config.ChatConfig {
 func (g *systemInfoServiceImpl) GetAiMCPConfig() config.MCPConfig {
 	return g.config.Ai.MCP
 }
-
-/*
-func (g *systemInfoServiceImpl) GetOpenAIApiKey() string {
-	return g.config.Ai.Chat.OpenAI.ApiKey
-}
-
-func (g *systemInfoServiceImpl) GetOpenAIModel() string {
-	if g.config.Ai.Chat.OpenAI.Model == "" {
-		return "gpt-5"
-	}
-	return g.config.Ai.Chat.OpenAI.Model
-}
-
-func (g *systemInfoServiceImpl) GetOpenAIProxyURL() string {
-	return g.config.Ai.Chat.OpenAI.ProxyURL
-}
-
-func (g *systemInfoServiceImpl) GetOpenAIBaseURL() string {
-	proxyURL := g.config.Ai.Chat.OpenAI.ProxyURL
-	if proxyURL == "" {
-		return "https://api.openai.com/v1"
-	}
-	proxyURL = strings.TrimSuffix(proxyURL, "/")
-	return proxyURL
-}
-
-func (g *systemInfoServiceImpl) GetOpenAITemperature() float64 {
-	if g.config.Ai.Chat.OpenAI.Temperature == 0 {
-		return 1.0 // default value
-	}
-	return g.config.Ai.Chat.OpenAI.Temperature
-}
-
-func (g *systemInfoServiceImpl) GetOpenAIReasoningEffort() string {
-	if g.config.Ai.Chat.OpenAI.ReasoningEffort == "" {
-		return "medium" // default value
-	}
-	return g.config.Ai.Chat.OpenAI.ReasoningEffort
-}
-
-func (g *systemInfoServiceImpl) GetOpenAIVerbosity() string {
-	if g.config.Ai.Chat.OpenAI.Verbosity == "" {
-		return "medium" // default value
-	}
-	return g.config.Ai.Chat.OpenAI.Verbosity
-}
-
-func (g *systemInfoServiceImpl) GetMCPWorkspace() string {
-	return g.config.Ai.MCP.Workspace
-}
-*/

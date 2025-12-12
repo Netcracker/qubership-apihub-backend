@@ -28,6 +28,7 @@ import (
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp/providers"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service/cleanup"
+	"github.com/Netcracker/qubership-apihub-commons-go/api-spec-exposer/config"
 
 	"gopkg.in/natefinch/lumberjack.v2"
 
@@ -49,6 +50,7 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 
+	"github.com/Netcracker/qubership-apihub-commons-go/api-spec-exposer"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
@@ -229,8 +231,10 @@ func main() {
 
 	lockService := service.NewLockService(lockRepo, systemInfoService.GetInstanceId())
 
+	monitoringService := service.NewMonitoringService(cp)
+
 	cleanupService := cleanup.NewCleanupService(cp)
-	if err := cleanupService.CreateRevisionsCleanupJob(publishedRepository, migrationRunRepository, versionCleanupRepository, lockService, systemInfoService.GetInstanceId(), systemInfoService.GetRevisionsCleanupSchedule(), systemInfoService.GetRevisionsCleanupDeleteLastRevision(), systemInfoService.GetRevisionsCleanupDeleteReleaseRevisions(), systemInfoService.GetRevisionsTTLDays()); err != nil {
+	if err := cleanupService.CreateRevisionsCleanupJob(publishedRepository, migrationRunRepository, versionCleanupRepository, monitoringService, lockService, systemInfoService.GetInstanceId(), systemInfoService.GetRevisionsCleanupSchedule(), systemInfoService.GetRevisionsCleanupDeleteLastRevision(), systemInfoService.GetRevisionsCleanupDeleteReleaseRevisions(), systemInfoService.GetRevisionsTTLDays()); err != nil {
 		log.Error("Failed to start revisions cleaning job" + err.Error())
 	}
 	if err := cleanupService.CreateComparisonsCleanupJob(publishedRepository, migrationRunRepository, comparisonCleanupRepository, lockService, systemInfoService.GetInstanceId(), systemInfoService.GetComparisonCleanupSchedule(), systemInfoService.GetComparisonCleanupTimeout(), systemInfoService.GetComparisonsTTLDays()); err != nil {
@@ -243,7 +247,6 @@ func main() {
 		log.Error("Failed to start unreferenced data cleaning job" + err.Error())
 	}
 
-	monitoringService := service.NewMonitoringService(cp)
 	packageVersionEnrichmentService := service.NewPackageVersionEnrichmentService(publishedRepository)
 	activityTrackingService := service.NewActivityTrackingService(activityTrackingRepository, publishedRepository, userService)
 	operationService := service.NewOperationService(operationRepository, publishedRepository, packageVersionEnrichmentService)
@@ -254,8 +257,8 @@ func main() {
 	portalService := service.NewPortalService(basePath, publishedService, publishedRepository)
 
 	operationGroupService := service.NewOperationGroupService(operationRepository, publishedRepository, exportRepository, packageVersionEnrichmentService, activityTrackingService)
-	versionService := service.NewVersionService(favoritesRepository, publishedRepository, publishedService, operationRepository, exportRepository, operationService, activityTrackingService, systemInfoService, packageVersionEnrichmentService, portalService, versionCleanupRepository, operationGroupService)
-	packageService := service.NewPackageService(favoritesRepository, publishedRepository, versionService, roleService, activityTrackingService, operationGroupService, usersRepository, ptHandler, systemInfoService)
+	versionService := service.NewVersionService(favoritesRepository, publishedRepository, publishedService, operationRepository, exportRepository, operationService, activityTrackingService, systemInfoService, packageVersionEnrichmentService, portalService, versionCleanupRepository, operationGroupService, monitoringService)
+	packageService := service.NewPackageService(favoritesRepository, publishedRepository, versionService, roleService, activityTrackingService, monitoringService, operationGroupService, usersRepository, ptHandler, systemInfoService)
 
 	logsService := service.NewLogsService()
 	apihubApiKeyService := service.NewApihubApiKeyService(apihubApiKeyRepository, publishedRepository, activityTrackingService, userService, roleRepository, roleService.IsSysadm, systemInfoService)
@@ -329,7 +332,6 @@ func main() {
 	buildCleanupController := controller.NewBuildCleanupController(dbCleanupService, roleService.IsSysadm)
 	transitionController := controller.NewTransitionController(transitionService, roleService.IsSysadm)
 	businessMetricController := controller.NewBusinessMetricController(businessMetricService, excelService, roleService.IsSysadm)
-	apiDocsController := controller.NewApiDocsController(basePath)
 	transformationController := controller.NewTransformationController(roleService, buildService, versionService, transformationService, operationGroupService)
 	minioStorageController := controller.NewMinioStorageController(minioStorageCreds, minioStorageService)
 	personalAccessTokenController := controller.NewPersonalAccessTokenController(personalAccessTokenService)
@@ -542,8 +544,26 @@ func main() {
 	mcpHandler := mcpController.MakeMCPServer()
 	r.Handle("/api/v1/mcp/", security.SecureMCP(mcpHandler))
 
-	r.HandleFunc("/v3/api-docs/swagger-config", apiDocsController.GetSpecsUrls).Methods(http.MethodGet)
-	r.HandleFunc("/v3/api-docs/{specName}", apiDocsController.GetSpec).Methods(http.MethodGet)
+	discoveryConfig := config.DiscoveryConfig{
+		ScanDirectory: systemInfoService.GetApiSpecDirectory(),
+	}
+	specExposer := exposer.New(discoveryConfig)
+	discoveryResult := specExposer.Discover()
+	if len(discoveryResult.Errors) > 0 {
+		for _, err := range discoveryResult.Errors {
+			log.Errorf("Error during API specifications discovery: %v", err)
+		}
+		panic("Failed to expose API specifications")
+	}
+	if len(discoveryResult.Warnings) > 0 {
+		for _, warning := range discoveryResult.Warnings {
+			log.Warnf("Warning during API specifications discovery: %s", warning)
+		}
+	}
+	for _, endpointConfig := range discoveryResult.Endpoints {
+		log.Debugf("Registering API specification endpoint with path: %s and spec metadata: %+v", endpointConfig.Path, endpointConfig.SpecMetadata)
+		r.HandleFunc(endpointConfig.Path, endpointConfig.Handler).Methods(http.MethodGet)
+	}
 
 	portalFs := http.FileServer(http.Dir(basePath + "/static/portal"))
 
