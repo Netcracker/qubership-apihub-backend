@@ -500,6 +500,330 @@ paths:
               examples:
                 InternalServerError:
                   $ref: "#/components/examples/InternalServerError"
+  "/api/v1/debug/logs":
+    put:
+      tags:
+        - Admin
+      summary: Store logs
+      description: Store debug logs from client
+      operationId: storeLogs
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+        - api-key: []
+        - PersonalAccessToken: []
+      requestBody:
+        description: Log data to store
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Success
+          content: {}
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v2/auth/publicKey":
+    get:
+      tags:
+        - Auth
+      summary: Get RSA public key
+      description: |
+        Returns the RSA public key used for JWT token verification.
+        Required for agent to verify apihub tokens.
+      operationId: getRsaPublicKey
+      security: [{}]
+      responses:
+        "200":
+          description: Success
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+                description: RSA public key in binary format
+        "404":
+          description: Public key not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v2/auth/apiKey":
+    get:
+      tags:
+        - Auth
+      summary: Get API key by key
+      description: |
+        Returns API key information by the API key value.
+        Required to verify api key for external authorization.
+        The API key should be provided in the `api-key` header.
+      operationId: getApiKeyByKey
+      security: [{}]
+      parameters:
+        - name: api-key
+          in: header
+          description: API key value
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    description: API key identifier
+                  packageId:
+                    type: string
+                    description: Package identifier
+                  name:
+                    type: string
+                    description: API key name
+                  revoked:
+                    type: boolean
+                    description: Whether the API key is revoked
+                  roles:
+                    type: array
+                    items:
+                      type: string
+                    description: List of roles associated with the API key
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: API key not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v2/auth/pat":
+    get:
+      tags:
+        - Auth
+      summary: Get PAT by PAT
+      description: |
+        Returns personal access token information by the PAT value.
+        Required to verify PAT for external authorization.
+        The PAT should be provided in the `X-Personal-Access-Token` header.
+      operationId: getPatByPat
+      security: [{}]
+      parameters:
+        - name: X-Personal-Access-Token
+          in: header
+          description: Personal access token value
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  personalAccessToken:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        description: PAT identifier
+                      name:
+                        type: string
+                        description: PAT name
+                      expiresAt:
+                        type: string
+                        format: date-time
+                        nullable: true
+                        description: Expiration date
+                      createdAt:
+                        type: string
+                        format: date-time
+                        description: Creation date
+                      status:
+                        type: string
+                        enum:
+                          - active
+                          - expired
+                        description: PAT status
+                  user:
+                    $ref: "#/components/schemas/User"
+                  systemRoles:
+                    type: array
+                    items:
+                      type: string
+                    description: List of system roles
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v1/auth/apiKey/{apiKeyId}":
+    parameters:
+      - name: apiKeyId
+        in: path
+        description: API key identifier
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Auth
+      summary: Get API key by ID
+      description: Returns API key information by its identifier
+      operationId: getApiKeyById
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+        - api-key: []
+        - PersonalAccessToken: []
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    description: API key identifier
+                  packageId:
+                    type: string
+                    description: Package identifier
+                  name:
+                    type: string
+                    description: API key name
+                  revoked:
+                    type: boolean
+                    description: Whether the API key is revoked
+                  roles:
+                    type: array
+                    items:
+                      type: string
+                    description: List of roles associated with the API key
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: API key not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v1/auth/token":
+    get:
+      tags:
+        - Auth
+      summary: Check JWT
+      description: |
+        Checks if the provided JWT token is valid.
+        Required for extensions to check Apihub auth.
+        Just returns 200 OK if authentication is passed.
+      operationId: checkJwt
+      security:
+        - BearerAuth: []
+        - CookieAuth: []
+      responses:
+        "200":
+          description: Success - Token is valid
+          content: {}
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
   "/api/internal/users":
     post:
       x-nc-api-audience: noBWC
