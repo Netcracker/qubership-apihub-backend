@@ -35,8 +35,11 @@ type OperationRepository interface {
 	GetOperationChanges(comparisonId string, operationId string, severities []string) (*entity.OperationComparisonEntity, error)
 	GetChangelog(searchQuery entity.ChangelogSearchQueryEntity) ([]entity.OperationComparisonChangelogEntity, error)
 	SearchForOperations(searchQuery *entity.OperationSearchQuery) ([]entity.OperationSearchResult, error)
+	FullTextSearchForOperations(searchQuery *entity.OperationSearchQuery) ([]entity.OperationSearchResult, error)
+	LiteSearchForOperations(searchQuery *entity.OperationSearchQuery) ([]entity.OperationSearchResult, error)
 	GetOperationsTypeCount(packageId string, version string, revision int, showOnlyDeleted bool) ([]entity.OperationsTypeCountEntity, error)
-	GetOperationsTypeDataHashes(packageId string, version string, revision int) ([]entity.OperationsTypeDataHashEntity, error)
+	GetOperationsTypes(packageId string, version string, revision int) ([]entity.OperationsTypeEntity, error)
+	GetOperationsInfo(packageId string, version string, revision int) (entity.OperationsInfoEntity, error)
 	GetOperationDeprecatedItems(packageId string, version string, revision int, operationType string, operationId string) (*entity.OperationRichEntity, error)
 	GetDeprecatedOperationsSummary(packageId string, version string, revision int) ([]entity.DeprecatedOperationsSummaryEntity, error)
 	GetDeprecatedOperationsRefsSummary(packageId string, version string, revision int) ([]entity.DeprecatedOperationsSummaryEntity, error)
@@ -235,7 +238,7 @@ func (o operationRepositoryImpl) GetOperations(packageId string, version string,
 
 	if searchReq.EmptyTag {
 		query.Where(`not exists(select 1 from jsonb_array_elements(operation.metadata -> 'tags') a
-            where a.value != '""') `)
+			where a.value != '""') `)
 	}
 
 	if searchReq.Deprecated != nil {
@@ -246,9 +249,6 @@ func (o operationRepositoryImpl) GetOperations(packageId string, version string,
 		query.Where("operation.operation_id in (?)", pg.In(searchReq.Ids))
 	}
 
-	if len(searchReq.HashList) > 0 {
-		query.Where("operation.data_hash in (?)", pg.In(searchReq.HashList))
-	}
 	if searchReq.DocumentSlug != "" {
 		query.Join("inner join published_version_revision_content as pvrc").
 			JoinOn("operation.operation_id = any(pvrc.operation_ids)").
@@ -331,7 +331,7 @@ func (o operationRepositoryImpl) GetDeprecatedOperations(packageId string, versi
 	}
 	if searchReq.EmptyTag {
 		query.Where(`not exists(select 1 from jsonb_array_elements(operation.metadata -> 'tags') a
-            where a.value != '""') `)
+			where a.value != '""') `)
 	}
 	if searchReq.EmptyGroup {
 		//todo try to replace this 'not in' condition with join
@@ -439,7 +439,7 @@ func (o operationRepositoryImpl) GetOperationsTags(searchQuery entity.OperationT
 		from
 		(
 			(select '' as tag
-  				from operation o
+				from operation o
 				where o.package_id = ?package_id
 				and o.version = ?version
 				and o.revision = ?revision
@@ -565,7 +565,7 @@ func (o operationRepositoryImpl) GetChangelog(searchQuery entity.ChangelogSearch
 	}
 	if searchQuery.EmptyTag {
 		query.JoinOn(`not exists(select 1 from jsonb_array_elements(o.metadata -> 'tags') a
-            where a.value != '""') `)
+			where a.value != '""') `)
 	}
 
 	if searchQuery.EmptyGroup {
@@ -641,18 +641,191 @@ func (o operationRepositoryImpl) GetChangelog(searchQuery entity.ChangelogSearch
 }
 
 func (o operationRepositoryImpl) SearchForOperations(searchQuery *entity.OperationSearchQuery) ([]entity.OperationSearchResult, error) {
-	if strings.HasPrefix(searchQuery.OriginalTextInput, "_") {
-		searchQuery.TextFilter = strings.TrimPrefix(searchQuery.TextFilter, "_")
-		searchQuery.OriginalTextInput = strings.TrimPrefix(searchQuery.OriginalTextInput, "_")
+	_, err := o.cp.GetConnection().Exec("select to_tsquery(?)", searchQuery.SearchString)
+	if err != nil {
+		return nil, fmt.Errorf("invalid search string: %v", err.Error())
+	}
+	searchQuery.TextFilter = "%" + utils.LikeEscaped(searchQuery.TextFilter) + "%"
+	var result []entity.OperationSearchResult
+	operationsSearchQuery := `
+	with	maxrev as
+			(
+					select package_id, version, pg.name as package_name, max(revision) as revision
+					from published_version pv
+						inner join package_group pg
+							on pg.id = pv.package_id
+							and pg.exclude_from_search = false
+					--where (?packages = '{}' or package_id = ANY(?packages))
+					/*
+					for now packages list serves as a list of parents and packages,
+					after adding new parents list need to uncomment line above and change condition below to use parents list
+					*/
+					where (?packages = '{}' or package_id like ANY(
+						select id from unnest(?packages::text[]) id
+						union
+						select id||'.%' from unnest(?packages::text[]) id))
+					and (?versions = '{}' or version = ANY(?versions))
+					group by package_id, version, pg.name
+			),
+			versions as
+			(
+					select pv.package_id, pv.version, pv.revision, pv.published_at, pv.status, maxrev.package_name
+					from published_version pv
+					inner join maxrev
+							on pv.package_id = maxrev.package_id
+							and pv.version = maxrev.version
+							and pv.revision = maxrev.revision
+					where pv.deleted_at is null
+							and (?statuses = '{}' or pv.status = ANY(?statuses))
+							and pv.published_at >= ?start_date
+							and pv.published_at <= ?end_date
+			),
+			operations as
+			(
+					select o.*, v.status version_status, v.package_name, v.published_at version_published_at
+					from operation o
+					inner join versions v
+							on v.package_id = o.package_id
+							and v.version = o.version
+							and v.revision = o.revision
+							and (?api_type = '' or o.type = ?api_type)
+							and (?methods = '{}' or o.metadata->>'method' = ANY(?methods))
+							and (?operation_types = '{}' or o.metadata->>'type' = ANY(?operation_types))
+			)
+			select
+			o.package_id,
+			o.package_name name,
+			o.version,
+			o.revision,
+			o.version_status status,
+			o.operation_id,
+			o.title,
+			o.data_hash,
+			o.deprecated,
+			o.kind,
+			o.type,
+			o.metadata,
+			parent_package_names(o.package_id) parent_names,
+			case
+				when init_rank > 0 then init_rank + version_status_tf + operation_open_count
+				else 0
+			end rank,
 
-		_, err := o.cp.GetConnection().Exec("select plainto_tsquery(?)", searchQuery.SearchString)
-		if err != nil {
-			return nil, fmt.Errorf("invalid search string: %v", err.Error())
+			--debug
+			coalesce(?scope_weight) scope_weight,
+			coalesce(?open_count_weight) open_count_weight,
+			scope_tf,
+			title_tf,
+			version_status_tf,
+			operation_open_count
+			from operations o
+			left join (
+					select ts.data_hash, max(rank) as rank from (
+							with filtered as (select data_hash from operations)
+							select
+							ts.data_hash,
+				case when scope_rank = 0 then detailed_scope_rank
+					when detailed_scope_rank = 0 then scope_rank
+					else scope_rank * detailed_scope_rank end rank
+							from
+							ts_rest_operation_data ts,
+							filtered f,
+							to_tsquery(?search_filter) search_query,
+							--using coalesce to skip ts_rank evaluation for scopes that are not requested
+							coalesce(case when ?filter_response then null else 0 end, ts_rank(scope_response, search_query)) resp_rank,
+							coalesce(case when ?filter_request then null else 0 end, ts_rank(scope_request, search_query)) req_rank,
+							coalesce(case when ?filter_examples then null else 0 end, ts_rank(scope_examples, search_query)) example_rank,
+							coalesce(case when ?filter_annotation then null else 0 end, ts_rank(scope_annotation, search_query)) annotation_rank,
+							coalesce(case when ?filter_properties then null else 0 end, ts_rank(scope_properties, search_query)) properties_rank,
+							coalesce(resp_rank + req_rank) scope_rank,
+							coalesce(example_rank + annotation_rank + properties_rank) detailed_scope_rank
+							where ts.data_hash = f.data_hash
+							and
+							(
+								(
+								(?filter_request = false and ?filter_response = false) or
+								(?filter_request and search_query @@ scope_request) or
+								(?filter_response and search_query @@ scope_response)
+								)
+								and
+								(
+								(?filter_annotation = false and ?filter_examples = false and ?filter_properties = false) or
+								(?filter_annotation and search_query @@ scope_annotation) or
+								(?filter_examples and search_query @@ scope_examples) or
+								(?filter_properties and search_query @@ scope_properties)
+								)
+							)
+					) ts
+					group by ts.data_hash
+					order by max(rank) desc
+					limit ?limit
+					offset ?offset
+			) rest_ts
+				on rest_ts.data_hash = o.data_hash
+				and o.type = ?rest_api_type
+				and ?filter_all = false
+			left join (
+					select ts.data_hash, max(rank) as rank from (
+							with filtered as (select data_hash from operations)
+							select
+							ts.data_hash,
+							scope_rank rank
+							from
+							ts_operation_data ts,
+							filtered f,
+							to_tsquery(?search_filter) search_query,
+							--using coalesce to skip ts_rank evaluation for scopes that are not requested
+							coalesce(case when ?filter_all then null else 0 end, ts_rank(scope_all, search_query)) scope_rank
+							where ts.data_hash = f.data_hash
+							and search_query @@ scope_all
+					) ts
+					group by ts.data_hash
+					order by max(rank) desc
+					limit ?limit
+					offset ?offset
+			) all_ts
+				on all_ts.data_hash = o.data_hash
+				and ?filter_all = true
+			left join operation_open_count oc
+				on oc.package_id = o.package_id
+				and oc.version = o.version
+				and oc.operation_id = o.operation_id,
+			coalesce(?title_weight * (o.title ilike ?text_filter)::int, 0) title_tf,
+			coalesce(?scope_weight * (coalesce(rest_ts.rank, 0) + coalesce(all_ts.rank, 0)), 0) scope_tf,
+			coalesce(title_tf + scope_tf, 0) init_rank,
+			coalesce(
+				?version_status_release_weight * (o.version_status = ?version_status_release)::int +
+				?version_status_draft_weight * (o.version_status = ?version_status_draft)::int +
+				?version_status_archived_weight * (o.version_status = ?version_status_archived)::int) version_status_tf,
+			coalesce(?open_count_weight * coalesce(oc.open_count), 0) operation_open_count
+			where init_rank > 0
+			order by rank desc, o.version_published_at desc, o.operation_id
+			limit ?limit;
+	`
+	_, err = o.cp.GetConnection().Model(searchQuery).Query(&result, operationsSearchQuery)
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return nil, nil
 		}
-		searchQuery.TextFilter = "%" + utils.LikeEscaped(searchQuery.TextFilter) + "%"
-		var result []entity.OperationSearchResult
+		return nil, err
+	}
 
-		operationsSearchQuery := `
+	return result, nil
+}
+
+func (o operationRepositoryImpl) FullTextSearchForOperations(searchQuery *entity.OperationSearchQuery) ([]entity.OperationSearchResult, error) {
+
+	searchQuery.TextFilter = strings.TrimPrefix(searchQuery.TextFilter, "_")
+	searchQuery.OriginalTextInput = strings.TrimPrefix(searchQuery.OriginalTextInput, "_")
+
+	_, err := o.cp.GetConnection().Exec("select phraseto_tsquery(?)", searchQuery.SearchString)
+	if err != nil {
+		return nil, fmt.Errorf("invalid search string: %v", err.Error())
+	}
+	searchQuery.TextFilter = "%" + utils.LikeEscaped(searchQuery.TextFilter) + "%"
+	var result []entity.OperationSearchResult
+
+	operationsSearchQuery := `
 			with
 			maxrev as
 			(
@@ -754,210 +927,84 @@ func (o operationRepositoryImpl) SearchForOperations(searchQuery *entity.Operati
 			order by all_ts.rank desc, o.version_published_at desc, o.operation_id
 			limit ?limit;`
 
-		_, err = o.cp.GetConnection().Model(searchQuery).Query(&result, operationsSearchQuery)
-		if err != nil {
-			if err == pg.ErrNoRows {
-				return nil, nil
-			}
-			return nil, err
+	_, err = o.cp.GetConnection().Model(searchQuery).Query(&result, operationsSearchQuery)
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return nil, nil
 		}
-
-		return result, nil
+		return nil, err
 	}
 
-	_, err := o.cp.GetConnection().Exec("select to_tsquery(?)", searchQuery.SearchString)
+	return result, nil
+
+}
+
+func (o operationRepositoryImpl) LiteSearchForOperations(searchQuery *entity.OperationSearchQuery) ([]entity.OperationSearchResult, error) {
+
+	searchQuery.TextFilter = strings.TrimPrefix(searchQuery.TextFilter, "_")
+	searchQuery.OriginalTextInput = strings.TrimPrefix(searchQuery.OriginalTextInput, "_")
+
+	_, err := o.cp.GetConnection().Exec("select websearch_to_tsquery(?)", searchQuery.OriginalTextInput)
 	if err != nil {
 		return nil, fmt.Errorf("invalid search string: %v", err.Error())
 	}
 	searchQuery.TextFilter = "%" + utils.LikeEscaped(searchQuery.TextFilter) + "%"
 	var result []entity.OperationSearchResult
+
 	operationsSearchQuery := `
-	with	maxrev as
-			(
-					select package_id, version, pg.name as package_name, max(revision) as revision
-					from published_version pv
-						inner join package_group pg
-							on pg.id = pv.package_id
-							and pg.exclude_from_search = false
-					--where (?packages = '{}' or package_id = ANY(?packages))
-					/*
-					for now packages list serves as a list of parents and packages,
-					after adding new parents list need to uncomment line above and change condition below to use parents list
-					*/
-					where (?packages = '{}' or package_id like ANY(
+select
+    o.package_id,
+    pg.name,
+    o.version,
+    o.revision,
+    pv.status,
+    o.operation_id,
+    o.title,
+    o.data_hash,
+    o.deprecated,
+    o.kind,
+    o.type,
+    o.metadata,
+    parent_package_names(o.package_id) parent_names
+from operation o
+         inner join (
+    SELECT DISTINCT ON (rank, package_id, operation_id)
+        ts_rank(data_vector, search_query) as rank,
+        ts.package_id   as package_id,
+        ts.operation_id as operation_id,
+        ts.version      as version,
+        ts.revision     as revision
+
+    FROM fts_latest_release_operation_data ts,
+         websearch_to_tsquery(?original_text_input) search_query
+    WHERE (?versions = '{}' or version like ANY(
+						select id from unnest(?versions::text[]) id)) and
+        				(?packages = '{}' or package_id like ANY(
 						select id from unnest(?packages::text[]) id
 						union
-						select id||'.%' from unnest(?packages::text[]) id))
-					and (?versions = '{}' or version = ANY(?versions))
-					group by package_id, version, pg.name
-			),
-			versions as
-			(
-					select pv.package_id, pv.version, pv.revision, pv.published_at, pv.status, maxrev.package_name
-					from published_version pv
-					inner join maxrev
-							on pv.package_id = maxrev.package_id
-							and pv.version = maxrev.version
-							and pv.revision = maxrev.revision
-					where pv.deleted_at is null
-							and (?statuses = '{}' or pv.status = ANY(?statuses))
-							and pv.published_at >= ?start_date
-							and pv.published_at <= ?end_date
-			),
-			operations as
-			(
-					select o.*, v.status version_status, v.package_name, v.published_at version_published_at
-					from operation o
-					inner join versions v
-							on v.package_id = o.package_id
-							and v.version = o.version
-							and v.revision = o.revision
-							and (?api_type = '' or o.type = ?api_type)
-							and (?methods = '{}' or o.metadata->>'method' = ANY(?methods))
-							and (?operation_types = '{}' or o.metadata->>'type' = ANY(?operation_types))
-			)
-			select
-			o.package_id,
-			o.package_name name,
-			o.version,
-			o.revision,
-			o.version_status status,
-			o.operation_id,
-			o.title,
-			o.data_hash,
-			o.deprecated,
-			o.kind,
-			o.type,
-			o.metadata,
-			parent_package_names(o.package_id) parent_names,
-			case
-				when init_rank > 0 then init_rank + version_status_tf + operation_open_count
-				else 0
-			end rank,
+						select id||'.%' from unnest(?packages::text[]) id)) and
+        				(?api_type = '' or ts.api_type = ?api_type) and search_query @@ data_vector
+    ORDER BY ts_rank(data_vector, search_query) DESC,
+             package_id,
+             operation_id desc,
+             version DESC,
+             revision DESC
+    LIMIT ?limit OFFSET ?offset
+) all_ts
+                   on all_ts.package_id = o.package_id and
+                      all_ts.version = o.version and
+                      all_ts.revision = o.revision and
+		all_ts.operation_id = o.operation_id
 
-			--debug
-			coalesce(?scope_weight) scope_weight,
-			coalesce(?open_count_weight) open_count_weight,
-			scope_tf,
-			title_tf,
-			version_status_tf,
-			operation_open_count
-			from operations o
-			left join (
-					select ts.data_hash, max(rank) as rank from (
-							with filtered as (select data_hash from operations)
-							select
-							ts.data_hash,
-							case when scope_rank = 0 then detailed_scope_rank
-								 when detailed_scope_rank = 0 then scope_rank
-								 else scope_rank * detailed_scope_rank end rank
-							from
-							ts_rest_operation_data ts,
-							filtered f,
-							to_tsquery(?search_filter) search_query,
-							--using coalesce to skip ts_rank evaluation for scopes that are not requested
-							coalesce(case when ?filter_response then null else 0 end, ts_rank(scope_response, search_query)) resp_rank,
-							coalesce(case when ?filter_request then null else 0 end, ts_rank(scope_request, search_query)) req_rank,
-							coalesce(case when ?filter_examples then null else 0 end, ts_rank(scope_examples, search_query)) example_rank,
-							coalesce(case when ?filter_annotation then null else 0 end, ts_rank(scope_annotation, search_query)) annotation_rank,
-							coalesce(case when ?filter_properties then null else 0 end, ts_rank(scope_properties, search_query)) properties_rank,
-							coalesce(resp_rank + req_rank) scope_rank,
-							coalesce(example_rank + annotation_rank + properties_rank) detailed_scope_rank
-							where ts.data_hash = f.data_hash
-							and
-							(
-								(
-								(?filter_request = false and ?filter_response = false) or
-								(?filter_request and search_query @@ scope_request) or
-								(?filter_response and search_query @@ scope_response)
-								)
-								and
-								(
-								(?filter_annotation = false and ?filter_examples = false and ?filter_properties = false) or
-								(?filter_annotation and search_query @@ scope_annotation) or
-								(?filter_examples and search_query @@ scope_examples) or
-								(?filter_properties and search_query @@ scope_properties)
-								)
-							)
-					) ts
-					group by ts.data_hash
-					order by max(rank) desc
-					limit ?limit
-					offset ?offset
-			) rest_ts
-				on rest_ts.data_hash = o.data_hash
-				and o.type = ?rest_api_type
-				and ?filter_all = false
-			left join (
-					select ts.data_hash, max(rank) as rank from (
-							with filtered as (select data_hash from operations)
-							select
-							ts.data_hash,
-							scope_rank rank
-							from
-							ts_graphql_operation_data ts,
-							filtered f,
-							to_tsquery(?search_filter) search_query,
-							--using coalesce to skip ts_rank evaluation for scopes that are not requested
-							coalesce(case when ?filter_annotation then null else 0 end, ts_rank(scope_annotation, search_query)) annotation_rank,
-							coalesce(case when ?filter_property then null else 0 end, ts_rank(scope_property, search_query)) property_rank,
-							coalesce(case when ?filter_argument then null else 0 end, ts_rank(scope_argument, search_query)) argument_rank,
-							coalesce(annotation_rank + property_rank + argument_rank) scope_rank
-							where ts.data_hash = f.data_hash
-							and
-							(
-								(?filter_annotation = false and ?filter_property = false and ?filter_argument = false) or
-								(?filter_annotation and search_query @@ scope_annotation) or
-								(?filter_property and search_query @@ scope_property) or
-								(?filter_argument and search_query @@ scope_argument)
-							)
-					) ts
-					group by ts.data_hash
-					order by max(rank) desc
-					limit ?limit
-					offset ?offset
-			) graphql_ts
-				on graphql_ts.data_hash = o.data_hash
-				and o.type = ?graphql_api_type
-				and ?filter_all = false
-			left join (
-					select ts.data_hash, max(rank) as rank from (
-							with filtered as (select data_hash from operations)
-							select
-							ts.data_hash,
-							scope_rank rank
-							from
-							ts_operation_data ts,
-							filtered f,
-							to_tsquery(?search_filter) search_query,
-							--using coalesce to skip ts_rank evaluation for scopes that are not requested
-							coalesce(case when ?filter_all then null else 0 end, ts_rank(scope_all, search_query)) scope_rank
-							where ts.data_hash = f.data_hash
-							and search_query @@ scope_all
-					) ts
-					group by ts.data_hash
-					order by max(rank) desc
-					limit ?limit
-					offset ?offset
-			) all_ts
-				on all_ts.data_hash = o.data_hash
-				and ?filter_all = true
-			left join operation_open_count oc
-                on oc.package_id = o.package_id
-                and oc.version = o.version
-                and oc.operation_id = o.operation_id,
-			coalesce(?title_weight * (o.title ilike ?text_filter)::int, 0) title_tf,
-			coalesce(?scope_weight * (coalesce(rest_ts.rank, 0) + coalesce(graphql_ts.rank, 0) + coalesce(all_ts.rank, 0)), 0) scope_tf,
-			coalesce(title_tf + scope_tf, 0) init_rank,
-			coalesce(
-				?version_status_release_weight * (o.version_status = ?version_status_release)::int +
-				?version_status_draft_weight * (o.version_status = ?version_status_draft)::int +
-				?version_status_archived_weight * (o.version_status = ?version_status_archived)::int) version_status_tf,
-			coalesce(?open_count_weight * coalesce(oc.open_count), 0) operation_open_count
-			where init_rank > 0
-			order by rank desc, o.version_published_at desc, o.operation_id
-			limit ?limit;
-	`
+inner join published_version pv on o.package_id=pv.package_id and o.version=pv.version and o.revision=pv.revision
+inner join package_group pg on o.package_id=pg.id
+
+where all_ts.rank > 0
+and pv.deleted_at is null
+order by all_ts.rank desc, o.operation_id
+limit ?limit;
+`
+
 	_, err = o.cp.GetConnection().Model(searchQuery).Query(&result, operationsSearchQuery)
 	if err != nil {
 		if err == pg.ErrNoRows {
@@ -978,21 +1025,21 @@ func (o operationRepositoryImpl) GetOperationsTypeCount(packageId string, versio
 
 	operationsTypeCountQuery := `
 	with versions as(
-        select s.reference_id as package_id, s.reference_version as version, s.reference_revision as revision
-        from published_version_reference s
+		select s.reference_id as package_id, s.reference_version as version, s.reference_revision as revision
+		from published_version_reference s
 		inner join published_version pv
 		on pv.package_id = s.reference_id
 		and pv.version = s.reference_version
 		and pv.revision = s.reference_revision
-		and pv.deleted_at is %s null
-        where s.package_id = ?
-        and s.version = ?
-        and s.revision = ?
-        and s.excluded = false
-        union
-        select ? as package_id, ? as version, ? as revision
-    ),
-    depr_count as (
+	and pv.deleted_at is %s null
+		where s.package_id = ?
+		and s.version = ?
+		and s.revision = ?
+		and s.excluded = false
+		union
+		select ? as package_id, ? as version, ? as revision
+	),
+	depr_count as (
 		select type, count(operation_id) cnt from operation o, versions v
 		where deprecated = true
 		and o.package_id = v.package_id
@@ -1057,18 +1104,18 @@ func (o operationRepositoryImpl) GetOperationsTypeCount(packageId string, versio
 	return result, nil
 }
 
-func (o operationRepositoryImpl) GetOperationsTypeDataHashes(packageId string, version string, revision int) ([]entity.OperationsTypeDataHashEntity, error) {
-	var result []entity.OperationsTypeDataHashEntity
-	operationsTypeOperationHashesQuery := `
-		select type, json_object_agg(operation_id, data_hash) operations_hash
+func (o operationRepositoryImpl) GetOperationsTypes(packageId string, version string, revision int) ([]entity.OperationsTypeEntity, error) {
+	var result []entity.OperationsTypeEntity
+	operationsTypesQuery := `
+		select distinct type
 		from operation
 		where package_id = ?
 		and version = ?
 		and revision = ?
-		group by type;
+		order by type;
 	`
 	_, err := o.cp.GetConnection().Query(&result,
-		operationsTypeOperationHashesQuery,
+		operationsTypesQuery,
 		packageId, version, revision,
 	)
 	if err != nil {
@@ -1076,6 +1123,32 @@ func (o operationRepositoryImpl) GetOperationsTypeDataHashes(packageId string, v
 			return nil, nil
 		}
 		return nil, err
+	}
+
+	return result, nil
+}
+
+func (o operationRepositoryImpl) GetOperationsInfo(packageId string, version string, revision int) (entity.OperationsInfoEntity, error) {
+	var result entity.OperationsInfoEntity
+	operationsInfoQuery := `
+		select json_object_agg(
+			operation_id,
+			json_build_object('apiType', type, 'dataHash', data_hash)
+		) operations_info
+		from operation
+		where package_id = ?
+		and version = ?
+		and revision = ?;
+	`
+	_, err := o.cp.GetConnection().Query(&result,
+		operationsInfoQuery,
+		packageId, version, revision,
+	)
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return result, nil
+		}
+		return result, err
 	}
 
 	return result, nil
@@ -1091,13 +1164,13 @@ func (o operationRepositoryImpl) GetDeprecatedOperationsSummary(packageId string
 		and package_id = ? and version = ? and revision = ?
 		group by type
 	),
- 	tagss as (
-		 select type, array_agg(distinct x.value) as tags from operation
+	tagss as (
+		select type, array_agg(distinct x.value) as tags from operation
 			cross join lateral jsonb_array_elements_text(metadata->'tags') as x
-		 where package_id = ? and version = ? and revision = ?
-		 and ((operation.deprecated_items is not null and jsonb_typeof(operation.deprecated_items) = 'array' and jsonb_array_length(operation.deprecated_items) != 0)
+		where package_id = ? and version = ? and revision = ?
+		and ((operation.deprecated_items is not null and jsonb_typeof(operation.deprecated_items) = 'array' and jsonb_array_length(operation.deprecated_items) != 0)
 				or operation.deprecated = true)
-		 group by type
+		group by type
 	)
 
 	select dc.type as type,
@@ -1148,12 +1221,12 @@ func (o operationRepositoryImpl) GetDeprecatedOperationsRefsSummary(packageId st
 				or r.deprecated = true)
 		group by package_id, version, revision,type
 	),
-    tagss as (
-		 select type, array_agg(distinct x.value) as tags, package_id, version,revision from refss
+	tagss as (
+		select type, array_agg(distinct x.value) as tags, package_id, version,revision from refss
 			cross join lateral jsonb_array_elements_text(metadata->'tags') as x
 		where ((deprecated_items is not null and jsonb_typeof(deprecated_items) = 'array' and jsonb_array_length(deprecated_items) != 0)
 			or deprecated = true)
-		 group by package_id, version, revision, type
+		group by package_id, version, revision, type
 	)
 
 	select dc.type as type, dc.package_id as package_id, dc.version as version, dc.revision as revision,
@@ -1470,7 +1543,7 @@ func (o operationRepositoryImpl) GetGroupedOperations(packageId string, version 
 
 	if searchReq.EmptyTag {
 		query.Where(`not exists(select 1 from jsonb_array_elements(operation.metadata -> 'tags') a
-            where a.value != '""') `)
+			where a.value != '""') `)
 	}
 
 	if searchReq.Deprecated != nil {

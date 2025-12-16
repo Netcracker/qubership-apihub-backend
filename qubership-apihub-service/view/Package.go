@@ -68,6 +68,23 @@ type PackagesInfo struct {
 	DeletedAt                 *time.Time          `json:"deletedAt,omitempty"`
 }
 
+type PackagesMCP struct {
+	Packages []PackagesInfoMCP `json:"packages"`
+}
+
+type PackagesInfoMCP struct {
+	Id                        string              `json:"packageId"`
+	Alias                     string              `json:"alias"`
+	ParentId                  string              `json:"parentId"`
+	Kind                      string              `json:"kind"`
+	Name                      string              `json:"name"`
+	Description               string              `json:"description"`
+	ServiceName               string              `json:"serviceName,omitempty"`
+	Parents                   []ParentPackageInfo `json:"parents"`
+	LastReleaseVersionDetails *VersionDetails     `json:"lastReleaseVersionDetails,omitempty"`
+	RestGroupingPrefix        string              `json:"restGroupingPrefix,omitempty"`
+}
+
 type ParentPackageInfo struct {
 	Id                string `json:"packageId"`
 	Alias             string `json:"alias"`
@@ -189,6 +206,15 @@ type VersionComparison struct {
 	OperationTypes           []OperationType `json:"operationTypes" validate:"required,dive,required"`
 	FromCache                bool            `json:"fromCache"`
 	ComparisonFileId         string          `json:"comparisonFileId"`
+}
+
+type ComparisonKey struct {
+	PackageId                string
+	Version                  string
+	Revision                 int
+	PreviousVersionPackageId string
+	PreviousVersion          string
+	PreviousVersionRevision  int
 }
 
 func MakeVersionComparisonId(packageId string, version string, revision int, previousVersionPackageId string, previousVersion string, previousVersionRevision int) string {
