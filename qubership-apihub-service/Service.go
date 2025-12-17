@@ -543,6 +543,7 @@ func main() {
 
 	mcpHandler := mcpController.MakeMCPServer()
 	r.Handle("/api/v1/mcp/", security.SecureMCP(mcpHandler))
+	r.Handle("/api/v1/mcp/no-auth", mcpHandler)
 
 	discoveryConfig := config.DiscoveryConfig{
 		ScanDirectory: systemInfoService.GetApiSpecDirectory(),
