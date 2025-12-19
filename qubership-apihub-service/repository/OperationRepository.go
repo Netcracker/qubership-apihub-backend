@@ -505,7 +505,9 @@ func (o operationRepositoryImpl) GetOperationChangesSummary(comparisonId string,
 	result := new(entity.OperationComparisonSummaryEntity)
 	err := o.cp.GetConnection().Model(result).
 		Where("comparison_id = ?", comparisonId).
-		Where("operation_id = ?", operationId).
+		WhereGroup(func(query *orm.Query) (*orm.Query, error) {
+			return query.Where("operation_id = ?", operationId).WhereOr("previous_operation_id = ?", operationId), nil
+		}).
 		OrderExpr("data_hash, previous_data_hash").
 		Limit(1).
 		Select()
