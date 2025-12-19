@@ -9773,6 +9773,7 @@ components:
         - type
         - format
         - title
+        - apiKind
       properties:
         fileId:
           type: string
@@ -9805,6 +9806,14 @@ components:
           items:
             type: string
           example: ["TMF"]
+        apiKind:
+          description: Document API kind
+          type: string
+          enum:
+            - bwc
+            - no-bwc
+            - experimental
+          example: "bwc"
     PackageTransformationFile:
       description: Parameters of published file in package version
       type: object
