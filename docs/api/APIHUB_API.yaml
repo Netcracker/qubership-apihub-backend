@@ -7397,6 +7397,9 @@ paths:
                                 Parent package and version link. Created by the concatenation of the packageId and version name with At sign.
                               type: string
                               example: QS.CloudQSS.CPQ.Q-TMF@2023.2
+                            info:
+                              description: Info object from openapi document
+                              type: object
                   packages:
                     description: |
                       A mapped list of the packageId and version name concatenation with At sign to the package objects.
@@ -8226,9 +8229,9 @@ paths:
       deprecated: true
       description: |
         Starts the SAML authentication process in APIHUB (legacy endpoint).
-        
+
         This is a deprecated endpoint. Use `/api/v1/login/sso/{idpId}` instead.
-        
+
         In case of successful authentication, the request will be redirected to the **redirectUri** and
         the response will contain cookie with access token for future API calls.
         All subsequent APIHUB calls must use this token in a **CookieAuth** or **BearerAuth** authentication.
