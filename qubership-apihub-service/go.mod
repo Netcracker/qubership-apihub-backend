@@ -18,7 +18,7 @@ require (
 	github.com/iancoleman/orderedmap v0.3.0
 	github.com/mark3labs/mcp-go v0.43.2
 	github.com/minio/minio-go/v7 v7.0.97
-	github.com/openai/openai-go/v3 v3.12.0
+	github.com/openai/openai-go/v3 v3.15.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/robfig/cron/v3 v3.0.1
@@ -31,7 +31,7 @@ require (
 	github.com/x-cray/logrus-prefixed-formatter v0.5.2
 	github.com/xuri/excelize/v2 v2.7.1
 	github.com/zeebo/xxh3 v1.0.2
-  golang.org/x/crypto v0.46.0
+	golang.org/x/crypto v0.46.0
 	golang.org/x/net v0.48.0
 	golang.org/x/sync v0.19.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
