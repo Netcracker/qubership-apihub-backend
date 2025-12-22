@@ -15,9 +15,10 @@
 package view
 
 type RestOperationMetadata struct {
-	Path   string   `json:"path"`
-	Method string   `json:"method"`
-	Tags   []string `json:"tags,omitempty"`
+	Path         string   `json:"path"`
+	OriginalPath string   `json:"originalPath,omitempty"`
+	Method       string   `json:"method"`
+	Tags         []string `json:"tags,omitempty"`
 }
 
 type RestOperationSingleView struct {

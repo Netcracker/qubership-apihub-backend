@@ -242,6 +242,7 @@ func (a *BuildResultToEntitiesReader) ReadOperationsToEntities() ([]*entity.Oper
 				metadata.SetTags(operation.Tags)
 			}
 			metadata.SetPath(operationMetadata.GetStringValue("path"))
+			metadata.SetOriginalPath(operationMetadata.GetStringValue("originalPath"))
 			metadata.SetMethod(operationMetadata.GetStringValue("method"))
 		case string(view.GraphqlApiType):
 			if len(operation.Tags) > 0 {

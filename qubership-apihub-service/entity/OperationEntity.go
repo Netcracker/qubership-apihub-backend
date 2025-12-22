@@ -296,9 +296,10 @@ func MakeRestOperationView(operationEnt *OperationEntity) view.RestOperationView
 	return view.RestOperationView{
 		OperationListView: MakeCommonOperationView(operationEnt),
 		RestOperationMetadata: view.RestOperationMetadata{
-			Path:   operationEnt.Metadata.GetPath(),
-			Method: operationEnt.Metadata.GetMethod(),
-			Tags:   operationEnt.Metadata.GetTags(),
+			Path:         operationEnt.Metadata.GetPath(),
+			OriginalPath: operationEnt.Metadata.GetOriginalPath(),
+			Method:       operationEnt.Metadata.GetMethod(),
+			Tags:         operationEnt.Metadata.GetTags(),
 		},
 	}
 }
@@ -360,9 +361,10 @@ func MakeDeprecatedOperationView(operationEnt OperationRichEntity, includeDeprec
 		return view.DeprecatedRestOperationView{
 			DeprecatedOperationView: operationView,
 			RestOperationMetadata: view.RestOperationMetadata{
-				Path:   operationEnt.Metadata.GetPath(),
-				Method: operationEnt.Metadata.GetMethod(),
-				Tags:   operationEnt.Metadata.GetTags(),
+				Path:         operationEnt.Metadata.GetPath(),
+				OriginalPath: operationEnt.Metadata.GetOriginalPath(),
+				Method:       operationEnt.Metadata.GetMethod(),
+				Tags:         operationEnt.Metadata.GetTags(),
 			},
 		}
 	case string(view.GraphqlApiType):
@@ -422,9 +424,10 @@ func MakeSingleOperationView(operationEnt OperationRichEntity) interface{} {
 		return view.RestOperationSingleView{
 			SingleOperationView: operationView,
 			RestOperationMetadata: view.RestOperationMetadata{
-				Path:   operationEnt.Metadata.GetPath(),
-				Method: operationEnt.Metadata.GetMethod(),
-				Tags:   operationEnt.Metadata.GetTags(),
+				Path:         operationEnt.Metadata.GetPath(),
+				OriginalPath: operationEnt.Metadata.GetOriginalPath(),
+				Method:       operationEnt.Metadata.GetMethod(),
+				Tags:         operationEnt.Metadata.GetTags(),
 			},
 		}
 	case string(view.GraphqlApiType):
@@ -499,9 +502,10 @@ func MakeOperationComparisonChangelogView(entity OperationComparisonChangelogEnt
 			current = &view.RestOperationComparisonChangelogView{
 				GenericComparisonOperationView: currentGenericView,
 				RestOperationMetadata: view.RestOperationMetadata{
-					Tags:   entity.Metadata.GetTags(),
-					Path:   entity.Metadata.GetPath(),
-					Method: entity.Metadata.GetMethod(),
+					Tags:         entity.Metadata.GetTags(),
+					Path:         entity.Metadata.GetPath(),
+					OriginalPath: entity.Metadata.GetOriginalPath(),
+					Method:       entity.Metadata.GetMethod(),
 				},
 			}
 		}
@@ -510,9 +514,10 @@ func MakeOperationComparisonChangelogView(entity OperationComparisonChangelogEnt
 			previous = &view.RestOperationComparisonChangelogView{
 				GenericComparisonOperationView: previousGenericView,
 				RestOperationMetadata: view.RestOperationMetadata{
-					Tags:   entity.PreviousMetadata.GetTags(),
-					Path:   entity.PreviousMetadata.GetPath(),
-					Method: entity.PreviousMetadata.GetMethod(),
+					Tags:         entity.PreviousMetadata.GetTags(),
+					Path:         entity.PreviousMetadata.GetPath(),
+					OriginalPath: entity.PreviousMetadata.GetOriginalPath(),
+					Method:       entity.PreviousMetadata.GetMethod(),
 				},
 			}
 		}
@@ -660,18 +665,20 @@ func MakeOperationComparisonChangesView(entity OperationComparisonChangelogEntit
 			return view.RestOperationComparisonChangesView{
 				OperationComparisonChangesView: operationComparisonChangelogView,
 				RestOperationMetadata: view.RestOperationMetadata{
-					Path:   entity.PreviousMetadata.GetPath(),
-					Method: entity.PreviousMetadata.GetMethod(),
-					Tags:   entity.PreviousMetadata.GetTags(),
+					Path:         entity.PreviousMetadata.GetPath(),
+					OriginalPath: entity.PreviousMetadata.GetOriginalPath(),
+					Method:       entity.PreviousMetadata.GetMethod(),
+					Tags:         entity.PreviousMetadata.GetTags(),
 				},
 			}
 		} else {
 			return view.RestOperationComparisonChangesView{
 				OperationComparisonChangesView: operationComparisonChangelogView,
 				RestOperationMetadata: view.RestOperationMetadata{
-					Path:   entity.Metadata.GetPath(),
-					Method: entity.Metadata.GetMethod(),
-					Tags:   entity.Metadata.GetTags(),
+					Path:         entity.Metadata.GetPath(),
+					OriginalPath: entity.Metadata.GetOriginalPath(),
+					Method:       entity.Metadata.GetMethod(),
+					Tags:         entity.Metadata.GetTags(),
 				},
 			}
 		}

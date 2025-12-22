@@ -27,6 +27,7 @@ const LABELS_KEY = "labels"
 const REPOSITORY_URL_KEY = "repository_url"
 const TITLE_KEY = "title"
 const PATH_KEY = "path"
+const ORIGINAL_PATH_KEY = "originalPath"
 const METHOD_KEY = "method"
 const TAGS_KEY = "tags"
 const CLOUD_NAME_KEY = "cloud_name"
@@ -205,6 +206,17 @@ func (m Metadata) GetPath() string {
 		return path
 	}
 	return ""
+}
+
+func (m Metadata) GetOriginalPath() string {
+	if path, ok := m[ORIGINAL_PATH_KEY].(string); ok {
+		return path
+	}
+	return ""
+}
+
+func (m Metadata) SetOriginalPath(originalPath string) {
+	m[ORIGINAL_PATH_KEY] = originalPath
 }
 
 func (m Metadata) SetMethod(method string) {
