@@ -672,6 +672,6 @@ func makeServer(systemInfoService service.SystemInfoService, r *mux.Router) *htt
 		Handler:      handlers.CompressHandler(handlers.CORS(corsOptions...)(r)),
 		Addr:         listenAddr,
 		WriteTimeout: 300 * time.Second,
-		ReadTimeout:  30 * time.Second,
+		ReadTimeout:  300 * time.Second,
 	}
 }
