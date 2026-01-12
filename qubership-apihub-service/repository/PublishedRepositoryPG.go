@@ -2740,8 +2740,8 @@ func (p publishedRepositoryImpl) GetFilteredDeletedPackages(ctx context.Context,
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetVersionValidationChanges(packageId string, versionName string, revision int) (*entity.PublishedVersionValidationEntity, error) {
-	result := new(entity.PublishedVersionValidationEntity)
+func (p publishedRepositoryImpl) GetVersionValidationChanges_deprecated(packageId string, versionName string, revision int) (*entity.PublishedVersionValidationEntity_deprecated, error) {
+	result := new(entity.PublishedVersionValidationEntity_deprecated)
 	err := p.cp.GetConnection().Model(result).
 		ExcludeColumn("spectral").
 		Where("package_id = ?", packageId).
@@ -2757,8 +2757,8 @@ func (p publishedRepositoryImpl) GetVersionValidationChanges(packageId string, v
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetVersionValidationProblems(packageId string, versionName string, revision int) (*entity.PublishedVersionValidationEntity, error) {
-	result := new(entity.PublishedVersionValidationEntity)
+func (p publishedRepositoryImpl) GetVersionValidationProblems_deprecated(packageId string, versionName string, revision int) (*entity.PublishedVersionValidationEntity_deprecated, error) {
+	result := new(entity.PublishedVersionValidationEntity_deprecated)
 	err := p.cp.GetConnection().Model(result).
 		ExcludeColumn("changelog", "bwc").
 		Where("package_id = ?", packageId).
