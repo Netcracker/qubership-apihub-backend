@@ -277,7 +277,7 @@ var (
 				"maximum": 100
 			},
 			"page": {
-			    "type": "integer"
+			    "type": "integer",
 				"minimum": 0
 			},
 			"release": {
