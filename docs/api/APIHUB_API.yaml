@@ -7840,6 +7840,12 @@ paths:
         - BearerAuth: [ ]
         - CookieAuth: [ ]
         - api-key: [ ]
+      parameters:
+        - name: refPackageId
+          description: Filter by package id of ref package and previous ref package.
+          in: query
+          schema:
+            type: string
       responses:
         "200":
           description: Success
