@@ -34,7 +34,7 @@ type mcpService struct {
 func (m mcpService) MakeMCPServer() *mcpserver.MCPServer {
 	s := mcpserver.NewMCPServer(
 		"apihub-mcp",
-		"0.0.1",
+		"0.0.2",
 		mcpserver.WithToolCapabilities(false),
 		mcpserver.WithInstructions(mcpInstructions),
 	)
@@ -60,6 +60,16 @@ func (m mcpService) MakeMCPServer() *mcpserver.MCPServer {
 	}, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return m.ExecuteGetSpecTool(ctx, req)
 	})
+
+	// Add get_rest_api_operation_diff tool
+	diffMeta := toolsMetadata[2]
+		s.AddTool(mcp.Tool{
+			Name:           diffMeta.Name,
+			Description:    diffMeta.DescriptionMCP,
+			RawInputSchema: diffMeta.Schema,
+		}, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return m.ExecuteGetOperationDiffTool(ctx, req)
+		})
 
 	mcpWorkspace := m.systemInfoService.GetAiMCPConfig().Workspace
 	if mcpWorkspace != "" {
@@ -157,6 +167,7 @@ Use apihub-mcp when the user asks about:
 AVAILABLE TOOLS:
 1. search_rest_api_operations - search for API operations (see tool description for details)
 2. get_rest_api_operations_specification - get OpenAPI specification for a specific operation (use only when user explicitly requests details)
+3. get_rest_api_operation_diff - get list of changes of the specific operation from OpenAPI specification from the specific package and version to the previous version (use then user asks for changes of the specific operation)
 
 AVAILABLE RESOURCES:
 - api-packages-list - list of all packages in the system. Use this resource when:
@@ -175,6 +186,7 @@ RESPONSES:
 const (
 	ToolNameSearchOperations = "search_rest_api_operations"
 	ToolNameGetOperationSpec = "get_rest_api_operations_specification"
+	ToolNameGetOperationDiff = "get_rest_api_operation_diff"
 )
 
 // Tool descriptions for MCP server
@@ -215,6 +227,14 @@ LLM INSTRUCTIONS:
 - Generate RequestBody and ResponseBody examples based on the specification
 - Provide the user with complete information about the operation
 - Include the full OpenAPI specification json in the response`
+
+	ToolDescriptionGetOperationDiffMCP = `Get list of changes of the specific operation from OpenAPI specification from the specific package and version to the previous version.
+
+Use this tool ONLY when the user explicitly requests changes of the specific operation.
+
+LLM INSTRUCTIONS:
+- The response contains JSON with list of changes of the specific operation from OpenAPI specification from the specific package and version to the previous version.
+- If uesrs asks for changes for many operation - call this tool for each operation`
 )
 
 // Tool descriptions for OpenAI
@@ -261,6 +281,15 @@ LLM INSTRUCTIONS:
 - Use markdown links for packageId and operationId:
   * packageId -> [packageId](/portal/packages/<packageId>)
   * operationId -> [operationId](/portal/packages/<packageId>/<version>/operations/rest/<operationId>)`
+
+	ToolDescriptionGetOperationDiffOpenAI = `Get list of changes of the specific operation from OpenAPI specification from the specific package and version to the previous version in markdown format.
+
+Use this tool ONLY when the user explicitly requests changes of the specific operation.
+
+LLM INSTRUCTIONS:
+- The response contains JSON with list of changes of the specific operation from OpenAPI specification from the specific package and version to the previous version.
+- If uesrs asks for changes for many operation - call this tool for each operation
+- Format responses in markdown with well-readable markup (headings, lists, tables)`
 )
 
 // Tool input schemas (shared between MCP and OpenAI)
@@ -305,6 +334,25 @@ var (
 		},
 		"required": ["operationId","packageId","version"]
 	}`)
+
+	getOperationDiffSchema = json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"operationId": {
+				"type": "string"
+			},
+			"packageId": {
+				"type": "string"
+			},
+			"version": {
+				"type": "string"
+			},
+			"previousVersion": {
+				"type": "string"
+			}
+		},
+		"required": ["operationId","packageId","version","previousVersion"]
+	}`)
 )
 
 // getToolMetadata returns metadata for all tools
@@ -321,6 +369,12 @@ func getToolMetadata() []view.ToolMetadata {
 			Schema:            getOperationSpecSchema,
 			DescriptionMCP:    ToolDescriptionGetOperationSpecMCP,
 			DescriptionOpenAI: ToolDescriptionGetOperationSpecOpenAI,
+		},
+		{
+			Name:              ToolNameGetOperationDiff,
+			Schema:            getOperationDiffSchema,
+			DescriptionMCP:    ToolDescriptionGetOperationDiffMCP,
+			DescriptionOpenAI: ToolDescriptionGetOperationDiffOpenAI,
 		},
 	}
 }
@@ -369,6 +423,12 @@ func getParameterDescription(toolName, paramName string) string {
 			"operationId": "Unique operation identifier (operationId) from search results",
 			"packageId":   "Package ID (packageId) where the operation is located. Use packageId from search results or api-packages-list resource",
 			"version":     "Package version in YYYY.Q format (e.g., 2024.3) where the operation is located",
+		},
+		ToolNameGetOperationDiff: {
+			"operationId": "Unique operation identifier (operationId) from search results",
+			"packageId":   "Package ID (packageId) where the operation is located. Use packageId from search results or api-packages-list resource",
+			"version":     "Package version in YYYY.Q format (e.g., 2024.3) where the operation is located",
+			"previousVersion": "Package version in YYYY.Q format (e.g., 2024.2) where the operation was located",
 		},
 	}
 
