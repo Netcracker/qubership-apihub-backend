@@ -12,30 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package service
+package view
 
-import (
-	"fmt"
-	"strings"
-
-	log "github.com/sirupsen/logrus"
-)
-
-type LogsService interface {
-	StoreLogs(obj map[string]interface{})
+type VersionInternalDocumentsFile struct {
+	Documents []VersionInternalDocument `json:"documents" validate:"dive,required"`
 }
 
-func NewLogsService() LogsService {
-	return &logsServiceImpl{}
+type InternalDocument struct {
+	Id       string `json:"id" validate:"required"`
+	Filename string `json:"filename" validate:"required"`
+	Hash     string `json:"hash"`
 }
 
-type logsServiceImpl struct {
+type VersionInternalDocument struct {
+	InternalDocument
 }
 
-func (l logsServiceImpl) StoreLogs(obj map[string]interface{}) {
-	fields := make([]string, 0)
-	for key, value := range obj {
-		fields = append(fields, fmt.Sprintf("%v: %v", key, value))
-	}
-	log.Infof("logs received: " + strings.Join(fields, ", "))
+type ComparisonInternalDocumentsFile struct {
+	Documents []ComparisonInternalDocument `json:"documents" validate:"dive,required"`
+}
+
+type ComparisonInternalDocument struct {
+	InternalDocument
+	ComparisonFileId string `json:"comparisonFileId" validate:"required"`
 }
