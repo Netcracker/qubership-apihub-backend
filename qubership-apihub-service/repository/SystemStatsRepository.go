@@ -113,7 +113,8 @@ func (s *systemStatsRepositoryImpl) GetBuildsCountByType(ctx context.Context) ([
     		('mergedSpecification'),
     		('exportVersion'),
     		('exportRestDocument'),
-    		('exportRestOperationsGroup')
+    		('exportRestOperationsGroup'),
+    		('exportGraphqlOperationsGroup')
 		),
 		build_stats AS (
   		SELECT 
