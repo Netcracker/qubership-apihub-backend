@@ -1755,6 +1755,7 @@ func (v versionServiceImpl) StartPublishFromCSV(ctx context.SecurityContext, req
 		return "", err
 	}
 
+	log.Debugf("Starting CSV dashboard publish: publishId=%s, packageId=%s, apiType=%s", publishEntity.PublishId, req.PackageId, req.ApiType)
 	utils.SafeAsync(func() {
 		v.publishFromCSV(ctx, pkg.Name, req, csvOriginal, publishEntity)
 	})
@@ -1795,29 +1796,38 @@ func (v versionServiceImpl) publishFromCSV(ctx context.SecurityContext, dashboar
 	serviceVersionCol := -1
 	methodCol := -1
 	pathCol := -1
+	typeCol := -1
 	extensionCols := make(map[string]int, 0)
 
 	for i, name := range colNames {
 		switch name {
 		case "service":
 			serviceNameCol = i
-			break
 		case "version":
 			serviceVersionCol = i
-			break
 		case "method":
 			methodCol = i
-			break
 		case "path":
 			pathCol = i
-			break
+		case "type":
+			typeCol = i
 		default:
 			extensionCols[name] = i
 		}
 	}
-	if serviceNameCol == -1 || serviceVersionCol == -1 || methodCol == -1 || pathCol == -1 {
-		v.updateDashboardPublishProcess(publishEntity, string(view.StatusError), fmt.Sprintf("Some mandatory columns [%s, %s, %s, %s] are not present in table header", "service", "version", "method", "path"))
-		return
+
+	isGraphql := req.ApiType == string(view.GraphqlApiType)
+
+	if isGraphql {
+		if serviceNameCol == -1 || serviceVersionCol == -1 || typeCol == -1 || methodCol == -1 {
+			v.updateDashboardPublishProcess(publishEntity, string(view.StatusError), fmt.Sprintf("Some mandatory columns [%s, %s, %s, %s] are not present in table header", "service", "version", "type", "method"))
+			return
+		}
+	} else {
+		if serviceNameCol == -1 || serviceVersionCol == -1 || methodCol == -1 || pathCol == -1 {
+			v.updateDashboardPublishProcess(publishEntity, string(view.StatusError), fmt.Sprintf("Some mandatory columns [%s, %s, %s, %s] are not present in table header", "service", "version", "method", "path"))
+			return
+		}
 	}
 
 	firstRow := colNamesRow + 1
@@ -1852,12 +1862,29 @@ func (v versionServiceImpl) publishFromCSV(ctx context.SecurityContext, dashboar
 			report[i] = append(report[i], "empty method")
 			continue
 		}
-		path := row[pathCol]
-		if path == "" {
-			report[i] = append(report[i], "empty path")
-			continue
+
+		// validate API-type-specific column
+		operationType := ""
+		path := ""
+		if isGraphql {
+			operationType = strings.ToLower(row[typeCol])
+			if operationType == "" {
+				report[i] = append(report[i], "empty type")
+				continue
+			}
+			if !view.ValidGraphQLOperationType(operationType) {
+				report[i] = append(report[i], fmt.Sprintf("invalid graphql operation type '%s', expected one of: query, mutation, subscription", operationType))
+				continue
+			}
+		} else {
+			path = row[pathCol]
+			if path == "" {
+				report[i] = append(report[i], "empty path")
+				continue
+			}
+			path = pathParamsRegex.ReplaceAllString(path, "*")
 		}
-		path = pathParamsRegex.ReplaceAllString(path, "*") //replace all path parameters with '*'
+
 		serviceInfo := servicesMap[serviceName]
 		if serviceInfo == nil {
 			if _, exists := notIncludedServices[serviceName]; exists {
@@ -1880,6 +1907,7 @@ func (v versionServiceImpl) publishFromCSV(ctx context.SecurityContext, dashboar
 			serviceInfo = &svcInfo
 			servicesMap[serviceName] = serviceInfo
 		}
+
 		versionKey := fmt.Sprintf("%v%v%v", serviceInfo.PackageId, stringSeparator, serviceVersion)
 		if serviceInfo.Version == "" {
 			if _, exists := notIncludedVersions[versionKey]; exists {
@@ -1910,9 +1938,19 @@ func (v versionServiceImpl) publishFromCSV(ctx context.SecurityContext, dashboar
 				continue
 			}
 		}
-		serviceOperationIds, err := v.operationRepo.GetOperationsByPathAndMethod(serviceInfo.PackageId, serviceInfo.Version, serviceInfo.Revision, string(view.RestApiType), path, method)
-		if err != nil {
-			report[i] = append(report[i], fmt.Sprintf("failed to look up operation by path and method: %v", err.Error()))
+
+		var serviceOperationIds []string
+		var lookupErr error
+		var lookupErrMsg string
+		if isGraphql {
+			lookupErrMsg = "failed to look up operation by type and method"
+			serviceOperationIds, lookupErr = v.operationRepo.GetGQLOperationsByTypeAndMethod(serviceInfo.PackageId, serviceInfo.Version, serviceInfo.Revision, operationType, method)
+		} else {
+			lookupErrMsg = "failed to look up operation by path and method"
+			serviceOperationIds, lookupErr = v.operationRepo.GetRESTOperationsByPathAndMethod(serviceInfo.PackageId, serviceInfo.Version, serviceInfo.Revision, path, method)
+		}
+		if lookupErr != nil {
+			report[i] = append(report[i], fmt.Sprintf("%s: %v", lookupErrMsg, lookupErr.Error()))
 			notIncludedOperationsCount++
 			continue
 		}
@@ -1974,7 +2012,7 @@ func (v versionServiceImpl) publishFromCSV(ctx context.SecurityContext, dashboar
 		v.updateDashboardPublishProcess(publishEntity, string(view.StatusError), fmt.Sprintf("failed to publish dashboard from csv: %v", err.Error()))
 		return
 	}
-	err = v.operationGroupService.CreateOperationGroup(ctx, req.PackageId, req.Version, string(view.RestApiType), view.CreateOperationGroupReq{
+	err = v.operationGroupService.CreateOperationGroup(ctx, req.PackageId, req.Version, req.ApiType, view.CreateOperationGroupReq{
 		GroupName: dashboardName,
 	})
 	if err != nil {
@@ -2006,7 +2044,7 @@ func (v versionServiceImpl) publishFromCSV(ctx context.SecurityContext, dashboar
 			}
 		}
 	}
-	err = v.operationGroupService.UpdateOperationGroup(ctx, req.PackageId, req.Version, string(view.RestApiType), dashboardName, view.UpdateOperationGroupReq{
+	err = v.operationGroupService.UpdateOperationGroup(ctx, req.PackageId, req.Version, req.ApiType, dashboardName, view.UpdateOperationGroupReq{
 		Operations: &groupOperations,
 	})
 	if err != nil {
