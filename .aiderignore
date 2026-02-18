@@ -1,0 +1,34 @@
+# Aider ignore file — files that AI should not modify
+
+# Vendor and dependencies
+qubership-apihub-service/vendor/
+
+# Generated / binary files
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Applied SQL migrations (never modify deployed migrations)
+# New migrations are OK — just don't edit existing ones
+# qubership-apihub-service/resources/migrations/
+
+# Static assets
+qubership-apihub-service/static/
+
+# Test data / Postman collections
+qubership-apihub-service/tests/postman/
+
+# Docker compose files for local dev
+docs/local_development/docker-compose/
+
+# CI/CD workflows (modify with care)
+.github/workflows/
+
+# Security and legal
+SECURITY.md
+CODE-OF-CONDUCT.md
+LICENSE
+
+# Config with potential secrets
+config.yaml

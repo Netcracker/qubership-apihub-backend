@@ -1,0 +1,96 @@
+---
+description: Go coding patterns and conventions for this project
+globs: "**/*.go"
+alwaysApply: false
+---
+
+# Go Coding Patterns
+
+## Interface-First Design
+Every layer uses interfaces. The pattern is:
+1. Define a public interface (e.g. `PackageService`)
+2. Create a private implementation struct (e.g. `packageServiceImpl`)
+3. Create a constructor function (e.g. `NewPackageService(...)`) that returns the interface
+
+```go
+type PackageService interface {
+    CreatePackage(ctx context.SecurityContext, packg view.SimplePackage) (*view.SimplePackage, error)
+}
+
+type packageServiceImpl struct {
+    repo repository.PublishedRepository
+}
+
+func NewPackageService(repo repository.PublishedRepository) PackageService {
+    return &packageServiceImpl{repo: repo}
+}
+```
+
+## Dependency Injection
+- All dependencies are wired manually in `Service.go` main function
+- No DI framework — constructor injection only
+- Dependencies passed as interfaces, not concrete types
+
+## Function Parameters
+- Required parameters: separate arguments
+- Optional parameters: via struct (e.g. `view.SearchRequest`)
+- Example: `getOperation(packageId string, version string, operationId string, searchReq view.SearchRequest)`
+
+## Error Handling
+- Use `exception.CustomError` for business errors with HTTP status, code, and message
+- Error codes and messages are constants in `exception/` package
+- Controllers call `utils.RespondWithCustomError(w, err)` or `utils.RespondWithError(w, status, msg, err)`
+- Always check and return errors — never silently ignore
+
+```go
+if err != nil {
+    return nil, &exception.CustomError{
+        Status:  http.StatusBadRequest,
+        Code:    exception.SomeErrorCode,
+        Message: exception.SomeErrorMsg,
+        Params:  map[string]interface{}{"key": value},
+    }
+}
+```
+
+## Context
+- Use `context.SecurityContext` (project's own, not stdlib) for passing auth info
+- Create from request: `ctx := context.Create(r)`
+- For stdlib context, import as `stdctx "context"`
+
+## Logging
+- Use `log "github.com/sirupsen/logrus"` (imported as `log`)
+- INFO: major operations and events (all POST/PUT/DELETE, NOT GET)
+- ERROR: all errors
+- DEBUG: minor details
+- Async operations: log start with request data + generated ID, prefix all logs with operation ID, log completion
+
+```go
+log.Infof("Starting operation %s with params %+v", id, req)
+log.Errorf("Operation %s: failed to process: %s", id, err.Error())
+```
+
+## Naming
+- Interfaces: PascalCase noun (e.g. `PackageService`, `PublishedRepository`)
+- Implementations: camelCase with `Impl` suffix (e.g. `packageServiceImpl`)
+- Constructors: `New` + interface name (e.g. `NewPackageService`)
+- Deprecated: append `_deprecated` suffix
+- HTTP handlers: verb + noun (e.g. `GetPackage`, `CreatePackage`, `DeletePackage`)
+- Constants: PascalCase for exported, camelCase for unexported
+
+## HTTP Handlers Pattern
+```go
+func (c controllerImpl) HandleSomething(w http.ResponseWriter, r *http.Request) {
+    param := getStringParam(r, "paramName")
+    ctx := context.Create(r)
+    // 1. Check permissions
+    // 2. Parse request body if needed
+    // 3. Call service
+    // 4. Respond with result or error
+}
+```
+
+## go-pg ORM
+- Entity structs use `tableName struct{} `+"`"+`pg:\"table_name\"`+"`" tag
+- Fields use `pg:"column_name"` tags
+- Queries via `cp.GetConnection().Model(&entity).Where(...)` pattern

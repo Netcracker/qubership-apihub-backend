@@ -1,0 +1,68 @@
+---
+description: REST API design conventions
+globs: "qubership-apihub-service/controller/**,qubership-apihub-service/view/**,docs/api/**"
+alwaysApply: false
+---
+
+# REST API Conventions
+
+## API-First Approach
+- Design API spec (OpenAPI 3.0) before implementation
+- API specs live in `docs/api/` folder
+- No breaking changes to public API without versioning
+
+## Versioning
+- URL path versioning: `/api/v2/...`, `/api/v3/...`
+- When breaking change required: create new version endpoint
+- Mark old endpoint as deprecated in spec and code (suffix `_deprecated`)
+
+## Response Patterns
+
+### Success
+```go
+utils.RespondWithJson(w, http.StatusOK, result)
+```
+
+### Created
+```go
+utils.RespondWithJson(w, http.StatusCreated, result)
+```
+
+### No Content
+```go
+w.WriteHeader(http.StatusNoContent)
+```
+
+### Errors
+```go
+utils.RespondWithCustomError(w, &exception.CustomError{
+    Status:  http.StatusNotFound,
+    Code:    exception.PackageNotFound,
+    Message: exception.PackageNotFoundMsg,
+    Params:  map[string]interface{}{"packageId": packageId},
+})
+```
+
+## Request Parameter Extraction
+- Path params: `getStringParam(r, "paramName")`
+- Query params: `r.URL.Query().Get("paramName")`
+- Pagination: `getLimitQueryParam(r)`, `getOffsetQueryParam(r)`
+- Request body: `json.NewDecoder(r.Body).Decode(&req)`
+
+## Permission Checks
+Every mutating endpoint must check permissions:
+```go
+sufficientPrivileges, err := c.roleService.HasRequiredPermissions(ctx, packageId, view.SomePermission)
+if err != nil { /* handle */ }
+if !sufficientPrivileges {
+    utils.RespondWithCustomError(w, &exception.CustomError{
+        Status:  http.StatusForbidden,
+        Code:    exception.InsufficientPrivileges,
+        Message: exception.InsufficientPrivilegesMsg,
+    })
+    return
+}
+```
+
+## Package Transitions
+Use `handlePkgRedirectOrRespondWithError` for package-related errors — handles package transitions (moved/renamed packages).

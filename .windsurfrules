@@ -1,0 +1,48 @@
+# Windsurf Rules for qubership-apihub-backend
+
+## Project
+Go 1.24 backend microservice for API Registry (qubership-apihub).
+Module: github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service
+All code in qubership-apihub-service/ directory.
+
+## Architecture
+Strict layered: Controller → Service → Repository → Entity.
+Views (DTOs) used by controllers and services. Exceptions for error handling.
+Dependencies wired manually in Service.go (no DI framework).
+
+## Patterns
+- Interface + private impl + New* constructor for every component
+- exception.CustomError{Status, Code, Message, Params} for errors
+- context.SecurityContext (project's own, NOT stdlib) for auth context
+- logrus (imported as log) for logging: INFO=writes, ERROR=errors, DEBUG=details
+- Required params as separate args, optional via struct
+- _deprecated suffix for deprecated methods
+- go-pg v10 for PostgreSQL ORM
+- gorilla/mux for HTTP routing
+
+## Rules
+- No business logic in controllers
+- No direct repository calls from controllers
+- No breaking API changes without URL version bump (/api/v2/ → /api/v3/)
+- Always create both up and down SQL migrations
+- Never modify deployed migrations
+- Never commit secrets
+- Always handle errors explicitly
+- API-first: OpenAPI spec before implementation
+- PR titles: conventional commits (feat:, fix:, refactor:)
+
+## Structure
+- controller/ — HTTP handlers
+- service/ — business logic
+- repository/ — data access (PostgreSQL)
+- entity/ — DB models (go-pg structs)
+- view/ — request/response DTOs
+- exception/ — error types and codes
+- security/ — auth (JWT, SAML, OIDC, LDAP)
+- resources/migrations/ — SQL migrations (N_desc.up.sql + N_desc.down.sql)
+- Service.go — entrypoint and dependency wiring
+
+## Domain Terms
+workspace=top-level group, package=API docs container, version=Draft/Release/Archived,
+build=spec processing, BWC=backward compatibility, dashboard=virtual package,
+operation=API endpoint, reference=link between versions

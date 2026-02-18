@@ -1,0 +1,72 @@
+---
+description: Database, migrations, and go-pg ORM patterns
+globs: "qubership-apihub-service/repository/**,qubership-apihub-service/entity/**,qubership-apihub-service/resources/migrations/**"
+alwaysApply: false
+---
+
+# Database Patterns
+
+## ORM: go-pg v10
+- Connection via `db.ConnectionProvider` (provides `GetConnection()`)
+- Models in `entity/` package with `pg` struct tags
+
+## Entity Definition Pattern
+```go
+type PackageEntity struct {
+    tableName struct{} `pg:"package"`
+    Id        string   `pg:"id,pk"`
+    Name      string   `pg:"name"`
+    Kind      string   `pg:"kind"`
+    // ...
+}
+```
+
+## Repository Pattern
+```go
+type SomeRepository interface {
+    GetById(id string) (*entity.SomeEntity, error)
+    Create(ent *entity.SomeEntity) error
+}
+
+type someRepositoryImpl struct {
+    cp db.ConnectionProvider
+}
+
+func NewSomeRepository(cp db.ConnectionProvider) SomeRepository {
+    return &someRepositoryImpl{cp: cp}
+}
+
+func (r *someRepositoryImpl) GetById(id string) (*entity.SomeEntity, error) {
+    ent := new(entity.SomeEntity)
+    err := r.cp.GetConnection().Model(ent).Where("id = ?", id).Select()
+    if err != nil {
+        return nil, err
+    }
+    return ent, nil
+}
+```
+
+## SQL Migrations
+- Location: `qubership-apihub-service/resources/migrations/`
+- Format: `{N}_{description}.up.sql` + `{N}_{description}.down.sql`
+- Always create BOTH up and down
+- Use sequential numbering (check latest migration number)
+- Down must fully reverse up
+- Use `IF EXISTS` / `IF NOT EXISTS` for safety
+
+### Migration naming examples
+```
+28_add_build_idx.up.sql
+28_add_build_idx.down.sql
+14_soft_deleted_data_cleanup.up.sql
+14_soft_deleted_data_cleanup.down.sql
+```
+
+## Soft Deletes
+- Some entities use soft delete pattern (deleted_at timestamp)
+- Cleanup job periodically purges soft-deleted records older than TTL
+- See `SoftDeletedDataCleanupRepository` and `cleanup/` service
+
+## Distributed Locking
+- `LockRepository` provides distributed locks via PostgreSQL advisory locks
+- Used for cleanup jobs and other exclusive operations
