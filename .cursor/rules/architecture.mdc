@@ -1,0 +1,87 @@
+---
+description: Architecture and layering rules
+globs: "qubership-apihub-service/**/*.go"
+alwaysApply: false
+---
+
+# Architecture Rules
+
+## Layered Architecture (strict dependency direction)
+
+```
+Controller → Service → Repository → Entity
+     ↓           ↓
+    View        View
+```
+
+### Layer Responsibilities
+
+**Controller** (`controller/`)
+- HTTP request/response handling only
+- Parse request params, body, headers
+- Permission checks via `roleService.HasRequiredPermissions()`
+- Delegate to service layer
+- NEVER contains business logic
+- NEVER directly accesses repository
+
+**Service** (`service/`)
+- All business logic lives here
+- Orchestrates repository calls
+- Validates business rules
+- May call other services
+- Returns `view` types or errors
+
+**Repository** (`repository/`)
+- Database queries only (go-pg)
+- Returns `entity` types
+- NO business logic
+- NO HTTP awareness
+
+**Entity** (`entity/`)
+- Database table mappings (go-pg structs)
+- Pure data, no behavior
+- Tags: `pg:"column_name"`
+
+**View** (`view/`)
+- API DTOs (request/response payloads)
+- JSON serialization tags
+- Used by controllers AND services
+- Separate from entities — mapping happens in service/repository layer
+
+**Exception** (`exception/`)
+- `CustomError` struct with Status, Code, Message, Params
+- Error code constants (int)
+- Error message constants (string)
+
+## Adding a New Feature Checklist
+1. If new API endpoint: update OpenAPI spec in `docs/api/` first
+2. Add/update view types in `view/`
+3. Add/update entity types in `entity/` if DB changes needed
+4. Add SQL migration in `resources/migrations/` (both up and down)
+5. Add/update repository interface + implementation
+6. Add/update service interface + implementation
+7. Add/update controller interface + implementation
+8. Register routes in `Service.go`
+9. Wire dependencies in `Service.go` main function
+
+## SQL Migrations
+- Located in `qubership-apihub-service/resources/migrations/`
+- Naming: `{number}_{description}.up.sql` and `{number}_{description}.down.sql`
+- Always provide both up AND down migrations
+- Number is sequential (check existing migrations for next number)
+- Down migration must fully reverse the up migration
+
+## Route Registration
+Routes are registered in `Service.go` using gorilla/mux:
+```go
+r.HandleFunc(basePath+"/api/v3/packages/{packageId}", controller.GetPackage).Methods(http.MethodGet)
+```
+- Use `basePath` prefix
+- Path params in `{braces}`
+- Explicit HTTP method via `.Methods()`
+
+## Security
+- All endpoints pass through security middleware
+- Permission checks at controller level using `roleService.HasRequiredPermissions()`
+- Permissions defined as constants in `view/` package
+- System access via access tokens (zero-day config)

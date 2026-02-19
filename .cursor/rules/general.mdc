@@ -1,0 +1,63 @@
+---
+description: General project rules and context for qubership-apihub-backend
+globs:
+alwaysApply: true
+---
+
+# qubership-apihub-backend
+
+This is the backend microservice for qubership-apihub (API Registry platform). It manages API specifications, packages, versions, operations, and provides REST API for UI and integrations.
+
+## Tech Stack
+- **Language**: Go 1.24 (module: `github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service`)
+- **HTTP Router**: gorilla/mux
+- **Database**: PostgreSQL via go-pg/pg/v10 (ORM)
+- **Cache**: Olric (distributed cache + pub-sub)
+- **Object Storage**: MinIO/S3
+- **Auth**: JWT + SAML + OIDC + LDAP
+- **Logging**: logrus with prefixed formatter
+- **Metrics**: Prometheus
+- **AI**: OpenAI chat + MCP server (Model Context Protocol)
+
+## Project Structure
+All application code lives in `qubership-apihub-service/`:
+- `Service.go` — entrypoint (main), wiring of all dependencies
+- `controller/` — HTTP handlers (REST API endpoints)
+- `service/` — business logic layer
+- `repository/` — data access layer (PostgreSQL queries via go-pg)
+- `entity/` — database models (go-pg table mappings)
+- `view/` — API request/response DTOs
+- `exception/` — custom error types and codes
+- `security/` — auth middleware, JWT, IdP providers
+- `db/` — database connection provider
+- `cache/` — Olric distributed cache
+- `migration/` — data migration logic (separate controller/service/repository)
+- `metrics/` — Prometheus metrics definitions
+- `utils/` — shared utilities
+- `middleware/` — HTTP middleware
+- `archive/` — ZIP archive handling
+- `client/` — external HTTP clients
+- `resources/migrations/` — SQL migration files (up/down pairs)
+
+## Key Conventions
+- API-first development: design and approve API spec before implementation
+- No breaking changes to public API (use versioned endpoints: `/api/v2/...` → `/api/v3/...`)
+- Deprecated methods/functions get `_deprecated` suffix
+- PR titles follow conventional commits: `feat:`, `fix:`, `refactor:`, `docs:`, etc.
+- Squash commits on merge to keep clean history
+
+## Configuration
+- Config via `config.yaml` (template: `config.template.yaml`)
+- Environment variables override config values
+- Secrets NEVER committed (JWT keys, DB passwords, API keys)
+
+## Business Domain Terms
+- **workspace** — top-level group (project/team/department separation)
+- **group** — logical grouping of packages within a workspace
+- **package** — contains published API documents for a service/application
+- **dashboard** — virtual package with links to other packages (no own documents)
+- **version** — package version with status: Draft → Release → Archived
+- **reference** — link between published versions
+- **build** — processing of API specs (dereference, comparison, search index generation)
+- **BWC** — Backward Compatibility analysis between releases
+- **operation** — single API operation (endpoint) within a specification

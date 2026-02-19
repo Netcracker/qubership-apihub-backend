@@ -1,0 +1,68 @@
+language: en-US
+tone_instructions: >
+  Be direct and technical. Focus on correctness, security, and adherence to
+  project architecture. This is a Go backend service — prioritize error handling,
+  concurrency safety, and API contract compliance.
+early_access: false
+enable_free_tier: true
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  high_level_summary_placeholder: "@coderabbitai summary"
+  auto_title_placeholder: "@coderabbitai"
+  review_status: true
+  poem: false
+  collapse_walkthrough: false
+  sequence_diagrams: true
+  changed_files_summary: true
+  labeling_instructions: []
+  path_filters: []
+  path_instructions:
+    - path: "qubership-apihub-service/controller/**"
+      instructions: >
+        Controllers must NOT contain business logic. They should only parse
+        requests, check permissions via roleService.HasRequiredPermissions(),
+        delegate to service layer, and format responses. Verify error handling
+        uses exception.CustomError.
+    - path: "qubership-apihub-service/service/**"
+      instructions: >
+        Service layer contains business logic. Verify proper error handling
+        with exception.CustomError, correct use of context.SecurityContext,
+        and that logging follows conventions (INFO for writes, ERROR for errors).
+    - path: "qubership-apihub-service/repository/**"
+      instructions: >
+        Repository layer handles database access via go-pg v10. Verify there
+        is no business logic here, only data access. Check for SQL injection
+        risks and proper error propagation.
+    - path: "qubership-apihub-service/entity/**"
+      instructions: >
+        Entity files define database models. Verify pg struct tags are correct
+        and consistent with migration schema.
+    - path: "qubership-apihub-service/view/**"
+      instructions: >
+        View files define API DTOs. Check JSON tags, required vs optional
+        fields, and alignment with OpenAPI spec in docs/api/.
+    - path: "qubership-apihub-service/resources/migrations/**"
+      instructions: >
+        SQL migrations must have both up and down files. Down must fully
+        reverse up. Check for IF EXISTS/IF NOT EXISTS safety. Never modify
+        already-deployed migrations.
+    - path: "docs/api/**"
+      instructions: >
+        OpenAPI specifications. Check for backward compatibility — no breaking
+        changes without API version bump. Validate against REST conventions.
+    - path: "qubership-apihub-service/security/**"
+      instructions: >
+        Security-critical code. Extra scrutiny for auth bypass, token
+        validation, and permission checks.
+  abort_on_close: true
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    drafts: false
+    base_branches:
+      - develop
+      - main
+chat:
+  auto_reply: true

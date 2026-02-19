@@ -1,0 +1,54 @@
+# Cline Rules for qubership-apihub-backend
+
+## Project Overview
+Go 1.24 backend microservice for qubership-apihub (API Registry platform).
+All code in `qubership-apihub-service/`. Module: github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service
+
+## Commands
+- Build: `cd qubership-apihub-service && go build -o apihub-service .`
+- Test: `cd qubership-apihub-service && go test ./...`
+- Lint: `golangci-lint run --timeout 10m`
+- Docker: `docker build -t apihub-backend .`
+
+## Architecture
+Strict layers: Controller → Service → Repository → Entity.
+Views = DTOs. Exceptions = error handling. Dependencies wired in Service.go main().
+
+## Code Patterns
+1. Interface + private impl struct + New* constructor for every component
+2. exception.CustomError{Status, Code, Message, Params} for business errors
+3. context.SecurityContext (project's, not stdlib) for auth info
+4. logrus as "log" — INFO for writes, ERROR for errors
+5. Required params as args, optional params via struct
+6. _deprecated suffix for deprecated code
+7. go-pg v10 for DB, gorilla/mux for HTTP
+
+## Strict Rules
+- NO business logic in controllers — only HTTP handling + delegation
+- NO direct repository access from controllers
+- NO breaking API changes without version bump (/api/v2/ → /api/v3/)
+- ALWAYS create both up AND down SQL migrations in resources/migrations/
+- NEVER modify existing deployed migrations
+- NEVER commit secrets (keys, passwords, tokens)
+- NEVER ignore errors — always check and handle
+
+## File Organization
+- controller/ = HTTP handlers
+- service/ = business logic
+- repository/ = database access
+- entity/ = DB models
+- view/ = API DTOs
+- exception/ = error codes
+- security/ = auth middleware
+- resources/migrations/ = SQL files
+- Service.go = main() + DI wiring
+
+## Domain Glossary
+- workspace: top-level organizational group
+- package: contains API documents for a service
+- version: package version (Draft → Release → Archived)
+- build: specification processing pipeline
+- BWC: backward compatibility analysis
+- dashboard: virtual package containing only links
+- operation: single API endpoint in a specification
+- reference: link between published versions
