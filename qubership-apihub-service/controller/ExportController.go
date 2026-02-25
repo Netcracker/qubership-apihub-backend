@@ -1017,6 +1017,8 @@ func (e exportControllerImpl) StartAsyncExport(w http.ResponseWriter, r *http.Re
 		exportRequest = &view.ExportRestOperationsGroupReq{}
 	case view.ExportEntityGraphqlOperationsGroup:
 		exportRequest = &view.ExportGraphqlOperationsGroupReq{}
+	case view.ExportEntityAsyncapiOperationsGroup:
+		exportRequest = &view.ExportAsyncapiOperationsGroupReq{}
 	default:
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
@@ -1078,6 +1080,8 @@ func (e exportControllerImpl) StartAsyncExport(w http.ResponseWriter, r *http.Re
 		exportID, err = e.exportService.StartRESTOpGroupExport(ctx, *exportRequest.(*view.ExportRestOperationsGroupReq))
 	case view.ExportEntityGraphqlOperationsGroup:
 		exportID, err = e.exportService.StartGraphQLOpGroupExport(ctx, *exportRequest.(*view.ExportGraphqlOperationsGroupReq))
+	case view.ExportEntityAsyncapiOperationsGroup:
+		exportID, err = e.exportService.StartAsyncAPIOpGroupExport(ctx, *exportRequest.(*view.ExportAsyncapiOperationsGroupReq))
 	}
 	if err != nil {
 		utils.RespondWithError(w, "Failed to start export process", err)
