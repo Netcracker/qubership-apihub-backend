@@ -61,6 +61,7 @@ func (d OpsMigration) Start() {
 	if err != nil {
 		log.Errorf("Migration stage failed: %s", err)
 	}
+	d.keepaliveStopChan <- struct{}{}
 }
 
 func (d OpsMigration) processStage(stage mView.OpsMigrationStage) error {
@@ -277,6 +278,19 @@ func (d OpsMigration) handleComplete() error {
 func (d OpsMigration) handleStageStart(stage mView.OpsMigrationStage) error {
 	if d.restartStage == stage {
 		log.Infof("Ops migration %s: restarting stage %s", d.ent.Id, stage)
+		if stage == mView.MigrationStageStarting && len(d.ent.StagesExecution) == 0 {
+			d.ent.StagesExecution = append(d.ent.StagesExecution, mEntity.StageExecution{
+				Stage:       stage,
+				Start:       time.Now(),
+				End:         time.Time{},
+				BuildsCount: 0,
+			})
+			_, err := d.cp.GetConnection().Model(&mEntity.MigrationRunEntity{}).
+				Set("updated_at=now()").
+				Set("stages_execution = ?", d.ent.StagesExecution).
+				Where("id = ?", d.ent.Id).Update()
+			return err
+		}
 		return nil
 	} else {
 		log.Infof("Ops migration %s: processing stage %s", d.ent.Id, stage)
@@ -340,7 +354,8 @@ func (d OpsMigration) keepaliveWhileRunning() {
 					Where("id = ?", d.ent.Id).
 					Where("status = ?", status).Update()
 				if err != nil {
-					log.Errorf("failed to update keepalive timeout for migration %s", d.ent.Id)
+					log.Errorf("failed to update keepalive timeout for migration %s: %s", d.ent.Id, err)
+					continue
 				}
 
 				if res.RowsAffected() != 1 {
@@ -354,7 +369,8 @@ func (d OpsMigration) keepaliveWhileRunning() {
 						isCancelling = true //it is necessary to continue keepalive to avoid a restart during the cancelling stage
 					} else {
 						log.Infof("ops migration %s: stopping keepalive", d.ent.Id)
-						d.keepaliveStopChan <- struct{}{}
+						t.Stop()
+						return
 					}
 				}
 			}
