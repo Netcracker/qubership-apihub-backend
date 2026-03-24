@@ -54,7 +54,7 @@ func TestCheckPreviousVersionDependencyCycle_graph(t *testing.T) {
 			wantCycle:   false,
 		},
 		{
-			name: "additional revision of published version alongside existing revision, no merge duplicate",
+			name: "additional revision of a new version published",
 			nodes: []entity.PublishedVersionEntity{
 				pv("0.9", 1, ""),
 				pv("1.0", 1, "0.9"),
@@ -64,18 +64,6 @@ func TestCheckPreviousVersionDependencyCycle_graph(t *testing.T) {
 			revision:    2,
 			wantCycle:   false,
 		},
-		{
-			name: "simulated revision already listed duplicates revision in stack and reports cycle",
-			nodes: []entity.PublishedVersionEntity{
-				pv("1.0", 1, "0.9"),
-				pv("1.0", 2, "0.9"),
-			},
-			version:     "1.0",
-			prevVersion: "2.0",
-			revision:    2,
-			wantCycle:   true,
-		},
-
 		{
 			name: "old version publication that introduces cycle",
 			nodes: []entity.PublishedVersionEntity{
@@ -101,6 +89,30 @@ func TestCheckPreviousVersionDependencyCycle_graph(t *testing.T) {
 			prevVersion: "1",
 			revision:    4,
 			wantCycle:   false,
+		},
+		{
+			name: "new correct publication with cycle in history - latest revisions only",
+			nodes: []entity.PublishedVersionEntity{
+				pv("1", 1, ""),
+				pv("2", 3, "1"),
+				pv("3", 1, "2"),
+			},
+			version:     "2",
+			prevVersion: "1",
+			revision:    4,
+			wantCycle:   false,
+		},
+		{
+			name: "new incorrect publication",
+			nodes: []entity.PublishedVersionEntity{
+				pv("1", 1, ""),
+				pv("2", 3, "1"),
+				pv("3", 1, "2"),
+			},
+			version:     "1",
+			prevVersion: "3",
+			revision:    2,
+			wantCycle:   true,
 		},
 		{
 			name: "longer revisions chain",
