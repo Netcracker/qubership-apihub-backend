@@ -1071,7 +1071,10 @@ func (p publishedServiceImpl) CheckPreviousVersionDependencyCycle(packageID stri
 	if err != nil {
 		return false, err
 	}
+	return detectPreviousVersionDependencyCycle(versionNodes, version, prevVersion, revision), nil
+}
 
+func detectPreviousVersionDependencyCycle(versionNodes []entity.PublishedVersionEntity, version, prevVersion string, revision int) bool {
 	type versionNodeKey struct {
 		version  string
 		revision int
@@ -1114,7 +1117,7 @@ func (p publishedServiceImpl) CheckPreviousVersionDependencyCycle(packageID stri
 		key := versionNodeKey{current.version, current.revision}
 
 		if visited[key] {
-			return true, nil
+			return true
 		}
 		visited[key] = true
 
@@ -1132,7 +1135,7 @@ func (p publishedServiceImpl) CheckPreviousVersionDependencyCycle(packageID stri
 		}
 	}
 
-	return false, nil
+	return false
 }
 
 func (p publishedServiceImpl) ReplaceVersionSources(secCtx context.SecurityContext, packageId string, versionName string, zipData []byte) error {
