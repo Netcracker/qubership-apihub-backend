@@ -91,6 +91,7 @@ type SystemInfoService interface {
 	GetAiChatConfig() config.ChatConfig
 	GetAiMCPConfig() config.MCPConfig
 	GetApiSpecDirectory() string
+	GetMigrationLockMaxWaitMinutes() int
 }
 
 func (g *systemInfoServiceImpl) GetCredsFromEnv() *view.DbCredentials {
@@ -205,6 +206,7 @@ func (g *systemInfoServiceImpl) setDefaults() {
 	viper.SetDefault("security.allowedOrigins", []string{})
 	viper.SetDefault("security.legacySaml", true)
 	viper.SetDefault("security.autoLogin", false)
+	viper.SetDefault("technicalParameters.migrationLockMaxWaitMinutes", 30)
 	viper.SetDefault("technicalParameters.basePath", ".")
 	viper.SetDefault("technicalParameters.listenAddress", ":8080")
 	viper.SetDefault("technicalParameters.metricsGetterSchedule", "* * * * *") // every minute
@@ -611,4 +613,8 @@ func (g *systemInfoServiceImpl) GetAiChatConfig() config.ChatConfig {
 
 func (g *systemInfoServiceImpl) GetAiMCPConfig() config.MCPConfig {
 	return g.config.Ai.MCP
+}
+
+func (g *systemInfoServiceImpl) GetMigrationLockMaxWaitMinutes() int {
+	return g.config.TechnicalParameters.MigrationLockMaxWaitMinutes
 }

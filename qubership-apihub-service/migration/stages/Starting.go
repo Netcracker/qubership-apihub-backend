@@ -11,8 +11,11 @@ import (
 
 const (
 	lockPollInterval = 10 * time.Second
-	lockMaxWait      = 30 * time.Minute
 )
+
+func (d OpsMigration) getLockMaxWait() time.Duration {
+	return time.Duration(d.systemInfoService.GetMigrationLockMaxWaitMinutes()) * time.Minute
+}
 
 func (d OpsMigration) StageStarting() error {
 	// When restarting, the previous PostgreSQL backend may still
@@ -34,10 +37,10 @@ func (d OpsMigration) StageStarting() error {
 func (d OpsMigration) createTempTablesWithRetry() error {
 	maxAttempts := 1
 	if d.restartStage != "" {
-		// Retry on lock timeout as a safety net to handle unpredictable cases
-		maxAttempts = int(lockMaxWait / lockPollInterval)
+		maxAttempts = int(d.getLockMaxWait() / lockPollInterval)
 	}
 
+	// Retry on lock timeout as a safety net to handle unpredictable cases
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		if attempt > 0 {
 			log.Warnf("ops migration %s: lock timeout creating temp tables (attempt %d/%d), retrying in %s",
@@ -170,7 +173,7 @@ func (d OpsMigration) waitForLocks() error {
 
 	// Wait for locks to be released. The old backend will eventually finish its query
 	// (commits the table) or PostgreSQL will detect the dead client connection (rolls back).
-	maxPolls := int(lockMaxWait / lockPollInterval)
+	maxPolls := int(d.getLockMaxWait() / lockPollInterval)
 	for i := 0; i < maxPolls; i++ {
 		select {
 		case <-time.After(lockPollInterval):
@@ -191,7 +194,7 @@ func (d OpsMigration) waitForLocks() error {
 			log.Infof("ops migration %s: still waiting for %d lock(s) to release", d.ent.Id, lockCount)
 		}
 	}
-	return fmt.Errorf("locks were not released within %s", lockMaxWait)
+	return fmt.Errorf("locks were not released within %s", d.getLockMaxWait())
 }
 
 func isLockTimeoutError(err error) bool {

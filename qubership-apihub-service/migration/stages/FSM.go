@@ -61,7 +61,6 @@ func (d OpsMigration) Start() {
 	if err != nil {
 		log.Errorf("Migration stage failed: %s", err)
 	}
-	d.keepaliveStopChan <- struct{}{}
 }
 
 func (d OpsMigration) processStage(stage mView.OpsMigrationStage) error {
@@ -232,8 +231,19 @@ func (d OpsMigration) handleError(migrationError error, stage mView.OpsMigration
 	d.ent.StagesExecution[seInd].End = time.Now()
 
 	log.Errorf("Ops migration %s: stage %s processing finished with error: %s. Processing took %s", d.ent.Id, stage, migrationError, time.Since(d.ent.StagesExecution[seInd].Start))
+
+	err := d.setMigrationFailed(migrationError, seInd)
+	if err != nil {
+		//DB is unavailable, retrying to set the terminal status of the migration and not leave it stuck in the 'running' status
+		log.Warnf("Ops migration %s: failed to set migration failed status, stopping keepalive and retrying: %s", d.ent.Id, err)
+		d.keepaliveStopChan <- struct{}{}
+		return d.retrySetMigrationFailed(migrationError, seInd)
+	}
+	return nil
+}
+
+func (d OpsMigration) setMigrationFailed(migrationError error, seInd int) error {
 	log.Infof("Ops migration %s: running post-migration cleanup", d.ent.Id)
-	//TODO: should we handle cancellation at this terminal stage ?
 	cleanupErr := d.StageCleanupAfter()
 	if cleanupErr != nil {
 		log.Errorf("Failed to run post-migration cleanup")
@@ -254,8 +264,44 @@ func (d OpsMigration) handleError(migrationError error, stage mView.OpsMigration
 		Set("error_details=?", fmt.Sprintf("%s", migrationError)).
 		Set("stages_execution = ?", d.ent.StagesExecution).
 		Where("id = ?", d.ent.Id).Update()
-
 	return updErr
+}
+
+func (d OpsMigration) retrySetMigrationFailed(migrationError error, seInd int) error {
+	const retryInterval = 30 * time.Second
+	attempt := 0
+
+	for {
+		time.Sleep(retryInterval)
+		attempt++
+
+		var currentEnt mEntity.MigrationRunEntity
+		err := d.cp.GetConnection().Model(&currentEnt).
+			Column("instance_id").
+			Where("id = ?", d.ent.Id).
+			Select()
+		if err != nil {
+			if attempt%2 == 0 {
+				log.Warnf("Ops migration %s: retrying to set failed status (attempt %d), DB is still unavailable: %s", d.ent.Id, attempt, err)
+			}
+			continue
+		}
+		if currentEnt.InstanceId != d.ent.InstanceId {
+			log.Infof("Ops migration %s: migration was restarted by another instance, skipping error handling", d.ent.Id)
+			return nil
+		}
+
+		err = d.setMigrationFailed(migrationError, seInd)
+		if err != nil {
+			if attempt%2 == 0 {
+				log.Warnf("Ops migration %s: retrying to set failed status (attempt %d): %s", d.ent.Id, attempt, err)
+			}
+			continue
+		}
+
+		log.Infof("Ops migration %s: successfully set failed status after %d retries", d.ent.Id, attempt)
+		return nil
+	}
 }
 
 func (d OpsMigration) handleComplete() error {
@@ -369,8 +415,7 @@ func (d OpsMigration) keepaliveWhileRunning() {
 						isCancelling = true //it is necessary to continue keepalive to avoid a restart during the cancelling stage
 					} else {
 						log.Infof("ops migration %s: stopping keepalive", d.ent.Id)
-						t.Stop()
-						return
+						d.keepaliveStopChan <- struct{}{}
 					}
 				}
 			}

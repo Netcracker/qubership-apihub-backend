@@ -86,12 +86,13 @@ type ZeroDayConfig struct {
 }
 
 type TechnicalParameters struct {
-	InstanceId            string
-	BasePath              string
-	BackendVersion        string
-	ListenAddress         string `validate:"required"`
-	MetricsGetterSchedule string
-	ApiSpecDirectory      string
+	InstanceId                  string
+	BasePath                    string
+	BackendVersion              string
+	ListenAddress               string `validate:"required"`
+	MetricsGetterSchedule       string
+	ApiSpecDirectory            string
+	MigrationLockMaxWaitMinutes int
 }
 
 type BusinessParameters struct {
