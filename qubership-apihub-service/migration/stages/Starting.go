@@ -43,8 +43,7 @@ func (d OpsMigration) createTempTablesWithRetry() error {
 	// Retry on lock timeout as a safety net to handle unpredictable cases
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		if attempt > 0 {
-			log.Warnf("ops migration %s: lock timeout creating temp tables (attempt %d/%d), retrying in %s",
-				d.ent.Id, attempt, maxAttempts, lockPollInterval)
+			log.Warnf("ops migration %s: lock timeout creating temp tables (attempt %d/%d)", d.ent.Id, attempt, maxAttempts)
 			select {
 			case <-time.After(lockPollInterval):
 			case <-d.migrationCtx.Done():
@@ -190,7 +189,7 @@ func (d OpsMigration) waitForLocks() error {
 			log.Infof("ops migration %s: locks released", d.ent.Id)
 			return nil
 		}
-		if (i+1)%6 == 0 { //TODO: in case of configurable polling interval, it should be updated
+		if (i+1)%6 == 0 { //log every minute
 			log.Infof("ops migration %s: still waiting for %d lock(s) to release", d.ent.Id, lockCount)
 		}
 	}

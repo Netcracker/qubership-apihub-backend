@@ -232,17 +232,17 @@ func (d OpsMigration) handleError(migrationError error, stage mView.OpsMigration
 
 	log.Errorf("Ops migration %s: stage %s processing finished with error: %s. Processing took %s", d.ent.Id, stage, migrationError, time.Since(d.ent.StagesExecution[seInd].Start))
 
-	err := d.setMigrationFailed(migrationError, seInd)
+	err := d.finalizeMigrationFailure(migrationError, seInd)
 	if err != nil {
 		//DB is unavailable, retrying to set the terminal status of the migration and not leave it stuck in the 'running' status
 		log.Warnf("Ops migration %s: failed to set migration failed status, stopping keepalive and retrying: %s", d.ent.Id, err)
 		d.keepaliveStopChan <- struct{}{}
-		return d.retrySetMigrationFailed(migrationError, seInd)
+		return d.finalizeMigrationFailureWithRetry(migrationError, seInd)
 	}
 	return nil
 }
 
-func (d OpsMigration) setMigrationFailed(migrationError error, seInd int) error {
+func (d OpsMigration) finalizeMigrationFailure(migrationError error, seInd int) error {
 	log.Infof("Ops migration %s: running post-migration cleanup", d.ent.Id)
 	cleanupErr := d.StageCleanupAfter()
 	if cleanupErr != nil {
@@ -267,13 +267,11 @@ func (d OpsMigration) setMigrationFailed(migrationError error, seInd int) error 
 	return updErr
 }
 
-func (d OpsMigration) retrySetMigrationFailed(migrationError error, seInd int) error {
+func (d OpsMigration) finalizeMigrationFailureWithRetry(migrationError error, seInd int) error {
 	const retryInterval = 30 * time.Second
-	attempt := 0
 
 	for {
 		time.Sleep(retryInterval)
-		attempt++
 
 		var currentEnt mEntity.MigrationRunEntity
 		err := d.cp.GetConnection().Model(&currentEnt).
@@ -281,9 +279,7 @@ func (d OpsMigration) retrySetMigrationFailed(migrationError error, seInd int) e
 			Where("id = ?", d.ent.Id).
 			Select()
 		if err != nil {
-			if attempt%2 == 0 {
-				log.Warnf("Ops migration %s: retrying to set failed status (attempt %d), DB is still unavailable: %s", d.ent.Id, attempt, err)
-			}
+			log.Warnf("Ops migration %s: retrying to set failed status, DB is still unavailable: %s", d.ent.Id, err)
 			continue
 		}
 		if currentEnt.InstanceId != d.ent.InstanceId {
@@ -291,15 +287,13 @@ func (d OpsMigration) retrySetMigrationFailed(migrationError error, seInd int) e
 			return nil
 		}
 
-		err = d.setMigrationFailed(migrationError, seInd)
+		err = d.finalizeMigrationFailure(migrationError, seInd)
 		if err != nil {
-			if attempt%2 == 0 {
-				log.Warnf("Ops migration %s: retrying to set failed status (attempt %d): %s", d.ent.Id, attempt, err)
-			}
+			log.Warnf("Ops migration %s: retrying to set failed status: %s", d.ent.Id, err)
 			continue
 		}
 
-		log.Infof("Ops migration %s: successfully set failed status after %d retries", d.ent.Id, attempt)
+		log.Infof("Ops migration %s: successfully set failed status", d.ent.Id)
 		return nil
 	}
 }
