@@ -48,6 +48,10 @@ type PublishedService interface {
 	GetVersionInternalDocumentData(hash string) ([]byte, string, error)
 	GetComparisonInternalDocuments(packageId string, version string, previousPackageId string, previousVersion string, refPackageId string) ([]view.InternalDocument, error)
 	GetComparisonInternalDocumentData(hash string) ([]byte, string, error)
+
+	ReplaceVersionSources(secCtx context.SecurityContext, packageId string, versionName string, zipData []byte) error
+
+	CheckPreviousVersionDependencyCycle(packageID string, version string, previousVersionPackageID string, prevVersion string, revision int) (bool, error)
 }
 
 func NewPublishedService(versionRepo repository.PublishedRepository,
@@ -457,7 +461,28 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 		return err
 	}
 
-	operationEntities, operationDataEntities, operationsInfo, err := buildArcEntitiesReader.ReadOperationsToEntities()
+	if !buildArc.PackageInfo.MigrationBuild && buildArc.PackageInfo.PreviousVersion != "" {
+		// inherit shareability from previous version
+		prevPkgId := buildArc.PackageInfo.PackageId
+		if buildArc.PackageInfo.PreviousVersionPackageId != "" {
+			prevPkgId = buildArc.PackageInfo.PreviousVersionPackageId
+		}
+		prevContent, prevErr := p.publishedRepo.GetRevisionContent(prevPkgId, buildArc.PackageInfo.PreviousVersion, previousVersionRevision)
+		if prevErr != nil {
+			return prevErr
+		}
+		prevShareabilityMap := make(map[string]string, len(prevContent))
+		for _, pc := range prevContent {
+			prevShareabilityMap[pc.Slug] = pc.Shareability
+		}
+		for _, fe := range fileEntities {
+			if prevShareability, exists := prevShareabilityMap[fe.Slug]; exists {
+				fe.Shareability = prevShareability
+			}
+		}
+	}
+
+	operationEntities, operationDataEntities, operationSearchTexts, operationsInfo, err := buildArcEntitiesReader.ReadOperationsToEntities()
 	if err != nil {
 		return err
 	}
@@ -628,6 +653,7 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 		versionInternalDocDataEntities,
 		comparisonInternalDocEntities,
 		comparisonInternalDocDataEntities,
+		operationSearchTexts,
 	)
 	utils.PerfLog(time.Since(start).Milliseconds(), 15000, "publishPackage: CreateVersionWithData")
 	if err != nil {
@@ -1060,4 +1086,173 @@ func (p publishedServiceImpl) GetComparisonInternalDocumentData(hash string) ([]
 	}
 
 	return docData.Data, docData.Filename, nil
+}
+
+func (p publishedServiceImpl) CheckPreviousVersionDependencyCycle(packageID string, version string, previousVersionPackageID string, prevVersion string, revision int) (bool, error) {
+	versionSearchQuery := entity.PublishedVersionSearchQueryEntity{
+		PackageId: packageID,
+		Limit:     100,
+		Offset:    0,
+	}
+	var packageVersions []entity.PackageVersionRevisionEntity
+	for {
+		versionEnts, err := p.publishedRepo.GetReadonlyPackageVersionsWithLimit(versionSearchQuery, false, false)
+		if err != nil {
+			return false, err
+		}
+		packageVersions = append(packageVersions, versionEnts...)
+		if len(versionEnts) < 100 {
+			break
+		}
+		versionSearchQuery.Offset += 100
+	}
+
+	return detectPreviousVersionDependencyCycleWithCurrVersion(packageVersions, version, prevVersion, revision), nil
+}
+
+func detectPreviousVersionDependencyCycleWithCurrVersion(versionNodes []entity.PackageVersionRevisionEntity, version, prevVersion string, revision int) bool {
+	if prevVersion == "" {
+		return false
+	}
+
+	type versionNodeKey struct {
+		version  string
+		revision int
+	}
+
+	versionNodeMap := make(map[versionNodeKey]string, len(versionNodes))
+	for _, n := range versionNodes {
+		if n.PreviousVersion != "" {
+			versionNodeMap[versionNodeKey{n.Version, n.Revision}] = n.PreviousVersion
+		}
+	}
+
+	latestRevision := make(map[string]int)
+	for _, n := range versionNodes {
+		latestRevision[n.Version] = n.Revision
+	}
+
+	latestRevision[version] = revision
+	visited := make(map[string]bool)
+	stack := []string{prevVersion}
+
+	for len(stack) > 0 {
+		current := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
+		if current == version {
+			return true
+		}
+
+		if visited[current] {
+			continue
+		}
+		visited[current] = true
+
+		latestRev, exists := latestRevision[current]
+		if !exists {
+			continue
+		}
+
+		prev, exists := versionNodeMap[versionNodeKey{current, latestRev}]
+		if !exists {
+			continue
+		}
+
+		stack = append(stack, prev)
+	}
+
+	return false
+}
+
+func (p publishedServiceImpl) ReplaceVersionSources(secCtx context.SecurityContext, packageId string, versionName string, zipData []byte) error {
+	versionEnt, err := p.publishedRepo.GetVersion(packageId, versionName)
+	if err != nil {
+		return err
+	}
+	if versionEnt == nil {
+		return &exception.CustomError{
+			Status:  http.StatusNotFound,
+			Code:    exception.PublishedVersionNotFound,
+			Message: exception.PublishedVersionNotFoundMsg,
+			Params:  map[string]interface{}{"version": versionName},
+		}
+	}
+	version := versionEnt.Version
+	revision := versionEnt.Revision
+
+	existingSrc, err := p.publishedRepo.GetPublishedSources(packageId, version, revision)
+	if err != nil {
+		return err
+	}
+	if existingSrc == nil {
+		return &exception.CustomError{
+			Status:  http.StatusNotFound,
+			Code:    exception.PublishedSourcesDataNotFound,
+			Message: exception.PublishedSourcesDataNotFoundMsg,
+			Params:  map[string]interface{}{"packageId": packageId, "versionName": version},
+		}
+	}
+
+	var buildConfig view.BuildConfig
+	err = json.Unmarshal(existingSrc.Config, &buildConfig)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal build config from published sources: %v", err.Error())
+	}
+
+	zipReader, err := zip.NewReader(bytes.NewReader(zipData), int64(len(zipData)))
+	if err != nil {
+		return &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidParameter,
+			Message: exception.InvalidParameterMsg,
+			Params:  map[string]interface{}{"param": "request body (ZIP archive)"},
+			Debug:   err.Error(),
+		}
+	}
+
+	srcArc := archive.NewSourcesArchive(zipReader, &buildConfig)
+	err = validation.ValidatePublishSources(srcArc)
+	if err != nil {
+		return err
+	}
+
+	archiveCS := sha512.Sum512(zipData)
+	newChecksum := hex.EncodeToString(archiveCS[:])
+	oldChecksum := existingSrc.ArchiveChecksum
+
+	trackingEntity := &entity.SourcesUpdateTrackingEntity{
+		Id:          uuid.New().String(),
+		PackageId:   packageId,
+		Version:     version,
+		Revision:    revision,
+		OldChecksum: oldChecksum,
+		NewChecksum: newChecksum,
+		PerformedBy: secCtx.GetUserId(),
+		PerformedAt: time.Now(),
+	}
+
+	if p.systemInfoService.IsMinioStorageActive() && !p.systemInfoService.IsMinioStoreOnlyBuildResult() {
+		err = p.minioStorageService.UploadFile(ctx.Background(), view.PUBLISHED_SOURCES_ARCHIVES_TABLE, newChecksum, zipData)
+		if err != nil {
+			return err
+		}
+		err = p.publishedRepo.UpdatePublishedSourcesChecksum(packageId, version, revision, newChecksum, trackingEntity)
+		if err != nil {
+			return err
+		}
+	} else {
+		srcArchiveEntity := &entity.PublishedSrcArchiveEntity{
+			Checksum: newChecksum,
+			Data:     zipData,
+		}
+		err = p.publishedRepo.UpdatePublishedSourcesArchive(packageId, version, revision, newChecksum, srcArchiveEntity, trackingEntity)
+		if err != nil {
+			return err
+		}
+	}
+
+	log.Infof("Replaced published sources for packageId=%s version=%s revision=%d oldChecksum=%s newChecksum=%s",
+		packageId, version, revision, oldChecksum, newChecksum)
+	return nil
 }

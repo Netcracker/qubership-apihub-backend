@@ -36,7 +36,7 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 
-	"github.com/Netcracker/qubership-apihub-commons-go/api-spec-exposer"
+	exposer "github.com/Netcracker/qubership-apihub-commons-go/api-spec-exposer"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
@@ -310,7 +310,7 @@ func main() {
 	jwtPubKeyController := controller.NewJwtPubKeyController()
 	logoutController := controller.NewLogoutController(tokenRevocationService, systemInfoService)
 	operationController := controller.NewOperationController(roleService, operationService, buildService, monitoringService, ptHandler)
-	operationGroupController := controller.NewOperationGroupController(roleService, operationGroupService, versionService)
+	operationGroupController := controller.NewOperationGroupController(roleService, operationGroupService, versionService, systemInfoService)
 	searchController := controller.NewSearchController(operationService, versionService, monitoringService)
 	dataMigrationController := mController.NewTempMigrationController(dbMigrationService, roleService.IsSysadm)
 	activityTrackingController := controller.NewActivityTrackingController(activityTrackingService, roleService, ptHandler)
@@ -326,6 +326,7 @@ func main() {
 	mcpController := controller.NewMCPController(mcpService)
 	chatController := controller.NewChatController(chatService)
 	buildController := controller.NewBuildController(buildResultService, buildService, roleService.IsSysadm)
+	adminPublishedController := controller.NewAdminPublishedController(publishedService, roleService.IsSysadm, systemInfoService.GetPublishArchiveSizeLimitMB())
 
 	r.HandleFunc("/api/v1/system/info", security.Secure(systemInfoController.GetSystemInfo)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/system/configuration", samlAuthController.GetSystemSSOInfo_deprecated).Methods(http.MethodGet) //deprecated
@@ -336,7 +337,8 @@ func main() {
 	r.HandleFunc("/api/v1/debug/logs/checkLevel", security.Secure(logsController.CheckLogLevel)).Methods(http.MethodGet)
 
 	//Search
-	r.HandleFunc("/api/v3/search/{searchLevel}", security.Secure(searchController.Search)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v3/search/{searchLevel}", security.Secure(searchController.Search_deprecated)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v4/search/{searchLevel}", security.Secure(searchController.Search)).Methods(http.MethodPost)
 
 	r.HandleFunc("/api/v2/builders/{builderId}/tasks", security.Secure(publishV2Controller.GetFreeBuild)).Methods(http.MethodPost)
 
@@ -434,6 +436,7 @@ func main() {
 
 	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/documents/{slug}", security.Secure(versionController.GetVersionedDocument)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/documents", security.Secure(versionController.GetVersionDocuments)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/documents/{slug}/shareability", security.Secure(versionController.UpdateDocumentShareability)).Methods(http.MethodPatch)
 	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/references", security.Secure(versionController.GetVersionReferencesV3)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/sources", security.Secure(publishedController.GetVersionSources)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/revisions", security.Secure(versionController.GetVersionRevisionsList)).Methods(http.MethodGet)
@@ -476,6 +479,8 @@ func main() {
 
 	r.HandleFunc("/api/v2/admin/builds/{buildId}/result", security.Secure(buildController.GetBuildResult)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/admin/builds/{buildId}/sources", security.Secure(buildController.GetBuildSources)).Methods(http.MethodGet)
+
+	r.HandleFunc("/api/v2/admin/packages/{packageId}/versions/{version}/sources", security.Secure(adminPublishedController.ReplaceVersionSources)).Methods(http.MethodPut)
 
 	r.HandleFunc("/api/v2/admin/system/stats", security.Secure(systemStatsController.GetSystemStats)).Methods(http.MethodGet)
 

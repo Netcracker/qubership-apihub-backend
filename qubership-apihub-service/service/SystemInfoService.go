@@ -43,6 +43,7 @@ type SystemInfoService interface {
 	GetAPIHubUrl() string
 	GetPublishArchiveSizeLimitMB() int64
 	GetPublishFileSizeLimitMB() int64
+	GetTemplateSizeLimitMB() int64
 	GetReleaseVersionPattern() string
 	GetCredsFromEnv() *view.DbCredentials
 	GetLdapServer() string
@@ -91,6 +92,7 @@ type SystemInfoService interface {
 	GetAiChatConfig() config.ChatConfig
 	GetAiMCPConfig() config.MCPConfig
 	GetApiSpecDirectory() string
+	GetFeatureFlags() view.FeatureFlags
 	GetMigrationLockMaxWaitMinutes() int
 }
 
@@ -141,6 +143,7 @@ func (g *systemInfoServiceImpl) GetSystemInfo() *view.SystemInfo {
 		ProductionMode: g.IsProductionMode(),
 		Notification:   g.getSystemNotification(),
 		ExternalLinks:  g.GetExternalLinks(),
+		FeatureFlags:   g.GetFeatureFlags(),
 	}
 }
 
@@ -212,6 +215,7 @@ func (g *systemInfoServiceImpl) setDefaults() {
 	viper.SetDefault("technicalParameters.metricsGetterSchedule", "* * * * *") // every minute
 	viper.SetDefault("businessParameters.publishArchiveSizeLimitMb", 50)
 	viper.SetDefault("businessParameters.publishFileSizeLimitMb", 15)
+	viper.SetDefault("businessParameters.templateSizeLimitMb", 1)
 	viper.SetDefault("businessParameters.releaseVersionPattern", ".*")
 	viper.SetDefault("businessParameters.externalLinks", []string{})
 	viper.SetDefault("businessParameters.failBuildOnBrokenRefs", true)
@@ -349,6 +353,10 @@ func (g *systemInfoServiceImpl) GetPublishArchiveSizeLimitMB() int64 {
 
 func (g *systemInfoServiceImpl) GetPublishFileSizeLimitMB() int64 {
 	return int64(g.config.BusinessParameters.PublishFileSizeLimitMb * bytesInMb)
+}
+
+func (g *systemInfoServiceImpl) GetTemplateSizeLimitMB() int64 {
+	return int64(g.config.BusinessParameters.TemplateSizeLimitMb * bytesInMb)
 }
 
 func (g *systemInfoServiceImpl) GetReleaseVersionPattern() string {
@@ -613,6 +621,12 @@ func (g *systemInfoServiceImpl) GetAiChatConfig() config.ChatConfig {
 
 func (g *systemInfoServiceImpl) GetAiMCPConfig() config.MCPConfig {
 	return g.config.Ai.MCP
+}
+
+func (g *systemInfoServiceImpl) GetFeatureFlags() view.FeatureFlags {
+	return view.FeatureFlags{
+		UseV3Search: g.config.FeatureFlags.UseV3Search,
+	}
 }
 
 func (g *systemInfoServiceImpl) GetMigrationLockMaxWaitMinutes() int {

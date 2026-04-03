@@ -11,18 +11,22 @@ type ExportApiChangesRequestView struct {
 	Group                    string
 	EmptyGroup               bool
 	ApiAudience              string
+	AsyncapiChannel          string
+	AsyncapiProtocol         string
 }
 
 type ExportOperationRequestView struct {
-	EmptyTag     bool
-	Kind         string
-	Tag          string
-	TextFilter   string
-	Tags         []string
-	RefPackageId string
-	Group        string
-	EmptyGroup   bool
-	ApiAudience  string
+	EmptyTag         bool
+	Kind             string
+	Tag              string
+	TextFilter       string
+	Tags             []string
+	RefPackageId     string
+	Group            string
+	EmptyGroup       bool
+	ApiAudience      string
+	AsyncapiChannel  string
+	AsyncapiProtocol string
 }
 
 const ExportFormatXlsx = "xlsx"
@@ -53,11 +57,12 @@ type ExportRequestDiscriminator struct {
 }
 
 type ExportVersionReq struct {
-	ExportedEntity      ExportedEntity `json:"exportedEntity" validate:"required"`
-	PackageId           string         `json:"packageId" validate:"required"`
-	Version             string         `json:"version" validate:"required"`
-	Format              string         `json:"format" validate:"required"`
-	RemoveOasExtensions bool           `json:"removeOasExtensions"`
+	ExportedEntity              ExportedEntity `json:"exportedEntity" validate:"required"`
+	PackageId                   string         `json:"packageId" validate:"required"`
+	Version                     string         `json:"version" validate:"required"`
+	Format                      string         `json:"format" validate:"required"`
+	RemoveOasExtensions         bool           `json:"removeOasExtensions"`
+	AllowedShareabilityStatuses []string       `json:"allowedShareabilityStatuses,omitempty"`
 }
 
 type ExportOASDocumentReq struct {

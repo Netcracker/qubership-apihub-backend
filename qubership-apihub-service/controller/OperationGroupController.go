@@ -1,12 +1,15 @@
 package controller
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
@@ -14,6 +17,7 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	log "github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v3"
 )
 
 type OperationGroupController interface {
@@ -26,11 +30,12 @@ type OperationGroupController interface {
 	GetOperationGroupPublishStatus(w http.ResponseWriter, r *http.Request)
 }
 
-func NewOperationGroupController(roleService service.RoleService, operationGroupService service.OperationGroupService, versionService service.VersionService) OperationGroupController {
+func NewOperationGroupController(roleService service.RoleService, operationGroupService service.OperationGroupService, versionService service.VersionService, systemInfoService service.SystemInfoService) OperationGroupController {
 	return &operationGroupControllerImpl{
 		roleService:           roleService,
 		operationGroupService: operationGroupService,
 		versionService:        versionService,
+		templateSizeLimit:     systemInfoService.GetTemplateSizeLimitMB(),
 	}
 }
 
@@ -38,6 +43,7 @@ type operationGroupControllerImpl struct {
 	roleService           service.RoleService
 	operationGroupService service.OperationGroupService
 	versionService        service.VersionService
+	templateSizeLimit     int64
 }
 
 func (o operationGroupControllerImpl) GetGroupedOperations(w http.ResponseWriter, r *http.Request) {
@@ -234,19 +240,44 @@ func (o operationGroupControllerImpl) GetGroupedOperations(w http.ResponseWriter
 		}
 	}
 
+	asyncapiChannel, err := url.QueryUnescape(r.URL.Query().Get("asyncapiChannel"))
+	if err != nil {
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidURLEscape,
+			Message: exception.InvalidURLEscapeMsg,
+			Params:  map[string]interface{}{"param": "asyncapiChannel"},
+			Debug:   err.Error(),
+		})
+		return
+	}
+	asyncapiProtocol, err := url.QueryUnescape(r.URL.Query().Get("asyncapiProtocol"))
+	if err != nil {
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidURLEscape,
+			Message: exception.InvalidURLEscapeMsg,
+			Params:  map[string]interface{}{"param": "asyncapiProtocol"},
+			Debug:   err.Error(),
+		})
+		return
+	}
+
 	groupedOperationListReq := view.OperationListReq{
-		Deprecated:   deprecated,
-		Kind:         kind,
-		EmptyTag:     emptyTag,
-		Tag:          tag,
-		Limit:        limit,
-		Page:         page,
-		TextFilter:   textFilter,
-		ApiType:      apiType,
-		DocumentSlug: documentSlug,
-		RefPackageId: refPackageId,
-		OnlyAddable:  onlyAddable,
-		ApiAudience:  apiAudience,
+		Deprecated:       deprecated,
+		Kind:             kind,
+		EmptyTag:         emptyTag,
+		Tag:              tag,
+		Limit:            limit,
+		Page:             page,
+		TextFilter:       textFilter,
+		ApiType:          apiType,
+		DocumentSlug:     documentSlug,
+		RefPackageId:     refPackageId,
+		OnlyAddable:      onlyAddable,
+		ApiAudience:      apiAudience,
+		AsyncapiChannel:  asyncapiChannel,
+		AsyncapiProtocol: asyncapiProtocol,
 	}
 
 	groupedOperations, err := o.operationGroupService.GetGroupedOperations(packageId, versionName, apiType, groupName, groupedOperationListReq)
@@ -313,14 +344,25 @@ func (o operationGroupControllerImpl) CreateOperationGroup(w http.ResponseWriter
 		return
 	}
 
+	// Template size + 10MB overhead for multipart boundaries, form fields, and encoding
+	r.Body = http.MaxBytesReader(w, r.Body, o.templateSizeLimit+10<<20)
 	err = r.ParseMultipartForm(0)
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.BadRequestBody,
-			Message: exception.BadRequestBodyMsg,
-			Debug:   err.Error(),
-		})
+		if strings.Contains(err.Error(), "http: request body too large") {
+			utils.RespondWithCustomError(w, &exception.CustomError{
+				Status:  http.StatusRequestEntityTooLarge,
+				Code:    exception.TemplateSizeExceeded,
+				Message: exception.TemplateSizeExceededMsg,
+				Params:  map[string]interface{}{"size": fmt.Sprintf("%dMB", o.templateSizeLimit/1048576)},
+			})
+		} else {
+			utils.RespondWithCustomError(w, &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.BadRequestBody,
+				Message: exception.BadRequestBodyMsg,
+				Debug:   err.Error(),
+			})
+		}
 		return
 	}
 	defer func() {
@@ -342,7 +384,7 @@ func (o operationGroupControllerImpl) CreateOperationGroup(w http.ResponseWriter
 				Debug:   err.Error()})
 			return
 		}
-		templateData, err := io.ReadAll(template)
+		templateData, err := io.ReadAll(io.LimitReader(template, o.templateSizeLimit+1))
 		closeErr := template.Close()
 		if closeErr != nil {
 			log.Debugf("failed to close temporal file: %+v", err)
@@ -355,8 +397,34 @@ func (o operationGroupControllerImpl) CreateOperationGroup(w http.ResponseWriter
 				Debug:   err.Error()})
 			return
 		}
+		encoding := r.Header.Get("Content-Transfer-Encoding")
+		if strings.EqualFold(encoding, "base64") {
+			n, decodeErr := base64.StdEncoding.Decode(templateData, templateData)
+			if decodeErr != nil {
+				utils.RespondWithCustomError(w, &exception.CustomError{
+					Status:  http.StatusBadRequest,
+					Code:    exception.IncorrectMultipartFile,
+					Message: exception.IncorrectMultipartFileMsg,
+					Debug:   decodeErr.Error()})
+				return
+			}
+			templateData = templateData[:n]
+		}
+		if int64(len(templateData)) > o.templateSizeLimit {
+			utils.RespondWithCustomError(w, &exception.CustomError{
+				Status:  http.StatusRequestEntityTooLarge,
+				Code:    exception.TemplateSizeExceeded,
+				Message: exception.TemplateSizeExceededMsg,
+				Params:  map[string]interface{}{"size": fmt.Sprintf("%dMB", o.templateSizeLimit/1048576)},
+			})
+			return
+		}
+		if validationErr := o.validateTemplateFile(templateFileHeader.Filename, templateData); validationErr != nil {
+			utils.RespondWithCustomError(w, validationErr)
+			return
+		}
 		createOperationGroupReq.Template = templateData
-		createOperationGroupReq.TemplateFilename = templateFileHeader.Filename
+		createOperationGroupReq.TemplateFilename = utils.SanitizeFilename(templateFileHeader.Filename, "template")
 	} else if r.FormValue("template") != "" {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
@@ -534,14 +602,25 @@ func (o operationGroupControllerImpl) UpdateOperationGroup(w http.ResponseWriter
 		return
 	}
 
+	// Template size + 10MB overhead for multipart boundaries, form fields, and encoding
+	r.Body = http.MaxBytesReader(w, r.Body, o.templateSizeLimit+10<<20)
 	err = r.ParseMultipartForm(0)
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.BadRequestBody,
-			Message: exception.BadRequestBodyMsg,
-			Debug:   err.Error(),
-		})
+		if strings.Contains(err.Error(), "http: request body too large") {
+			utils.RespondWithCustomError(w, &exception.CustomError{
+				Status:  http.StatusRequestEntityTooLarge,
+				Code:    exception.TemplateSizeExceeded,
+				Message: exception.TemplateSizeExceededMsg,
+				Params:  map[string]interface{}{"size": fmt.Sprintf("%dMB", o.templateSizeLimit/1048576)},
+			})
+		} else {
+			utils.RespondWithCustomError(w, &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.BadRequestBody,
+				Message: exception.BadRequestBodyMsg,
+				Debug:   err.Error(),
+			})
+		}
 		return
 	}
 	defer func() {
@@ -569,7 +648,7 @@ func (o operationGroupControllerImpl) UpdateOperationGroup(w http.ResponseWriter
 				Debug:   err.Error()})
 			return
 		}
-		templateData, err := io.ReadAll(template)
+		templateData, err := io.ReadAll(io.LimitReader(template, o.templateSizeLimit+1))
 		closeErr := template.Close()
 		if closeErr != nil {
 			log.Debugf("failed to close temporal file: %+v", err)
@@ -582,9 +661,35 @@ func (o operationGroupControllerImpl) UpdateOperationGroup(w http.ResponseWriter
 				Debug:   err.Error()})
 			return
 		}
+		encoding := r.Header.Get("Content-Transfer-Encoding")
+		if strings.EqualFold(encoding, "base64") {
+			n, decodeErr := base64.StdEncoding.Decode(templateData, templateData)
+			if decodeErr != nil {
+				utils.RespondWithCustomError(w, &exception.CustomError{
+					Status:  http.StatusBadRequest,
+					Code:    exception.IncorrectMultipartFile,
+					Message: exception.IncorrectMultipartFileMsg,
+					Debug:   decodeErr.Error()})
+				return
+			}
+			templateData = templateData[:n]
+		}
+		if int64(len(templateData)) > o.templateSizeLimit {
+			utils.RespondWithCustomError(w, &exception.CustomError{
+				Status:  http.StatusRequestEntityTooLarge,
+				Code:    exception.TemplateSizeExceeded,
+				Message: exception.TemplateSizeExceededMsg,
+				Params:  map[string]interface{}{"size": fmt.Sprintf("%dMB", o.templateSizeLimit/1048576)},
+			})
+			return
+		}
+		if validationErr := o.validateTemplateFile(templateFileHeader.Filename, templateData); validationErr != nil {
+			utils.RespondWithCustomError(w, validationErr)
+			return
+		}
 		updateOperationGroupReq.Template = &view.OperationGroupTemplate{
 			TemplateData:     templateData,
-			TemplateFilename: templateFileHeader.Filename,
+			TemplateFilename: utils.SanitizeFilename(templateFileHeader.Filename, "template"),
 		}
 	} else if r.Form.Has("template") {
 		if r.FormValue("template") != "" {
@@ -868,4 +973,53 @@ func (o operationGroupControllerImpl) GetOperationGroupPublishStatus(w http.Resp
 		return
 	}
 	utils.RespondWithJson(w, http.StatusOK, publishStatus)
+}
+
+func (o operationGroupControllerImpl) validateTemplateFile(filename string, data []byte) *exception.CustomError {
+	ext := strings.ToLower(filepath.Ext(filename))
+	allowedExtensions := []string{".yaml", ".yml", ".json"}
+	allowed := false
+	for _, a := range allowedExtensions {
+		if ext == a {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		return &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidTemplateFileExtension,
+			Message: exception.InvalidTemplateFileExtensionMsg,
+			Params:  map[string]interface{}{"extension": ext, "allowedExtensions": strings.Join(allowedExtensions, ", ")},
+		}
+	}
+
+	// Validate content
+	switch ext {
+	//TODO: do we need to check the exact structure of the files ?
+	case ".json":
+		var js interface{}
+		if err := json.Unmarshal(data, &js); err != nil {
+			return &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.InvalidTemplateContent,
+				Message: exception.InvalidTemplateContentMsg,
+				Params:  map[string]interface{}{"format": "JSON"},
+				Debug:   err.Error(),
+			}
+		}
+	case ".yaml", ".yml":
+		var ym interface{}
+		if err := yaml.Unmarshal(data, &ym); err != nil {
+			return &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.InvalidTemplateContent,
+				Message: exception.InvalidTemplateContentMsg,
+				Params:  map[string]interface{}{"format": "YAML"},
+				Debug:   err.Error(),
+			}
+		}
+	}
+
+	return nil
 }
