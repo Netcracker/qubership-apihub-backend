@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
+	"github.com/go-pg/pg/v10/orm"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -37,9 +38,11 @@ func (d OpsMigration) StageTSRecalculate() error {
 	scope_annotation = EXCLUDED.scope_annotation,
 	scope_properties = EXCLUDED.scope_properties,
 	scope_examples = EXCLUDED.scope_examples;`, d.ent.Id)
-	_, err := d.cp.GetConnection().ExecContext(d.migrationCtx, calculateRestTextSearchDataQuery,
-		view.RestScopeRequest, view.RestScopeResponse, view.RestScopeAnnotation, view.RestScopeProperties, view.RestScopeExamples,
-		view.RestApiType)
+	_, err := withDBRetry(d, func() (orm.Result, error) {
+		return d.cp.GetConnection().ExecContext(d.migrationCtx, calculateRestTextSearchDataQuery,
+			view.RestScopeRequest, view.RestScopeResponse, view.RestScopeAnnotation, view.RestScopeProperties, view.RestScopeExamples,
+			view.RestApiType)
+	})
 	if err != nil {
 		return fmt.Errorf("failed to calculate ts_rest_operation_data: %w", err)
 	}
@@ -62,7 +65,9 @@ func (d OpsMigration) StageTSRecalculate() error {
         for update skip locked
 	on conflict (data_hash) do update
 	set scope_all = EXCLUDED.scope_all`, d.ent.Id)
-	_, err = d.cp.GetConnection().ExecContext(d.migrationCtx, calculateAllTextSearchDataQuery, view.ScopeAll)
+	_, err = withDBRetry(d, func() (orm.Result, error) {
+		return d.cp.GetConnection().ExecContext(d.migrationCtx, calculateAllTextSearchDataQuery, view.ScopeAll)
+	})
 	if err != nil {
 		return fmt.Errorf("failed to calculate ts_operation_data: %w", err)
 	}
@@ -85,7 +90,9 @@ func (d OpsMigration) StageTSRecalculate() error {
         for update skip locked
 	on conflict (data_hash) do update
 	set data_vector = EXCLUDED.data_vector`, d.ent.Id)
-	_, err = d.cp.GetConnection().ExecContext(d.migrationCtx, calculateFullTextSearchOperationsQuery)
+	_, err = withDBRetry(d, func() (orm.Result, error) {
+		return d.cp.GetConnection().ExecContext(d.migrationCtx, calculateFullTextSearchOperationsQuery)
+	})
 	if err != nil {
 		return fmt.Errorf("failed to calculate fts_operation_data: %w", err)
 	}

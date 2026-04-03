@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/go-pg/pg/v10"
+	"github.com/go-pg/pg/v10/orm"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -67,7 +68,9 @@ func (d OpsMigration) createTempTablesWithRetry() error {
 
 func (d OpsMigration) createTempTables() error {
 	// create temporary tables required for suspicious builds analysis
-	_, err := d.cp.GetConnection().ExecContext(d.migrationCtx, `create schema if not exists migration;`)
+	_, err := withDBRetry(d, func() (orm.Result, error) {
+		return d.cp.GetConnection().ExecContext(d.migrationCtx, `create schema if not exists migration;`)
+	})
 	if err != nil {
 		return err
 	}
@@ -98,21 +101,29 @@ func (d OpsMigration) createTempTables() error {
 		vcQuery := fmt.Sprintf(
 			`create table if not exists migration."version_comparison_%s" as select * from version_comparison%s;`,
 			d.ent.Id, whereClauses)
-		_, err = d.cp.GetConnection().ExecContext(d.migrationCtx, vcQuery, params...)
+		_, err = withDBRetry(d, func() (orm.Result, error) {
+			return d.cp.GetConnection().ExecContext(d.migrationCtx, vcQuery, params...)
+		})
 	} else {
-		_, err = d.cp.GetConnection().ExecContext(d.migrationCtx,
-			fmt.Sprintf(`create table if not exists migration."version_comparison_%s" as select * from version_comparison;`, d.ent.Id))
+		_, err = withDBRetry(d, func() (orm.Result, error) {
+			return d.cp.GetConnection().ExecContext(d.migrationCtx,
+				fmt.Sprintf(`create table if not exists migration."version_comparison_%s" as select * from version_comparison;`, d.ent.Id))
+		})
 	}
 	if err != nil {
 		return err
 	}
 
-	_, err = d.cp.GetConnection().ExecContext(d.migrationCtx, fmt.Sprintf(`create index if not exists "ix_ver_comp_%s"
+	_, err = withDBRetry(d, func() (orm.Result, error) {
+		return d.cp.GetConnection().ExecContext(d.migrationCtx, fmt.Sprintf(`create index if not exists "ix_ver_comp_%s"
 on migration."version_comparison_%s"(package_id,version,revision,previous_package_id,previous_version,previous_revision);`, d.ent.Id, d.ent.Id))
+	})
 	if err != nil {
 		return err
 	}
-	_, err = d.cp.GetConnection().ExecContext(d.migrationCtx, fmt.Sprintf(`create index if not exists "ix_compid_%s" on migration."version_comparison_%s"(comparison_id)`, d.ent.Id, d.ent.Id))
+	_, err = withDBRetry(d, func() (orm.Result, error) {
+		return d.cp.GetConnection().ExecContext(d.migrationCtx, fmt.Sprintf(`create index if not exists "ix_compid_%s" on migration."version_comparison_%s"(comparison_id)`, d.ent.Id, d.ent.Id))
+	})
 	if err != nil {
 		return err
 	}
@@ -121,27 +132,37 @@ on migration."version_comparison_%s"(package_id,version,revision,previous_packag
 		ocQuery := fmt.Sprintf(
 			`create table if not exists migration."operation_comparison_%s" as select oc.* from operation_comparison oc where oc.comparison_id in (select comparison_id from migration."version_comparison_%s");`,
 			d.ent.Id, d.ent.Id)
-		_, err = d.cp.GetConnection().ExecContext(d.migrationCtx, ocQuery)
+		_, err = withDBRetry(d, func() (orm.Result, error) {
+			return d.cp.GetConnection().ExecContext(d.migrationCtx, ocQuery)
+		})
 	} else if d.restartStage != "" {
 		// The version_comparison temp table may have been created in a prior run; need to have consistent data in the operation_comparison temp table
 		ocQuery := fmt.Sprintf(
 			`create table if not exists migration."operation_comparison_%s" as select oc.* from operation_comparison oc where oc.comparison_id in (select comparison_id from migration."version_comparison_%s");`,
 			d.ent.Id, d.ent.Id)
-		_, err = d.cp.GetConnection().ExecContext(d.migrationCtx, ocQuery)
+		_, err = withDBRetry(d, func() (orm.Result, error) {
+			return d.cp.GetConnection().ExecContext(d.migrationCtx, ocQuery)
+		})
 	} else {
-		_, err = d.cp.GetConnection().ExecContext(d.migrationCtx,
-			fmt.Sprintf(`create table if not exists migration."operation_comparison_%s" as select * from operation_comparison;`, d.ent.Id))
+		_, err = withDBRetry(d, func() (orm.Result, error) {
+			return d.cp.GetConnection().ExecContext(d.migrationCtx,
+				fmt.Sprintf(`create table if not exists migration."operation_comparison_%s" as select * from operation_comparison;`, d.ent.Id))
+		})
 	}
 	if err != nil {
 		return err
 	}
 
-	_, err = d.cp.GetConnection().ExecContext(d.migrationCtx, fmt.Sprintf(`create index if not exists "operation_comparison_%s_comparison_id_index" on migration."operation_comparison_%s" (comparison_id);`, d.ent.Id, d.ent.Id))
+	_, err = withDBRetry(d, func() (orm.Result, error) {
+		return d.cp.GetConnection().ExecContext(d.migrationCtx, fmt.Sprintf(`create index if not exists "operation_comparison_%s_comparison_id_index" on migration."operation_comparison_%s" (comparison_id);`, d.ent.Id, d.ent.Id))
+	})
 	if err != nil {
 		return err
 	}
 
-	_, err = d.cp.GetConnection().ExecContext(d.migrationCtx, fmt.Sprintf(`create table if not exists migration."expired_ts_operation_data_%s" (package_id varchar, version varchar, revision integer);`, d.ent.Id))
+	_, err = withDBRetry(d, func() (orm.Result, error) {
+		return d.cp.GetConnection().ExecContext(d.migrationCtx, fmt.Sprintf(`create table if not exists migration."expired_ts_operation_data_%s" (package_id varchar, version varchar, revision integer);`, d.ent.Id))
+	})
 	if err != nil {
 		return err
 	}
@@ -160,7 +181,9 @@ func (d OpsMigration) waitForLocks() error {
 		AND l.pid != pg_backend_pid()`
 
 	var lockCount int
-	_, err := d.cp.GetConnection().QueryOneContext(d.migrationCtx, pg.Scan(&lockCount), locksQuery, lockPattern)
+	_, err := withDBRetry(d, func() (orm.Result, error) {
+		return d.cp.GetConnection().QueryOneContext(d.migrationCtx, pg.Scan(&lockCount), locksQuery, lockPattern)
+	})
 	if err != nil {
 		return err
 	}
@@ -180,9 +203,11 @@ func (d OpsMigration) waitForLocks() error {
 			return fmt.Errorf("migration cancelled while waiting for locks")
 		}
 
-		_, err = d.cp.GetConnection().QueryOneContext(d.migrationCtx, pg.Scan(&lockCount), locksQuery, lockPattern)
-		if err != nil {
-			log.Warnf("ops migration %s: failed to query pg_locks during wait: %v", d.ent.Id, err)
+		_, pollErr := withDBRetry(d, func() (orm.Result, error) {
+			return d.cp.GetConnection().QueryOneContext(d.migrationCtx, pg.Scan(&lockCount), locksQuery, lockPattern)
+		})
+		if pollErr != nil {
+			log.Warnf("ops migration %s: failed to query pg_locks during wait: %v", d.ent.Id, pollErr)
 			continue
 		}
 		if lockCount == 0 {
