@@ -80,7 +80,9 @@ func (d OpsMigration) StageTSRecalculate() error {
 	INNER JOIN latest_rev lr ON o.package_id = lr.package_id AND o.version = lr.version AND o.revision = lr.revision
 	ON CONFLICT (package_id, version, revision, operation_id)
 	DO UPDATE SET data_vector = EXCLUDED.data_vector`, d.ent.Id)
-	_, err = d.cp.GetConnection().ExecContext(d.migrationCtx, recalculateLiteSearchQuery)
+	_, err = withDBRetry(d, func() (orm.Result, error) {
+		return d.cp.GetConnection().ExecContext(d.migrationCtx, recalculateLiteSearchQuery)
+	})
 	if err != nil {
 		return fmt.Errorf("failed to recalculate fts_latest_release_operation_data: %w", err)
 	}
@@ -95,7 +97,9 @@ func (d OpsMigration) StageTSRecalculate() error {
 	ON CONFLICT (package_id, version, revision, operation_id) DO UPDATE
 		SET search_data_hash = EXCLUDED.search_data_hash,
 			data_vector = EXCLUDED.data_vector`, d.ent.Id)
-	_, err = d.cp.GetConnection().ExecContext(d.migrationCtx, recalculateFtsOperationSearchTextQuery)
+	_, err = withDBRetry(d, func() (orm.Result, error) {
+		return d.cp.GetConnection().ExecContext(d.migrationCtx, recalculateFtsOperationSearchTextQuery)
+	})
 	if err != nil {
 		return fmt.Errorf("failed to recalculate fts_operation_search_text: %w", err)
 	}
