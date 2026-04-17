@@ -2349,5 +2349,29 @@ func (r *shareabilityReport) createReportSheet() error {
 	if err := setCellsValues(r.workbook, sheetName, cells); err != nil {
 		return fmt.Errorf("failed to set cell values: %v", err.Error())
 	}
+
+	lastDataRow := rowIndex - 1
+	if lastDataRow >= 2 {
+		dv := excelize.NewDataValidation(true)
+		dv.SetSqref(fmt.Sprintf("C2:C%d", lastDataRow))
+		allowed := view.AllowedShareabilityValues()
+		if err := dv.SetDropList(allowed); err != nil {
+			return fmt.Errorf("failed to configure shareability dropdown: %v", err.Error())
+		}
+		dv.SetError(excelize.DataValidationErrorStyleStop,
+			"Invalid shareability value",
+			fmt.Sprintf("Allowed values: %s", strings.Join(allowed, ", ")))
+		if err := r.workbook.AddDataValidation(sheetName, dv); err != nil {
+			return fmt.Errorf("failed to add shareability data validation: %v", err.Error())
+		}
+	}
+
+	filterRange := "A1:F1"
+	if lastDataRow >= 2 {
+		filterRange = fmt.Sprintf("A1:F%d", lastDataRow)
+	}
+	if err := r.workbook.AutoFilter(sheetName, filterRange, []excelize.AutoFilterOptions{}); err != nil {
+		return fmt.Errorf("failed to set auto filter on shareability report: %v", err.Error())
+	}
 	return nil
 }
