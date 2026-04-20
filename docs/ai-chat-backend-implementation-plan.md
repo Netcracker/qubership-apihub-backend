@@ -1,0 +1,525 @@
+# AI Chat — Backend Implementation Plan
+
+Audience: the backend engineer(s) who will turn the designed contract into code.
+
+Goal: replace the current PoC (`POST /api/v1/ai-chat`, `POST /api/v1/ai-chat/stream`, stateless, dev-only) with a full-featured chat:
+
+* per-user chat ownership, no cross-user visibility;
+* durable storage in Postgres with a two-tier retention policy (TTL + "last M forever" + unlimited pins);
+* chat CRUD (list/create/get/rename/pin-unpin/delete);
+* streaming responses over SSE with tool-use visibility;
+* generated-file links served via signed URLs;
+* automatic context compaction when the conversation approaches the model's context window, so that old facts are re-packed into a summary rather than silently dropped by the LLM (the Responses API would otherwise fail the turn with `context_length_exceeded`);
+* minimal FE↔BE and BE↔OpenAI traffic.
+
+Contract of reference: `docs/api/APIHUB_API.yaml` (tag **AI Chat**) and `docs/ai-chat-frontend-contract.md`.
+
+---
+
+## 1. Architecture overview
+
+```
+controller/ChatController.go                 ──► HTTP/SSE layer (parse, auth, render)
+service/ChatService.go                       ──► orchestration: CRUD + turn pipeline
+service/ChatContextService.go  (new)         ──► history fetch, token counting, compaction
+service/ChatFileService.go     (new)         ──► generated files on disk + signed tokens
+service/cleanup/AiChat.go      (new)         ──► TTL-based chat cleanup job
+service/cleanup/AiChatFiles.go (new)         ──► /tmp file cleanup job
+repository/ChatRepository.go   (new)         ──► DB access
+client/OpenAIClient.go                       ──► (existing) reused, but the Responses API
+                                                 endpoints will be used instead of Chat Completions
+```
+
+Responsibilities split:
+
+* `ChatController` only converts HTTP/SSE ↔ service calls; no business logic.
+* `ChatService` owns transactions. A single "send message" call goes end-to-end through the service.
+* `ChatContextService` hides the details of how the OpenAI context is rebuilt for a turn (previous_response_id vs. summary+tail vs. full rebuild fallback).
+* `ChatFileService` encapsulates the filesystem and the HMAC token (no other code touches `/tmp`).
+* `ChatRepository` is the only module that touches the three new tables.
+
+---
+
+## 2. Data model (Postgres)
+
+New migration: `qubership-apihub-service/resources/migrations/34_ai_chat.up.sql` (with matching `*.down.sql`).
+
+```sql
+CREATE TABLE ai_chat (
+    id                           uuid        PRIMARY KEY,
+    user_id                      varchar     NOT NULL,
+    title                        text        NOT NULL DEFAULT '',
+    pinned                       boolean     NOT NULL DEFAULT false,
+    pinned_at                    timestamp without time zone,
+    created_at                   timestamp without time zone NOT NULL,
+    last_message_at              timestamp without time zone NOT NULL,
+    messages_count               integer     NOT NULL DEFAULT 0,
+    context_compactions_count    integer     NOT NULL DEFAULT 0,
+
+    -- OpenAI Responses API thread head (see §5.2).
+    openai_previous_response_id  text,
+    -- Cursor above which messages are superseded by a summary (see §5.3).
+    compacted_up_to_created_at   timestamp without time zone,
+    -- The latest compaction summary (system-role text injected on next turn).
+    compaction_summary           text,
+    -- usage.total_tokens reported by OpenAI for the last assistant response on this chat,
+    -- used to decide whether to compact before the *next* turn (see §5.3). NULL until the
+    -- first turn completes or immediately after a compaction.
+    last_turn_tokens             integer,
+
+    CONSTRAINT ai_chat_user_fk FOREIGN KEY (user_id)
+        REFERENCES user_data(user_id) ON DELETE CASCADE
+);
+
+CREATE INDEX ai_chat_user_sort_idx
+    ON ai_chat (user_id, pinned DESC, last_message_at DESC);
+
+CREATE INDEX ai_chat_retention_idx
+    ON ai_chat (user_id, pinned, last_message_at);
+
+CREATE TABLE ai_chat_message (
+    id                  uuid        PRIMARY KEY,
+    chat_id             uuid        NOT NULL
+        REFERENCES ai_chat(id) ON DELETE CASCADE,
+    role                varchar     NOT NULL,           -- 'user' | 'assistant'
+    content             text        NOT NULL,
+    client_message_id   uuid,                            -- idempotency key (user role only)
+    tool_invocations    jsonb,                           -- [{name,status,durationMs}, ...]
+    openai_response_id  text,                            -- assistant role only
+    created_at          timestamp without time zone NOT NULL
+);
+
+CREATE INDEX ai_chat_message_chat_time_idx
+    ON ai_chat_message (chat_id, created_at DESC);
+
+CREATE UNIQUE INDEX ai_chat_message_client_id_idx
+    ON ai_chat_message (chat_id, client_message_id)
+    WHERE client_message_id IS NOT NULL;
+
+CREATE TABLE ai_chat_file (
+    id            uuid        PRIMARY KEY,
+    chat_id       uuid        REFERENCES ai_chat(id) ON DELETE SET NULL,
+    message_id    uuid        REFERENCES ai_chat_message(id) ON DELETE SET NULL,
+    user_id       varchar     NOT NULL,
+    filename      text        NOT NULL,
+    storage_path  text        NOT NULL,
+    mime_type     varchar,
+    size_bytes    bigint,
+    created_at    timestamp without time zone NOT NULL,
+    expires_at    timestamp without time zone NOT NULL
+);
+
+CREATE INDEX ai_chat_file_expires_idx ON ai_chat_file (expires_at);
+CREATE INDEX ai_chat_file_user_idx    ON ai_chat_file (user_id);
+```
+
+Down migration drops all three tables in reverse dependency order.
+
+Notes on the columns:
+
+* `messages_count` is maintained by the service on every insert/delete (cheap, avoids a count(*) for the list endpoint).
+* `tool_invocations` stores only UI-facing summaries (`name`, `status`, `durationMs`). Raw tool arguments and results are logged but not persisted — they are not needed for replay (the LLM has the final answer text).
+* `openai_response_id` on assistant messages is the *per-message* id. `openai_previous_response_id` on the chat row is the *current head*; it differs from the latest message's id only right after a compaction (see §5.3).
+* `compacted_up_to_created_at` marks the boundary: when replaying history for display we still return messages below the boundary (they remain visible); when rebuilding a fresh OpenAI thread we skip them and use `compaction_summary` instead.
+
+---
+
+## 3. Configuration
+
+Extend `qubership-apihub-service/config/Config.go`:
+
+```go
+type ChatConfig struct {
+    OpenAI                     OpenAIConfig
+    RetentionDays              int              // default 30
+    PinnedForeverCount         int              // default 10
+    MaxPinnedPerUser           int              // default 3
+    MaxUserMessageLength       int              // default 32000 (≈ 8k tokens, fits a JSON schema paste while still providing a DoS guard)
+    CompactAtContextPercent    int              // default 80 — compact when used tokens ≥ this % of the model's context window
+    CleanupSchedule            string           // cron, default "15 3 * * *"
+    SignedUrlSecret            Base64DecodedString // HMAC key for file tokens; required
+    GeneratedFiles             GeneratedFilesConfig
+}
+
+type GeneratedFilesConfig struct {
+    Directory       string // default os.TempDir()+"/apihub-ai-chat"
+    TTLMinutes      int    // default 30
+    CleanupSchedule string // cron, default "*/5 * * * *"
+    MaxFileSizeMB   int    // default 50
+}
+```
+
+Model context-window lookup is a constant map in `client/OpenAIResponsesClient.go` (e.g. `gpt-4o` → 128 000, `gpt-4o-mini` → 128 000, `gpt-4.1` → 1 047 576) and is refreshed when the model list evolves. `CompactAtContextPercent` is the single knob — "trigger compaction once ≥ X % of this model's window is used" — which keeps operators from thinking in absolute token numbers that become wrong whenever the model changes.
+
+In `SystemInfoService`:
+
+* add defaults via `viper.SetDefault` (see `setDefaults()` in `qubership-apihub-service/service/SystemInfoService.go`);
+* exposed getters:
+  * `GetAiChatRetentionPolicy() (retentionDays, pinnedForeverCount, maxPinnedPerUser int)`;
+  * `GetAiChatClientConfig() view.AiChatClientConfig` (for the `/config` endpoint — returns only `maxPinnedPerUser` and `maxUserMessageLength`);
+  * `GetAiChatGeneratedFilesConfig() config.GeneratedFilesConfig`;
+  * `GetAiChatSignedUrlSecret() []byte`;
+  * `GetAiChatCompactAtContextPercent() int`;
+* validation: `SignedUrlSecret` must be at least 32 bytes — fail fast on startup if not (the chat is currently dev-only so we can abort startup when the secret is missing; gate the whole feature behind a new `ai.chat.enabled` bool that defaults to `false` in production if we decide to ship the feature there later).
+
+Config sample (add to `config.yaml` example section in the deployment repo):
+
+```yaml
+ai:
+  chat:
+    retentionDays: 30
+    pinnedForeverCount: 10
+    maxPinnedPerUser: 3
+    maxUserMessageLength: 32000
+    compactAtContextPercent: 80
+    cleanupSchedule: "15 3 * * *"
+    signedUrlSecret: "<base64 >= 32 bytes>"
+    generatedFiles:
+      directory: "/tmp/apihub-ai-chat"
+      ttlMinutes: 30
+      cleanupSchedule: "*/5 * * * *"
+      maxFileSizeMB: 50
+    openAI:
+      apiKey: "..."
+      model: "gpt-4o-mini"
+      # ...
+```
+
+---
+
+## 4. HTTP / SSE layer
+
+### 4.1 Routes
+
+Register under `!productionMode` for now (same gate as the PoC) in `Service.go`:
+
+```go
+// /api/v1/ai-chat/* — full-featured AI chat
+r.HandleFunc("/api/v1/ai-chat/config", security.Secure(chatController.GetConfig)).Methods(http.MethodGet)
+
+r.HandleFunc("/api/v1/ai-chat/chats", security.Secure(chatController.ListChats)).Methods(http.MethodGet)
+r.HandleFunc("/api/v1/ai-chat/chats", security.Secure(chatController.CreateChat)).Methods(http.MethodPost)
+r.HandleFunc("/api/v1/ai-chat/chats/{chatId}", security.Secure(chatController.GetChat)).Methods(http.MethodGet)
+r.HandleFunc("/api/v1/ai-chat/chats/{chatId}", security.Secure(chatController.UpdateChat)).Methods(http.MethodPatch)
+r.HandleFunc("/api/v1/ai-chat/chats/{chatId}", security.Secure(chatController.DeleteChat)).Methods(http.MethodDelete)
+
+r.HandleFunc("/api/v1/ai-chat/chats/{chatId}/messages", security.Secure(chatController.ListMessages)).Methods(http.MethodGet)
+r.HandleFunc("/api/v1/ai-chat/chats/{chatId}/messages", security.Secure(chatController.SendMessage)).Methods(http.MethodPost)
+r.HandleFunc("/api/v1/ai-chat/chats/{chatId}/messages/stream", security.Secure(chatController.SendMessageStream)).Methods(http.MethodPost)
+
+// public, signed-URL based
+r.HandleFunc("/api/v1/ai-chat/files/{fileId}", security.NoSecure(chatController.DownloadFile)).Methods(http.MethodGet)
+```
+
+Remove the two PoC routes (`POST /api/v1/ai-chat`, `POST /api/v1/ai-chat/stream`).
+
+### 4.2 SSE framing
+
+Use a dedicated helper (e.g. in `controller/sse.go`):
+
+* headers: `Content-Type: text/event-stream; charset=utf-8`, `Cache-Control: no-cache`, `Connection: keep-alive`, `X-Accel-Buffering: no`;
+* write `event: <type>\n` then `data: <json>\n\n` then `Flush()`;
+* write a 15s heartbeat comment line (`: ping\n\n`) via a `time.Ticker` to keep idle connections alive behind nginx;
+* on context cancellation (client abort), return — service will observe ctx.Done() and stop the OpenAI call.
+
+The controller only emits pre-built DTOs received from the service. The service exposes a channel:
+
+```go
+type StreamEvent interface { EventType() string }
+
+func (c *ChatService) SendMessageStream(ctx context.Context, userId, chatId string, req SendMessageRequest) (<-chan StreamEvent, error)
+```
+
+### 4.3 Request validation
+
+* `content` — trim, non-empty, `len([]rune(content)) <= MaxUserMessageLength`;
+* `clientMessageId` — optional UUID; if present, must be a valid UUID v4;
+* ownership check: `chat.user_id == ctx.GetUserId()` — if not, return `404` (do not disclose existence of other users' chats);
+* all 404s use `APIHUB-AI-3001`;
+* pin validation: when `pinned: true` is requested in PATCH, count current pinned chats for the user and reject with `APIHUB-AI-4003` if already at the limit.
+
+---
+
+## 5. The turn pipeline
+
+This is the heart of the service. The same pipeline is used for both streaming and non-streaming endpoints; the non-streaming wrapper just drains the channel and assembles the final DTO.
+
+### 5.1 Steps
+
+```
+sendMessage(ctx, userId, chatId, req):
+
+1.   loadChat(ctx, userId, chatId)          -- locks chat via SELECT FOR UPDATE in a short tx
+1a.  if req.clientMessageId != nil:
+        existing := findAssistantByClientMessageId(chatId, clientMessageId)
+        if existing: return replay(existing)     -- idempotency, no LLM call
+
+2.   persistUserMessage(userMsg) in tx
+     -- no event for this: reaching step 3 implies the message is saved;
+     -- server-assigned id is not needed on the client stream (see FE contract).
+
+3.   ctxSpec := chatContextService.Prepare(ctx, chat)
+     if ctxSpec.WasCompacted:
+         emit(context.compacted, {count})
+
+4.   emit(message.assistant.start, {newMsgId})
+
+5.   for each OpenAI iteration (tool-calling loop, same as PoC):
+        if toolCall:
+            emit(tool.started, {...})
+            result := executeMCPTool(...)
+            emit(tool.completed, {...})
+        else (assistant content):
+            for each delta chunk:
+                emit(message.assistant.delta, {delta})
+
+6.   persistAssistantMessage(asstMsg, tool_invocations, openai_response_id) in tx
+     chat.openai_previous_response_id = asstMsg.openai_response_id
+     chat.last_message_at = asstMsg.created_at
+     chat.messages_count += 2
+     save(chat) in tx
+
+7.   emit(message.assistant.completed, {full message, usage})
+8.   emit(done)
+```
+
+Every channel emission blocks on `ctx.Done()` — the controller's cancellation cleanly tears down the pipeline.
+
+Failure handling:
+
+* any error before step 2 → regular HTTP error (the stream has not started yet);
+* any error from step 3 onwards → emit `error` event and close the channel. If step 5 produced some assistant content, still persist it (truncated, clearly marked with a `[partial]` suffix in `content`) so history stays consistent. Log the full error.
+
+### 5.2 OpenAI integration — Responses API
+
+We switch from Chat Completions to the **Responses API** (`openai.Responses.New(ctx, ...)` in `openai-go v3`). This gives us server-side state: we pass only the new user message + `previous_response_id`, OpenAI reconstructs the thread.
+
+Concrete wiring:
+
+```go
+params := responses.ResponseNewParams{
+    Model:               shared.ChatModel(cfg.Model),
+    PreviousResponseID:  openai.String(chat.OpenAIPreviousResponseID), // nil on first turn / after compaction
+    Input: responses.ResponseNewParamsInputUnion{
+        OfInputItemList: []responses.ResponseInputItemUnionParam{
+            responses.ResponseInputItemParamOfMessage(
+                responses.EasyInputMessageRoleUser, userMsg.Content,
+            ),
+        },
+    },
+    Store:            openai.Bool(true),
+    Tools:            toolsAsResponsesTools(mcpTools),
+    ReasoningEffort:  convertReasoningEffort(cfg.ReasoningEffort),
+    // temperature/verbosity — same as today
+}
+```
+
+On the very first turn the chat has no `openai_previous_response_id`, so `PreviousResponseID` is omitted and a system message is prepended (same content as today's `systemMessageBaseContent` + cached `api-packages-list`).
+
+Tool-use loop: the Responses API also supports function tools. Reuse the MCP tool schema from `MCPService.MakeOpenAiMCPTools()` and adapt each to `responses.ResponseNewParamsToolUnionParam` (function tools). Tool outputs are fed back via `responses.ResponseNewParamsInputUnionOfInputItemList` with an `OfFunctionCallOutput` item referring to the corresponding `tool_call_id`. After the final (non-tool-call) response, capture its `id` and store it as the new `openai_previous_response_id`.
+
+Streaming: use `client.Responses.NewStreaming(ctx, params)` — it exposes incremental events including `response.output_text.delta`, `response.function_call_arguments.delta`, `response.tool_call.completed` etc. Map these to our own SSE events.
+
+Fallback path (response id no longer accepted by OpenAI — e.g. 30-day retention):
+
+* detect via the specific error code returned by the Responses API (`invalid_previous_response_id` or 404);
+* rebuild context from our DB: apply the `compaction_summary` (if any) as a system message + all messages with `created_at > compacted_up_to_created_at`, send as a fresh `Input` list, drop `PreviousResponseID`. Save the new response id.
+
+### 5.3 Automatic context compaction
+
+Rationale: the Responses API keeps the thread state on OpenAI's side, but when the accumulated thread exceeds the configured model's context window OpenAI returns `context_length_exceeded` and the turn fails — the aim of compaction is not cost saving, it is keeping old information alive in a shorter form before the model refuses to continue.
+
+Triggered inside `ChatContextService.Prepare(ctx, chat)`:
+
+1. Cheap estimate of currently used tokens (done **after** the previous turn, cached on `ai_chat.last_turn_tokens`):
+   * if `openai_previous_response_id` is set, read `usage.total_tokens` from the previous response (we already have it from the stream — no extra call required);
+   * otherwise estimate by running a local tokenizer (`tiktoken-go`) across the messages we would rebuild from.
+2. Compute `threshold = modelContextWindow(cfg.Model) * CompactAtContextPercent / 100`.
+3. If `lastTurnTokens + roughEstimate(newUserMsg) ≥ threshold`:
+   a. load all messages of the chat (excluding those already compacted);
+   b. call OpenAI once with a cheap model (e.g. `gpt-4o-mini`) asking for a structured summary (see prompt template below);
+   c. within a single DB tx:
+      * `chat.compaction_summary = <new summary>`;
+      * `chat.compacted_up_to_created_at = <createdAt of the last message included in the summary>`;
+      * `chat.openai_previous_response_id = NULL` (force next turn to start a fresh thread with the summary as a system message);
+      * `chat.context_compactions_count += 1`;
+   d. return `{WasCompacted: true, MessagesCompacted: N}` so the pipeline can emit `context.compacted`.
+
+Defensive safety net: if a turn still fails with `context_length_exceeded` despite the proactive trigger (e.g. a very large single user message that alone pushes us over), run the same compaction flow reactively once and retry the turn.
+
+Summary prompt template (stored in code as a constant):
+
+```
+You are compacting an ongoing conversation between a user and an API documentation
+assistant so that the assistant can continue without losing essential context.
+Produce a concise (≤ 1500 tokens) structured summary of the dialogue so far:
+  • Goals the user is pursuing.
+  • Facts / findings relevant to the task (package ids, operation ids, versions,
+    filters the user cares about).
+  • Decisions already made.
+  • Open questions / TODOs.
+Return plain prose, not JSON.
+```
+
+On the next turn the service sends the summary as a `responses.EasyInputMessageRoleSystem` input, followed by the new user message. `openai_previous_response_id` is set to the id of that response; from then on turns go back to incremental mode until the next compaction.
+
+Historical messages remain visible to the user (we never delete them mid-life), but they are filtered out when rebuilding OpenAI context.
+
+### 5.4 Idempotency
+
+Unique index on `(chat_id, client_message_id) WHERE client_message_id IS NOT NULL`. The service wraps step 2 in `INSERT ... ON CONFLICT (chat_id, client_message_id) DO NOTHING RETURNING id`. If nothing was returned, we fetch the existing user message and the assistant reply that follows it and replay that to the client (stream: emit all events in order; non-stream: just return the final DTO). No LLM call is made.
+
+### 5.5 Auto-title
+
+If `chat.title == ''` after the first assistant turn succeeds, schedule an async background task (fire-and-forget via `utils.SafeAsync`) that:
+
+* makes a single non-streaming cheap-model call (e.g. `gpt-4o-mini`) with both the user question and the assistant answer and asks for "a 3-6 word title, no punctuation";
+* updates `ai_chat.title` via a short tx;
+* does not emit any event; the FE will see the updated title on the next `GET /chats` refresh.
+
+If the background call fails, leave the title empty; the user can rename manually.
+
+---
+
+## 6. Generated files
+
+### 6.1 Filesystem layout
+
+Root: `cfg.GeneratedFiles.Directory` (default `<os.TempDir>/apihub-ai-chat`). Ensure the directory exists and is `0700` on startup.
+
+Files are stored as `<root>/<userId>/<fileId>` (no original extension; the real filename and MIME are kept in the DB and served via `Content-Disposition`). Putting them under `<userId>/` makes manual ops trivially clear and allows per-user quotas in future.
+
+### 6.2 Generation path
+
+Files are expected to be produced by future MCP tools (out of scope for this iteration). The plumbing is:
+
+* `ChatFileService.CreateFile(ctx, userId, chatId, messageId, filename, mimeType, reader)` — writes the file, inserts the `ai_chat_file` row with `expires_at = now + TTLMinutes`, returns an `AiChatAttachment` struct (including a signed URL).
+* MCP tool adapters call this method and return the resulting `AiChatAttachment.url` back to the LLM as a string. The LLM embeds it as a markdown link verbatim. Parallel `attachments` list is constructed by the service by peeking at `ChatFileService.ListCreatedDuring(turnStart, turnEnd, userId)`.
+
+### 6.3 Signed tokens
+
+Algorithm: `HMAC_SHA256(signedUrlSecret, fileId + "|" + expiresAtUnix)` → base64url → token body. Final token is `<expiresAtUnix>.<body>` (so the server can verify without a DB roundtrip if the token is malformed/expired).
+
+Download flow (`GET /files/{fileId}?token=...`):
+
+1. Parse and verify token; reject with `401` on any failure.
+2. If `expiresAtUnix < now` → `410 Gone` + `APIHUB-AI-4101`.
+3. Load `ai_chat_file` row by id; if missing or already past `expires_at` → `404` + `APIHUB-AI-3002`.
+4. Open the file from disk, set `Content-Type` and `Content-Disposition`, stream bytes.
+
+### 6.4 Cleanup job
+
+New entry in `service/cleanup/AiChatFiles.go`, registered in `main()` like the other cleanup jobs. Cron from `cfg.GeneratedFiles.CleanupSchedule` (default every 5 minutes):
+
+1. `SELECT id, storage_path FROM ai_chat_file WHERE expires_at < now() LIMIT 1000`.
+2. For each row, delete the file from disk (ignore ENOENT), delete the row.
+3. Orphan sweep: walk the directory tree and remove any file whose id is not in the DB (protects against crashes between FS write and DB insert).
+
+---
+
+## 7. Chat cleanup job
+
+New `service/cleanup/AiChat.go`, cron from `cfg.Chat.CleanupSchedule` (default daily at 03:15). Per user:
+
+1. Let `keepForever = pinnedForeverCount`. Compute the set of chat ids to keep as:
+   * all pinned chats;
+   * top `keepForever` chats by `last_message_at DESC` among the non-pinned ones;
+   * all non-pinned chats with `last_message_at > now() - retentionDays`.
+2. Delete all other chats (cascading messages via `ON DELETE CASCADE`).
+
+Done in one SQL statement per user to keep it cheap:
+
+```sql
+DELETE FROM ai_chat c
+WHERE c.user_id = $1
+  AND c.pinned = false
+  AND c.last_message_at < now() - $2::interval
+  AND c.id NOT IN (
+      SELECT id FROM ai_chat
+      WHERE user_id = $1 AND pinned = false
+      ORDER BY last_message_at DESC
+      LIMIT $3
+  );
+```
+
+Driver query: `SELECT DISTINCT user_id FROM ai_chat`.
+
+The job is protected by the existing `LockService` (same pattern as `CreateComparisonsCleanupJob`) so that only one backend instance in the cluster runs it at a time.
+
+---
+
+## 8. Responses API migration (openai-go/v3)
+
+The current PoC uses `client.Chat.Completions.New`. We move to `client.Responses.New` / `client.Responses.NewStreaming`. Concrete tasks:
+
+1. Add a thin `client/OpenAIResponsesClient.go` wrapper that exposes:
+   * `CreateResponseStream(ctx, params) (<-chan ResponseEvent, error)` yielding our internal event type;
+   * `CreateResponse(ctx, params) (*Response, error)` for non-streaming paths (summary, auto-title);
+   * `GetResponseUsage(ctx, responseId) (Usage, error)` for the compaction trigger.
+2. Translate the existing OpenAI tool adapter from Chat Completions tools (`shared.FunctionDefinitionParam`) to Responses tools. The function schema is identical; only the wrapping struct changes.
+3. Keep the existing `systemMessageBaseContent` and the `api-packages-list` cache from `ChatService.buildSystemMessage`. It is injected only on the first turn of a chat (or right after a compaction).
+
+Version already pinned in `go.mod` (`openai-go/v3 v3.31.0`) — no dependency bump needed, but verify at implementation time that the Responses API surface is present in this release.
+
+---
+
+## 9. Observability
+
+* Every request carries a correlation id — use the existing `X-Request-ID` middleware convention (if not present, add one) and pass it to OpenAI as `X-Request-ID` header via the client's request options.
+* Structured `log.WithFields` for: `userId`, `chatId`, `messageId`, `turnDurationMs`, `promptTokens`, `completionTokens`, `compacted`, `toolCalls`, `streamClosedReason` (one of `done`, `error`, `client_aborted`).
+* New Prometheus counters in `metrics/`:
+  * `apihub_ai_chat_turns_total{status="ok|error|aborted"}`;
+  * `apihub_ai_chat_tokens_total{kind="prompt|completion"}`;
+  * `apihub_ai_chat_compactions_total`;
+  * `apihub_ai_chat_generated_files_total`.
+
+---
+
+## 10. Rollout and testing plan
+
+### 10.1 Migration strategy
+
+* The PoC had no persistence, so nothing to migrate.
+* New migration `34_ai_chat.up.sql` adds three empty tables. On environments where the PoC is disabled this is a no-op for users.
+
+### 10.2 Testing
+
+1. **Unit tests**
+   * Pin-limit enforcement in `ChatService.UpdateChat`.
+   * Retention predicate in `cleanup/AiChat` (table-driven: various combinations of pinned/last-activity).
+   * Signed-URL token generation and verification.
+   * Idempotency — two concurrent sends with the same `clientMessageId` should cause exactly one LLM call (simulated via a fake OpenAI client).
+   * SSE framing — the controller writes well-formed frames for each event DTO.
+
+2. **Integration tests** (use the existing docker-compose + test harness)
+   * Full turn happy path with a fake OpenAI client that returns a scripted stream.
+   * Auto-compaction: stub `GetResponseUsage` to return a tokens value above the threshold; verify `context.compacted` event fired and the chat row got a summary.
+   * File download lifecycle: create a fake file via `ChatFileService`, assert signed URL works before expiry, returns 410 after expiry, 404 after cleanup.
+   * Ownership: user A cannot see user B's chats (tests return 404 on all CRUD attempts).
+
+3. **Manual / end-to-end**
+   * Dev-only deployment with FE integration.
+   * Verify retention cleanup by setting `retentionDays=1`, `pinnedForeverCount=2` and advancing `last_message_at` manually in the DB.
+
+### 10.3 Feature flag
+
+Add `ai.chat.enabled` (default `false` in production, `true` in dev). Gate route registration in `Service.go` on this flag instead of the current `!productionMode` check, so we can progressively enable the feature per environment once ready.
+
+---
+
+## 11. Work-breakdown (proposed order)
+
+1. **Config & scaffolding.** Extend `ChatConfig`, defaults, validation, new getters in `SystemInfoService`. Add a no-op `ChatService` interface shaped like the final one.
+2. **DB migration + repository.** Write migration `34_ai_chat.up/down.sql`. Implement `ChatRepository` (CRUD + keyset pagination + idempotency insert).
+3. **Chat CRUD endpoints.** Controller + service methods for `GET /config`, `GET/POST /chats`, `GET/PATCH/DELETE /chats/{id}`, `GET /chats/{id}/messages`. No LLM involvement yet.
+4. **Signed-URL file plumbing.** `ChatFileService` + `GET /files/{fileId}` endpoint + cleanup job. Can be tested without any MCP tool by injecting test files via an internal helper.
+5. **Non-streaming send.** `POST /messages` wired through the Responses API (no compaction, no auto-title). Full tool-calling loop, one turn at a time.
+6. **Streaming send.** SSE framing + `<-chan StreamEvent` service API. Reuse pipeline from step 5.
+7. **Idempotency.** Plug `clientMessageId` uniqueness; add replay path.
+8. **Auto-compaction.** `ChatContextService.Prepare`, compaction summary prompt, DB fields.
+9. **Auto-title.** Background task after first turn.
+10. **Retention cleanup job.** Implement, wire via `LockService`.
+11. **Observability.** Metrics, structured logs, request id propagation.
+12. **Feature flag + remove PoC routes.** Flip the dev deployments to the new contract and delete the legacy endpoints + obsolete code in `service/ChatService.go` (the stateless `Chat` / `ChatStream` methods).
+
+Each step produces a landable increment with tests; the FE team can start against step 3's shape (all CRUD is usable without real LLM traffic).
