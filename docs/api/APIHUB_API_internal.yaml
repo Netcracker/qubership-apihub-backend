@@ -977,6 +977,7 @@ components:
         - rest
         - graphql
         - protobuf
+        - mcp
         - asyncapi
     PackageStatus:
       description: Published package version content
@@ -1057,6 +1058,9 @@ components:
         - graphapi
         - introspection
         - protobuf-3
+        - mcp-tools
+        - mcp-resources
+        - mcp-prompts
         - asyncapi-3-0
         - unknown
     DocumentFormat:
@@ -1417,6 +1421,13 @@ components:
                       excluded:
                         description: All excluded refs will be ignored (but will still be visible for package version).
                         type: boolean
+                mcpPacks:
+                  description: |
+                    MCP document packs configuration as provided in publish build config.
+                    Present only if the build included MCP documents.
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/McpDocumentPack"
             documents.json:
               type: object
               description: List of documents data.
@@ -1593,6 +1604,235 @@ components:
                                   Only used when useOperationDataAsSearchText is false.
                                 type: string
                                 example: "search/abc.json"
+            mcp/tools.json:
+              description: |
+                Index of MCP tools extracted from MCP documents.
+                Present only if the build config includes mcpPacks with tools documents.
+              type: object
+              properties:
+                tools:
+                  type: array
+                  items:
+                    allOf:
+                      - $ref: "#/components/schemas/McpToolMeta"
+                      - type: object
+                        required:
+                          - entityId
+                          - documentId
+                          - entityType
+                          - mcpEndpoint
+                          - title
+                          - search
+                        properties:
+                          entityId:
+                            description: Unique entity identifier within the package version.
+                            type: string
+                            example: "mcp-tool-search-docs"
+                          documentId:
+                            description: Identifier of the source document from which the entity was extracted.
+                            type: string
+                            example: "tools-json"
+                          entityType:
+                            $ref: "#/components/schemas/McpEntityType"
+                          mcpEndpoint:
+                            description: MCP server endpoint path.
+                            type: string
+                            example: "/mcp"
+                          title:
+                            description: Display title (equals entity name).
+                            type: string
+                            example: "search_docs"
+                          search:
+                            description: Configuration for entity search indexing.
+                            type: object
+                            properties:
+                              useEntityDataAsSearchText:
+                                description: |
+                                  When true, the entity's single-entity specification data file is used as search text.
+                                type: boolean
+                                default: true
+            mcp/tools/{toolId}:
+              description: |
+                Single-entity specification for an MCP tool.
+                A valid MCP tools document containing exactly one tool.
+              type: object
+              required:
+                - tools
+              properties:
+                tools:
+                  type: array
+                  minItems: 1
+                  maxItems: 1
+                  items:
+                    type: object
+                    required:
+                      - name
+                      - inputSchema
+                    properties:
+                      name:
+                        type: string
+                      description:
+                        type: string
+                      inputSchema:
+                        type: object
+                    additionalProperties: true
+            mcp/resources.json:
+              description: |
+                Index of MCP resources extracted from MCP documents.
+                Present only if the build config includes mcpPacks with resources documents.
+              type: object
+              properties:
+                resources:
+                  type: array
+                  items:
+                    allOf:
+                      - $ref: "#/components/schemas/McpResourceMeta"
+                      - type: object
+                        required:
+                          - entityId
+                          - documentId
+                          - entityType
+                          - mcpEndpoint
+                          - title
+                          - search
+                        properties:
+                          entityId:
+                            description: Unique entity identifier within the package version.
+                            type: string
+                            example: "mcp-resource-readme"
+                          documentId:
+                            description: Identifier of the source document from which the entity was extracted.
+                            type: string
+                            example: "resources-json"
+                          entityType:
+                            $ref: "#/components/schemas/McpEntityType"
+                          mcpEndpoint:
+                            description: MCP server endpoint path.
+                            type: string
+                            example: "/mcp"
+                          title:
+                            description: Display title (equals entity name).
+                            type: string
+                            example: "readme"
+                          search:
+                            description: Configuration for entity search indexing.
+                            type: object
+                            properties:
+                              useEntityDataAsSearchText:
+                                description: |
+                                  When true, the entity's single-entity specification data file is used as search text.
+                                type: boolean
+                                default: true
+            mcp/resources/{resourceId}:
+              description: |
+                Single-entity specification for an MCP resource.
+                A valid MCP resources document containing exactly one resource.
+              type: object
+              required:
+                - resources
+              properties:
+                resources:
+                  type: array
+                  minItems: 1
+                  maxItems: 1
+                  items:
+                    type: object
+                    required:
+                      - uri
+                      - name
+                    properties:
+                      uri:
+                        type: string
+                        format: uri
+                      name:
+                        type: string
+                      description:
+                        type: string
+                      mimeType:
+                        type: string
+                    additionalProperties: true
+            mcp/prompts.json:
+              description: |
+                Index of MCP prompts extracted from MCP documents.
+                Present only if the build config includes mcpPacks with prompts documents.
+              type: object
+              properties:
+                prompts:
+                  type: array
+                  items:
+                    allOf:
+                      - $ref: "#/components/schemas/McpPromptMeta"
+                      - type: object
+                        required:
+                          - entityId
+                          - documentId
+                          - entityType
+                          - mcpEndpoint
+                          - title
+                          - search
+                        properties:
+                          entityId:
+                            description: Unique entity identifier within the package version.
+                            type: string
+                            example: "mcp-prompt-summarize"
+                          documentId:
+                            description: Identifier of the source document from which the entity was extracted.
+                            type: string
+                            example: "prompts-json"
+                          entityType:
+                            $ref: "#/components/schemas/McpEntityType"
+                          mcpEndpoint:
+                            description: MCP server endpoint path.
+                            type: string
+                            example: "/mcp"
+                          title:
+                            description: Display title (equals entity name).
+                            type: string
+                            example: "summarize"
+                          search:
+                            description: Configuration for entity search indexing.
+                            type: object
+                            properties:
+                              useEntityDataAsSearchText:
+                                description: |
+                                  When true, the entity's single-entity specification data file is used as search text.
+                                type: boolean
+                                default: true
+            mcp/prompts/{promptId}:
+              description: |
+                Single-entity specification for an MCP prompt.
+                A valid MCP prompts document containing exactly one prompt.
+              type: object
+              required:
+                - prompts
+              properties:
+                prompts:
+                  type: array
+                  minItems: 1
+                  maxItems: 1
+                  items:
+                    type: object
+                    required:
+                      - name
+                    properties:
+                      name:
+                        type: string
+                      title:
+                        type: string
+                      description:
+                        type: string
+                      arguments:
+                        type: array
+                        items:
+                          type: object
+                          required:
+                            - name
+                          properties:
+                            name:
+                              type: string
+                            description:
+                              type: string
+                    additionalProperties: true
         - title: Build result for changelog
           description: Build result for buildType = changelog
           type: object
@@ -2072,6 +2312,14 @@ components:
                 description: Referenced package version number.
                 type: string
                 example: "2022.2@5"
+        mcpPacks:
+          description: |
+            List of MCP (Model Context Protocol) document packs.
+            Each pack groups MCP documents (tools, resources, prompts) belonging to the same MCP server endpoint.
+            Document type is detected automatically based on file content.
+          type: array
+          items:
+            $ref: "#/components/schemas/McpDocumentPack"
     ExportVersionBuildConfig:
       description: Build config for export of version.
       type: object
@@ -2490,6 +2738,107 @@ components:
                 type: string
                 pattern: "^[a-z0-9-]"
                 example: "qitmf-v5-11-qitmf-v5-12-merged-json"
+    McpDocumentPack:
+      description: |
+        A group of MCP documents belonging to the same MCP server endpoint.
+        Package version can include multiple MCP document packs for different MCP server endpoints.
+      type: object
+      required:
+        - mcpEndpoint
+        - fileIds
+      properties:
+        mcpEndpoint:
+          description: |
+            MCP server endpoint path (e.g. "/mcp").
+            Does not include the host — only the path portion.
+          type: string
+          example: "/mcp"
+        fileIds:
+          description: |
+            List of MCP document file IDs from the sources archive.
+            Document type (tools, resources, or prompts) is detected automatically based on file content.
+          type: array
+          items:
+            type: string
+          example: ["mcp/tools.json", "mcp/resources.json", "mcp/prompts.json"]
+    McpEntityType:
+      title: mcpEntityType
+      description: Type of MCP entity.
+      type: string
+      enum:
+        - tool
+        - resource
+        - prompt
+    McpToolMeta:
+      description: Type-specific metadata for an MCP tool entity.
+      type: object
+      required:
+        - toolId
+        - name
+        - description
+      properties:
+        toolId:
+          description: Unique tool identifier within the package version. Same as entityId.
+          type: string
+          example: "mcp-tool-search-docs"
+        name:
+          description: Tool name from the MCP document.
+          type: string
+          example: "search_docs"
+        description:
+          description: Tool description. Empty string if not specified in the source document.
+          type: string
+          example: "Search through documentation"
+    McpResourceMeta:
+      description: Type-specific metadata for an MCP resource entity.
+      type: object
+      required:
+        - resourceId
+        - name
+        - description
+        - uri
+      properties:
+        resourceId:
+          description: Unique resource identifier within the package version. Same as entityId.
+          type: string
+          example: "mcp-resource-readme"
+        name:
+          description: Resource name from the MCP document.
+          type: string
+          example: "readme"
+        description:
+          description: Resource description. Empty string if not specified in the source document.
+          type: string
+          example: "Project README file"
+        uri:
+          description: Resource URI from the MCP document.
+          type: string
+          format: uri
+          example: "file:///docs/readme.md"
+        mimeType:
+          description: Resource MIME type. Present only if specified in the source document.
+          type: string
+          example: "text/markdown"
+    McpPromptMeta:
+      description: Type-specific metadata for an MCP prompt entity.
+      type: object
+      required:
+        - promptId
+        - name
+        - description
+      properties:
+        promptId:
+          description: Unique prompt identifier within the package version. Same as entityId.
+          type: string
+          example: "mcp-prompt-summarize"
+        name:
+          description: Prompt name from the MCP document.
+          type: string
+          example: "summarize"
+        description:
+          description: Prompt description. Empty string if not specified in the source document.
+          type: string
+          example: "Summarize the given text"
   examples:
     IncorrectInputParameters:
       description: Incorrect input parameters
