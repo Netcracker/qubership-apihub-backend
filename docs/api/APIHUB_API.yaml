@@ -9722,43 +9722,6 @@ paths:
               examples:
                 InternalServerError:
                   $ref: "#/components/examples/InternalServerError"
-  "/api/v1/ai-chat/config":
-    get:
-      tags:
-        - AI Chat
-      summary: Get AI chat client configuration.
-      description: |
-        Returns the set of AI chat parameters that the frontend needs to know in order to render the UI correctly (e.g. maximum number of pinned chats, retention policy, generated-file TTL).
-        All values are read-only and mirror the corresponding server configuration in `config.yaml`.
-      operationId: getAiChatConfig
-      responses:
-        "200":
-          description: Successful execution
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AiChatClientConfig"
-              examples:
-                AiChatClientConfig:
-                  $ref: "#/components/examples/AiChatClientConfig"
-        "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                Unauthorized:
-                  $ref: "#/components/examples/Unauthorized"
-        "500":
-          description: Internal Server Error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              examples:
-                InternalServerError:
-                  $ref: "#/components/examples/InternalServerError"
   "/api/v1/ai-chat/chats":
     get:
       tags:
@@ -9939,7 +9902,7 @@ paths:
       description: |
         Partially updates a chat. Only the fields present in the request body are updated.
         Pinning rules:
-          * a user may pin at most `maxPinnedPerUser` chats (see `GET /api/v1/ai-chat/config`); pinning beyond the limit returns `400`;
+          * a user may pin at most **3** chats (the limit is hard-coded identically on the client and on the server); pinning beyond the limit returns `400`;
           * pinned chats are exempt from TTL-based cleanup.
       operationId: updateAiChat
       requestBody:
@@ -9958,7 +9921,7 @@ paths:
         "400":
           description: |
             Bad request. Typical reasons:
-              * attempting to pin when the user already has `maxPinnedPerUser` chats pinned;
+              * attempting to pin when the user already has the maximum allowed number of pinned chats;
               * `title` too long or empty after trimming.
           content:
             application/json:
@@ -10285,7 +10248,7 @@ paths:
       summary: Download a generated file.
       description: |
         Downloads a file produced by the assistant in the scope of the current user's chats.
-        The endpoint is served without session authentication; instead, access is authorized via a short-lived signed token passed in the `token` query parameter. Tokens are issued by the backend and embedded into markdown responses as regular links; they expire together with the file itself (see `generatedFileTtlMinutes` in `AiChatClientConfig`).
+        The endpoint is served without session authentication; instead, access is authorized via a short-lived signed token passed in the `token` query parameter. Tokens are issued by the backend and embedded into markdown responses as regular links; they expire together with the file itself (the exact lifetime is a server-side configuration and is not published to the client).
         A link becoming stale is not an error condition — the client is expected to request a fresh response from the assistant.
       operationId: downloadAiChatFile
       security: []
@@ -10293,7 +10256,7 @@ paths:
         - name: token
           in: query
           required: true
-          description: Signed access token (HMAC). Opaque to the client.
+          description: Short-lived signed access token scoped to this file. Opaque to the client — issued by the server as part of the attachment URL and simply echoed back.
           schema:
             type: string
       responses:
@@ -12662,26 +12625,6 @@ components:
           type: string
           description: File name (slug+extension).
           example: "qitmf-v5.11.json"
-    AiChatClientConfig:
-      description: |
-        Client-visible limits for the AI chat. Only parameters that directly influence client behaviour (button state, client-side validation) are exposed — server-only policies such as retention or file TTL are intentionally not published.
-      type: object
-      required:
-        - maxPinnedPerUser
-        - maxUserMessageLength
-      properties:
-        maxPinnedPerUser:
-          description: |
-            Maximum number of chats a single user may pin. The client should disable the "Pin" action when the user already has this many pinned chats. Controlled by config `ai.chat.maxPinnedPerUser`, default 3.
-          type: integer
-          minimum: 0
-          example: 3
-        maxUserMessageLength:
-          description: |
-            Maximum allowed length of a user message in characters. Used by the client to validate the compose input before sending. Controlled by config `ai.chat.maxUserMessageLength`, default 32000 (≈ 8k tokens — generous enough to paste a JSON schema or a small spec excerpt, while still providing a basic DoS guard).
-          type: integer
-          minimum: 1
-          example: 32000
     AiChat:
       description: AI chat metadata (messages are not included).
       type: object
@@ -12760,7 +12703,7 @@ components:
           example: "Tenant-aware search questions"
         pinned:
           description: |
-            If true, pins the chat. Pinning is rejected with `400` when the user has already reached `maxPinnedPerUser`.
+            If true, pins the chat. Pinning is rejected with `400` when the user already has the maximum allowed number of pinned chats (hard-coded to 3 on both client and server).
             If false, unpins the chat.
           type: boolean
           example: true
@@ -12884,7 +12827,7 @@ components:
       properties:
         content:
           description: |
-            User message text (plain text, not markdown). The exact allowed length is exposed to the client as `AiChatClientConfig.maxUserMessageLength`; this schema carries the same number as a default hint for generated clients.
+            User message text (plain text, not markdown). Length limit is hard-coded identically on the client (validation) and on the server (enforcement) to the value of `maxLength` below.
           type: string
           minLength: 1
           maxLength: 32000
@@ -13138,11 +13081,6 @@ components:
         code: "APIHUB-8000"
         reason: "InternalServerError"
         message: "InternalServerError"
-    AiChatClientConfig:
-      description: Typical AI chat client config
-      value:
-        maxPinnedPerUser: 3
-        maxUserMessageLength: 32000
     AiChat:
       description: Single chat metadata
       value:
@@ -13266,7 +13204,7 @@ components:
       value:
         status: 400
         code: "APIHUB-AI-4003"
-        message: "Cannot pin chat: user already has 3 pinned chats (maxPinnedPerUser=3)"
+        message: "Cannot pin chat: user already has 3 pinned chats (the limit is 3)"
     AiChatFileNotFound:
       description: Generated file not found or already cleaned up.
       value:

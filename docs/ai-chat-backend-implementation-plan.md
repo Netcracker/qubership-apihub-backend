@@ -35,7 +35,7 @@ Responsibilities split:
 * `ChatController` only converts HTTP/SSE ↔ service calls; no business logic.
 * `ChatService` owns transactions. A single "send message" call goes end-to-end through the service.
 * `ChatContextService` hides the details of how the OpenAI context is rebuilt for a turn (previous_response_id vs. summary+tail vs. full rebuild fallback).
-* `ChatFileService` encapsulates the filesystem and the HMAC token (no other code touches `/tmp`).
+* `ChatFileService` encapsulates the filesystem and defers all token minting/validation to the existing `security` package (see §6.3). No other code touches `/tmp`.
 * `ChatRepository` is the only module that touches the three new tables.
 
 ---
@@ -128,16 +128,26 @@ Notes on the columns:
 
 Extend `qubership-apihub-service/config/Config.go`:
 
+Two values are **hard-coded identically on the client and on the server** and therefore are not stored in `config.yaml` and not exposed via any endpoint:
+
+```go
+const (
+    MaxPinnedPerUser     = 3       // user-facing pin limit; FE mirrors the same constant
+    MaxUserMessageLength = 32_000  // characters; ≈ 8k tokens, fits a JSON schema paste while still providing a DoS guard
+)
+```
+
+Any future change of either constant has to be a coordinated FE + BE rollout — that is the whole point of baking them in instead of introducing a `/config` endpoint that every client would have to poll.
+
+Everything else lives in `qubership-apihub-service/config/Config.go` as server-only knobs:
+
 ```go
 type ChatConfig struct {
     OpenAI                     OpenAIConfig
     RetentionDays              int              // default 30
     PinnedForeverCount         int              // default 10
-    MaxPinnedPerUser           int              // default 3
-    MaxUserMessageLength       int              // default 32000 (≈ 8k tokens, fits a JSON schema paste while still providing a DoS guard)
     CompactAtContextPercent    int              // default 80 — compact when used tokens ≥ this % of the model's context window
     CleanupSchedule            string           // cron, default "15 3 * * *"
-    SignedUrlSecret            Base64DecodedString // HMAC key for file tokens; required
     GeneratedFiles             GeneratedFilesConfig
 }
 
@@ -155,12 +165,11 @@ In `SystemInfoService`:
 
 * add defaults via `viper.SetDefault` (see `setDefaults()` in `qubership-apihub-service/service/SystemInfoService.go`);
 * exposed getters:
-  * `GetAiChatRetentionPolicy() (retentionDays, pinnedForeverCount, maxPinnedPerUser int)`;
-  * `GetAiChatClientConfig() view.AiChatClientConfig` (for the `/config` endpoint — returns only `maxPinnedPerUser` and `maxUserMessageLength`);
+  * `GetAiChatRetentionPolicy() (retentionDays, pinnedForeverCount int)` — note: `maxPinnedPerUser` is *not* a runtime config, it is the compile-time constant above;
   * `GetAiChatGeneratedFilesConfig() config.GeneratedFilesConfig`;
-  * `GetAiChatSignedUrlSecret() []byte`;
   * `GetAiChatCompactAtContextPercent() int`;
-* validation: `SignedUrlSecret` must be at least 32 bytes — fail fast on startup if not (the chat is currently dev-only so we can abort startup when the secret is missing; gate the whole feature behind a new `ai.chat.enabled` bool that defaults to `false` in production if we decide to ship the feature there later).
+* there is **no** `signedUrlSecret` — file download tokens are JWTs minted by the existing `security` package against the same RSA key that signs user session tokens (see §6.3). This means one signing key for the whole service; nothing new for operators to provision.
+* feature-gate the whole chat under a new `ai.chat.enabled` bool that defaults to `false` in production.
 
 Config sample (add to `config.yaml` example section in the deployment repo):
 
@@ -169,11 +178,8 @@ ai:
   chat:
     retentionDays: 30
     pinnedForeverCount: 10
-    maxPinnedPerUser: 3
-    maxUserMessageLength: 32000
     compactAtContextPercent: 80
     cleanupSchedule: "15 3 * * *"
-    signedUrlSecret: "<base64 >= 32 bytes>"
     generatedFiles:
       directory: "/tmp/apihub-ai-chat"
       ttlMinutes: 30
@@ -195,8 +201,6 @@ Register under `!productionMode` for now (same gate as the PoC) in `Service.go`:
 
 ```go
 // /api/v1/ai-chat/* — full-featured AI chat
-r.HandleFunc("/api/v1/ai-chat/config", security.Secure(chatController.GetConfig)).Methods(http.MethodGet)
-
 r.HandleFunc("/api/v1/ai-chat/chats", security.Secure(chatController.ListChats)).Methods(http.MethodGet)
 r.HandleFunc("/api/v1/ai-chat/chats", security.Secure(chatController.CreateChat)).Methods(http.MethodPost)
 r.HandleFunc("/api/v1/ai-chat/chats/{chatId}", security.Secure(chatController.GetChat)).Methods(http.MethodGet)
@@ -236,7 +240,7 @@ func (c *ChatService) SendMessageStream(ctx context.Context, userId, chatId stri
 * `clientMessageId` — optional UUID; if present, must be a valid UUID v4;
 * ownership check: `chat.user_id == ctx.GetUserId()` — if not, return `404` (do not disclose existence of other users' chats);
 * all 404s use `APIHUB-AI-3001`;
-* pin validation: when `pinned: true` is requested in PATCH, count current pinned chats for the user and reject with `APIHUB-AI-4003` if already at the limit.
+* pin validation: when `pinned: true` is requested in PATCH, count current pinned chats for the user and reject with `APIHUB-AI-4003` if already at `MaxPinnedPerUser` (the same constant the FE uses).
 
 ---
 
@@ -398,14 +402,49 @@ Files are expected to be produced by future MCP tools (out of scope for this ite
 
 ### 6.3 Signed tokens
 
-Algorithm: `HMAC_SHA256(signedUrlSecret, fileId + "|" + expiresAtUnix)` → base64url → token body. Final token is `<expiresAtUnix>.<body>` (so the server can verify without a DB roundtrip if the token is malformed/expired).
+File download tokens are **JWTs signed by the same RSA key the IdP already uses for user sessions** (`security/Auth.go`'s `keeper`). There is no separate HMAC secret — one signing key for the whole service, one piece of crypto state for operators to manage.
+
+Scope isolation is provided by `TokenTypeExt`, the same mechanism that already keeps access and refresh tokens from being used in each other's place (`JWTValidator.ValidateToken` enforces type match). A new token type is introduced:
+
+```go
+// security/AiChatFileTokens.go (new)
+const AiChatFileDownloadTokenType = "ai-chat-file-download"
+
+func MintAiChatFileToken(userId, fileId string, ttl time.Duration) (string, error) {
+    user := auth.NewUserInfo("", userId, nil, auth.Extensions{})
+    ext := user.GetExtensions()
+    ext.Set(TokenTypeExt, AiChatFileDownloadTokenType)
+    ext.Set("fileId", fileId)
+    return jwt.IssueAccessToken(user, keeper, jwt.SetExpDuration(ttl))
+}
+
+func ValidateAiChatFileToken(token string) (userId, fileId string, err error) {
+    // Reuse the same JWTValidator that the rest of the auth layer uses.
+    info, _, err := jwtValidator.ValidateToken(token, AiChatFileDownloadTokenType)
+    if err != nil {
+        return "", "", err
+    }
+    return info.GetID(), info.GetExtensions().Get("fileId"), nil
+}
+```
+
+Consequences, all of them desirable:
+
+* **Cannot be used as a session token** — `BearerTokenStrategy` asks `JWTValidator.ValidateToken(tok, AccessTokenType)`, which rejects anything with a different `TokenTypeExt`. And vice versa: a real access token cannot be used as a file download token.
+* **Revocation works for free.** `JWTValidator.parseAndValidate` already calls `IsTokenRevoked(userId, issuedAt)`. If the user is logged out / revoked, their outstanding file links die too — which is the correct behaviour. A subsequent `GET /messages` will re-sign fresh URLs after the user logs back in.
+* **Token lifetime is decoupled from session lifetime.** We pass `ttl = time.Until(file.ExpiresAt)` — typically ≤ `TTLMinutes` (default 30 min).
+
+Minor refactor required in `security/Auth.go`: `jwtValidator` is today a local variable inside `SetupGoGuardian`. Promote it to a package-level var (`var jwtValidator JWTValidator`) next to `keeper`, so the new file-token helpers can reuse the same validator instance (and therefore the same revocation service, the same leeway rules, etc.). No behaviour change for existing callers.
+
+`ChatFileService` itself does not touch crypto; it calls `security.MintAiChatFileToken` when constructing an `AiChatAttachment` and `security.ValidateAiChatFileToken` is called from the controller on download.
 
 Download flow (`GET /files/{fileId}?token=...`):
 
-1. Parse and verify token; reject with `401` on any failure.
-2. If `expiresAtUnix < now` → `410 Gone` + `APIHUB-AI-4101`.
-3. Load `ai_chat_file` row by id; if missing or already past `expires_at` → `404` + `APIHUB-AI-3002`.
-4. Open the file from disk, set `Content-Type` and `Content-Disposition`, stream bytes.
+1. `security.ValidateAiChatFileToken(token)` — on any failure (bad signature, type mismatch, issuer/audience mismatch, revoked) reject with `401`.
+2. If the JWT `exp` is in the past, the validator itself returns a "token expired" error; map that to `410 Gone` + `APIHUB-AI-4101` (distinguished from generic `401` by inspecting the error).
+3. Compare `fileId` from the token against the path parameter — mismatch ⇒ `401` (token for a different file).
+4. Load `ai_chat_file` row by id; if missing or already past `expires_at` → `404` + `APIHUB-AI-3002`. Also cross-check `row.user_id == tokenUserId` as a belt-and-braces measure (should always hold).
+5. Open the file from disk, set `Content-Type` and `Content-Disposition`, stream bytes.
 
 ### 6.4 Cleanup job
 
@@ -487,7 +526,7 @@ Version already pinned in `go.mod` (`openai-go/v3 v3.31.0`) — no dependency bu
 1. **Unit tests**
    * Pin-limit enforcement in `ChatService.UpdateChat`.
    * Retention predicate in `cleanup/AiChat` (table-driven: various combinations of pinned/last-activity).
-   * Signed-URL token generation and verification.
+   * `security.MintAiChatFileToken` / `security.ValidateAiChatFileToken` — happy path, expired token, bad signature, wrong token type (e.g. a real access token must not validate as a file token), wrong `fileId` in the path vs token.
    * Idempotency — two concurrent sends with the same `clientMessageId` should cause exactly one LLM call (simulated via a fake OpenAI client).
    * SSE framing — the controller writes well-formed frames for each event DTO.
 
@@ -511,8 +550,8 @@ Add `ai.chat.enabled` (default `false` in production, `true` in dev). Gate route
 
 1. **Config & scaffolding.** Extend `ChatConfig`, defaults, validation, new getters in `SystemInfoService`. Add a no-op `ChatService` interface shaped like the final one.
 2. **DB migration + repository.** Write migration `34_ai_chat.up/down.sql`. Implement `ChatRepository` (CRUD + keyset pagination + idempotency insert).
-3. **Chat CRUD endpoints.** Controller + service methods for `GET /config`, `GET/POST /chats`, `GET/PATCH/DELETE /chats/{id}`, `GET /chats/{id}/messages`. No LLM involvement yet.
-4. **Signed-URL file plumbing.** `ChatFileService` + `GET /files/{fileId}` endpoint + cleanup job. Can be tested without any MCP tool by injecting test files via an internal helper.
+3. **Chat CRUD endpoints.** Controller + service methods for `GET/POST /chats`, `GET/PATCH/DELETE /chats/{id}`, `GET /chats/{id}/messages`. No LLM involvement yet. Pin-limit validation uses the `MaxPinnedPerUser` compile-time constant.
+4. **File download plumbing.** Add `security/AiChatFileTokens.go` (mint + validate, reusing the IdP's JWT `keeper` and `JWTValidator`). Implement `ChatFileService` + `GET /files/{fileId}` endpoint + cleanup job. Can be tested without any MCP tool by injecting test files via an internal helper.
 5. **Non-streaming send.** `POST /messages` wired through the Responses API (no compaction, no auto-title). Full tool-calling loop, one turn at a time.
 6. **Streaming send.** SSE framing + `<-chan StreamEvent` service API. Reuse pipeline from step 5.
 7. **Idempotency.** Plug `clientMessageId` uniqueness; add replay path.

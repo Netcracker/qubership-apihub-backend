@@ -38,7 +38,6 @@ All endpoints live under `/api/v1/ai-chat/*` and require the standard APIHUB ses
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/api/v1/ai-chat/config` | Read the client-visible limits (pin limit and max message length). |
 | `GET` | `/api/v1/ai-chat/chats` | List the user's chats (paginated, pinned first). |
 | `POST` | `/api/v1/ai-chat/chats` | Create a new (empty) chat. |
 | `GET` | `/api/v1/ai-chat/chats/{chatId}` | Read chat metadata. |
@@ -68,8 +67,8 @@ For `/messages` the sort is strictly `createdAt desc`.
 
 ### 3.3 Pinning
 
-* Users may pin at most `maxPinnedPerUser` chats (default **3**). The server enforces this — pinning over the limit returns `400 APIHUB-AI-4003`. The FE should either mirror the local count before calling, or simply display the server error.
-* In addition to user-driven pinning, the server keeps the **N most recently active** chats of each user alive indefinitely (default **N = 10**, exposed as `pinnedForeverCount`). These are not visually marked as pinned — they simply do not disappear. The FE does not need to special-case this; it only drives the "Pin" button.
+* Users may pin **at most 3 chats**. This limit is hard-coded identically on the client (UI should disable the "Pin" action when the count is already at 3) and on the server (pinning beyond the limit returns `400 APIHUB-AI-4003`). There is no `/config` endpoint — the value is a shared constant.
+* In addition to user-driven pinning, the server keeps the **10 most recently active** chats of each user alive indefinitely as a server-only retention policy. These are **not** visually marked as pinned and the FE does not need to know about this — it only drives the "Pin" button. The value is server configuration and may change without a client update.
 
 ## 4. Sending a message (streaming) — the main flow
 
@@ -156,7 +155,7 @@ Behaviour guarantees:
 * Every file has a server-controlled lifetime (order of tens of minutes — the exact value is a server-side concern and is not published to the client). The attachment carries a concrete `expiresAt`; until that moment the link works.
 * When the user revisits an old chat via `GET /messages`, the server re-issues fresh signed URLs for every still-existing attachment, so a reload of an old chat does not leave the user with stale links.
 * The server returns **`410 Gone`** when the token is valid but expired and **`404`** when the file has already been cleaned up. Both cases are fine — the UI can display a generic "This link has expired, please re-ask the assistant" message.
-* The download endpoint **does not** require a session cookie or JWT; it authorises solely via the signed token. This means: opening the link in a new tab (or sharing it within the validity window) just works.
+* The download endpoint **does not** require a session cookie or Authorization header; the short-lived token in the query string is authorisation in itself. This means: opening the link in a new tab (or sharing it within the validity window) just works.
 
 ## 6. Chat CRUD flow
 
@@ -187,7 +186,7 @@ Errors are returned as the standard APIHUB `ErrorResponse` body (`status`, `code
 | `APIHUB-AI-3001` | Chat not found (or belongs to another user; the server does not disclose the difference). |
 | `APIHUB-AI-3002` | Generated file not found or already cleaned up. |
 | `APIHUB-AI-4001` | Message validation failed (length, empty content, etc.). |
-| `APIHUB-AI-4003` | `maxPinnedPerUser` exceeded. |
+| `APIHUB-AI-4003` | Pinned-chats limit exceeded (3). |
 | `APIHUB-AI-4101` | Signed download token expired (`410 Gone`). |
 | `APIHUB-AI-5000` | Generic internal server error while processing the chat. |
 | `APIHUB-AI-5001` | OpenAI upstream failure. |
@@ -199,7 +198,10 @@ Non-streaming endpoints return the error in the response body. The streaming end
 
 Minimum viable integration:
 
-- [ ] Call `GET /config` once on app init; store `maxPinnedPerUser` and `maxUserMessageLength` in a reactive store.
+- [ ] Define two shared constants in the client codebase, identical to the server values:
+  - [ ] `MAX_PINNED_PER_USER = 3` — used to disable the "Pin" action in the UI;
+  - [ ] `MAX_USER_MESSAGE_LENGTH = 32000` — used to validate the compose input before sending.
+  - There is **no** `/config` endpoint; any change of these constants has to be a coordinated FE+BE rollout.
 - [ ] Implement chat sidebar with `GET /chats`, keyset pagination, sorting comes from the server — do not re-sort client-side.
 - [ ] Implement chat view with `GET /chats/{id}` + `GET /chats/{id}/messages` (newest first, paginated on scroll up). Use this endpoint **only** for historical display; the streaming endpoint is not usable for history replay.
 - [ ] Implement compose → send via `POST /chats/{id}/messages/stream`:
@@ -215,7 +217,6 @@ Minimum viable integration:
 
 Non-essential but recommended:
 
-- [ ] Client-side validation of user message length using `maxUserMessageLength` before sending.
 - [ ] Graceful retry with the same `clientMessageId` on transient network errors.
 - [ ] Abort the in-flight `fetch()` when the user navigates away, to free backend resources.
 
