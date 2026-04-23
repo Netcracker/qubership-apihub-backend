@@ -8,9 +8,9 @@ Goal: replace the current PoC (`POST /api/v1/ai-chat`, `POST /api/v1/ai-chat/str
 * durable storage in Postgres with a two-tier retention policy (TTL + "last M forever" + unlimited pins);
 * chat CRUD (list/create/get/rename/pin-unpin/delete);
 * streaming responses over SSE with tool-use visibility;
-* generated-file links served via signed URLs;
-* automatic context compaction when the conversation approaches the model's context window, so that old facts are re-packed into a summary rather than silently dropped by the LLM (the Responses API would otherwise fail the turn with `context_length_exceeded`);
-* minimal FE↔BE and BE↔OpenAI traffic.
+* downloadable files produced by the assistant, served from a generic `/api/v1/generated-files/{fileId}` endpoint via short-lived signed tokens;
+* automatic context compaction when the conversation approaches the model's context window, so that old facts are re-packed into a summary rather than silently dropped by the LLM (the provider would otherwise fail the turn with `context_length_exceeded`);
+* minimal FE↔BE and BE↔LLM-provider traffic.
 
 Contract of reference: `docs/api/APIHUB_API.yaml` (tag **AI Chat**) and `docs/ai-chat-frontend-contract.md`.
 
@@ -19,23 +19,25 @@ Contract of reference: `docs/api/APIHUB_API.yaml` (tag **AI Chat**) and `docs/ai
 ## 1. Architecture overview
 
 ```
-controller/ChatController.go                 ──► HTTP/SSE layer (parse, auth, render)
-service/ChatService.go                       ──► orchestration: CRUD + turn pipeline
-service/ChatContextService.go  (new)         ──► history fetch, token counting, compaction
-service/ChatFileService.go     (new)         ──► generated files on disk + signed tokens
-service/cleanup/AiChat.go      (new)         ──► TTL-based chat cleanup job
-service/cleanup/AiChatFiles.go (new)         ──► /tmp file cleanup job
-repository/ChatRepository.go   (new)         ──► DB access
-client/OpenAIClient.go                       ──► (existing) reused, but the Responses API
-                                                 endpoints will be used instead of Chat Completions
+controller/ChatController.go                     ──► HTTP/SSE layer (parse, auth, render)
+controller/GeneratedFileController.go (new)      ──► /api/v1/generated-files/{fileId}
+service/ChatService.go                           ──► orchestration: CRUD + turn pipeline
+service/ChatContextService.go (new)              ──► history fetch, token counting, compaction
+service/GeneratedFileService.go (new)            ──► backend-generated files on disk + signed tokens
+service/cleanup/AiChat.go (new)                  ──► TTL-based chat cleanup job
+service/cleanup/GeneratedFiles.go (new)          ──► /tmp file cleanup job
+repository/ChatRepository.go (new)               ──► DB access
+client/OpenAIClient.go                           ──► (existing) reused, but the Responses API
+                                                     endpoints will be used instead of Chat Completions
 ```
 
 Responsibilities split:
 
 * `ChatController` only converts HTTP/SSE ↔ service calls; no business logic.
+* `GeneratedFileController` owns the single public, token-authenticated endpoint `GET /api/v1/generated-files/{fileId}`. It is deliberately kept separate from `ChatController` because the route is not chat-scoped (the token alone authorises it) and may be reused by future non-chat features that produce downloadable files.
 * `ChatService` owns transactions. A single "send message" call goes end-to-end through the service.
-* `ChatContextService` hides the details of how the OpenAI context is rebuilt for a turn (previous_response_id vs. summary+tail vs. full rebuild fallback).
-* `ChatFileService` encapsulates the filesystem and defers all token minting/validation to the existing `security` package (see §6.3). No other code touches `/tmp`.
+* `ChatContextService` hides the details of how the LLM-provider context is rebuilt for a turn (previous_response_id vs. summary+tail vs. full rebuild fallback).
+* `GeneratedFileService` encapsulates the filesystem and defers all token minting/validation to the existing `security` package (see §6.3). No other code touches `/tmp`.
 * `ChatRepository` is the only module that touches the three new tables.
 
 ---
@@ -50,19 +52,19 @@ CREATE TABLE ai_chat (
     user_id                      varchar     NOT NULL,
     title                        text        NOT NULL DEFAULT '',
     pinned                       boolean     NOT NULL DEFAULT false,
-    pinned_at                    timestamp without time zone,
     created_at                   timestamp without time zone NOT NULL,
+    -- Equal to created_at for a chat that has no messages yet; advances on every turn.
+    -- Always populated (no NULLs) so that the list endpoint can sort uniformly.
     last_message_at              timestamp without time zone NOT NULL,
     messages_count               integer     NOT NULL DEFAULT 0,
-    context_compactions_count    integer     NOT NULL DEFAULT 0,
 
-    -- OpenAI Responses API thread head (see §5.2).
+    -- LLM-provider (OpenAI Responses API) thread head (see §5.2).
     openai_previous_response_id  text,
     -- Cursor above which messages are superseded by a summary (see §5.3).
     compacted_up_to_created_at   timestamp without time zone,
     -- The latest compaction summary (system-role text injected on next turn).
     compaction_summary           text,
-    -- usage.total_tokens reported by OpenAI for the last assistant response on this chat,
+    -- usage.total_tokens reported by the provider for the last assistant response on this chat,
     -- used to decide whether to compact before the *next* turn (see §5.3). NULL until the
     -- first turn completes or immediately after a compaction.
     last_turn_tokens             integer,
@@ -117,10 +119,12 @@ Down migration drops all three tables in reverse dependency order.
 
 Notes on the columns:
 
+* `pinned` is just a boolean — there is no separate `pinned_at`. The list endpoint sorts by `pinned DESC, last_message_at DESC`, which gives stable, intuitive ordering without an extra timestamp to maintain; the matching composite index is created below.
 * `messages_count` is maintained by the service on every insert/delete (cheap, avoids a count(*) for the list endpoint).
 * `tool_invocations` stores only UI-facing summaries (`name`, `status`, `durationMs`). Raw tool arguments and results are logged but not persisted — they are not needed for replay (the LLM has the final answer text).
 * `openai_response_id` on assistant messages is the *per-message* id. `openai_previous_response_id` on the chat row is the *current head*; it differs from the latest message's id only right after a compaction (see §5.3).
-* `compacted_up_to_created_at` marks the boundary: when replaying history for display we still return messages below the boundary (they remain visible); when rebuilding a fresh OpenAI thread we skip them and use `compaction_summary` instead.
+* `compacted_up_to_created_at` marks the boundary: when replaying history for display we still return messages below the boundary (they remain visible); when rebuilding a fresh provider-side thread we skip them and use `compaction_summary` instead.
+* No `context_compactions_count` column: compactions are a backend-internal implementation detail and not part of the wire contract. When we need operational visibility we read the Prometheus counter (§9) rather than a per-chat column.
 
 ---
 
@@ -133,7 +137,7 @@ Two values are **hard-coded identically on the client and on the server** and th
 ```go
 const (
     MaxPinnedPerUser     = 3       // user-facing pin limit; FE mirrors the same constant
-    MaxUserMessageLength = 32_000  // characters; ≈ 8k tokens, fits a JSON schema paste while still providing a DoS guard
+    MaxUserMessageLength = 32_000  // characters; generous headroom for JSON-schema / stacktrace pastes, still a DoS guard
 )
 ```
 
@@ -211,8 +215,8 @@ r.HandleFunc("/api/v1/ai-chat/chats/{chatId}/messages", security.Secure(chatCont
 r.HandleFunc("/api/v1/ai-chat/chats/{chatId}/messages", security.Secure(chatController.SendMessage)).Methods(http.MethodPost)
 r.HandleFunc("/api/v1/ai-chat/chats/{chatId}/messages/stream", security.Secure(chatController.SendMessageStream)).Methods(http.MethodPost)
 
-// public, signed-URL based
-r.HandleFunc("/api/v1/ai-chat/files/{fileId}", security.NoSecure(chatController.DownloadFile)).Methods(http.MethodGet)
+// public (no session cookie required), authorised by the signed token in the query string
+r.HandleFunc("/api/v1/generated-files/{fileId}", security.NoSecure(generatedFileController.Download)).Methods(http.MethodGet)
 ```
 
 Remove the two PoC routes (`POST /api/v1/ai-chat`, `POST /api/v1/ai-chat/stream`).
@@ -283,7 +287,9 @@ sendMessage(ctx, userId, chatId, req):
      chat.messages_count += 2
      save(chat) in tx
 
-7.   emit(message.assistant.completed, {full message, usage})
+7.   emit(message.assistant.completed, {full message DTO})
+     -- the DTO carries toolInvocations for UI transparency; raw tool payloads and
+     -- provider usage are logged/metered server-side only (see §9), not shipped to the FE.
 8.   emit(done)
 ```
 
@@ -346,7 +352,7 @@ Triggered inside `ChatContextService.Prepare(ctx, chat)`:
       * `chat.compaction_summary = <new summary>`;
       * `chat.compacted_up_to_created_at = <createdAt of the last message included in the summary>`;
       * `chat.openai_previous_response_id = NULL` (force next turn to start a fresh thread with the summary as a system message);
-      * `chat.context_compactions_count += 1`;
+      * bump the `apihub_ai_chat_compactions_total` Prometheus counter (§9).
    d. return `{WasCompacted: true, MessagesCompacted: N}` so the pipeline can emit `context.compacted`.
 
 Defensive safety net: if a turn still fails with `context_length_exceeded` despite the proactive trigger (e.g. a very large single user message that alone pushes us over), run the same compaction flow reactively once and retry the turn.
@@ -387,6 +393,13 @@ If the background call fails, leave the title empty; the user can rename manuall
 
 ## 6. Generated files
 
+Files produced by the assistant (exports, conversion results, generated diagrams) are exposed to the UI **exclusively as inline markdown links** in the assistant's message body — there is no parallel `attachments` array on the wire (confirmed in the API spec and FE contract). The backend's job is to
+
+1. store the file bytes under `/tmp`,
+2. record a row in `ai_chat_file`,
+3. mint a short-lived signed URL that the LLM receives as a plain string and embeds as `[filename](URL)` in its reply,
+4. re-sign those URLs on subsequent `GET /messages` so that reloaded history keeps working until the file row expires.
+
 ### 6.1 Filesystem layout
 
 Root: `cfg.GeneratedFiles.Directory` (default `<os.TempDir>/apihub-ai-chat`). Ensure the directory exists and is `0700` on startup.
@@ -397,30 +410,43 @@ Files are stored as `<root>/<userId>/<fileId>` (no original extension; the real 
 
 Files are expected to be produced by future MCP tools (out of scope for this iteration). The plumbing is:
 
-* `ChatFileService.CreateFile(ctx, userId, chatId, messageId, filename, mimeType, reader)` — writes the file, inserts the `ai_chat_file` row with `expires_at = now + TTLMinutes`, returns an `AiChatAttachment` struct (including a signed URL).
-* MCP tool adapters call this method and return the resulting `AiChatAttachment.url` back to the LLM as a string. The LLM embeds it as a markdown link verbatim. Parallel `attachments` list is constructed by the service by peeking at `ChatFileService.ListCreatedDuring(turnStart, turnEnd, userId)`.
+* `GeneratedFileService.CreateFile(ctx, userId, chatId, messageId, filename, mimeType, reader)` — writes the bytes, inserts the `ai_chat_file` row with `expires_at = now + TTLMinutes`, and returns:
+
+    ```go
+    type GeneratedFile struct {
+        ID         string
+        Filename   string
+        SizeBytes  int64
+        ExpiresAt  time.Time
+        URL        string // signed, ready for markdown embedding
+    }
+    ```
+
+  `URL` is `/api/v1/generated-files/<fileId>?token=<jwt>` where `<jwt>` is minted with `ttl = time.Until(ExpiresAt)`.
+* MCP tool adapters call `CreateFile` and return the resulting `URL` (and only the URL) back to the LLM as a plain string. The LLM embeds it verbatim, e.g. `[report.xlsx](/api/v1/generated-files/7f…?token=eyJ…)`. No structured attachment payload ever leaves the backend.
+* When `GET /messages` is served, the service runs the rendered `content` through a single regex pass that matches `/api/v1/generated-files/<uuid>(\?token=[^)\s"]+)?`, extracts `<uuid>`, looks up the still-live row in `ai_chat_file` and substitutes a freshly-minted token. If the row is gone, the URL is **left as-is** — the browser will then get a clean `404 APIHUB-AI-3002` or `410 APIHUB-AI-4101` when the user actually clicks, which is the FE-contracted behaviour. Re-signing happens in memory; nothing is written back to `ai_chat_message.content`.
 
 ### 6.3 Signed tokens
 
-File download tokens are **JWTs signed by the same RSA key the IdP already uses for user sessions** (`security/Auth.go`'s `keeper`). There is no separate HMAC secret — one signing key for the whole service, one piece of crypto state for operators to manage.
+File download tokens are **JWTs signed by the same RSA key the IdP already uses for user sessions** (`security/Auth.go`'s `keeper`). There is no separate HMAC secret — one signing key for the whole service, one piece of crypto state for operators to manage. The token type is deliberately generic (`generated-file-download`) so that the same endpoint and token-minting helpers can be reused by future non-chat features that also produce downloadable artefacts.
 
 Scope isolation is provided by `TokenTypeExt`, the same mechanism that already keeps access and refresh tokens from being used in each other's place (`JWTValidator.ValidateToken` enforces type match). A new token type is introduced:
 
 ```go
-// security/AiChatFileTokens.go (new)
-const AiChatFileDownloadTokenType = "ai-chat-file-download"
+// security/GeneratedFileTokens.go (new)
+const GeneratedFileDownloadTokenType = "generated-file-download"
 
-func MintAiChatFileToken(userId, fileId string, ttl time.Duration) (string, error) {
+func MintGeneratedFileToken(userId, fileId string, ttl time.Duration) (string, error) {
     user := auth.NewUserInfo("", userId, nil, auth.Extensions{})
     ext := user.GetExtensions()
-    ext.Set(TokenTypeExt, AiChatFileDownloadTokenType)
+    ext.Set(TokenTypeExt, GeneratedFileDownloadTokenType)
     ext.Set("fileId", fileId)
     return jwt.IssueAccessToken(user, keeper, jwt.SetExpDuration(ttl))
 }
 
-func ValidateAiChatFileToken(token string) (userId, fileId string, err error) {
+func ValidateGeneratedFileToken(token string) (userId, fileId string, err error) {
     // Reuse the same JWTValidator that the rest of the auth layer uses.
-    info, _, err := jwtValidator.ValidateToken(token, AiChatFileDownloadTokenType)
+    info, _, err := jwtValidator.ValidateToken(token, GeneratedFileDownloadTokenType)
     if err != nil {
         return "", "", err
     }
@@ -436,19 +462,19 @@ Consequences, all of them desirable:
 
 Minor refactor required in `security/Auth.go`: `jwtValidator` is today a local variable inside `SetupGoGuardian`. Promote it to a package-level var (`var jwtValidator JWTValidator`) next to `keeper`, so the new file-token helpers can reuse the same validator instance (and therefore the same revocation service, the same leeway rules, etc.). No behaviour change for existing callers.
 
-`ChatFileService` itself does not touch crypto; it calls `security.MintAiChatFileToken` when constructing an `AiChatAttachment` and `security.ValidateAiChatFileToken` is called from the controller on download.
+`GeneratedFileService` itself does not touch crypto; it calls `security.MintGeneratedFileToken` when constructing a `GeneratedFile` struct and `security.ValidateGeneratedFileToken` is called from `GeneratedFileController` on download.
 
-Download flow (`GET /files/{fileId}?token=...`):
+Download flow (`GET /api/v1/generated-files/{fileId}?token=...`):
 
-1. `security.ValidateAiChatFileToken(token)` — on any failure (bad signature, type mismatch, issuer/audience mismatch, revoked) reject with `401`.
-2. If the JWT `exp` is in the past, the validator itself returns a "token expired" error; map that to `410 Gone` + `APIHUB-AI-4101` (distinguished from generic `401` by inspecting the error).
+1. `security.ValidateGeneratedFileToken(token)` — on any failure (bad signature, type mismatch, issuer/audience mismatch, revoked) reject with `401`.
+2. If the JWT `exp` is in the past, the validator returns a "token expired" error; map that to `410 Gone` + `APIHUB-AI-4101` (distinguished from generic `401` by inspecting the error).
 3. Compare `fileId` from the token against the path parameter — mismatch ⇒ `401` (token for a different file).
 4. Load `ai_chat_file` row by id; if missing or already past `expires_at` → `404` + `APIHUB-AI-3002`. Also cross-check `row.user_id == tokenUserId` as a belt-and-braces measure (should always hold).
-5. Open the file from disk, set `Content-Type` and `Content-Disposition`, stream bytes.
+5. Open the file from disk, set `Content-Type` and `Content-Disposition: attachment; filename="<original>"`, stream bytes.
 
 ### 6.4 Cleanup job
 
-New entry in `service/cleanup/AiChatFiles.go`, registered in `main()` like the other cleanup jobs. Cron from `cfg.GeneratedFiles.CleanupSchedule` (default every 5 minutes):
+New entry in `service/cleanup/GeneratedFiles.go`, registered in `main()` like the other cleanup jobs. Cron from `cfg.GeneratedFiles.CleanupSchedule` (default every 5 minutes):
 
 1. `SELECT id, storage_path FROM ai_chat_file WHERE expires_at < now() LIMIT 1000`.
 2. For each row, delete the file from disk (ignore ENOENT), delete the row.
@@ -526,14 +552,15 @@ Version already pinned in `go.mod` (`openai-go/v3 v3.31.0`) — no dependency bu
 1. **Unit tests**
    * Pin-limit enforcement in `ChatService.UpdateChat`.
    * Retention predicate in `cleanup/AiChat` (table-driven: various combinations of pinned/last-activity).
-   * `security.MintAiChatFileToken` / `security.ValidateAiChatFileToken` — happy path, expired token, bad signature, wrong token type (e.g. a real access token must not validate as a file token), wrong `fileId` in the path vs token.
+   * `security.MintGeneratedFileToken` / `security.ValidateGeneratedFileToken` — happy path, expired token, bad signature, wrong token type (e.g. a real access token must not validate as a file token), wrong `fileId` in the path vs token.
+   * Link re-signing on `GET /messages` — stored markdown content with a stale token must come out with a fresh token; content pointing at an already-expired `ai_chat_file` row must be returned untouched.
    * Idempotency — two concurrent sends with the same `clientMessageId` should cause exactly one LLM call (simulated via a fake OpenAI client).
    * SSE framing — the controller writes well-formed frames for each event DTO.
 
 2. **Integration tests** (use the existing docker-compose + test harness)
    * Full turn happy path with a fake OpenAI client that returns a scripted stream.
    * Auto-compaction: stub `GetResponseUsage` to return a tokens value above the threshold; verify `context.compacted` event fired and the chat row got a summary.
-   * File download lifecycle: create a fake file via `ChatFileService`, assert signed URL works before expiry, returns 410 after expiry, 404 after cleanup.
+   * File download lifecycle: create a fake file via `GeneratedFileService`, assert the signed URL works before expiry, returns `410 APIHUB-AI-4101` after JWT expiry, `404 APIHUB-AI-3002` once the cleanup job has removed the row.
    * Ownership: user A cannot see user B's chats (tests return 404 on all CRUD attempts).
 
 3. **Manual / end-to-end**
@@ -551,7 +578,7 @@ Add `ai.chat.enabled` (default `false` in production, `true` in dev). Gate route
 1. **Config & scaffolding.** Extend `ChatConfig`, defaults, validation, new getters in `SystemInfoService`. Add a no-op `ChatService` interface shaped like the final one.
 2. **DB migration + repository.** Write migration `34_ai_chat.up/down.sql`. Implement `ChatRepository` (CRUD + keyset pagination + idempotency insert).
 3. **Chat CRUD endpoints.** Controller + service methods for `GET/POST /chats`, `GET/PATCH/DELETE /chats/{id}`, `GET /chats/{id}/messages`. No LLM involvement yet. Pin-limit validation uses the `MaxPinnedPerUser` compile-time constant.
-4. **File download plumbing.** Add `security/AiChatFileTokens.go` (mint + validate, reusing the IdP's JWT `keeper` and `JWTValidator`). Implement `ChatFileService` + `GET /files/{fileId}` endpoint + cleanup job. Can be tested without any MCP tool by injecting test files via an internal helper.
+4. **File download plumbing.** Add `security/GeneratedFileTokens.go` (mint + validate, reusing the IdP's JWT `keeper` and `JWTValidator`). Implement `GeneratedFileService` + `GeneratedFileController` + `GET /api/v1/generated-files/{fileId}` endpoint + cleanup job + link re-signing pass used by `GET /messages`. Can be tested without any MCP tool by injecting test files via an internal helper.
 5. **Non-streaming send.** `POST /messages` wired through the Responses API (no compaction, no auto-title). Full tool-calling loop, one turn at a time.
 6. **Streaming send.** SSE framing + `<-chan StreamEvent` service API. Reuse pipeline from step 5.
 7. **Idempotency.** Plug `clientMessageId` uniqueness; add replay path.

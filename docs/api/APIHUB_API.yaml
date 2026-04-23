@@ -9730,7 +9730,10 @@ paths:
       description: |
         Returns chat metadata (without messages) for the authenticated user, sorted first by `pinned` desc, then by `lastMessageAt` desc.
         Chats of other users are never returned.
-        Supports keyset pagination: pass `before` = `lastMessageAt` of the oldest chat from the previous page to fetch the next page.
+
+        Pagination is keyset-based rather than page-based because a user's chat list is a live view: pinning/unpinning and incoming messages constantly reorder entries, so a second offset-based request would produce duplicates or gaps. A timestamp cursor (`before`) is stable under these changes.
+
+        Usage: the first request omits `before` and receives the newest `limit` chats; subsequent requests pass `before` = `lastMessageAt` of the last (oldest) chat from the previous page. The client never generates the timestamp itself, so no client/server clock-skew handling is required.
       operationId: listAiChats
       parameters:
         - name: limit
@@ -9741,11 +9744,12 @@ paths:
             type: integer
             minimum: 1
             maximum: 200
-            default: 50
+            default: 100
         - name: before
           in: query
           description: |
             Keyset cursor. Return only chats with `lastMessageAt` strictly less than this value. Format: RFC 3339 timestamp.
+            When omitted, the server returns the newest `limit` chats (i.e. the first page).
             Pinned chats are always returned before non-pinned chats regardless of the cursor.
           required: false
           schema:
@@ -10006,17 +10010,18 @@ paths:
       summary: List chat messages.
       description: |
         Returns messages of the given chat in reverse-chronological order (newest first). Use keyset pagination via `before` to fetch older pages.
-        
+
+        Keyset pagination is used (rather than `page`) because messages are appended live: a naive offset would miss or duplicate items whenever a new message arrives between two page fetches. The first request omits `before` and receives the newest `limit` messages; subsequent requests pass `before` = `createdAt` of the last (oldest) message from the previous page.
+
         For every `assistant` message the response includes:
-          * full markdown `content` (same that was streamed);
-          * `toolInvocations` — the same UI-facing summaries (tool name, status, duration) that were shown as transient pills during the live stream, so that after a reload the user still sees which tools were used;
-          * `attachments` — generated files, with freshly re-signed download URLs (see note below).
-        
+          * full markdown `content` (same that was streamed) — including any inline markdown links to generated files, with freshly re-issued signed tokens so the links remain usable for the standard file TTL at the moment of the request;
+          * `toolInvocations` — UI-facing summaries (tool name, status, duration) that were shown as transient pills during the live stream, so that after a reload the user still sees which tools were used. Clients that do not need this telemetry may ignore the field.
+
         What is intentionally not returned:
-          * raw OpenAI tool-call arguments and tool results (internal; not needed for rendering);
+          * raw LLM tool-call arguments and tool results (internal; not needed for rendering);
           * system prompt and compaction summaries (internal context-management artefacts).
-        
-        This endpoint is the only way to load history — the streaming endpoint is strictly for producing new turns, not for replaying existing ones. Existing attachments are re-signed on every call so that links included in the response stay valid for the standard file TTL at the moment of the request.
+
+        This endpoint is the only way to load history — the streaming endpoint is strictly for producing new turns, not for replaying existing ones.
       operationId: listAiChatMessages
       parameters:
         - name: limit
@@ -10027,13 +10032,13 @@ paths:
             type: integer
             minimum: 1
             maximum: 200
-            default: 50
+            default: 100
         - name: before
           in: query
           required: false
           description: |
             Keyset cursor. Return only messages created strictly before this timestamp (RFC 3339).
-            Combine with `limit` to paginate the history.
+            When omitted, the server returns the newest `limit` messages (i.e. the first page).
           schema:
             type: string
             format: date-time
@@ -10092,7 +10097,7 @@ paths:
       description: |
         Appends a user message to the chat and waits synchronously for the assistant response.
         Intended for integration scripts or clients that do not want to handle SSE. Interactive UIs should use the streaming variant (`/messages/stream`) instead.
-        The request body must carry **only the new user message** — never the full history. The server reconstructs the conversation context from its own storage.
+        The request body must carry **only the new user message** — never the full history. The server reconstructs the conversation context from its own storage and from the LLM provider's conversation-state mechanism.
       operationId: sendAiChatMessage
       requestBody:
         required: true
@@ -10158,14 +10163,14 @@ paths:
         
         Request semantics:
           * the body carries **only the new user message** plus (optionally) a client-generated `clientMessageId` for idempotency — never the full conversation history;
-          * the server reconstructs context from its own storage and forwards only the new message to OpenAI (Responses API with `previous_response_id`);
+          * the server reconstructs context from its own storage and forwards only the new message to the LLM provider, relying on the provider's native conversation-state mechanism to resume the session without re-sending the whole history;
           * on the very first message in a chat the server may auto-fill the chat title in the background.
         
         Response semantics (SSE):
           * `Content-Type: text/event-stream; charset=utf-8`;
           * each event is framed as `event: <type>\n` + `data: <json>\n\n`;
           * the connection is closed by the server after emitting a terminal event (`done` or `error`);
-          * to cancel a turn the client may abort the underlying HTTP request; the server will stop the OpenAI call best-effort but the partial assistant message that was already persisted stays in the history.
+          * to cancel a turn the client may abort the underlying HTTP request; the server will stop the upstream LLM call best-effort but the partial assistant message that was already persisted stays in the history.
         
         Possible event types (in order of occurrence):
           * `context.compacted` — emitted at most once per turn, before the assistant starts streaming, when the server auto-compacted earlier history into a summary;
@@ -10173,7 +10178,7 @@ paths:
           * `tool.started` — MCP tool call has started (UI hint: "Searching API operations…");
           * `tool.completed` — MCP tool call finished (`ok: true/false`, duration);
           * `message.assistant.delta` — incremental markdown chunk to append; chunks are safe to concatenate as-is;
-          * `message.assistant.completed` — full final markdown, usage metrics, optional list of attached generated files;
+          * `message.assistant.completed` — full final markdown of the assistant message, including any inline markdown links to generated files;
           * `error` — unrecoverable error; stream ends;
           * `done` — terminal marker; stream ends.
         
@@ -10233,30 +10238,29 @@ paths:
               examples:
                 InternalServerError:
                   $ref: "#/components/examples/InternalServerError"
-  "/api/v1/ai-chat/files/{fileId}":
+  "/api/v1/generated-files/{fileId}":
     parameters:
       - name: fileId
         in: path
         required: true
-        description: Generated-file identifier, as returned in `AiChatAttachment.fileId`.
+        description: Opaque identifier of a backend-generated file.
         schema:
           type: string
           format: uuid
     get:
       tags:
         - AI Chat
-      summary: Download a generated file.
+      summary: Download a backend-generated file.
       description: |
-        Downloads a file produced by the assistant in the scope of the current user's chats.
-        The endpoint is served without session authentication; instead, access is authorized via a short-lived signed token passed in the `token` query parameter. Tokens are issued by the backend and embedded into markdown responses as regular links; they expire together with the file itself (the exact lifetime is a server-side configuration and is not published to the client).
-        A link becoming stale is not an error condition — the client is expected to request a fresh response from the assistant.
-      operationId: downloadAiChatFile
+        Downloads a file produced by the backend on behalf of the current user. At present the only producer is the AI chat assistant, but the endpoint is intentionally placed on a generic path so that other subsystems that need to hand out short-lived file artefacts (e.g. exports, reports) can reuse the same mechanism.
+        The endpoint is served without session authentication; instead, access is authorized via a short-lived signed token passed in the `token` query parameter. Tokens are issued by the backend and embedded into the producer's response (for AI chat — directly into the assistant's markdown as a regular link). The token lifetime is a server-side setting and is not published to the client.
+      operationId: downloadGeneratedFile
       security: []
       parameters:
         - name: token
           in: query
           required: true
-          description: Short-lived signed access token scoped to this file. Opaque to the client — issued by the server as part of the attachment URL and simply echoed back.
+          description: Short-lived signed access token scoped to this file. Opaque to the client — issued by the server as part of the download URL and simply echoed back.
           schema:
             type: string
       responses:
@@ -10284,23 +10288,24 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
-          description: File not found or expired.
+          description: File not found or already cleaned up.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
               examples:
-                AiChatFileNotFound:
-                  $ref: "#/components/examples/AiChatFileNotFound"
+                GeneratedFileNotFound:
+                  $ref: "#/components/examples/GeneratedFileNotFound"
         "410":
-          description: Token expired. The link is stale; the client should request a fresh response from the assistant.
+          description: |
+            Token expired. The browser will surface this as a failed download; the client does not need to handle it specially.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
               examples:
-                AiChatFileTokenExpired:
-                  $ref: "#/components/examples/AiChatFileTokenExpired"
+                GeneratedFileTokenExpired:
+                  $ref: "#/components/examples/GeneratedFileTokenExpired"
         "500":
           description: Internal Server Error
           content:
@@ -12631,7 +12636,6 @@ components:
       required:
         - chatId
         - title
-        - pinned
         - createdAt
         - lastMessageAt
         - messagesCount
@@ -12649,14 +12653,9 @@ components:
         pinned:
           description: |
             If true, the chat is pinned. Pinned chats are exempt from TTL-based cleanup and are shown above non-pinned chats in the list.
+            Omitted by the server when the chat is not pinned; clients should treat a missing value as `false`.
           type: boolean
           default: false
-        pinnedAt:
-          description: Timestamp when the chat was pinned (null if not pinned).
-          type: string
-          format: date-time
-          nullable: true
-          example: "2026-04-18T09:12:33Z"
         createdAt:
           description: Chat creation timestamp (RFC 3339).
           type: string
@@ -12664,8 +12663,7 @@ components:
           example: "2026-04-12T08:01:07Z"
         lastMessageAt:
           description: |
-            Timestamp of the last user or assistant message in the chat.
-            For empty chats equals `createdAt`. Used to rank chats in the sidebar and to evaluate the "last M chats kept forever" rule.
+            Timestamp of the last user or assistant message in the chat. Always populated by the server; for a freshly created chat that has no messages yet, equals `createdAt`. Used to rank chats in the sidebar and to evaluate the "last M chats kept forever" rule.
           type: string
           format: date-time
           example: "2026-04-19T15:44:12Z"
@@ -12674,12 +12672,6 @@ components:
           type: integer
           minimum: 0
           example: 42
-        contextCompactionsCount:
-          description: How many times the server auto-compacted this chat's history.
-          type: integer
-          minimum: 0
-          default: 0
-          example: 1
     AiChatCreateRequest:
       description: Optional payload for creating a new chat.
       type: object
@@ -12707,45 +12699,6 @@ components:
             If false, unpins the chat.
           type: boolean
           example: true
-    AiChatAttachment:
-      description: Reference to a file generated by the assistant during a turn.
-      type: object
-      required:
-        - fileId
-        - fileName
-        - url
-        - expiresAt
-      properties:
-        fileId:
-          description: Opaque file identifier.
-          type: string
-          format: uuid
-          example: "7b6f4f87-4c8f-4d69-a66e-4a3c8a1b2c55"
-        fileName:
-          description: Suggested file name.
-          type: string
-          example: "operations-report.csv"
-        mimeType:
-          description: MIME type as reported by the producer (or `application/octet-stream`).
-          type: string
-          example: "text/csv"
-        sizeBytes:
-          description: File size in bytes, if known.
-          type: integer
-          format: int64
-          minimum: 0
-          example: 14823
-        url:
-          description: |
-            Ready-to-use download URL containing a short-lived signed token. The URL points at `GET /api/v1/ai-chat/files/{fileId}` and is rendered directly in the assistant's markdown. Once the token expires the link returns 410; the client does not need to handle this case specially.
-          type: string
-          format: uri
-          example: "/api/v1/ai-chat/files/7b6f4f87-4c8f-4d69-a66e-4a3c8a1b2c55?token=eyJhbGciOi..."
-        expiresAt:
-          description: Timestamp after which the signed URL stops working.
-          type: string
-          format: date-time
-          example: "2026-04-19T16:14:12Z"
     AiChatToolInvocation:
       description: |
         Minimal, UI-facing descriptor of an MCP tool call that happened while producing an assistant message. The server intentionally does not expose tool arguments or raw results in order to keep the contract stable and avoid leaking internal data.
@@ -12809,15 +12762,11 @@ components:
           example: "2026-04-19T15:44:12Z"
         toolInvocations:
           description: |
-            UI-facing summaries of MCP tool calls that happened while producing this assistant message. Always empty for user messages.
+            Optional UI-facing summaries of MCP tool calls that happened while producing this assistant message. The FE may render them as inline pills or ignore them entirely; they are surfaced mainly for transparency and for debugging chat behaviour.
+            Always empty (or omitted) for user messages.
           type: array
           items:
             $ref: "#/components/schemas/AiChatToolInvocation"
-        attachments:
-          description: Files generated by the assistant during this message, if any. Always empty for user messages.
-          type: array
-          items:
-            $ref: "#/components/schemas/AiChatAttachment"
     AiChatSendMessageRequest:
       description: |
         Request body for sending a new user message. The body carries **only the new message** — never the full history.
@@ -12849,28 +12798,6 @@ components:
           $ref: "#/components/schemas/AiChatMessage"
         assistantMessage:
           $ref: "#/components/schemas/AiChatMessage"
-        contextCompacted:
-          description: True if the server had to auto-compact the chat context while processing this turn.
-          type: boolean
-          default: false
-        usage:
-          $ref: "#/components/schemas/AiChatUsage"
-    AiChatUsage:
-      description: Aggregated token usage produced by OpenAI for a single turn (sum of all nested tool-calling iterations).
-      type: object
-      properties:
-        promptTokens:
-          type: integer
-          minimum: 0
-          example: 1240
-        completionTokens:
-          type: integer
-          minimum: 0
-          example: 320
-        totalTokens:
-          type: integer
-          minimum: 0
-          example: 1560
     AiChatStreamEvent:
       description: |
         Documentation-only schema describing the shape of a single SSE event payload. The wire format is not JSON — each event is framed as:
@@ -12929,7 +12856,7 @@ components:
           type: string
           example: "Here are the operations I found:\n"
     AiChatStreamAssistantCompletedEvent:
-      description: Terminal event for the assistant message. Carries the full final markdown and any attachments.
+      description: Terminal event for the assistant message. Carries the full final markdown (including any inline links to generated files).
       type: object
       required: [type, message]
       properties:
@@ -12938,8 +12865,6 @@ components:
           enum: ["message.assistant.completed"]
         message:
           $ref: "#/components/schemas/AiChatMessage"
-        usage:
-          $ref: "#/components/schemas/AiChatUsage"
     AiChatStreamToolStartedEvent:
       description: |
         Emitted when the assistant decides to call an MCP tool. Multiple tool events may appear between `message.assistant.start` and `message.assistant.completed`.
@@ -13003,7 +12928,7 @@ components:
         code:
           description: |
             Stable error code. Known values:
-              * `APIHUB-AI-5001` — upstream OpenAI error;
+              * `APIHUB-AI-5001` — upstream LLM provider error;
               * `APIHUB-AI-5002` — MCP tool failure propagated as stream error;
               * `APIHUB-AI-4001` — message validation failed mid-flight (rare);
               * `APIHUB-AI-5000` — internal error.
@@ -13011,7 +12936,7 @@ components:
           example: "APIHUB-AI-5001"
         message:
           type: string
-          example: "Upstream OpenAI request failed"
+          example: "Upstream LLM provider request failed"
     AiChatStreamDoneEvent:
       description: Terminal marker. Always the last event on a successful stream.
       type: object
@@ -13086,12 +13011,9 @@ components:
       value:
         chatId: "e1a9f6d2-4a17-4a3b-9b91-4d7e9e8a0f11"
         title: "How do I paginate REST operations?"
-        pinned: false
-        pinnedAt: null
         createdAt: "2026-04-12T08:01:07Z"
         lastMessageAt: "2026-04-19T15:44:12Z"
         messagesCount: 42
-        contextCompactionsCount: 1
     AiChatsList:
       description: A page of the user's chats
       value:
@@ -13099,19 +13021,14 @@ components:
           - chatId: "a1111111-1111-1111-1111-111111111111"
             title: "Pinned: release checklist"
             pinned: true
-            pinnedAt: "2026-04-18T09:12:33Z"
             createdAt: "2026-04-01T07:00:00Z"
             lastMessageAt: "2026-04-19T10:22:01Z"
             messagesCount: 18
-            contextCompactionsCount: 0
           - chatId: "e1a9f6d2-4a17-4a3b-9b91-4d7e9e8a0f11"
             title: "How do I paginate REST operations?"
-            pinned: false
-            pinnedAt: null
             createdAt: "2026-04-12T08:01:07Z"
             lastMessageAt: "2026-04-19T15:44:12Z"
             messagesCount: 42
-            contextCompactionsCount: 1
         hasMore: true
     AiChatMessagesList:
       description: Last page of messages in a chat (newest first).
@@ -13125,19 +13042,18 @@ components:
               | Operation | Method | Path |
               | --- | --- | --- |
               | [get-packages-list](/portal/packages/QS.QSS.PRG.APIHUB/2026.1/operations/rest/get-packages-list) | GET | /api/v2/packages |
+
+              And a CSV export: [operations-report.csv](/api/v1/generated-files/7b6f4f87-4c8f-4d69-a66e-4a3c8a1b2c55?token=eyJhbGciOi...)
             createdAt: "2026-04-19T15:44:12Z"
             toolInvocations:
               - name: "search_rest_api_operations"
                 status: "ok"
                 durationMs: 312
-            attachments: []
           - messageId: "1a0bcd12-0000-4000-8000-000000000001"
             clientMessageId: "9c8e9045-dd9c-4946-b9e4-e05e3f41c4cc"
             role: "user"
             content: "List all REST operations in package QS.QSS.PRG.APIHUB."
             createdAt: "2026-04-19T15:44:03Z"
-            toolInvocations: []
-            attachments: []
         hasMore: true
     AiChatSendMessageResponse:
       description: Non-streaming response after a user message has been answered.
@@ -13148,8 +13064,6 @@ components:
           role: "user"
           content: "List all REST operations in package QS.QSS.PRG.APIHUB."
           createdAt: "2026-04-19T15:44:03Z"
-          toolInvocations: []
-          attachments: []
         assistantMessage:
           messageId: "2f5a8c6b-8c11-4b1a-9c6a-1c2e4d5f6a7b"
           role: "assistant"
@@ -13159,12 +13073,6 @@ components:
             - name: "search_rest_api_operations"
               status: "ok"
               durationMs: 312
-          attachments: []
-        contextCompacted: false
-        usage:
-          promptTokens: 1240
-          completionTokens: 320
-          totalTokens: 1560
     AiChatStreamEvents:
       description: |
         Example of a full SSE response body. Each event is framed as `event: <type>\ndata: <json>\n\n`.
@@ -13188,7 +13096,7 @@ components:
         data: {"type":"message.assistant.delta","delta":"| Operation | Method | Path |\n"}
 
         event: message.assistant.completed
-        data: {"type":"message.assistant.completed","message":{"messageId":"2f5a8c6b-8c11-4b1a-9c6a-1c2e4d5f6a7b","role":"assistant","content":"Here are the operations I found:\n\n| Operation | Method | Path |\n","createdAt":"2026-04-19T15:44:12Z","toolInvocations":[{"name":"search_rest_api_operations","status":"ok","durationMs":312}],"attachments":[]},"usage":{"promptTokens":1240,"completionTokens":320,"totalTokens":1560}}
+        data: {"type":"message.assistant.completed","message":{"messageId":"2f5a8c6b-8c11-4b1a-9c6a-1c2e4d5f6a7b","role":"assistant","content":"Here are the operations I found:\n\n| Operation | Method | Path |\n","createdAt":"2026-04-19T15:44:12Z","toolInvocations":[{"name":"search_rest_api_operations","status":"ok","durationMs":312}]}}
 
         event: done
         data: {"type":"done"}
@@ -13205,13 +13113,13 @@ components:
         status: 400
         code: "APIHUB-AI-4003"
         message: "Cannot pin chat: user already has 3 pinned chats (the limit is 3)"
-    AiChatFileNotFound:
+    GeneratedFileNotFound:
       description: Generated file not found or already cleaned up.
       value:
         status: 404
         code: "APIHUB-AI-3002"
         message: "generated file with fileId = $fileId not found"
-    AiChatFileTokenExpired:
+    GeneratedFileTokenExpired:
       description: Signed download token expired.
       value:
         status: 410
