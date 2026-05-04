@@ -10284,18 +10284,18 @@ paths:
       summary: Send a message with streaming response (SSE).
       description: |
         Appends a user message to the chat and streams the assistant response as Server-Sent Events.
-        
+
         Request semantics:
           * the body carries **only the new user message** plus (optionally) a client-generated `clientMessageId` for idempotency — never the full conversation history;
           * the server reconstructs context from its own storage and forwards only the new message to the LLM provider, relying on the provider's native conversation-state mechanism to resume the session without re-sending the whole history;
           * on the very first message in a chat the server may auto-fill the chat title in the background.
-        
+
         Response semantics (SSE):
           * `Content-Type: text/event-stream; charset=utf-8`;
           * each event is framed as `event: <type>\n` + `data: <json>\n\n`;
           * the connection is closed by the server after emitting a terminal event (`done` or `error`);
           * to cancel a turn the client may abort the underlying HTTP request; the server will stop the upstream LLM call best-effort but the partial assistant message that was already persisted stays in the history.
-        
+
         Possible event types (in order of occurrence):
           * `context.compacted` — emitted at most once per turn, before the assistant starts streaming, when the server auto-compacted earlier history into a summary;
           * `message.assistant.start` — assistant message created; contains its `id`;
@@ -10305,7 +10305,7 @@ paths:
           * `message.assistant.completed` — full final markdown of the assistant message, including any inline markdown links to generated files;
           * `error` — unrecoverable error; stream ends;
           * `done` — terminal marker; stream ends.
-        
+
         Every event payload is a JSON object; see `AiChatStreamEvent` schemas for details.
       operationId: sendAiChatMessageStream
       requestBody:
@@ -12960,13 +12960,13 @@ components:
     AiChatStreamEvent:
       description: |
         Documentation-only schema describing the shape of a single SSE event payload. The wire format is not JSON — each event is framed as:
-        
+
         ```
         event: <type>
         data: <json>
-        
+
         ```
-        
+
         where the `<json>` line conforms to one of the variants below, selected by the `type` field.
       type: object
       required:
@@ -13233,9 +13233,11 @@ components:
               status: "ok"
               durationMs: 312
     AiChatStreamEvents:
+      summary: Full SSE turn — context compaction + tool call + delta chunks + done
       description: |
         Example of a full SSE response body. Each event is framed as `event: <type>\ndata: <json>\n\n`.
-      value: |
+
+        ```
         event: context.compacted
         data: {"type":"context.compacted","messagesCompactedCount":40}
 
@@ -13251,14 +13253,14 @@ components:
         event: message.assistant.delta
         data: {"type":"message.assistant.delta","delta":"Here are the operations I found:\n\n"}
 
-        event: message.assistant.delta
-        data: {"type":"message.assistant.delta","delta":"| Operation | Method | Path |\n"}
-
         event: message.assistant.completed
-        data: {"type":"message.assistant.completed","message":{"messageId":"2f5a8c6b-8c11-4b1a-9c6a-1c2e4d5f6a7b","role":"assistant","content":"Here are the operations I found:\n\n| Operation | Method | Path |\n","createdAt":"2026-04-19T15:44:12Z","toolInvocations":[{"name":"search_rest_api_operations","status":"ok","durationMs":312}]}}
+        data: {"type":"message.assistant.completed","message":{"messageId":"2f5a8c6b-8c11-4b1a-9c6a-1c2e4d5f6a7b","role":"assistant","content":"Here are the operations I found:\n\n","createdAt":"2026-04-19T15:44:12Z","toolInvocations":[{"name":"search_rest_api_operations","status":"ok","durationMs":312}]}}
 
         event: done
         data: {"type":"done"}
+        ```
+      value:
+        type: done
 
     AiChatNotFound:
       description: Chat not found by id. Response for the 404 error.

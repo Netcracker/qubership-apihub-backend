@@ -274,7 +274,10 @@ A `context.compacted` SSE frame is emitted to the FE so the UI can show a "(earl
 
 ### 6.5 Observability
 
-* Every LLM turn mints a fresh UUID and attaches it to `context.Context` via `WithAiChatCorrelationID`. `openAIRequestOptions(ctx)` pulls it back and adds `X-Request-ID: <uuid>` to **every** OpenAI request fired during the turn (including the title/summary side-quests). OpenAI echoes the header in its server-side traces, so support can pivot from one of our log lines to the upstream provider's request graph in a single click.
+* Every LLM turn mints a fresh UUID and attaches it to `context.Context` via `WithAiChatCorrelationID`.
+  `openAIRequestOptions(ctx)` pulls it back and adds `X-Request-ID: <uuid>` to **every** OpenAI request fired
+  during the turn (including the title/summary side-quests). OpenAI echoes the header in its server-side traces,
+  so support can pivot from one of our log lines to the upstream provider's request graph in a single click.
 * `runLLMTurn` also attaches `WithAiChatTurn(ctx, userID, chat.ID)` so MCP tool handlers running inside the loop know whose turn this is — `save_generated_file` reads it back to anchor the output to the right per-user `/tmp` directory without taking userID as a tool argument.
 * Prometheus metrics live in `metrics/ai_chat.go`:
   * `ai_chat_turns_total{mode,status}`, `ai_chat_turn_duration_seconds{mode,status}` — turn-level RED;
@@ -286,7 +289,11 @@ A `context.compacted` SSE frame is emitted to the FE so the UI can show a "(earl
 
 ### 7.1 Feature flag
 
-A single master kill-switch — `ai.chat.enabled` — gates everything: the registration of `/api/v1/ai-chat/*` and `/api/v1/generated-files/*` routes, the AI chat retention job, and the generated-files GC job. `Service.go::isAiChatEnabled` is the single source of truth. Default is `false` in `config.template.yaml` so every deployment must opt in deliberately (the feature requires an OpenAI API key, writable temp directory, and the `34_ai_chat` migration to be applied).
+A single master kill-switch — `ai.chat.enabled` — gates everything: the registration of `/api/v1/ai-chat/*` and
+`/api/v1/generated-files/*` routes, the AI chat retention job, and the generated-files GC job.
+`Service.go::isAiChatEnabled` is the single source of truth. Default is `false` in `config.template.yaml` so every
+deployment must opt in deliberately (the feature requires an OpenAI API key, writable temp directory, and the
+`34_ai_chat` migration to be applied).
 
 ### 7.2 Retention
 

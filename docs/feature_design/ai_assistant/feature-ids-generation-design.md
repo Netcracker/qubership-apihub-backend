@@ -10,7 +10,10 @@ Prerequisite: this feature builds on the [AI chat assistant](./feature-ai-chat-d
 
 ## 1. User story
 
-> **As an integration architect**, when I describe a 3rd-party integration scenario in the chat (e.g. "Create a design based on this text — CIP should call API Reserve_SIM_Profiles from TelCoopStock, version 2025.2 …"), I want the assistant to produce a complete Integration Design Specification document, look up the real API specs in APIHub for every operation I mention, and hand me back a downloadable `.md` file I can attach to a Jira ticket.
+> **As an integration architect**, when I describe a 3rd-party integration scenario in the chat
+> (e.g. "Create a design based on this text — CIP should call API Reserve_SIM_Profiles from TelCoopStock, version 2025.2 …"),
+> I want the assistant to produce a complete Integration Design Specification document, look up the real API specs
+> in APIHub for every operation I mention, and hand me back a downloadable `.md` file I can attach to a Jira ticket.
 
 The expected interaction shape:
 
@@ -262,14 +265,25 @@ A few choices that may not be obvious from the code:
 
 ## 7. Operational notes
 
-* **Feature flag inheritance.** The IDS feature inherits the AI chat's master kill-switch (`ai.chat.enabled`). When the chat is off, neither the chat tools nor the MCP prompt/resource are reachable through the normal entry points. The `MCPService.MakeMCPServer` registration is independent of the kill-switch — i.e. the MCP HTTP endpoint still publishes the resources/prompt — but the apihub MCP server is itself a separate route that operators can choose to expose or not.
+* **Feature flag inheritance.** The IDS feature inherits the AI chat's master kill-switch (`ai.chat.enabled`).
+  When the chat is off, neither the chat tools nor the MCP prompt/resource are reachable through the normal entry
+  points. The `MCPService.MakeMCPServer` registration is independent of the kill-switch — i.e. the MCP HTTP endpoint
+  still publishes the resources/prompt — but the apihub MCP server is itself a separate route that operators can
+  choose to expose or not.
 * **Updating the template / rules.** Edit `qubership-apihub-service/resources/mcp/{resources,prompts}/...`, rebuild the image, redeploy. There is no live reload; this is by design (audit trail = Git history of the resource files + image SHA).
 * **Removing the feature.** Delete the two files. On startup, `MCPAssets` will log a warning, `IDSAssetsAvailable()` returns false, the chat tools are not registered, and the MCP prompt is not published. No code changes needed.
-* **Adding another authoring kit.** Drop a new template under `resources/mcp/resources/<name>.md` (auto-registered as MCP resource), drop a new rules file under `resources/mcp/prompts/<name>.md`, then add ~30 lines mirroring the IDS pattern: a constant pair of asset names, a tiny `<New>AuthoringKit` method on `mcpAssets`, a `<New>Tools` factory on the chat side, and a registration of the MCP prompt in `MakeMCPServer`. No DB, no migration, no config.
+* **Adding another authoring kit.** Drop a new template under `resources/mcp/resources/<name>.md`
+  (auto-registered as MCP resource), drop a new rules file under `resources/mcp/prompts/<name>.md`, then add ~30
+  lines mirroring the IDS pattern: a constant pair of asset names, a tiny `<New>AuthoringKit` method on `mcpAssets`,
+  a `<New>Tools` factory on the chat side, and a registration of the MCP prompt in `MakeMCPServer`.
+  No DB, no migration, no config.
 
 ## 8. Limitations & known gaps
 
-* **Single-shot generation.** The model produces the entire IDS in one go; there is no checkpoint mechanism for very long documents. Empirically, the template + a 2-3 operation scenario fits comfortably in one turn even at `verbosity=high`. If a future template balloons or operators want multi-pass refinement, the natural extension is to make `save_generated_file` accept a `mode = draft|final` flag and let the model iterate.
+* **Single-shot generation.** The model produces the entire IDS in one go; there is no checkpoint mechanism for
+  very long documents. Empirically, the template + a 2-3 operation scenario fits comfortably in one turn even at
+  `verbosity=high`. If a future template balloons or operators want multi-pass refinement, the natural extension is
+  to make `save_generated_file` accept a `mode = draft|final` flag and let the model iterate.
 * **No verification that APIHub lookups actually happened.** The rules tell the model `MUST` look up every API; if the model misbehaves, the only safety net is the user's review. A stricter implementation could enforce "for each `Operation:` section in the document, there must be at least one `get_rest_api_operations_specification` invocation in `toolInvocations`", but it is not implemented today.
 * **Filenames are de facto English/ASCII.** `sanitizeChatToolFilename` collapses non-ASCII to `_`. Cyrillic / CJK filenames are not preserved through the chain. This matches today's IDS naming conventions (`IDS_<SystemAbbrev>.md`).
 * **Templates are not versioned in MCP resource metadata.** External MCP clients see the latest content but no version string. If multiple template revisions need to coexist, the natural approach is to publish each as `apihub://mcp/resources/ids_template_v<N>.md`.

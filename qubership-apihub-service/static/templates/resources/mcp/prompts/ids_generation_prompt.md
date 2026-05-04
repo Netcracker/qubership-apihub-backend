@@ -3,7 +3,7 @@
 Read user input.
 Create md file with the integration design using template @resources/templates/ids_template.md
 
-# Step 2
+## Step 2
 
 Populate section "Integration Design Specification (IDS)" by the rules:
 `<generate_document_id>` - generate ID as "NC.Phase.INT.IDS.<3rdPartySystemName>" where 3rdPartySystemName define from the user's prompt.
@@ -14,7 +14,7 @@ Owner - do not change
 Approval Status - do not change
 Jira Link - do not change
 
-# Step 3
+## Step 3
 
 Populate Document Metadata section by the rules
 Integration ID set from previously generated in step 2
@@ -25,7 +25,7 @@ Design Items - do not change
 Comments - do not change
 List business reason for implementation.
 
-# Step 4
+## Step 4
 
 Populate Version History.
 Add row to the table
@@ -33,16 +33,16 @@ Add row to the table
 comment should be 'Initial Draft Created' if the document is just created
 or summary of changes if the document is changed.
 
-# Step 5
+## Step 5
 
 Populate Document References
 Set `<IA_id>` as `<generate_document_id>` from Step 2, but replace "IDS" with "IA".
 
-# Step 6
+## Step 6
 
 Do not change Glossary of Terms.
 
-# Step 7
+## Step 7
 
 Generate Introduction section.
 Document Purpose replace 3rdPartySystemName.
@@ -53,7 +53,7 @@ Out of Scope - do not change.
 Technical Design - do not change.
 Authentication & Authorization - replace authentication placeholder with some security requirements you found in the related services.
 
-# Step 8
+## Step 8
 
 Integration Process
 
@@ -133,6 +133,6 @@ Before finishing the Integration Process section, check that:
 - In the Process Steps table, each step that involves an API call includes a reference to that Operation (e.g. `[link to section](#operation-name)` or "API Name: link to the section in the document").
 - If any step mentions an API that has no Data Mapping section, add the missing Operation section or fix the Process Steps description so it matches the Data Mapping sections you created.
 
-# Step 9
+## Step 9
 
 In Error Handling describe possible error codes, create a separate section for each operation.

@@ -163,7 +163,10 @@ type GeneratedFilesConfig struct {
 }
 ```
 
-Model context-window lookup is a constant map in `client/OpenAIResponsesClient.go` (e.g. `gpt-4o` → 128 000, `gpt-4o-mini` → 128 000, `gpt-4.1` → 1 047 576) and is refreshed when the model list evolves. `CompactAtContextPercent` is the single knob — "trigger compaction once ≥ X % of this model's window is used" — which keeps operators from thinking in absolute token numbers that become wrong whenever the model changes.
+Model context-window lookup is a constant map in `client/OpenAIResponsesClient.go`
+(e.g. `gpt-4o` → 128 000, `gpt-4o-mini` → 128 000, `gpt-4.1` → 1 047 576) and is refreshed when the model list evolves.
+`CompactAtContextPercent` is the single knob — "trigger compaction once ≥ X % of this model's window is used" —
+which keeps operators from thinking in absolute token numbers that become wrong whenever the model changes.
 
 In `SystemInfoService`:
 
@@ -326,7 +329,11 @@ params := responses.ResponseNewParams{
 
 On the very first turn the chat has no `openai_previous_response_id`, so `PreviousResponseID` is omitted and a system message is prepended (same content as today's `systemMessageBaseContent` + cached `api-packages-list`).
 
-Tool-use loop: the Responses API also supports function tools. Reuse the MCP tool schema from `MCPService.MakeOpenAiMCPTools()` and adapt each to `responses.ResponseNewParamsToolUnionParam` (function tools). Tool outputs are fed back via `responses.ResponseNewParamsInputUnionOfInputItemList` with an `OfFunctionCallOutput` item referring to the corresponding `tool_call_id`. After the final (non-tool-call) response, capture its `id` and store it as the new `openai_previous_response_id`.
+Tool-use loop: the Responses API also supports function tools. Reuse the MCP tool schema from `MCPService.MakeOpenAiMCPTools()`
+and adapt each to `responses.ResponseNewParamsToolUnionParam` (function tools).
+Tool outputs are fed back via `responses.ResponseNewParamsInputUnionOfInputItemList` with an `OfFunctionCallOutput` item
+referring to the corresponding `tool_call_id`.
+After the final (non-tool-call) response, capture its `id` and store it as the new `openai_previous_response_id`.
 
 Streaming: use `client.Responses.NewStreaming(ctx, params)` — it exposes incremental events including `response.output_text.delta`, `response.function_call_arguments.delta`, `response.tool_call.completed` etc. Map these to our own SSE events.
 
@@ -377,7 +384,10 @@ Historical messages remain visible to the user (we never delete them mid-life), 
 
 ### 5.4 Idempotency
 
-Unique index on `(chat_id, client_message_id) WHERE client_message_id IS NOT NULL`. The service wraps step 2 in `INSERT ... ON CONFLICT (chat_id, client_message_id) DO NOTHING RETURNING id`. If nothing was returned, we fetch the existing user message and the assistant reply that follows it and replay that to the client (stream: emit all events in order; non-stream: just return the final DTO). No LLM call is made.
+Unique index on `(chat_id, client_message_id) WHERE client_message_id IS NOT NULL`.
+The service wraps step 2 in `INSERT ... ON CONFLICT (chat_id, client_message_id) DO NOTHING RETURNING id`.
+If nothing was returned, we fetch the existing user message and the assistant reply that follows it and replay that
+to the client (stream: emit all events in order; non-stream: just return the final DTO). No LLM call is made.
 
 ### 5.5 Auto-title
 
@@ -424,11 +434,19 @@ Files are expected to be produced by future MCP tools (out of scope for this ite
 
   `URL` is `/api/v1/generated-files/<fileId>?token=<jwt>` where `<jwt>` is minted with `ttl = time.Until(ExpiresAt)`.
 * MCP tool adapters call `CreateFile` and return the resulting `URL` (and only the URL) back to the LLM as a plain string. The LLM embeds it verbatim, e.g. `[report.xlsx](/api/v1/generated-files/7f…?token=eyJ…)`. No structured attachment payload ever leaves the backend.
-* When `GET /messages` is served, the service runs the rendered `content` through a single regular expression pass that matches `/api/v1/generated-files/<uuid>(\?token=[^)\s"]+)?`, extracts `<uuid>`, looks up the still-live row in `ai_chat_file` and substitutes a freshly-minted token. If the row is gone, the URL is **left as-is** — the browser will then get a clean `404 APIHUB-AI-3002` or `410 APIHUB-AI-4101` when the user actually clicks, which is the FE-contracted behaviour. Re-signing happens in memory; nothing is written back to `ai_chat_message.content`.
+* When `GET /messages` is served, the service runs the rendered `content` through a single regular expression pass
+  that matches `/api/v1/generated-files/<uuid>(\?token=[^)\s"]+)?`, extracts `<uuid>`, looks up the still-live row
+  in `ai_chat_file` and substitutes a freshly-minted token. If the row is gone, the URL is **left as-is** — the
+  browser will then get a clean `404 APIHUB-AI-3002` or `410 APIHUB-AI-4101` when the user actually clicks,
+  which is the FE-contracted behaviour. Re-signing happens in memory; nothing is written back to `ai_chat_message.content`.
 
 ### 6.3 Signed tokens
 
-File download tokens are **JWTs signed by the same RSA key the IdP already uses for user sessions** (`security/Auth.go`'s `keeper`). There is no separate HMAC secret — one signing key for the whole service, one piece of crypto state for operators to manage. The token type is deliberately generic (`generated-file-download`) so that the same endpoint and token-minting helpers can be reused by future non-chat features that also produce downloadable artefacts.
+File download tokens are **JWTs signed by the same RSA key the IdP already uses for user sessions**
+(`security/Auth.go`'s `keeper`). There is no separate HMAC secret — one signing key for the whole service,
+one piece of crypto state for operators to manage. The token type is deliberately generic (`generated-file-download`)
+so that the same endpoint and token-minting helpers can be reused by future non-chat features that also produce
+downloadable artefacts.
 
 Scope isolation is provided by `TokenTypeExt`, the same mechanism that already keeps access and refresh tokens from being used in each other's place (`JWTValidator.ValidateToken` enforces type match). A new token type is introduced:
 
@@ -557,7 +575,11 @@ chat.OpenAIPreviousResponseID = &turn.OpenAICompletionID  // head advances to th
 
 Compaction zeroes `OpenAIPreviousResponseID`, which forces the next turn to send the new compacted history (summary + recent tail) on a fresh thread.
 
-**Recovery from invalid `previous_response_id`.** OpenAI eventually evicts stored responses from its server-side store; if our DB still references one, the next turn will fail. `runLLMTurn` detects this via `IsInvalidPrevResponseIDError` (matches `param=previous_response_id` plus relevant 400/404 patterns), zeroes `chat.OpenAIPreviousResponseID`, rebuilds the full compacted history with `buildHistoryForLLM`, and retries the turn once on a fresh thread. If the retry also fails, the error is surfaced to the client.
+**Recovery from invalid `previous_response_id`.** OpenAI eventually evicts stored responses from its server-side store;
+if our DB still references one, the next turn will fail. `runLLMTurn` detects this via `IsInvalidPrevResponseIDError`
+(matches `param=previous_response_id` plus relevant 400/404 patterns), zeroes `chat.OpenAIPreviousResponseID`,
+rebuilds the full compacted history with `buildHistoryForLLM`, and retries the turn once on a fresh thread.
+If the retry also fails, the error is surfaced to the client.
 
 Version pinned in `go.mod` (`openai-go/v3 v3.31.0`).
 
@@ -565,7 +587,10 @@ Version pinned in `go.mod` (`openai-go/v3 v3.31.0`).
 
 ## 9. Observability
 
-* **Per-turn correlation ID.** `ai_chat_service.runLLMTurn` mints a fresh UUID for each user turn (covering all OpenAI calls in the tool loop) via `WithAiChatCorrelationID(ctx, ...)`. `service.openAIRequestOptions(ctx)` reads it back and attaches it to every `Responses.New` / `Responses.NewStreaming` call as the `X-Request-ID` header, so OpenAI's server-side traces line up with our log fields during incident triage.
+* **Per-turn correlation ID.** `ai_chat_service.runLLMTurn` mints a fresh UUID for each user turn (covering all
+  OpenAI calls in the tool loop) via `WithAiChatCorrelationID(ctx, ...)`. `service.openAIRequestOptions(ctx)`
+  reads it back and attaches it to every `Responses.New` / `Responses.NewStreaming` call as the `X-Request-ID`
+  header, so OpenAI's server-side traces line up with our log fields during incident triage.
 * Structured `log.WithFields` for: `userId`, `chatId`, `messageId`, `turnDurationMs`, `promptTokens`, `completionTokens`, `compacted`, `toolCalls`, `streamClosedReason` (one of `done`, `error`, `client_aborted`).
 * Prometheus counters/histograms in `metrics/`:
   * `apihub_ai_chat_turns_total{status="ok|error|aborted"}`;
@@ -592,7 +617,7 @@ Version pinned in `go.mod` (`openai-go/v3 v3.31.0`).
    * Pin-limit enforcement in `ChatService.UpdateChat`.
    * Retention predicate in `cleanup/AiChat` (table-driven: various combinations of pinned/last-activity).
    * `security.MintGeneratedFileToken` / `security.ValidateGeneratedFileToken` — happy path, expired token, bad signature, wrong token type (e.g. a real access token must not validate as a file token), wrong `fileId` in the path vs token.
-   * Link re-signing on `GET /messages` — stored markdown content with a stale token must come out with a fresh token; content pointing at an already-expired `ai_chat_file` row must be returned untouched.
+   * Link re-signing on `GET /messages` — stored Markdown content with a stale token must come out with a fresh token; content pointing at an already-expired `ai_chat_file` row must be returned untouched.
    * Idempotency — two concurrent sends with the same `clientMessageId` should cause exactly one LLM call (simulated via a fake OpenAI client).
    * SSE framing — the controller writes well-formed frames for each event DTO.
 

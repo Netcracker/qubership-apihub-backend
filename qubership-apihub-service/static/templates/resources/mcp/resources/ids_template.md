@@ -162,7 +162,7 @@ This covers the mapping of Operation Name interface exposed by <System Name> for
 
 ## Error Handling
 
-Error handling will be done in two ways by Integration Adapter. Based on the error type, retry the failed request (based on pre-defined config) or direct forwarding of error to the caller module which will in turn manage or resolve the error.
+Error handling will be done in two ways by Integration Adapter. Based on the error type, retry the failed request (based on predefined config) or direct forwarding of error to the caller module which will in turn manage or resolve the error.
 
 ### Error Codes - <3rdPartySystemName> (<Operation Name>)
 

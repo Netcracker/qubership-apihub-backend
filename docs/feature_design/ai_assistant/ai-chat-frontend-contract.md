@@ -137,7 +137,11 @@ See `AiChatStreamEvent` and its variants in the OpenAPI schema. Quick reference:
 ### 4.5 Rendering guidance
 
 * `message.assistant.delta.delta` values are safe to **concatenate naively** in the order received. Do not buffer for JSON — each chunk is already plain string content. Markdown may be rendered incrementally; tables and fenced code will simply "resolve" as more chunks arrive.
-* `tool.started` / `tool.completed` events and the persisted `toolInvocations` field on `AiChatMessage` are both **optional UI sugar**. They exist mainly for transparency and for debugging chat behaviour. A client that doesn't care about tool pills can ignore them entirely. A client that does care should treat them as equivalent: live events let you render a pill in real time ("🔎 Searching API operations…" that turns static on `tool.completed`), while the persisted list lets the same pill reappear after a history reload.
+* `tool.started` / `tool.completed` events and the persisted `toolInvocations` field on `AiChatMessage` are both
+  **optional UI sugar**. They exist mainly for transparency and for debugging chat behaviour. A client that doesn't
+  care about tool pills can ignore them entirely. A client that does care should treat them as equivalent: live events
+  let you render a pill in real time ("🔎 Searching API operations…" that turns static on `tool.completed`), while
+  the persisted list lets the same pill reappear after a history reload.
 * `context.compacted` is an informational signal. A lightweight indicator like "(earlier part of this conversation was summarised to fit the model's context window)" is sufficient. UIs may also simply ignore it.
 * On `message.assistant.completed` replace the streamed-in content with the authoritative `message.content` (defensive against any formatting glitches from partial chunks) and use `toolInvocations` to reconcile any pills still in transit.
 

@@ -50,13 +50,13 @@ func (r *aiChatRepositoryImpl) UpdateChat(ctx context.Context, row *entity.AiCha
 	_, err := r.cp.GetConnection().ExecContext(ctx, `
 		UPDATE ai_chat
 		SET title                       = ?,
-		    pinned                      = ?,
-		    last_message_at             = ?,
-		    messages_count              = ?,
-		    openai_previous_response_id = ?,
-		    compacted_up_to_created_at  = ?,
-		    compaction_summary          = ?,
-		    last_turn_tokens            = ?
+				pinned                      = ?,
+				last_message_at             = ?,
+				messages_count              = ?,
+				openai_previous_response_id = ?,
+				compacted_up_to_created_at  = ?,
+				compaction_summary          = ?,
+				last_turn_tokens            = ?
 		WHERE id = ?`,
 		row.Title,
 		row.Pinned,
