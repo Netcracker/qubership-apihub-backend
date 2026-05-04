@@ -513,30 +513,69 @@ The job is protected by the existing `LockService` (same pattern as `CreateCompa
 
 ---
 
-## 8. Responses API migration (openai-go/v3)
+## 8. Responses API migration (openai-go/v3) — DONE
 
-The current PoC uses `client.Chat.Completions.New`. We move to `client.Responses.New` / `client.Responses.NewStreaming`. Concrete tasks:
+The chat path runs on `client.Responses.New` / `client.Responses.NewStreaming` end-to-end. No separate wrapper package was introduced — `service/ChatService.go` calls the SDK directly because the call sites are all internal:
 
-1. Add a thin `client/OpenAIResponsesClient.go` wrapper that exposes:
-   * `CreateResponseStream(ctx, params) (<-chan ResponseEvent, error)` yielding our internal event type;
-   * `CreateResponse(ctx, params) (*Response, error)` for non-streaming paths (summary, auto-title);
-   * `GetResponseUsage(ctx, responseId) (Usage, error)` for the compaction trigger.
-2. Translate the existing OpenAI tool adapter from Chat Completions tools (`shared.FunctionDefinitionParam`) to Responses tools. The function schema is identical; only the wrapping struct changes.
-3. Keep the existing `systemMessageBaseContent` and the `api-packages-list` cache from `ChatService.buildSystemMessage`. It is injected only on the first turn of a chat (or right after a compaction).
+* `runChatCompletionWithHistory(ctx, viewMessages, previousResponseID)` is the unstreamed primitive used by `ai_chat_service.runLLMTurn` for `POST /messages`. It:
+  * always sends `Instructions` from `buildSystemMessage` (Responses API does not carry instructions across `previous_response_id`);
+  * if `previousResponseID == nil`, sends the full `viewMessages` as `Input.OfInputItemList` (built by `convertViewMessagesToInputItems`, which turns each ChatMessage into an `EasyInputMessageParam`);
+  * if `previousResponseID != nil`, sends only the new turn's items (the caller — `ai_chat_service` — passes a one-element `[]ChatMessage{user}`);
+  * loops on function-call output items (`responses.ResponseInputItemParamOfFunctionCallOutput(callId, result)`) until the model produces text without function calls, advancing `PreviousResponseID = lastResp.ID` each iteration;
+  * caps the loop at 10 iterations.
+* `runChatCompletionStreaming(ctx, viewMessages, previousResponseID, hooks)` is the streaming twin used by `POST /messages/stream`. Same Responses-API semantics, but text deltas, tool-call lifecycles, and the final response id are produced incrementally:
+  * iterates `client.Responses.NewStreaming(...)`'s SSE union, switching on `event.Type`:
+    * `response.output_text.delta` → forwards `event.Delta` via `hooks.OnTextDelta` (mapped to `message.assistant.delta` SSE on the public API);
+    * `response.output_item.added` with type `function_call` → fires `hooks.OnToolStart` (mapped to `tool.started`) **as soon as the model commits to a tool**, well before arguments are fully assembled;
+    * `response.output_item.done` with type `function_call` → collects the finalized call into the per-iteration `pendingCalls` slice;
+    * `response.completed` → closes the iteration, captures `Response.ID` (next `previous_response_id`) and accumulates usage;
+    * `response.failed` / `error` → bubble up.
+  * after each iteration runs any pending tools synchronously via the existing `executeToolCallsWithInvocations`, fires `hooks.OnToolCompleted` per result, then feeds the outputs back as the next iteration's input;
+  * stops when an iteration completes with no `pendingCalls`.
+* MCP tools are converted to `responses.FunctionToolParam` with `Strict: false` (`convertToResponsesToolParams`).
+* `generateChatTitle` and `summarizeMessagesForCompaction` are one-shot Responses calls with `Store: false` so they never appear in the user-visible chain.
 
-Version already pinned in `go.mod` (`openai-go/v3 v3.31.0`) — no dependency bump needed, but verify at implementation time that the Responses API surface is present in this release.
+Wiring in `ai_chat_service.runLLMTurn` (note the streaming/non-streaming branch):
+
+```go
+if !compacted && chat.OpenAIPreviousResponseID != nil && um != nil {
+    prevResponseID = chat.OpenAIPreviousResponseID
+    msgsForLLM = []view.ChatMessage{{Role: "user", Content: um.Content}}
+} else {
+    msgsForLLM = s.buildHistoryForLLM(chat, hist)  // first turn or post-compaction
+}
+
+if stream != nil {
+    // SSE: forward deltas + tool lifecycle through hooks the moment they arrive
+    turn, err = s.chat.runChatCompletionStreaming(ctx, msgsForLLM, prevResponseID, hooks)
+} else {
+    // POST /messages: get the whole assistant response in one go
+    turn, err = s.chat.runChatCompletionWithHistory(ctx, msgsForLLM, prevResponseID)
+}
+chat.OpenAIPreviousResponseID = &turn.OpenAICompletionID  // head advances to the FINAL response in the chain
+```
+
+Compaction zeroes `OpenAIPreviousResponseID`, which forces the next turn to send the new compacted history (summary + recent tail) on a fresh thread.
+
+**Recovery from invalid `previous_response_id`.** OpenAI eventually evicts stored responses from its server-side store; if our DB still references one, the next turn will fail. `runLLMTurn` detects this via `IsInvalidPrevResponseIDError` (matches `param=previous_response_id` plus relevant 400/404 patterns), zeroes `chat.OpenAIPreviousResponseID`, rebuilds the full compacted history with `buildHistoryForLLM`, and retries the turn once on a fresh thread. If the retry also fails, the error is surfaced to the client.
+
+Version pinned in `go.mod` (`openai-go/v3 v3.31.0`).
 
 ---
 
 ## 9. Observability
 
-* Every request carries a correlation id — use the existing `X-Request-ID` middleware convention (if not present, add one) and pass it to OpenAI as `X-Request-ID` header via the client's request options.
+* **Per-turn correlation id.** `ai_chat_service.runLLMTurn` mints a fresh UUID for each user turn (covering all OpenAI calls in the tool loop) via `WithAiChatCorrelationID(ctx, ...)`. `service.openAIRequestOptions(ctx)` reads it back and attaches it to every `Responses.New` / `Responses.NewStreaming` call as the `X-Request-ID` header, so OpenAI's server-side traces line up with our log fields during incident triage.
 * Structured `log.WithFields` for: `userId`, `chatId`, `messageId`, `turnDurationMs`, `promptTokens`, `completionTokens`, `compacted`, `toolCalls`, `streamClosedReason` (one of `done`, `error`, `client_aborted`).
-* New Prometheus counters in `metrics/`:
+* Prometheus counters/histograms in `metrics/`:
   * `apihub_ai_chat_turns_total{status="ok|error|aborted"}`;
-  * `apihub_ai_chat_tokens_total{kind="prompt|completion"}`;
+  * `apihub_ai_chat_turn_duration_seconds`;
+  * `apihub_ai_chat_turn_tokens{mode="stream|sync"}`;
+  * `apihub_ai_chat_tool_calls_total{name,status}`;
   * `apihub_ai_chat_compactions_total`;
-  * `apihub_ai_chat_generated_files_total`.
+  * `apihub_ai_chat_generated_files_total`;
+  * `apihub_ai_chat_generated_file_bytes`;
+  * `apihub_ai_chat_cleanup_deleted_total{job}`.
 
 ---
 

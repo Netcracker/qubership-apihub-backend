@@ -143,8 +143,24 @@ type AIConfig struct {
 type MCPConfig struct {
 	Workspace string
 }
+
+// ChatConfig holds productized AI chat and OpenAI client settings
 type ChatConfig struct {
-	OpenAI OpenAIConfig
+	OpenAI         OpenAIConfig
+	Enabled        bool
+	RetentionDays  int
+	PinnedForeverCount int
+	CompactAtContextPercent int
+	CleanupSchedule    string
+	GeneratedFiles     GeneratedFilesConfig
+}
+
+// GeneratedFilesConfig is server-side only (temp files, TTL, cleanup)
+type GeneratedFilesConfig struct {
+	Directory       string
+	TTLMinutes      int
+	CleanupSchedule string
+	MaxFileSizeMB   int
 }
 
 type OpenAIConfig struct {

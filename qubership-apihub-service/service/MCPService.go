@@ -15,10 +15,18 @@ import (
 
 type MCPService interface {
 	MakeMCPServer() *mcpserver.MCPServer
-	MakeOpenAiMCPTools() []openAITool
+	MakeLLMTools() []LLMTool
 	ExecuteGetSpecTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error)
 	ExecuteSearchTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error)
 	GetPackagesList(ctx context.Context, workspaceId string) ([]mcp.ResourceContents, error)
+	// IDSAssetsAvailable reports whether the bundled IDS template and prompt
+	// were loaded from the image. Used by ChatService to decide whether to
+	// expose start_ids_generation to the model.
+	IDSAssetsAvailable() bool
+	// IDSAuthoringKit assembles the LLM-facing "how to build an IDS" instruction
+	// blob (template + rules + the user's natural-language request) returned by
+	// the start_ids_generation chat tool.
+	IDSAuthoringKit(userInput string) (string, error)
 }
 
 func NewMCPService(systemInfoService SystemInfoService, operationService OperationService, packageService PackageService, versionService VersionService) MCPService {
@@ -27,6 +35,7 @@ func NewMCPService(systemInfoService SystemInfoService, operationService Operati
 		operationService:  operationService,
 		packageService:    packageService,
 		versionService:    versionService,
+		assets:            loadMCPAssets(mcpAssetsRootDir),
 	}
 }
 
@@ -35,6 +44,26 @@ type mcpService struct {
 	operationService  OperationService
 	packageService    PackageService
 	versionService    VersionService
+
+	// assets holds the snapshot of /resources/mcp/{prompts,resources}/*.* loaded once at
+	// startup. Image-bundled, no live reload (operators rebuild the image to swap them).
+	assets *mcpAssets
+}
+
+// IDSAssetsAvailable returns true if the IDS template and prompt are both present.
+func (m mcpService) IDSAssetsAvailable() bool {
+	if m.assets == nil {
+		return false
+	}
+	return m.assets.IDSAssetsAvailable()
+}
+
+// IDSAuthoringKit builds the start_ids_generation tool's instruction payload.
+func (m mcpService) IDSAuthoringKit(userInput string) (string, error) {
+	if m.assets == nil {
+		return "", fmt.Errorf("MCP assets not loaded")
+	}
+	return m.assets.IDSAuthoringKit(userInput)
 }
 
 func (m mcpService) MakeMCPServer() *mcpserver.MCPServer {
@@ -92,21 +121,82 @@ func (m mcpService) MakeMCPServer() *mcpserver.MCPServer {
 		log.Warn("MCP_WORKSPACE environment variable is not set, skipping API packages resource registration")
 	}
 
+	// Auto-register every file under resources/mcp/resources/ as a static MCP resource.
+	// URI scheme: apihub://mcp/resources/<filename> -- stable so external clients can
+	// reference resources directly when an embeddable URI is needed.
+	if m.assets != nil {
+		for _, asset := range m.assets.ListResources() {
+			a := asset // capture
+			uri := mcpResourceURI(a.Filename)
+			s.AddResource(mcp.Resource{
+				URI:         uri,
+				Name:        a.Name,
+				Description: fmt.Sprintf("Bundled MCP resource loaded from resources/mcp/resources/%s.", a.Filename),
+				MIMEType:    a.MIMEType,
+			}, func(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+				return []mcp.ResourceContents{
+					&mcp.TextResourceContents{
+						URI:      uri,
+						MIMEType: a.MIMEType,
+						Text:     a.Content,
+					},
+				}, nil
+			})
+		}
+	}
+
+	// IDS-specific prompt: it's the only one (so far) that takes a templated argument
+	// and embeds another bundled asset (the ids_template resource). Other prompts can
+	// be added the same way as more authoring kits land.
+	if m.IDSAssetsAvailable() {
+		s.AddPrompt(mcp.Prompt{
+			Name:        idsPromptName,
+			Description: "Generate an Integration Design Specification (IDS) document from a free-text user request. The prompt returns the canonical IDS markdown template together with the step-by-step authoring rules; the LLM is expected to walk the apihub MCP tools to fill in real API specs and produce the final document.",
+			Arguments: []mcp.PromptArgument{
+				{
+					Name:        idsPromptArgUserInput,
+					Description: "The user's natural-language request describing the integration scenario and APIs to integrate.",
+					Required:    true,
+				},
+			},
+		}, func(ctx context.Context, request mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+			userInput := request.Params.Arguments[idsPromptArgUserInput]
+			kit, err := m.IDSAuthoringKit(userInput)
+			if err != nil {
+				return nil, err
+			}
+			return mcp.NewGetPromptResult(
+				"IDS authoring kit (template + rules + user request)",
+				[]mcp.PromptMessage{
+					mcp.NewPromptMessage(mcp.RoleUser, mcp.NewTextContent(kit)),
+				},
+			), nil
+		})
+	}
+
 	return s
 }
 
-func (m mcpService) MakeOpenAiMCPTools() []openAITool {
+// mcpResourceURI builds the canonical URI for a bundled MCP resource asset.
+func mcpResourceURI(filename string) string {
+	return "apihub://mcp/resources/" + filename
+}
+
+const (
+	// idsPromptName is the public MCP-side prompt name used by external clients (Claude Desktop etc.).
+	idsPromptName         = "generate_ids_document"
+	idsPromptArgUserInput = "user_input"
+)
+
+func (m mcpService) MakeLLMTools() []LLMTool {
 	openAIToolsRaw := GetToolsForOpenAI()
-	toolsList := make([]openAITool, len(openAIToolsRaw))
+	toolsList := make([]LLMTool, len(openAIToolsRaw))
 	for i, toolRaw := range openAIToolsRaw {
 		functionRaw := toolRaw["function"].(map[string]interface{})
-		toolsList[i] = openAITool{
-			Type: toolRaw["type"].(string),
-			Function: openAIFunction{
-				Name:        functionRaw["name"].(string),
-				Description: functionRaw["description"].(string),
-				Parameters:  functionRaw["parameters"].(map[string]interface{}),
-			},
+		toolsList[i] = LLMTool{
+			Name:        functionRaw["name"].(string),
+			Description: functionRaw["description"].(string),
+			Parameters:  functionRaw["parameters"].(map[string]interface{}),
 		}
 	}
 	return toolsList

@@ -241,6 +241,16 @@ func (g *systemInfoServiceImpl) setDefaults() {
 	viper.SetDefault("openAI.temperature", 1.0)
 	viper.SetDefault("openAI.reasoningEffort", "medium")
 	viper.SetDefault("openAI.verbosity", "medium")
+
+	viper.SetDefault("ai.chat.enabled", false)
+	viper.SetDefault("ai.chat.retentionDays", 30)
+	viper.SetDefault("ai.chat.pinnedForeverCount", 10)
+	viper.SetDefault("ai.chat.compactAtContextPercent", 80)
+	viper.SetDefault("ai.chat.cleanupSchedule", "15 3 * * *")
+	viper.SetDefault("ai.chat.generatedFiles.directory", "/tmp/apihub-ai-chat-files")
+	viper.SetDefault("ai.chat.generatedFiles.ttlMinutes", 30)
+	viper.SetDefault("ai.chat.generatedFiles.cleanupSchedule", "*/5 * * * *")
+	viper.SetDefault("ai.chat.generatedFiles.maxFileSizeMB", 50)
 }
 
 func (g *systemInfoServiceImpl) GetConfigFolder() string {

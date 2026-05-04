@@ -95,6 +95,72 @@ var NumberOfBuildRetries = prometheus.NewGaugeVec(
 	[]string{},
 )
 
+// AI chat metrics
+
+var AiChatTurnsTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "apihub_ai_chat_turns_total",
+		Help: "Number of AI chat turns processed, partitioned by mode (sync/stream) and status (ok/error).",
+	},
+	[]string{"mode", "status"},
+)
+
+var AiChatTurnDuration = promauto.NewHistogramVec(
+	prometheus.HistogramOpts{
+		Name:    "apihub_ai_chat_turn_duration_seconds",
+		Help:    "End-to-end duration of an AI chat turn (LLM + tool calls + persistence).",
+		Buckets: []float64{0.5, 1, 2, 3, 5, 8, 13, 20, 30, 60, 120},
+	},
+	[]string{"mode", "status"},
+)
+
+var AiChatTurnTokens = promauto.NewHistogramVec(
+	prometheus.HistogramOpts{
+		Name:    "apihub_ai_chat_turn_tokens",
+		Help:    "Total tokens (prompt+completion) reported by the LLM provider per turn.",
+		Buckets: []float64{500, 1000, 2000, 4000, 8000, 16000, 32000, 64000, 96000, 128000},
+	},
+	[]string{"mode"},
+)
+
+var AiChatToolCallsTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "apihub_ai_chat_tool_calls_total",
+		Help: "Number of MCP tool invocations performed during AI chat turns.",
+	},
+	[]string{"tool", "status"},
+)
+
+var AiChatCompactionsTotal = prometheus.NewCounter(
+	prometheus.CounterOpts{
+		Name: "apihub_ai_chat_compactions_total",
+		Help: "Number of context compactions performed.",
+	},
+)
+
+var AiChatGeneratedFilesTotal = prometheus.NewCounter(
+	prometheus.CounterOpts{
+		Name: "apihub_ai_chat_generated_files_total",
+		Help: "Number of AI-generated files persisted.",
+	},
+)
+
+var AiChatGeneratedFileBytes = promauto.NewHistogram(
+	prometheus.HistogramOpts{
+		Name:    "apihub_ai_chat_generated_file_bytes",
+		Help:    "Size of AI-generated files in bytes.",
+		Buckets: []float64{1024, 8 * 1024, 64 * 1024, 512 * 1024, 4 * 1024 * 1024, 32 * 1024 * 1024},
+	},
+)
+
+var AiChatCleanupDeleted = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "apihub_ai_chat_cleanup_deleted_total",
+		Help: "Items deleted by the AI chat cleanup jobs.",
+	},
+	[]string{"job", "kind"},
+)
+
 func RegisterAllPrometheusApplicationMetrics() {
 	prometheus.Register(TotalRequests)
 	prometheus.Register(HttpDuration)
@@ -106,4 +172,10 @@ func RegisterAllPrometheusApplicationMetrics() {
 	prometheus.Register(MaxBuildTime)
 	prometheus.Register(AvgBuildTime)
 	prometheus.Register(NumberOfBuildRetries)
+
+	prometheus.Register(AiChatTurnsTotal)
+	prometheus.Register(AiChatToolCallsTotal)
+	prometheus.Register(AiChatCompactionsTotal)
+	prometheus.Register(AiChatGeneratedFilesTotal)
+	prometheus.Register(AiChatCleanupDeleted)
 }

@@ -283,7 +283,34 @@ func main() {
 	systemStatsService := service.NewSystemStatsService(systemStatsRepository)
 
 	mcpService := service.NewMCPService(systemInfoService, operationService, packageService, versionService)
-	chatService := service.NewChatService(systemInfoService, mcpService)
+	aiChatRepository, err := repository.NewAiChatRepositoryPG(cp)
+	if err != nil {
+		log.Error("Failed to create AiChatRepository: " + err.Error())
+		panic("Failed to create AiChatRepository: " + err.Error())
+	}
+	generatedFileService := service.NewGeneratedFileService(systemInfoService, aiChatRepository)
+	chatService := service.NewChatService(systemInfoService, mcpService, generatedFileService, security.MintGeneratedFileToken)
+	aiChatService, err := service.NewAiChatService(systemInfoService, aiChatRepository, chatService, security.MintGeneratedFileToken)
+	if err != nil {
+		log.Error("Failed to create AiChatService: " + err.Error())
+		panic("Failed to create AiChatService: " + err.Error())
+	}
+
+	aiChatController := controller.NewAiChatController(aiChatService)
+	generatedFileController := controller.NewGeneratedFileController(aiChatService)
+
+	aiChatEnabled := isAiChatEnabled(systemInfoService)
+	if aiChatEnabled {
+		log.Info("ai-chat: routes and cleanup jobs are ENABLED")
+		aiChatCleanup := service.NewAiChatCleanupService(aiChatRepository, lockService)
+		aiCfg := systemInfoService.GetAiChatConfig()
+		if err := aiChatCleanup.StartChatRetentionJob(aiCfg.CleanupSchedule, aiCfg.RetentionDays, aiCfg.PinnedForeverCount); err != nil {
+			log.Warnf("Failed to start ai chat retention cleanup: %v", err)
+		}
+		if err := aiChatCleanup.StartGeneratedFilesCleanupJob(aiCfg.GeneratedFiles.CleanupSchedule, aiCfg.GeneratedFiles.Directory); err != nil {
+			log.Warnf("Failed to start ai chat generated files cleanup: %v", err)
+		}
+	}
 
 	idpManager, err := providers.NewIDPManager(systemInfoService.GetAuthConfig(), systemInfoService.GetAllowedHosts(), systemInfoService.IsProductionMode(), userService)
 	if err != nil {
@@ -326,7 +353,6 @@ func main() {
 	systemStatsController := controller.NewSystemStatsController(systemStatsService, roleService)
 	internalDocsController := controller.NewInternalDocumentController(publishedService, roleService)
 	mcpController := controller.NewMCPController(mcpService)
-	chatController := controller.NewChatController(chatService)
 	buildController := controller.NewBuildController(buildResultService, buildService, roleService.IsSysadm)
 	adminPublishedController := controller.NewAdminPublishedController(publishedService, roleService.IsSysadm, systemInfoService.GetPublishArchiveSizeLimitMB())
 
@@ -537,10 +563,22 @@ func main() {
 		r.PathPrefix("/debug/").Handler(http.DefaultServeMux)
 
 		r.HandleFunc("/api/internal/minio/download", security.Secure(minioStorageController.DownloadFilesFromMinioToDatabase)).Methods(http.MethodPost)
+	}
 
-		//Chat
-		r.HandleFunc("/api/v1/ai-chat", security.Secure(chatController.Chat)).Methods(http.MethodPost)
-		r.HandleFunc("/api/v1/ai-chat/stream", security.Secure(chatController.ChatStream)).Methods(http.MethodPost)
+	// Generated-file download is always available: the short-lived JWT in the
+	// query string is self-contained auth, so the route is safe to expose
+	// unconditionally. Other features (not only AI chat) may produce downloadable files.
+	r.HandleFunc("/api/v1/generated-files/{fileId}", security.NoSecure(generatedFileController.Download)).Methods(http.MethodGet)
+
+	if aiChatEnabled {
+		r.HandleFunc("/api/v1/ai-chat/chats", security.Secure(aiChatController.ListChats)).Methods(http.MethodGet)
+		r.HandleFunc("/api/v1/ai-chat/chats", security.Secure(aiChatController.CreateChat)).Methods(http.MethodPost)
+		r.HandleFunc("/api/v1/ai-chat/chats/{chatId}", security.Secure(aiChatController.GetChat)).Methods(http.MethodGet)
+		r.HandleFunc("/api/v1/ai-chat/chats/{chatId}", security.Secure(aiChatController.UpdateChat)).Methods(http.MethodPatch)
+		r.HandleFunc("/api/v1/ai-chat/chats/{chatId}", security.Secure(aiChatController.DeleteChat)).Methods(http.MethodDelete)
+		r.HandleFunc("/api/v1/ai-chat/chats/{chatId}/messages", security.Secure(aiChatController.ListMessages)).Methods(http.MethodGet)
+		r.HandleFunc("/api/v1/ai-chat/chats/{chatId}/messages", security.Secure(aiChatController.SendMessage)).Methods(http.MethodPost)
+		r.HandleFunc("/api/v1/ai-chat/chats/{chatId}/messages/stream", security.Secure(aiChatController.SendMessageStream)).Methods(http.MethodPost)
 	}
 
 	mcpHandler := mcpController.MakeMCPServer()
@@ -646,6 +684,18 @@ func main() {
 	dbMigrationService.StartOpsMigrationRestoreProc(context.Background())
 
 	log.Fatalf("Http server returned error: %v", srv.ListenAndServe())
+}
+
+// isAiChatEnabled is the single source of truth for whether the productized AI chat
+// stack (HTTP routes, periodic cleanup jobs, generated-files lifecycle) is wired up
+// on this instance.
+//
+// Today the rule is straightforward: the explicit ai.chat.enabled config flag controls
+// it everywhere, dev and prod alike. If you forget to set it in dev, AI chat is off —
+// that's intentional, since the feature now hits external dependencies (OpenAI API key,
+// PostgreSQL migration, /tmp generated-files dir) that we don't want auto-on.
+func isAiChatEnabled(sis service.SystemInfoService) bool {
+	return sis.GetAiChatConfig().Enabled
 }
 
 func makeServer(systemInfoService service.SystemInfoService, r *mux.Router) *http.Server {

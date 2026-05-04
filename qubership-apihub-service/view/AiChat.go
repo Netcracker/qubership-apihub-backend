@@ -1,0 +1,63 @@
+package view
+
+// AiChat is chat metadata in API responses
+type AiChat struct {
+	ChatID        string `json:"chatId"`
+	Title         string `json:"title"`
+	Pinned        *bool  `json:"pinned,omitempty"`
+	CreatedAt     string `json:"createdAt"`
+	LastMessageAt string `json:"lastMessageAt"`
+	MessagesCount int    `json:"messagesCount"`
+}
+
+// AiChatsListResponse is GET /chats
+type AiChatsListResponse struct {
+	Chats   []AiChat `json:"chats"`
+	HasMore bool     `json:"hasMore"`
+}
+
+// AiChatCreateRequest is POST /chats body
+type AiChatCreateRequest struct {
+	Title *string `json:"title,omitempty" validate:"omitempty,max=120"`
+}
+
+// AiChatUpdateRequest is PATCH /chats/{id} body
+type AiChatUpdateRequest struct {
+	Title  *string `json:"title,omitempty" validate:"omitempty,min=1,max=120"`
+	Pinned *bool   `json:"pinned,omitempty"`
+}
+
+// AiChatMessage is one persisted message
+type AiChatMessage struct {
+	MessageID        string                 `json:"messageId"`
+	ClientMessageID  *string                `json:"clientMessageId,omitempty"`
+	Role             string                 `json:"role"`
+	Content          string                 `json:"content"`
+	CreatedAt        string                 `json:"createdAt"`
+	ToolInvocations  []AiChatToolInvocation `json:"toolInvocations,omitempty"`
+}
+
+// AiChatToolInvocation is UI-facing tool summary
+type AiChatToolInvocation struct {
+	Name       string `json:"name"`
+	Status     string `json:"status"`
+	DurationMs *int   `json:"durationMs,omitempty"`
+}
+
+// AiChatMessagesListResponse is GET /chats/{id}/messages
+type AiChatMessagesListResponse struct {
+	Messages []AiChatMessage `json:"messages"`
+	HasMore  bool            `json:"hasMore"`
+}
+
+// AiChatSendMessageRequest is POST .../messages
+type AiChatSendMessageRequest struct {
+	Content         string  `json:"content" validate:"required,min=1,max=32000"`
+	ClientMessageID *string `json:"clientMessageId,omitempty"`
+}
+
+// AiChatSendMessageResponse is non-streaming send result
+type AiChatSendMessageResponse struct {
+	UserMessage      AiChatMessage `json:"userMessage"`
+	AssistantMessage AiChatMessage `json:"assistantMessage"`
+}

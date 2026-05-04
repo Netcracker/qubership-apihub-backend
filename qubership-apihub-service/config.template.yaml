@@ -198,6 +198,22 @@ ai:
     # Default workspace for MCP to work with
     workspace: ''
   chat:
+    # Master kill-switch for the AI chat feature. When true, /api/v1/ai-chat/chats
+    # and /api/v1/generated-files routes are registered and the periodic retention/
+    # generated-files cleanup jobs are scheduled. When false, none of those are wired
+    # up regardless of the rest of the ai.chat.* config. Default kept as `false` so
+    # operators have to consciously opt in (the feature requires an OpenAI API key,
+    # writable /tmp directory, and the 34_ai_chat migration to be applied).
+    enabled: false
+    retentionDays: 30
+    pinnedForeverCount: 10
+    compactAtContextPercent: 80
+    cleanupSchedule: "15 3 * * *"
+    generatedFiles:
+      directory: "/tmp/apihub-ai-chat"
+      ttlMinutes: 30
+      cleanupSchedule: "*/5 * * * *"
+      maxFileSizeMB: 50
     # Section with OpenAI configuration for AI-assisted chat
     openAI:
       # Mandatory; OpenAI API key for chat functionality; If not set, default value: ""; Example: sk-...
