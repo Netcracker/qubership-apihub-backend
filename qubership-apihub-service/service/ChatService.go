@@ -29,6 +29,10 @@ type ChatUsage struct {
 	TotalTokens      int `json:"totalTokens"`
 }
 
+// toolNameAskClarification is a meta-tool that short-circuits the tool loop:
+// instead of executing externally, the question becomes the assistant's response.
+const toolNameAskClarification = "ask_clarification"
+
 // System message base content — provider-agnostic, defines the assistant's scope and behaviour.
 const systemMessageBaseContent = `You are a specialized assistant for working with REST API documentation and specifications. Your role is to help users find and understand API operations, endpoints, and their specifications, and to help them author Integration Design Specification (IDS) documents that describe how APIs are wired together.
 
@@ -50,12 +54,25 @@ YOUR CAPABILITIES:
 - Explain API endpoints, request/response formats, and data structures
 - Help users understand how to use specific APIs
 - Generate Integration Design Specification (IDS) documents on demand and deliver them to the user as downloadable Markdown files
+- Ask a clarifying question using the ask_clarification tool when the request is genuinely ambiguous
 
 INTEGRATION DESIGN GENERATION:
 - When the user explicitly asks you to "generate", "create", "draft" or "build" an IDS / Integration Design Specification / design document for an integration scenario, your VERY FIRST action MUST be to call the start_ids_generation tool with the user's request as the user_input argument. The tool returns the canonical template, the step-by-step authoring rules, and a final hand-off contract.
 - Follow the rules returned by start_ids_generation literally. They include MANDATORY APIHub lookups via search_rest_api_operations and get_rest_api_operations_specification for every API the user mentions; do NOT invent paths, parameters or schemas.
 - When the document is complete, call save_generated_file with a concise filename (e.g. "IDS_<3rdPartySystemAbbrev>.md") and the FULL Markdown body. The tool returns a Markdown link of the form [filename](url); embed it verbatim in your final user-facing reply so the user can download the file. Keep the rest of the reply short -- one paragraph summarising what was generated.
 - Never call save_generated_file outside of the IDS authoring flow, and never inline the IDS body itself in chat -- the user gets it via the download link.
+
+CLARIFICATION POLICY:
+- When a user's request is genuinely ambiguous and you cannot give a reliable answer without more details, call ask_clarification with ONE specific question instead of guessing or fabricating an answer.
+- Use ask_clarification when:
+  * The user refers to a system, integration, or operation by an incomplete or ambiguous name, and a tool search would return too many equally plausible matches
+  * The user asks to generate an IDS but has not specified which systems or operations are involved (e.g. "generate an IDS for our CRM integration" with no further detail)
+  * Multiple valid interpretations exist and the answer would differ significantly between them
+- Do NOT use ask_clarification when:
+  * A search_rest_api_operations call can resolve the ambiguity — try the search first
+  * The request is clear enough to give a useful answer even if some details are missing
+  * You are being cautious rather than genuinely uncertain
+- Ask at most ONE question per turn. Make it specific and actionable so the user knows exactly what you need.
 
 AVAILABLE RESOURCES:
 - api-packages-list: A resource containing the list of all API packages in the system. This resource is useful when:
@@ -76,6 +93,28 @@ RESPONSE FORMAT:
 
 Always use available tools and resources when appropriate to provide accurate and up-to-date information about APIs.`
 
+// makeAskClarificationTool returns the LLM tool definition for the clarification meta-tool.
+// The backend intercepts calls to this tool and converts the question into the final assistant
+// response without forwarding results back to the model — the loop terminates immediately.
+func makeAskClarificationTool() LLMTool {
+	return LLMTool{
+		Name: toolNameAskClarification,
+		Description: "Ask the user a single clarifying question when their request is too ambiguous to answer reliably. " +
+			"The question you provide will be shown to the user as your response. " +
+			"Use this instead of guessing. Do NOT use it when a search could resolve the ambiguity — try searching first.",
+		Parameters: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"question": map[string]interface{}{
+					"type":        "string",
+					"description": "A specific, concise clarifying question for the user. One question only.",
+				},
+			},
+			"required": []string{"question"},
+		},
+	}
+}
+
 // NewChatService creates a chatServiceImpl wired to the OpenAI Responses API.
 // It constructs an openAIChatClient internally; callers outside this package only
 // see *chatServiceImpl (an opaque concrete type).
@@ -93,6 +132,7 @@ func NewChatService(
 	} else {
 		log.Info("ai-chat: IDS authoring tools NOT exposed (assets/services missing)")
 	}
+	mcpTools = append(mcpTools, makeAskClarificationTool())
 
 	log.Infof("ChatService initialized with %d LLM tools", len(mcpTools))
 	for _, tool := range mcpTools {
@@ -255,6 +295,18 @@ func (c *chatServiceImpl) runToolLoop(ctx context.Context, req LLMRequest, strea
 			break
 		}
 
+		// ask_clarification is a meta-tool: the model's question becomes the final
+		// assistant response and the loop terminates without a follow-up LLM call.
+		if question, isClarification := extractClarificationQuestion(resp.ToolCalls); isClarification {
+			log.Debugf("Model requested clarification: %q", truncateRunes(question, 120))
+			assistantText.WriteString(question)
+			lastToken = resp.ContinuationToken
+			if streaming && hooks.OnTextDelta != nil {
+				hooks.OnTextDelta(question)
+			}
+			break
+		}
+
 		toolResultStrs, invocations, recs, err := c.executeToolCallsWithInvocations(ctx, resp.ToolCalls)
 		if err != nil {
 			log.Errorf("Tool execution failed: %v", err)
@@ -342,6 +394,31 @@ func (c *chatServiceImpl) buildSystemMessage(ctx context.Context) string {
 		return systemMessageBaseContent + "\n\nCURRENT WORKSPACE PACKAGES (from api-packages-list resource):\n" + resourceData
 	}
 	return systemMessageBaseContent
+}
+
+// extractClarificationQuestion checks whether the tool calls contain an ask_clarification
+// invocation and, if so, returns the question text and true. The model may include other
+// tool calls alongside it; we handle the clarification first and ignore the rest.
+func extractClarificationQuestion(toolCalls []LLMToolCall) (string, bool) {
+	for _, tc := range toolCalls {
+		if tc.Name != toolNameAskClarification {
+			continue
+		}
+		var args struct {
+			Question string `json:"question"`
+		}
+		if err := json.Unmarshal([]byte(tc.Arguments), &args); err != nil {
+			log.Warnf("ask_clarification: failed to parse arguments: %v", err)
+			return "", false
+		}
+		q := strings.TrimSpace(args.Question)
+		if q == "" {
+			log.Warn("ask_clarification: empty question in tool arguments")
+			return "", false
+		}
+		return q, true
+	}
+	return "", false
 }
 
 // executeToolCallsWithInvocations runs MCP tools requested by the model.

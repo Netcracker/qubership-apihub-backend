@@ -448,6 +448,11 @@ func (s *aiChatServiceImpl) runLLMTurn(ctx context.Context, userID string, chat 
 				})
 			},
 			OnToolStart: func(callID, name string) {
+				// ask_clarification is a meta-tool: its "result" is the assistant
+				// message itself, so we never expose it as a tool pill to the FE.
+				if name == toolNameAskClarification {
+					return
+				}
 				_ = s.emitStream(stream, "tool.started", map[string]interface{}{
 					"type": "tool.started", "toolCallId": callID, "name": name,
 				})
