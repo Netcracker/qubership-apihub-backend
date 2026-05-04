@@ -249,7 +249,7 @@ paths:
       description: |
         Start export of package version, one document or operations group. Use ```GET /api/v1/export/{exportId}/status``` to get status of export and exported file itself.\
         Export of document is currently available for documents with type openapi-3-1, openapi-3-0, or openapi-2-0 and is intended to retrieve content with some transformations. For other document types, use GET /api/v2/packages/{packageId}/versions/{version}/files/{slug} to obtain the original document content.\
-        Export of operations group is currently available for groups with apiType = REST or GraphQL.
+        Export of operations group is currently available for groups with apiType = REST, GraphQL or AsyncAPI.
       operationId: postExport
       requestBody:
         description: |
@@ -259,6 +259,7 @@ paths:
             - **OpnAPI document** - export of one specific document with type openapi-3-1, openapi-3-0, or openapi-2-0.
             - **REST operations group** - export of operations group. Only operations group with apiType = REST can be exported.
             - **GraphQL operations group** - export of operations group. Only operations group with apiType = GraphQL can be exported.
+            - **AsyncAPI operations group** - export of operations group. Only operations group with apiType = AsyncAPI can be exported.
         content:
           application/json:
             schema:
@@ -267,6 +268,7 @@ paths:
                 - $ref: "#/components/schemas/ExportRestDocument"
                 - $ref: "#/components/schemas/ExportRestOperationsGroup"
                 - $ref: "#/components/schemas/ExportGraphqlOperationsGroup"
+                - $ref: "#/components/schemas/ExportAsyncapiOperationsGroup"
               discriminator:
                 propertyName: exportedEntity
       responses:
@@ -700,6 +702,7 @@ paths:
                                   enum:
                                     - rest
                                     - graphql
+                                    - asyncapi
                                 notLatestRevision:
                                   description: If parameter is not returned, then it is latest revision.
                                   type: boolean
@@ -8020,6 +8023,125 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  "/api/v2/packages/{packageId}/versions/{version}/export/shareability-report":
+    parameters:
+      - $ref: "#/components/parameters/packageId"
+      - $ref: "#/components/parameters/version"
+    get:
+      tags:
+        - Export
+      summary: Generate shareability report
+      description: |
+        Generate a shareability status xlsx report for all documents in a group, including all sub-groups and packages.
+        Rows are sorted by package name, document name, slug. Requires read permission on the group.
+      operationId: generateShareabilityReport
+      responses:
+        "200":
+          description: Success
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+                description: xlsx file to download
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                description: xlsx file name
+                example: 'attachment; filename="shareability_report_group.id_2024.1_20240101120000.xlsx"'
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                IncorrectInputParams:
+                  $ref: "#/components/examples/IncorrectInputParameters"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v1/shareability/bulk-update":
+    post:
+      tags:
+        - Documents
+      summary: Bulk update document shareability
+      description: |
+        Upload a shareability report xlsx file to bulk-update shareability statuses for all documents with changed values.
+        `document_shareability_management` is required for all packages listed in the report.
+      operationId: bulkUpdateDocumentShareability
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+              description: Shareability report xlsx file
+      responses:
+        "204":
+          description: Shareability statuses updated successfully
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                IncorrectInputParams:
+                  $ref: "#/components/examples/IncorrectInputParameters"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
   "/api/v1/packages/{packageId}/versions/{version}/version-internal-documents":
     parameters:
       - $ref: "#/components/parameters/packageId"
@@ -8294,6 +8416,7 @@ paths:
           enum:
             - rest
             - graphql
+            - asyncapi
       - name: groupName
         in: path
         required: true
@@ -8410,6 +8533,7 @@ paths:
           enum:
             - rest
             - graphql
+            - asyncapi
       - name: groupName
         in: path
         required: true
@@ -10749,6 +10873,41 @@ components:
         groupName:
           description: Name of the operations group to export. Group must have apiType = GraphQL
           type: string
+    ExportAsyncapiOperationsGroup:
+      type: object
+      title: Export AsyncAPI operations group
+      description: |
+        Export settings for exporting the operations group. The option is applicable only for groups with apiType = AsyncAPI.
+        The export result is a ZIP file containing AsyncAPI specifications for all operations from the group.
+      required:
+        - exportedEntity
+        - packageId
+        - version
+        - groupName
+        - format
+      properties:
+        exportedEntity:
+          description: The entity to be exported.
+          type: string
+          enum:
+            - asyncapiOperationsGroup
+        packageId:
+          description: Package unique string identifier (full alias).
+          type: string
+          example: WS.GRP.PCKG
+        version:
+          description: Package version.
+          type: string
+          example: "2024.2"
+        groupName:
+          description: Name of the operations group to export. Group must have apiType = AsyncAPI
+          type: string
+        format:
+          description: Format of the exported file.
+          type: string
+          enum:
+            - yaml
+            - json
     PackageCreate:
       description: Parameters for the package creation
       required:

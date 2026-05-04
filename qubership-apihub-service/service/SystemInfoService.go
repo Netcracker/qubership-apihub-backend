@@ -44,6 +44,7 @@ type SystemInfoService interface {
 	GetPublishArchiveSizeLimitMB() int64
 	GetPublishFileSizeLimitMB() int64
 	GetTemplateSizeLimitMB() int64
+	GetShareabilityReportSizeLimitMB() int64
 	GetReleaseVersionPattern() string
 	GetCredsFromEnv() *view.DbCredentials
 	GetLdapServer() string
@@ -88,6 +89,8 @@ type SystemInfoService interface {
 	GetSoftDeletedDataTTLDays() int
 	GetUnreferencedDataCleanupSchedule() string
 	GetUnreferencedDataCleanupTimeout() int
+	GetMaintenanceVacuumCleanupSchedule() string
+	GetMaintenanceVacuumCleanupTimeout() int
 	GetExtensions() []view.Extension
 	GetAiChatConfig() config.ChatConfig
 	GetAiMCPConfig() config.MCPConfig
@@ -216,6 +219,7 @@ func (g *systemInfoServiceImpl) setDefaults() {
 	viper.SetDefault("businessParameters.publishArchiveSizeLimitMb", 50)
 	viper.SetDefault("businessParameters.publishFileSizeLimitMb", 15)
 	viper.SetDefault("businessParameters.templateSizeLimitMb", 1)
+	viper.SetDefault("businessParameters.shareabilityReportSizeLimitMb", 10)
 	viper.SetDefault("businessParameters.releaseVersionPattern", ".*")
 	viper.SetDefault("businessParameters.externalLinks", []string{})
 	viper.SetDefault("businessParameters.failBuildOnBrokenRefs", true)
@@ -237,6 +241,8 @@ func (g *systemInfoServiceImpl) setDefaults() {
 	viper.SetDefault("cleanup.softDeletedData.ttlDays", 730)            // 2 years
 	viper.SetDefault("cleanup.unreferencedData.schedule", "0 15 * * 6") //at 3 PM on Saturday
 	viper.SetDefault("cleanup.unreferencedData.timeoutMinutes", 360)    //6 hours
+	viper.SetDefault("cleanup.maintenanceVacuum.schedule", "0 2 * * 1") //at 2 AM on Monday
+	viper.SetDefault("cleanup.maintenanceVacuum.timeoutMinutes", 300)   //5 hours
 	viper.SetDefault("openAI.model", "gpt-4o")
 	viper.SetDefault("openAI.temperature", 1.0)
 	viper.SetDefault("openAI.reasoningEffort", "medium")
@@ -367,6 +373,10 @@ func (g *systemInfoServiceImpl) GetPublishFileSizeLimitMB() int64 {
 
 func (g *systemInfoServiceImpl) GetTemplateSizeLimitMB() int64 {
 	return int64(g.config.BusinessParameters.TemplateSizeLimitMb * bytesInMb)
+}
+
+func (g *systemInfoServiceImpl) GetShareabilityReportSizeLimitMB() int64 {
+	return int64(g.config.BusinessParameters.ShareabilityReportSizeLimitMb * bytesInMb)
 }
 
 func (g *systemInfoServiceImpl) GetReleaseVersionPattern() string {
@@ -616,6 +626,14 @@ func (g *systemInfoServiceImpl) GetUnreferencedDataCleanupSchedule() string {
 
 func (g *systemInfoServiceImpl) GetUnreferencedDataCleanupTimeout() int {
 	return g.config.Cleanup.UnreferencedData.TimeoutMinutes
+}
+
+func (g *systemInfoServiceImpl) GetMaintenanceVacuumCleanupSchedule() string {
+	return g.config.Cleanup.MaintenanceVacuum.Schedule
+}
+
+func (g *systemInfoServiceImpl) GetMaintenanceVacuumCleanupTimeout() int {
+	return g.config.Cleanup.MaintenanceVacuum.TimeoutMinutes
 }
 
 func (g *systemInfoServiceImpl) GetExtensions() []view.Extension {
