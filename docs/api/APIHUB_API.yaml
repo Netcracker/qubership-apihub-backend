@@ -9502,7 +9502,8 @@ paths:
                   example: "QS"
                 status:
                   description: Package version status.
-                  $ref: "#/components/schemas/VersionStatusEnum"
+                  allOf:
+                    - $ref: "#/components/schemas/VersionStatusEnum"
                 packageIds:
                   description: |
                     List of Package Id(s). Must belong to the specified workspace.

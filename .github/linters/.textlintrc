@@ -17,7 +17,6 @@
         "URLs",
         "HTTP",
         "HTTPS",
-        "REST",
         "OpenAPI",
         "Node.js",
         ["hard-coded", "hardcoded"],
