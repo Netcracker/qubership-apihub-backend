@@ -1,0 +1,6 @@
+[sqlfluff]
+dialect = postgres
+templater = raw
+
+[sqlfluff:rules]
+max_line_length = 120

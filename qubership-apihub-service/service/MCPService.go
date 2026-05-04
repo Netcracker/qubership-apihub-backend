@@ -335,10 +335,10 @@ AVAILABLE TOOLS:
 
 AVAILABLE RESOURCES:
 - api-packages-list - list of all packages in the system. Use this resource when:
-  * User asks "what packages are available", "show all APIs", "list packages"
-  * You need to find package ID by package name for use in tool calls
-  * The resource returns a JSON object with 'packages' array. Each package contains metadata and 'versions' list (release versions sorted by version desc)
-  * Use package ID from this resource in the 'group' parameter of search_rest_api_operations tool
+	* User asks "what packages are available", "show all APIs", "list packages"
+	* You need to find package ID by package name for use in tool calls
+	* The resource returns a JSON object with 'packages' array. Each package contains metadata and 'versions' list (release versions sorted by version desc)
+	* Use package ID from this resource in the 'group' parameter of search_rest_api_operations tool
 
 RESPONSES:
 - Provide concise and structured answers
@@ -370,10 +370,10 @@ LLM INSTRUCTIONS:
 - Return all metadata that MCP returns (operationId, packageId, packageName, version, path, method, title, apiKind, apiType, apiAudience)
 - Return the most recent versions of operations (by default, search is performed in the latest completed version)
 - If the first call returned few unique operations - make repeated calls:
-  * Increase page number for pagination
-  * Simplify or generalize the search query
-  * Search in other packages (use 'group' parameter for a specific package)
-  * Search in older versions only if user explicitly requested it
+	* Increase page number for pagination
+	* Simplify or generalize the search query
+	* Search in other packages (use 'group' parameter for a specific package)
+	* Search in older versions only if user explicitly requested it
 - If user asks for more results - increment page, simplify query, or search in other packages/versions
 - DO NOT use get_rest_api_operations_specification in advance - first show a list of operations to choose from, even if only one is found
 - Use get_rest_api_operations_specification only when user explicitly requests details about a specific operation
@@ -387,10 +387,10 @@ Use this tool ONLY when the user explicitly requests details about a specific op
 LLM INSTRUCTIONS:
 - The response contains JSON with REST API specification - provide the full specification json in the response, display it as a code block
 - After the code block, add a human-readable description:
-  * Purpose and meaning of the operation
-  * Description of request parameters
-  * Description of response structure
-  * Specify the package (packageId) and version in which this operation is located
+	* Purpose and meaning of the operation
+	* Description of request parameters
+	* Description of response structure
+	* Specify the package (packageId) and version in which this operation is located
 - Generate RequestBody and ResponseBody examples based on the specification
 - Provide the user with complete information about the operation
 - Include the full OpenAPI specification json in the response`
@@ -421,18 +421,18 @@ LLM INSTRUCTIONS:
 - Return all metadata that MCP returns (operationId, packageId, packageName, version, path, method, title, apiKind, apiType, apiAudience)
 - Return the most recent versions of operations (by default, search is performed in the latest completed version)
 - If the first call returned few unique operations - make repeated calls:
-  * Increase page number for pagination
-  * Simplify or generalize the search query
-  * Search in other packages (use 'group' parameter for a specific package)
-  * Search in older versions only if user explicitly requested it
+	* Increase page number for pagination
+	* Simplify or generalize the search query
+	* Search in other packages (use 'group' parameter for a specific package)
+	* Search in older versions only if user explicitly requested it
 - If user asks for more results - increment page, simplify query, or search in other packages/versions
 - DO NOT use get_rest_api_operations_specification in advance - first show a list of operations to choose from in markdown format, even if only one is found
 - Use get_rest_api_operations_specification only when user explicitly requests details about a specific operation
 - If user explicitly requests a specific version - use 'release' parameter in YYYY.Q format (prefer versions from api-packages-list resource)
 - If user requests results from a specific package - use 'group' parameter with packageId (not packageName)
 - REQUIRED: Convert metadata to markdown links (relative, without baseUrl):
-  * packageId -> [packageId](/portal/packages/<packageId>)
-  * operationId -> [operationId](/portal/packages/<packageId>/<version>/operations/rest/<operationId>)
+	* packageId -> [packageId](/portal/packages/<packageId>)
+	* operationId -> [operationId](/portal/packages/<packageId>/<version>/operations/rest/<operationId>)
 - Format responses in markdown with well-readable markup (headings, lists, tables)`
 
 	ToolDescriptionGetOperationSpecOpenAI = `Get OpenAPI specification for a specific REST API operation.
@@ -442,15 +442,15 @@ Use this tool ONLY when the user explicitly requests details about a specific op
 LLM INSTRUCTIONS:
 - The response contains JSON with REST API specification - provide the full specification json in the response, display it as a code block
 - After the code block, add a human-readable description in markdown format:
-  * Purpose and meaning of the operation
-  * Description of request parameters
-  * Description of response structure
-  * Specify the package (packageId) and version in which this operation is located
+	* Purpose and meaning of the operation
+	* Description of request parameters
+	* Description of response structure
+	* Specify the package (packageId) and version in which this operation is located
 - Generate RequestBody and ResponseBody examples based on the specification in markdown code blocks
 - Provide the user with complete information about the operation in structured markdown format
 - Use markdown links for packageId and operationId:
-  * packageId -> [packageId](/portal/packages/<packageId>)
-  * operationId -> [operationId](/portal/packages/<packageId>/<version>/operations/rest/<operationId>)`
+	* packageId -> [packageId](/portal/packages/<packageId>)
+	* operationId -> [operationId](/portal/packages/<packageId>/<version>/operations/rest/<operationId>)`
 
 	ToolDescriptionGetOperationDiffOpenAI = `Get list of changes of the specific operation from OpenAPI specification from the specific package and version to the previous version in markdown format.
 

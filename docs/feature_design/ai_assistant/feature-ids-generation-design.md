@@ -25,7 +25,7 @@ The same flow has to work for external MCP clients (Claude Desktop, Continue, et
 
 The template and the generation rules are static, image-bundled assets, not config or DB rows. The contract with operators is: **to update the IDS authoring rules or the template, edit the file in `resources/mcp/...` and rebuild the image** — no config knobs, no live reload, no DB migration.
 
-```
+```text
 qubership-apihub-service/
 └── resources/
     └── mcp/
@@ -46,7 +46,7 @@ Future authoring kits land by adding files into the same two directories. All re
 
 ## 3. Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                       qubership-apihub-service (BE)                         │
 │                                                                             │
@@ -176,7 +176,7 @@ Filename sanitisation is intentionally aggressive: the model gets the ASCII subs
 
 This is the brain of the feature. The function takes the user's natural-language request and produces a single string the LLM consumes as the spec for the rest of the turn. Layout (annotated):
 
-```
+````text
 You are now generating an Integration Design Specification (IDS) ...
 ... use search_rest_api_operations / get_rest_api_operations_specification ...
 ... when done, call save_generated_file ...
@@ -194,9 +194,9 @@ You are now generating an Integration Design Specification (IDS) ...
 
 ## OUTPUT CONTRACT
 - Produce the full IDS document ...
-- Pick a concise file name like `IDS_<3rdPartySystemAbbrev>.md` ...
+- Pick a concise filename like `IDS_<3rdPartySystemAbbrev>.md` ...
 - Call `save_generated_file` ...
-```
+````
 
 Why this shape:
 
@@ -263,7 +263,7 @@ A few choices that may not be obvious from the code:
 ## 7. Operational notes
 
 * **Feature flag inheritance.** The IDS feature inherits the AI chat's master kill-switch (`ai.chat.enabled`). When the chat is off, neither the chat tools nor the MCP prompt/resource are reachable through the normal entry points. The `MCPService.MakeMCPServer` registration is independent of the kill-switch — i.e. the MCP HTTP endpoint still publishes the resources/prompt — but the apihub MCP server is itself a separate route that operators can choose to expose or not.
-* **Updating the template / rules.** Edit `qubership-apihub-service/resources/mcp/{resources,prompts}/...`, rebuild the image, redeploy. There is no live reload; this is by design (audit trail = git history of the resource files + image SHA).
+* **Updating the template / rules.** Edit `qubership-apihub-service/resources/mcp/{resources,prompts}/...`, rebuild the image, redeploy. There is no live reload; this is by design (audit trail = Git history of the resource files + image SHA).
 * **Removing the feature.** Delete the two files. On startup, `MCPAssets` will log a warning, `IDSAssetsAvailable()` returns false, the chat tools are not registered, and the MCP prompt is not published. No code changes needed.
 * **Adding another authoring kit.** Drop a new template under `resources/mcp/resources/<name>.md` (auto-registered as MCP resource), drop a new rules file under `resources/mcp/prompts/<name>.md`, then add ~30 lines mirroring the IDS pattern: a constant pair of asset names, a tiny `<New>AuthoringKit` method on `mcpAssets`, a `<New>Tools` factory on the chat side, and a registration of the MCP prompt in `MakeMCPServer`. No DB, no migration, no config.
 

@@ -9,7 +9,7 @@ that want to change prompts or document templates without touching the Go source
 
 All customisable static resources live under the working directory of the service:
 
-```
+```text
 static/
 └── templates/
     └── resources/
@@ -25,7 +25,7 @@ static/
 
 In the production image (`WORKDIR=/app/qubership-apihub-service`) the paths resolve to:
 
-```
+```text
 /app/qubership-apihub-service/static/templates/resources/mcp/
 ```
 
@@ -39,7 +39,7 @@ holds them in memory for the lifetime of the process. To deploy updated template
 
 ### `styles.css`
 
-**Purpose:** CSS stylesheet used when rendering API documentation pages and HTML exports.
+**Purpose:** CSS style sheet used when rendering API documentation pages and HTML exports.
 
 **What to customise:** Branding colours, fonts, spacing, and any UI chrome specific to
 your organisation's design system.
@@ -79,7 +79,7 @@ IDS (Integration Design Specification) document.
    for the remainder of the turn.
 3. The LLM follows the rules in this file to call `search_rest_api_operations` and
    `get_rest_api_operations_specification` MCP tools, populate the template, and finally
-   invoke `save_generated_file` with the completed markdown document.
+   invoke `save_generated_file` with the completed Markdown document.
 
 **What to customise:**
 
@@ -90,7 +90,7 @@ IDS (Integration Design Specification) document.
 
 **Constraints:**
 
-- The file must remain valid UTF-8 text (markdown recommended).
+- The file must remain valid UTF-8 text (Markdown recommended).
 - The instructions must tell the LLM to call `save_generated_file` at the end, otherwise
   the download link will not appear in the chat.
 - Removing or renaming this file disables the IDS generation feature entirely (the
@@ -100,7 +100,7 @@ IDS (Integration Design Specification) document.
 
 ### `mcp/resources/ids_template.md`
 
-**Purpose:** The canonical markdown skeleton for an IDS document. This is the template
+**Purpose:** The canonical Markdown skeleton for an IDS document. This is the template
 the LLM fills in when generating a new specification.
 
 **How it is used:**
@@ -114,13 +114,13 @@ the LLM fills in when generating a new specification.
 **What to customise:**
 
 - Section headings, placeholder names (`<generate_document_id>`, `<current_date>`, etc.).
-- Company- or project-specific metadata fields (owner, JIRA templates, document ID format).
+- Company- or project-specific metadata fields (owner, Jira templates, document ID format).
 - Mandatory / optional sections — add or remove sections to match internal standards.
 - Language of the section headings and placeholder labels.
 
 **Constraints:**
 
-- The file must remain valid UTF-8 text (markdown).
+- The file must remain valid UTF-8 text (Markdown).
 - Removing or renaming this file disables the IDS generation feature (same as the prompt).
 
 ---

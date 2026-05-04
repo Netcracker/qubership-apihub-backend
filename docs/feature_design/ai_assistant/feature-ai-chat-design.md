@@ -4,7 +4,7 @@ Audience: anyone who needs the end-to-end picture of the AI chat feature without
 
 Scope: high-level architecture, end-to-end flows, data model, FE↔BE and BE↔LLM contracts, operational concerns. Wire-level details intentionally delegate to the dedicated documents:
 
-* [docs/api/APIHUB_API.yaml](./api/APIHUB_API.yaml) — authoritative OpenAPI contract (tag **AI Chat**).
+* [docs/api/APIHUB_API.yaml](../../api/APIHUB_API.yaml) — authoritative OpenAPI contract (tag **AI Chat**).
 * [docs/ai-chat-frontend-contract.md](./ai-chat-frontend-contract.md) — FE integration guide for the contract.
 * [docs/ai-chat-backend-implementation-plan.md](./ai-chat-backend-implementation-plan.md) — backend implementation plan (DB schema, package layout, migrations, etc.).
 
@@ -26,7 +26,7 @@ A separate companion feature, the [Integration Design Specification (IDS) genera
 
 ## 2. Architecture overview
 
-```
+```text
                      ┌──────────────────────────────────────┐
                      │              FE (browser)            │
                      │  fetch + ReadableStream SSE parser   │
@@ -62,7 +62,7 @@ Responsibilities split, top to bottom:
 * `AiChatController` — HTTP/SSE adapter only. Parses requests, enforces auth, maps service errors to status codes, frames SSE events.
 * `GeneratedFileController` — single token-authenticated endpoint for downloads; deliberately not chat-scoped (the token is the auth) so future non-chat features can reuse it.
 * `AiChatService` — owns chat/message persistence and the *turn pipeline*: idempotency, history loading, compaction, streaming, retries against transient OpenAI failures.
-* `ChatService` — the LLM-facing layer. Speaks the OpenAI Responses API end to end: builds the request, drives the `function_call` loop against MCP tools, fans tool lifecycle / text deltas back to `AiChatService` via hooks. Stays user-agnostic.
+* `ChatService` — the LLM-facing layer. Speaks the OpenAI Responses API end-to-end: builds the request, drives the `function_call` loop against MCP tools, fans tool lifecycle / text deltas back to `AiChatService` via hooks. Stays user-agnostic.
 * `MCPService` — catalogs MCP tools (`search_rest_api_operations`, `get_rest_api_operations_specification`, `get_rest_api_operation_diff`) and bundled assets (template/prompt files under `resources/mcp/`). Used both by the in-process chat tool loop and by the public MCP HTTP server (`/api/v2/mcp`).
 * `GeneratedFileService` — writes LLM-produced files to per-user `/tmp` directories and registers them in `ai_chat_file`.
 * `AiChatCleanupService` — periodic retention job (chats) + temp-file GC (generated files), driven by config-defined cron schedules and a distributed lock.
@@ -202,7 +202,7 @@ The contract is fully documented in [`docs/ai-chat-frontend-contract.md`](./ai-c
 
 OpenAI's Responses API is used (not Chat Completions) for two reasons:
 
-1. **Cheap multi-turn:** the API stores conversation state on the server side and lets us reference it by `previous_response_id`. After the first turn we only send the latest user message.
+1. **Cheap multi-turn:** the API stores conversation state on the server-side and lets us reference it by `previous_response_id`. After the first turn we only send the latest user message.
 2. **First-class tool calls:** the streaming protocol exposes per-iteration `function_call` items with `call_id` correlation, which makes the live `tool.started`/`tool.completed` UI affordances trivial.
 
 ### 6.1 Request shape
@@ -218,13 +218,13 @@ For subsequent turns:
 
 * `instructions`: same;
 * `input`: just the latest user message (or just the `function_call_output` items, while a tool loop is in flight);
-* `previous_response_id`: the id stored on the chat row from the previous turn / iteration.
+* `previous_response_id`: the ID stored on the chat row from the previous turn / iteration.
 
 ### 6.2 Tool loop
 
 Both `runChatCompletionWithHistory` (sync) and `runChatCompletionStreaming` (SSE) implement the same loop:
 
-```
+```text
 do
   response = OpenAI.Responses.{New|NewStreaming}(req)
   for output in response:
@@ -237,7 +237,7 @@ do
 while iteration < 10
 ```
 
-If any iteration returns no function calls, the loop exits with the accumulated `chatTurnResult` (assistant text, usage, list of tool invocations, final response id).
+If any iteration returns no function calls, the loop exits with the accumulated `chatTurnResult` (assistant text, usage, list of tool invocations, final response ID).
 
 ### 6.3 Recovery from stale `previous_response_id`
 
@@ -300,11 +300,11 @@ Implemented in `service/AiChatCleanupService.go`:
 
 Take a `clientMessageId` (UUID) from the FE on every `POST /messages*` call. The repository inserts the user message under a partial unique index `(chat_id, client_message_id) WHERE client_message_id IS NOT NULL`. Three cases at the start of a turn:
 
-1. **Fresh** — no existing user message with this id. Insert and run a fresh LLM turn.
+1. **Fresh** — no existing user message with this ID. Insert and run a fresh LLM turn.
 2. **Replay-completed** — user message exists *and* a later assistant message exists. Return the cached pair; for streaming, replay the assistant message as `message.assistant.*` events so the FE sees the same shape as a real turn.
 3. **Replay-incomplete** — user message exists but no assistant message follows (a previous attempt errored out after persisting the user message). Re-run the LLM call so the client gets a complete pair instead of a hard 500 on retry.
 
-Concurrent inserters with the same id race on the partial unique index; the loser falls into case 2 or 3 above.
+Concurrent inserters with the same ID race on the partial unique index; the loser falls into case 2 or 3 above.
 
 ### 7.4 Security
 

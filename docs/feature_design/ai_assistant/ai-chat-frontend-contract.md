@@ -4,17 +4,17 @@ Audience: the frontend engineer integrating the new full-featured AI chat into t
 
 Scope: REST/SSE contract, data model, request/response flow, error handling. UI design is **out of scope** — this document does not prescribe layout, components or interaction design beyond what is needed to implement the contract correctly.
 
-The authoritative machine-readable contract lives in [`docs/api/APIHUB_API.yaml`](./api/APIHUB_API.yaml), tag **AI Chat**. This document explains the *intent* behind the contract and how to use it end-to-end.
+The authoritative machine-readable contract lives in [`docs/api/APIHUB_API.yaml`](../../api/APIHUB_API.yaml), tag **AI Chat**. This document explains the *intent* behind the contract and how to use it end-to-end.
 
 ---
 
 ## 1. High-level mental model
 
 * A **chat** is a container of messages that belongs to exactly one user. Other users' chats are invisible and inaccessible (enforced by the server via the session/JWT).
-* A **message** has a role (`user` or `assistant`), server-assigned `messageId`, creation timestamp, and markdown-formatted `content` (plain text for `user`, markdown for `assistant`).
+* A **message** has a role (`user` or `assistant`), server-assigned `messageId`, creation timestamp, and Markdown-formatted `content` (plain text for `user`, Markdown for `assistant`).
 * The **full history is stored on the server**, not in the browser. The FE only keeps a sliding window of the chat it currently renders. On refresh it re-fetches from the API.
 * Each turn (user message → assistant response) is processed by the server against an LLM backend, with MCP tools available to the model. The FE does not see tool calls directly — it receives UI-facing hints via the stream.
-* Some assistant answers contain **backend-generated files** rendered as regular markdown links inside the assistant's reply. Links are signed and short-lived; that's fine — when they expire the user can just ask again.
+* Some assistant answers contain **backend-generated files** rendered as regular Markdown links inside the assistant's reply. Links are signed and short-lived; that's fine — when they expire the user can just ask again.
 
 ## 2. Traffic model: what goes over the wire
 
@@ -23,7 +23,7 @@ The contract is designed so that the frontend **never uploads the full conversat
 | Direction | Payload |
 | --- | --- |
 | FE → BE on send | New user message text + optional idempotency key. |
-| BE → FE on send | Only the new assistant message (streamed chunks + final markdown). |
+| BE → FE on send | Only the new assistant message (streamed chunks + final Markdown). |
 | FE → BE on open chat | `GET /chats/{id}/messages?limit=...` once; then `?before=<cursor>` for older pages as the user scrolls up. |
 
 Implications for the FE state management:
@@ -69,7 +69,7 @@ For `/chats` the sort is `pinned desc, lastMessageAt desc`. Pinned chats are alw
 
 ### 3.3 Pinning
 
-* Users may pin **at most 3 chats**. This limit is hard-coded identically on the client (UI should disable the "Pin" action when the count is already at 3) and on the server (pinning beyond the limit returns `400 APIHUB-AI-4003`). There is no `/config` endpoint — the value is a shared constant.
+* Users may pin **at most 3 chats**. This limit is hardcoded identically on the client (UI should disable the "Pin" action when the count is already at 3) and on the server (pinning beyond the limit returns `400 APIHUB-AI-4003`). There is no `/config` endpoint — the value is a shared constant.
 * In addition to user-driven pinning, the server keeps the **10 most recently active** chats of each user alive indefinitely as a server-only retention policy. These are **not** visually marked as pinned and the FE does not need to know about this — it only drives the "Pin" button. The value is server configuration and may change without a client update.
 
 ## 4. Sending a message (streaming) — the main flow
@@ -93,7 +93,7 @@ Authorization: Bearer <jwt>
 
 `Content-Type: text/event-stream; charset=utf-8` with standard SSE framing:
 
-```
+```text
 event: <type>
 data: <one-line JSON>
 
@@ -105,12 +105,12 @@ The connection stays open until the server emits a terminal event (`done` on suc
 
 A happy-path turn looks like this:
 
-```
+```text
 [context.compacted]              → optional, at most once; emitted if older history was summarised
 message.assistant.start          → assistant message created; got its id
 [tool.started / tool.completed]  → zero or more MCP tool calls during the turn
-message.assistant.delta * ...    → 1..N markdown chunks — append in order
-message.assistant.completed      → final full AiChatMessage (markdown, toolInvocations)
+message.assistant.delta * ...    → 1..N Markdown chunks — append in order
+message.assistant.completed      → final full AiChatMessage (Markdown, toolInvocations)
 done                             → terminal
 ```
 
@@ -147,24 +147,24 @@ If the user navigates away or clicks "Stop", abort the underlying `fetch()` requ
 
 ## 5. Files generated by the assistant
 
-Some turns produce downloadable files (CSV reports, generated docs, etc.). They appear **exclusively as ordinary markdown links inside the assistant's `content`**, for example:
+Some turns produce downloadable files (CSV reports, generated docs, etc.). They appear **exclusively as ordinary Markdown links inside the assistant's `content`**, for example:
 
-```
+```Markdown
 Here is the report you asked for: [operations-report.csv](/api/v1/generated-files/7b6f4f87-4c8f-4d69-a66e-4a3c8a1b2c55?token=eyJhbGciOi...)
 ```
 
-The markdown renderer does not need any special handling — a regular `<a>` with `target="_blank"` / `download` is enough. There is **no separate `attachments` array** in the contract; the markdown link is the single source of truth for both live and historical messages.
+The Markdown renderer does not need any special handling — a regular `<a>` with `target="_blank"` / `download` is enough. There is **no separate `attachments` array** in the contract; the Markdown link is the single source of truth for both live and historical messages.
 
 Behaviour guarantees:
 
 * Every file has a server-controlled lifetime (order of tens of minutes — the exact value is a server-side concern and is not published to the client).
-* When the user revisits an old chat via `GET /messages`, the server re-issues fresh signed tokens in-place in the markdown `content`, so a reload of an old chat does not leave the user with stale links — provided the underlying file has not yet been cleaned up.
+* When the user revisits an old chat via `GET /messages`, the server re-issues fresh signed tokens in-place in the Markdown `content`, so a reload of an old chat does not leave the user with stale links — provided the underlying file has not yet been cleaned up.
 * The server returns **`410 Gone`** when the token is valid but expired and **`404`** when the file has already been cleaned up. The client does not need to handle either case specially — the browser surfaces the failure as a standard download error and the user can simply re-ask the assistant.
 * The download endpoint **does not** require a session cookie or Authorization header; the short-lived token in the query string is authorisation in itself. This means: opening the link in a new tab (or sharing it within the validity window) just works.
 
 ## 6. Chat CRUD flow
 
-```
+```text
 Sidebar opens               →  GET /chats?limit=100
 User clicks chat            →  GET /chats/{id}
                                GET /chats/{id}/messages?limit=100
@@ -219,7 +219,7 @@ Minimum viable integration:
   - [ ] (optional) render live tool pills from `tool.started` / `tool.completed`; after a reload the same pills reappear from `toolInvocations` on the persisted message;
   - [ ] (optional) show the compaction indicator when `context.compacted` arrives.
 - [ ] Handle the standard chat actions (create, rename, pin/unpin, delete). Surface the `APIHUB-AI-4003` error as a toast.
-- [ ] Let the markdown renderer handle file links — they are regular `<a>` elements pointing at `/api/v1/generated-files/...`.
+- [ ] Let the Markdown renderer handle file links — they are regular `<a>` elements pointing at `/api/v1/generated-files/...`.
 
 Non-essential but recommended:
 

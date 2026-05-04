@@ -18,7 +18,7 @@ Contract of reference: `docs/api/APIHUB_API.yaml` (tag **AI Chat**) and `docs/ai
 
 ## 1. Architecture overview
 
-```
+```text
 controller/ChatController.go                     ──► HTTP/SSE layer (parse, auth, render)
 controller/GeneratedFileController.go (new)      ──► /api/v1/generated-files/{fileId}
 service/ChatService.go                           ──► orchestration: CRUD + turn pipeline
@@ -122,7 +122,7 @@ Notes on the columns:
 * `pinned` is just a boolean — there is no separate `pinned_at`. The list endpoint sorts by `pinned DESC, last_message_at DESC`, which gives stable, intuitive ordering without an extra timestamp to maintain; the matching composite index is created below.
 * `messages_count` is maintained by the service on every insert/delete (cheap, avoids a count(*) for the list endpoint).
 * `tool_invocations` stores only UI-facing summaries (`name`, `status`, `durationMs`). Raw tool arguments and results are logged but not persisted — they are not needed for replay (the LLM has the final answer text).
-* `openai_response_id` on assistant messages is the *per-message* id. `openai_previous_response_id` on the chat row is the *current head*; it differs from the latest message's id only right after a compaction (see §5.3).
+* `openai_response_id` on assistant messages is the *per-message* ID. `openai_previous_response_id` on the chat row is the *current head*; it differs from the latest message's ID only right after a compaction (see §5.3).
 * `compacted_up_to_created_at` marks the boundary: when replaying history for display we still return messages below the boundary (they remain visible); when rebuilding a fresh provider-side thread we skip them and use `compaction_summary` instead.
 * No `context_compactions_count` column: compactions are a backend-internal implementation detail and not part of the wire contract. When we need operational visibility we read the Prometheus counter (§9) rather than a per-chat column.
 
@@ -132,7 +132,7 @@ Notes on the columns:
 
 Extend `qubership-apihub-service/config/Config.go`:
 
-Two values are **hard-coded identically on the client and on the server** and therefore are not stored in `config.yaml` and not exposed via any endpoint:
+Two values are **hardcoded identically on the client and on the server** and therefore are not stored in `config.yaml` and not exposed via any endpoint:
 
 ```go
 const (
@@ -175,7 +175,7 @@ In `SystemInfoService`:
 * there is **no** `signedUrlSecret` — file download tokens are JWTs minted by the existing `security` package against the same RSA key that signs user session tokens (see §6.3). This means one signing key for the whole service; nothing new for operators to provision.
 * feature-gate the whole chat under a new `ai.chat.enabled` bool that defaults to `false` in production.
 
-Config sample (add to `config.yaml` example section in the deployment repo):
+Config sample (add to `config.yaml` example section in the deployment repository):
 
 ```yaml
 ai:
@@ -254,7 +254,7 @@ This is the heart of the service. The same pipeline is used for both streaming a
 
 ### 5.1 Steps
 
-```
+```text
 sendMessage(ctx, userId, chatId, req):
 
 1.   loadChat(ctx, userId, chatId)          -- locks chat via SELECT FOR UPDATE in a short tx
@@ -330,10 +330,10 @@ Tool-use loop: the Responses API also supports function tools. Reuse the MCP too
 
 Streaming: use `client.Responses.NewStreaming(ctx, params)` — it exposes incremental events including `response.output_text.delta`, `response.function_call_arguments.delta`, `response.tool_call.completed` etc. Map these to our own SSE events.
 
-Fallback path (response id no longer accepted by OpenAI — e.g. 30-day retention):
+Fallback path (response ID no longer accepted by OpenAI — e.g. 30-day retention):
 
 * detect via the specific error code returned by the Responses API (`invalid_previous_response_id` or 404);
-* rebuild context from our DB: apply the `compaction_summary` (if any) as a system message + all messages with `created_at > compacted_up_to_created_at`, send as a fresh `Input` list, drop `PreviousResponseID`. Save the new response id.
+* rebuild context from our DB: apply the `compaction_summary` (if any) as a system message + all messages with `created_at > compacted_up_to_created_at`, send as a fresh `Input` list, drop `PreviousResponseID`. Save the new response ID.
 
 ### 5.3 Automatic context compaction
 
@@ -359,7 +359,7 @@ Defensive safety net: if a turn still fails with `context_length_exceeded` despi
 
 Summary prompt template (stored in code as a constant):
 
-```
+```text
 You are compacting an ongoing conversation between a user and an API documentation
 assistant so that the assistant can continue without losing essential context.
 Produce a concise (≤ 1500 tokens) structured summary of the dialogue so far:
@@ -371,7 +371,7 @@ Produce a concise (≤ 1500 tokens) structured summary of the dialogue so far:
 Return plain prose, not JSON.
 ```
 
-On the next turn the service sends the summary as a `responses.EasyInputMessageRoleSystem` input, followed by the new user message. `openai_previous_response_id` is set to the id of that response; from then on turns go back to incremental mode until the next compaction.
+On the next turn the service sends the summary as a `responses.EasyInputMessageRoleSystem` input, followed by the new user message. `openai_previous_response_id` is set to the ID of that response; from then on turns go back to incremental mode until the next compaction.
 
 Historical messages remain visible to the user (we never delete them mid-life), but they are filtered out when rebuilding OpenAI context.
 
@@ -393,7 +393,7 @@ If the background call fails, leave the title empty; the user can rename manuall
 
 ## 6. Generated files
 
-Files produced by the assistant (exports, conversion results, generated diagrams) are exposed to the UI **exclusively as inline markdown links** in the assistant's message body — there is no parallel `attachments` array on the wire (confirmed in the API spec and FE contract). The backend's job is to
+Files produced by the assistant (exports, conversion results, generated diagrams) are exposed to the UI **exclusively as inline Markdown links** in the assistant's message body — there is no parallel `attachments` array on the wire (confirmed in the API spec and FE contract). The backend's job is to
 
 1. store the file bytes under `/tmp`,
 2. record a row in `ai_chat_file`,
@@ -424,7 +424,7 @@ Files are expected to be produced by future MCP tools (out of scope for this ite
 
   `URL` is `/api/v1/generated-files/<fileId>?token=<jwt>` where `<jwt>` is minted with `ttl = time.Until(ExpiresAt)`.
 * MCP tool adapters call `CreateFile` and return the resulting `URL` (and only the URL) back to the LLM as a plain string. The LLM embeds it verbatim, e.g. `[report.xlsx](/api/v1/generated-files/7f…?token=eyJ…)`. No structured attachment payload ever leaves the backend.
-* When `GET /messages` is served, the service runs the rendered `content` through a single regex pass that matches `/api/v1/generated-files/<uuid>(\?token=[^)\s"]+)?`, extracts `<uuid>`, looks up the still-live row in `ai_chat_file` and substitutes a freshly-minted token. If the row is gone, the URL is **left as-is** — the browser will then get a clean `404 APIHUB-AI-3002` or `410 APIHUB-AI-4101` when the user actually clicks, which is the FE-contracted behaviour. Re-signing happens in memory; nothing is written back to `ai_chat_message.content`.
+* When `GET /messages` is served, the service runs the rendered `content` through a single regular expression pass that matches `/api/v1/generated-files/<uuid>(\?token=[^)\s"]+)?`, extracts `<uuid>`, looks up the still-live row in `ai_chat_file` and substitutes a freshly-minted token. If the row is gone, the URL is **left as-is** — the browser will then get a clean `404 APIHUB-AI-3002` or `410 APIHUB-AI-4101` when the user actually clicks, which is the FE-contracted behaviour. Re-signing happens in memory; nothing is written back to `ai_chat_message.content`.
 
 ### 6.3 Signed tokens
 
@@ -469,7 +469,7 @@ Download flow (`GET /api/v1/generated-files/{fileId}?token=...`):
 1. `security.ValidateGeneratedFileToken(token)` — on any failure (bad signature, type mismatch, issuer/audience mismatch, revoked) reject with `401`.
 2. If the JWT `exp` is in the past, the validator returns a "token expired" error; map that to `410 Gone` + `APIHUB-AI-4101` (distinguished from generic `401` by inspecting the error).
 3. Compare `fileId` from the token against the path parameter — mismatch ⇒ `401` (token for a different file).
-4. Load `ai_chat_file` row by id; if missing or already past `expires_at` → `404` + `APIHUB-AI-3002`. Also cross-check `row.user_id == tokenUserId` as a belt-and-braces measure (should always hold).
+4. Load `ai_chat_file` row by ID; if missing or already past `expires_at` → `404` + `APIHUB-AI-3002`. Also cross-check `row.user_id == tokenUserId` as a belt-and-braces measure (should always hold).
 5. Open the file from disk, set `Content-Type` and `Content-Disposition: attachment; filename="<original>"`, stream bytes.
 
 ### 6.4 Cleanup job
@@ -478,7 +478,7 @@ New entry in `service/cleanup/GeneratedFiles.go`, registered in `main()` like th
 
 1. `SELECT id, storage_path FROM ai_chat_file WHERE expires_at < now() LIMIT 1000`.
 2. For each row, delete the file from disk (ignore ENOENT), delete the row.
-3. Orphan sweep: walk the directory tree and remove any file whose id is not in the DB (protects against crashes between FS write and DB insert).
+3. Orphan sweep: walk the directory tree and remove any file whose ID is not in the DB (protects against crashes between FS write and DB insert).
 
 ---
 
@@ -486,7 +486,7 @@ New entry in `service/cleanup/GeneratedFiles.go`, registered in `main()` like th
 
 New `service/cleanup/AiChat.go`, cron from `cfg.Chat.CleanupSchedule` (default daily at 03:15). Per user:
 
-1. Let `keepForever = pinnedForeverCount`. Compute the set of chat ids to keep as:
+1. Let `keepForever = pinnedForeverCount`. Compute the set of chat IDs to keep as:
    * all pinned chats;
    * top `keepForever` chats by `last_message_at DESC` among the non-pinned ones;
    * all non-pinned chats with `last_message_at > now() - retentionDays`.
@@ -523,7 +523,7 @@ The chat path runs on `client.Responses.New` / `client.Responses.NewStreaming` e
   * if `previousResponseID != nil`, sends only the new turn's items (the caller — `ai_chat_service` — passes a one-element `[]ChatMessage{user}`);
   * loops on function-call output items (`responses.ResponseInputItemParamOfFunctionCallOutput(callId, result)`) until the model produces text without function calls, advancing `PreviousResponseID = lastResp.ID` each iteration;
   * caps the loop at 10 iterations.
-* `runChatCompletionStreaming(ctx, viewMessages, previousResponseID, hooks)` is the streaming twin used by `POST /messages/stream`. Same Responses-API semantics, but text deltas, tool-call lifecycles, and the final response id are produced incrementally:
+* `runChatCompletionStreaming(ctx, viewMessages, previousResponseID, hooks)` is the streaming twin used by `POST /messages/stream`. Same Responses-API semantics, but text deltas, tool-call lifecycles, and the final response ID are produced incrementally:
   * iterates `client.Responses.NewStreaming(...)`'s SSE union, switching on `event.Type`:
     * `response.output_text.delta` → forwards `event.Delta` via `hooks.OnTextDelta` (mapped to `message.assistant.delta` SSE on the public API);
     * `response.output_item.added` with type `function_call` → fires `hooks.OnToolStart` (mapped to `tool.started`) **as soon as the model commits to a tool**, well before arguments are fully assembled;
@@ -565,7 +565,7 @@ Version pinned in `go.mod` (`openai-go/v3 v3.31.0`).
 
 ## 9. Observability
 
-* **Per-turn correlation id.** `ai_chat_service.runLLMTurn` mints a fresh UUID for each user turn (covering all OpenAI calls in the tool loop) via `WithAiChatCorrelationID(ctx, ...)`. `service.openAIRequestOptions(ctx)` reads it back and attaches it to every `Responses.New` / `Responses.NewStreaming` call as the `X-Request-ID` header, so OpenAI's server-side traces line up with our log fields during incident triage.
+* **Per-turn correlation ID.** `ai_chat_service.runLLMTurn` mints a fresh UUID for each user turn (covering all OpenAI calls in the tool loop) via `WithAiChatCorrelationID(ctx, ...)`. `service.openAIRequestOptions(ctx)` reads it back and attaches it to every `Responses.New` / `Responses.NewStreaming` call as the `X-Request-ID` header, so OpenAI's server-side traces line up with our log fields during incident triage.
 * Structured `log.WithFields` for: `userId`, `chatId`, `messageId`, `turnDurationMs`, `promptTokens`, `completionTokens`, `compacted`, `toolCalls`, `streamClosedReason` (one of `done`, `error`, `client_aborted`).
 * Prometheus counters/histograms in `metrics/`:
   * `apihub_ai_chat_turns_total{status="ok|error|aborted"}`;
@@ -624,7 +624,7 @@ Add `ai.chat.enabled` (default `false` in production, `true` in dev). Gate route
 8. **Auto-compaction.** `ChatContextService.Prepare`, compaction summary prompt, DB fields.
 9. **Auto-title.** Background task after first turn.
 10. **Retention cleanup job.** Implement, wire via `LockService`.
-11. **Observability.** Metrics, structured logs, request id propagation.
+11. **Observability.** Metrics, structured logs, request ID propagation.
 12. **Feature flag + remove PoC routes.** Flip the dev deployments to the new contract and delete the legacy endpoints + obsolete code in `service/ChatService.go` (the stateless `Chat` / `ChatStream` methods).
 
 Each step produces a landable increment with tests; the FE team can start against step 3's shape (all CRUD is usable without real LLM traffic).

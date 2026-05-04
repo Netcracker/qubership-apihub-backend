@@ -6,7 +6,7 @@
 **System ID:** <system_id>  
 **Owner:** —  
 **Approval Status:** —  
-**JIRA Link:** —
+**Jira Link:** —
 
 ---
 
@@ -64,15 +64,15 @@ This document is intended to define and describe integrations and interfaces des
 The objectives of the document to provide a high level understanding of:
 
 - Integration process describing interaction between Netcracker functional modules and Integration layer.
-- Process of calling 3rd party API's and methods.
-- Data mapping between functional model and integration methods/API's.
+- Process of calling third-party APIs and methods.
+- Data mapping between functional model and integration methods/APIs.
 - Integration interface configuration.
 - Response handling rules.
 - Error handling process.
 
 ### Intended Audience
 
-This document is intended for nominated business, 3rd party vendors and IT representatives to verify alignment of the proposed solution with the requirements of Trappist program as well as for further use by system developers and by test teams.
+This document is intended for nominated business, third-party vendors and IT representatives to verify alignment of the proposed solution with the requirements of Trappist program as well as for further use by system developers and by test teams.
 
 ### Assumptions
 
@@ -106,7 +106,7 @@ Integration Scenarios will be same as defined in IA: <3rdPartySystemName> Scenar
 
 ## Integration Process
 
-### Integration flow for QIP Chain - <Process Name> 
+### Integration flow for QIP Chain - <Process Name>
 
 <description_of_the_process>
 
@@ -180,7 +180,7 @@ This section describes the logging considerations to be taken care for various o
 
 | Attribute Name | API name | Masked | Example |
 |----------------|----------|--------|---------|
-| <pii_field> | <Operation Name> | Y (<Show only last 2 digits and mask the remaining by using x>) | 
+| <pii_field> | <Operation Name> | Y (<Show only last 2 digits and mask the remaining by using x>) | — |
 
 ---
 
@@ -190,7 +190,7 @@ Following parameters will be part of <3rdPartySystemName> Integration configurat
 
 | Sl.Num. | Parameter Name | Default Value | Notes |
 |---------|----------------|---------------|-------|
-| 1 | URL | Example: https://server:port/ | — |
+| 1 | URL | Example: `https://server:port/` | — |
 | 2 | Number of Retries | 3 | In case of connection error/timeout |
 | 3 | Delay between retries (in sec) | 10 secs | Delay between each command retry |
 

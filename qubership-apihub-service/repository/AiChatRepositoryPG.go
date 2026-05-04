@@ -258,14 +258,14 @@ func (r *aiChatRepositoryImpl) DeleteUserChatsByRetention(ctx context.Context, u
 	q := `
 DELETE FROM ai_chat c
 WHERE c.user_id = ?
-  AND c.pinned = false
-  AND c.last_message_at < (now() at time zone 'utc') - make_interval(days => ?)
-  AND c.id NOT IN (
-      SELECT id FROM ai_chat
-      WHERE user_id = ? AND pinned = false
-      ORDER BY last_message_at DESC
-      LIMIT ?
-  )`
+	AND c.pinned = false
+	AND c.last_message_at < (now() at time zone 'utc') - make_interval(days => ?)
+	AND c.id NOT IN (
+			SELECT id FROM ai_chat
+			WHERE user_id = ? AND pinned = false
+			ORDER BY last_message_at DESC
+			LIMIT ?
+	)`
 	res, err := r.cp.GetConnection().ExecContext(ctx, q, userID, retentionDays, userID, pinnedForeverCount)
 	if err != nil {
 		return 0, err

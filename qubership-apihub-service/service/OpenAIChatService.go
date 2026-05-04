@@ -188,9 +188,9 @@ func (c *openAIChatService) SummarizeForCompaction(ctx context.Context, prior *s
 	const sysPrompt = `You are summarizing the EARLIER part of an ongoing assistant conversation.
 The summary will be substituted for these messages on the next turn so the model still has the relevant context.
 Capture concretely:
-  - the user's overall goal and constraints
-  - decisions already made and facts already established
-  - any package/version/operation IDs and tool results that the user is still working with
+	- the user's overall goal and constraints
+	- decisions already made and facts already established
+	- any package/version/operation IDs and tool results that the user is still working with
 Return plain text, 4-12 sentences, no markdown headings.`
 	var b strings.Builder
 	if prior != nil && *prior != "" {

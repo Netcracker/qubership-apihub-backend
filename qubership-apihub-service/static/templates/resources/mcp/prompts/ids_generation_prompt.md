@@ -1,47 +1,48 @@
-#Step 1
+# Step 1
+
 Read user input.
 Create md file with the integration design using template @resources/templates/ids_template.md
 
+# Step 2
 
-#Step 2
 Populate section "Integration Design Specification (IDS)" by the rules:
-<generate_document_id> - generate id as "NC.Phase.INT.IDS.<3rdPartySystemName>" where 3rdPartySystemName define from the user's prompt. 
+`<generate_document_id>` - generate ID as "NC.Phase.INT.IDS.<3rdPartySystemName>" where 3rdPartySystemName define from the user's prompt.
 Version - do not change
 Document Date set current date in the format dd.mm.yyyy
 System ID use 3rdParty System Abbreviation given by user in the prompt. If not given, generate from the system name (e.g. abbreviate).
-Owner - do not change 
+Owner - do not change
 Approval Status - do not change
-JIRA Link - do not change
+Jira Link - do not change
 
+# Step 3
 
-#Step 3
 Populate Document Metadata section by the rules
 Integration ID set from previously generated in step 2
 System set 3rdPartySystemName
-Domain - do not change 
-Functional Capabilities - do not change 
-Design Items - do not change 
-Comments - do not change 
+Domain - do not change
+Functional Capabilities - do not change
+Design Items - do not change
+Comments - do not change
 List business reason for implementation.
 
-#Step 4
+# Step 4
 
 Populate Version History.
 Add row to the table
-| <current_version> | <current_date> | <user_name> | <comment> |
-comment shold be 'Initial Draft Created' if the document is just created
-or summary of changes if the document is chainged.
+| `<current_version>` | `<current_date>` | `<user_name>` | `<comment>` |
+comment should be 'Initial Draft Created' if the document is just created
+or summary of changes if the document is changed.
 
-#Step 5
+# Step 5
 
 Populate Document References
-Set <IA_id> as <generate_document_id> from Step 2?, but replace "IDS" with "IA".
+Set `<IA_id>` as `<generate_document_id>` from Step 2, but replace "IDS" with "IA".
 
-#Step 6
+# Step 6
 
 Do not change Glossary of Terms.
 
-#Step 7
+# Step 7
 
 Generate Introduction section.
 Document Purpose replace 3rdPartySystemName.
@@ -50,15 +51,15 @@ Intended Audience - do not change.
 Assumptions - do not change.
 Out of Scope - do not change.
 Technical Design - do not change.
-Authentication & Authorization - replace authentification with some security requirements you found in the related services.
+Authentication & Authorization - replace authentication placeholder with some security requirements you found in the related services.
 
-#Step 8
+# Step 8
 
-Integration Process 
+Integration Process
 
-For each mentioned integration scenario generate a separate section, populating <Process Name>.
-Describe the process in business terms in <description_of_the_process> in 2-4 sentences.
-Create mermaid sequence diagram based on the description of interactions and place it in <place_for_mermaid>
+For each mentioned integration scenario generate a separate section, populating `<Process Name>`.
+Describe the process in business terms in `<description_of_the_process>` in 2-4 sentences.
+Create mermaid sequence diagram based on the description of interactions and place it in `<place_for_mermaid>`
 Each step is numbered.
 Create a table for description of the steps in Process Steps.
 For each step create a row in the table with description which system have to be sending or receiving information.
@@ -75,7 +76,7 @@ All API details MUST come from APIHub tool calls.
 
 **IMPORTANT**: DO NOT INVENT, GUESS OR FABRICATE API PATHS, PARAMETERS OR REQUEST/RESPONSE SCHEMAS.
 
-### Workflow for each API operation:
+### Workflow for each API operation
 
 1. **Search APIHub.** Call the tool `search_rest_api_operations` with a query derived from the API name
    mentioned by the user. **Pass the query as a plain string WITHOUT surrounding quotes** — e.g. use
@@ -86,9 +87,9 @@ All API details MUST come from APIHub tool calls.
    If the user specifies an API version/release (e.g. "2025.2"), pass it as
    the `release` parameter (format: "YYYY.Q") to filter results by that release.
    If version is not set use 2025.2.
-   - Pick from the first found api `operationId` and `packageId`. Use `version` from user description.
+   - Pick from the first found API `operationId` and `packageId`. Use `version` from user description.
 
-2. **Get the specification.** Retrieve API Specification with using MCP tools 
+2. **Get the specification.** Retrieve API Specification with using MCP tools
    - The response contains the full OpenAPI specification for that operation.
 
 3. **Extract data from the specification.** From the returned specification populate:
@@ -96,7 +97,7 @@ All API details MUST come from APIHub tool calls.
    - All request parameters (query, path, header, body) with their names, types, descriptions,
      and whether they are mandatory — take these directly from the spec.
    - All response fields for success and error responses — take these directly from the spec.
-   - Sample request and sample response — create sample using API Specification taken from APIHUB including all fields (mandatory and optional). DO NOT IMAGINE FIELDS, USE ONLY RECIEVED INFORMATION FROM APIHUB.
+   - Sample request and sample response — create sample using API Specification taken from APIHUB including all fields (mandatory and optional). DO NOT IMAGINE FIELDS, USE ONLY RECEIVED INFORMATION FROM APIHUB.
 
    When you have called get_rest_api_operations_specification and received a successful result for an operation, you MUST use the path, parameters, and schemas from that result in the Data Mapping section. Do not use "Path: TBD" or the "not found" note for that operation.
 
@@ -107,13 +108,13 @@ All API details MUST come from APIHub tool calls.
      **"Note: This API was not found in APIHub. The path, parameters, and schemas below are
      preliminary and must be confirmed with the API owner."**
    - Add an entry to the Questions section at the end of the document:
-     "Confirm the exact APIHub package and version for <API Name>."
+     "Confirm the exact APIHub package and version for `<API Name>`."
    - Use reasonable placeholder values based on the user's text, but do NOT present them as
      authoritative.
    **If the API WAS found in APIHub** (you have packageId, version, operationId from the tool result):
    - Do NOT add this question for that API. State the APIHub source in the Operation section and do not add a "Confirm APIHub package/version" row in Questions.
 
-### Writing the Data Mapping section for each operation:
+### Writing the Data Mapping section for each operation
 
 For each execution of the API:
     - Add a reference inside the interaction row in the format:
@@ -129,8 +130,9 @@ For each execution of the API:
 
 Before finishing the Integration Process section, check that:
 - Every API call described in the Process Steps table has a corresponding Operation section under #Data Mapping (same API name, method, and path).
-- In the Process Steps table, each step that involves an API call includes a reference to that Operation (e.g. "API Name: [link to section](#operation-name)" or "API Name: link to the section in the document").
+- In the Process Steps table, each step that involves an API call includes a reference to that Operation (e.g. `[link to section](#operation-name)` or "API Name: link to the section in the document").
 - If any step mentions an API that has no Data Mapping section, add the missing Operation section or fix the Process Steps description so it matches the Data Mapping sections you created.
 
-#Step 9
+# Step 9
+
 In Error Handling describe possible error codes, create a separate section for each operation.

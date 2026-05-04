@@ -59,18 +59,18 @@ INTEGRATION DESIGN GENERATION:
 
 AVAILABLE RESOURCES:
 - api-packages-list: A resource containing the list of all API packages in the system. This resource is useful when:
-  * User asks "what packages are available", "show all APIs", "list packages"
-  * You need to find package ID by package name (use the ID in tool calls)
-  * The resource returns a JSON array with elements containing: name, id, and type (package/group)
-  * When searching for operations, use the package ID from this resource in the 'group' parameter of the search_rest_api_operations tool
+	* User asks "what packages are available", "show all APIs", "list packages"
+	* You need to find package ID by package name (use the ID in tool calls)
+	* The resource returns a JSON array with elements containing: name, id, and type (package/group)
+	* When searching for operations, use the package ID from this resource in the 'group' parameter of the search_rest_api_operations tool
 
 RESPONSE FORMAT:
 - Always use markdown format with well-readable markup (headings, lists, tables, code blocks)
 - Respond concisely and in a structured manner
 - Return all metadata that tools return
 - Convert metadata to markdown links (relative, without baseUrl):
-  * packageId -> [packageId](/portal/packages/<packageId>)
-  * operationId -> [operationId](/portal/packages/<packageId>/<version>/operations/rest/<operationId>)
+	* packageId -> [packageId](/portal/packages/<packageId>)
+	* operationId -> [operationId](/portal/packages/<packageId>/<version>/operations/rest/<operationId>)
 - First show a list of operations to choose from, even if only one operation is found
 - Use get_rest_api_operations_specification only when user explicitly requests details about a specific operation
 
@@ -116,7 +116,7 @@ type chatServiceImpl struct {
 	mintFileToken     FileTokenMinter
 
 	llmProvider LLMProvider
-	mcpTools  []LLMTool
+	mcpTools    []LLMTool
 
 	// Cache for api-packages-list resource (invalidated after 24 h).
 	packagesListCache struct {
