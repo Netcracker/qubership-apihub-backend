@@ -300,7 +300,13 @@ func (c *chatServiceImpl) runToolLoop(ctx context.Context, req LLMRequest, strea
 		if question, isClarification := extractClarificationQuestion(resp.ToolCalls); isClarification {
 			log.Debugf("Model requested clarification: %q", truncateRunes(question, 120))
 			assistantText.WriteString(question)
-			lastToken = resp.ContinuationToken
+			// Intentionally clear lastToken here even though it was set above from
+			// resp.ContinuationToken. That response contains an unresolved tool call;
+			// persisting its ID as previous_response_id would make the next user turn
+			// fail with "No tool output found for function call …" from OpenAI.
+			// Resetting to "" forces the next turn to send the full history on a fresh
+			// thread instead.
+			lastToken = ""
 			if streaming && hooks.OnTextDelta != nil {
 				hooks.OnTextDelta(question)
 			}
