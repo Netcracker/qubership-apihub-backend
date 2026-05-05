@@ -289,8 +289,9 @@ func (r *aiChatRepositoryImpl) ListExpiredFiles(ctx context.Context, limit int) 
 }
 
 func (r *aiChatRepositoryImpl) DeleteFileByID(ctx context.Context, fileID string) error {
+	// Do not chain TableExpr("ai_chat_file") here: the model tag already names ai_chat_file
+	// and go-pg would emit invalid SQL (PostgreSQL 42712: table specified more than once).
 	_, err := r.cp.GetConnection().ModelContext(ctx, (*entity.AiChatFileEntity)(nil)).
-		TableExpr("ai_chat_file").
 		Where("id = ?", fileID).
 		Delete()
 	return err
