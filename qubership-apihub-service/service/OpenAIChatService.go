@@ -160,12 +160,11 @@ Capture the main topic or task of the conversation.`
 		Model:        shared.ResponsesModel(c.sis.GetAiChatConfig().OpenAI.Model),
 		Instructions: openai.String(sysPrompt),
 		Input:        responses.ResponseNewParamsInputUnion{OfString: openai.String(prompt)},
-		Temperature:  openai.Float(0.2),
 		Store:        openai.Bool(false),
 	}
 	resp, err := c.client.Responses.New(ctx, req, openAIRequestOptions(ctx)...)
 	if err != nil || resp == nil {
-		log.Debugf("GenerateTitle failed: %v", err)
+		log.Warnf("ai-chat: GenerateTitle OpenAI call failed: %v", err)
 		return ""
 	}
 	title := strings.TrimSpace(resp.OutputText())
@@ -214,12 +213,11 @@ Return plain text, 4-12 sentences, no markdown headings.`
 		Model:        shared.ResponsesModel(c.sis.GetAiChatConfig().OpenAI.Model),
 		Instructions: openai.String(sysPrompt),
 		Input:        responses.ResponseNewParamsInputUnion{OfString: openai.String(b.String())},
-		Temperature:  openai.Float(0.2),
 		Store:        openai.Bool(false),
 	}
 	resp, err := c.client.Responses.New(ctx, req, openAIRequestOptions(ctx)...)
 	if err != nil || resp == nil {
-		log.Warnf("SummarizeForCompaction failed: %v", err)
+		log.Warnf("ai-chat: SummarizeForCompaction failed: %v", err)
 		if prior != nil {
 			return *prior
 		}

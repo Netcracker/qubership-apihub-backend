@@ -525,7 +525,10 @@ func (s *aiChatServiceImpl) runLLMTurn(ctx context.Context, userID string, chat 
 		return nil, nil, err
 	}
 	chat.LastMessageAt = createdA
-	wasFirstAssistantTurn := chat.MessagesCount == 0 && strings.TrimSpace(chat.Title) == ""
+	// Retry title generation on every turn until one sticks (capped at 3 exchanges to
+	// avoid burning tokens indefinitely). Retries cover transient OpenAI failures on the
+	// first turn and match the user-visible expectation of "a title appears after a message or two".
+	wasNeedingTitle := strings.TrimSpace(chat.Title) == "" && chat.MessagesCount < 6
 	chat.MessagesCount += 2
 	chat.OpenAIPreviousResponseID = compPtr
 	if turn.Usage != nil {
@@ -540,7 +543,7 @@ func (s *aiChatServiceImpl) runLLMTurn(ctx context.Context, userID string, chat 
 		return nil, nil, err
 	}
 
-	if wasFirstAssistantTurn {
+	if wasNeedingTitle {
 		s.scheduleAutoTitle(chat.ID, chat.UserID, um.Content, turn.AssistantContent)
 	}
 
@@ -645,14 +648,15 @@ func (s *aiChatServiceImpl) entityToMessageView(ctx context.Context, userID stri
 	}, nil
 }
 
-// scheduleAutoTitle generates and persists a short title in the background
-// after the very first assistant turn, but only if the user has not provided one.
+// scheduleAutoTitle generates and persists a short title in the background.
+// It is a no-op if the chat already has a title (user-set or previously generated).
 func (s *aiChatServiceImpl) scheduleAutoTitle(chatID, userID, userText, assistantText string) {
 	utils.SafeAsync(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		title := s.chat.generateChatTitle(ctx, userText, assistantText)
 		if strings.TrimSpace(title) == "" {
+			log.WithField("chatId", chatID).Warn("ai-chat: title generation returned empty result")
 			return
 		}
 		current, err := s.repo.GetChatByIDForUser(ctx, chatID, userID)
@@ -664,9 +668,10 @@ func (s *aiChatServiceImpl) scheduleAutoTitle(chatID, userID, userText, assistan
 		}
 		current.Title = title
 		if err := s.repo.UpdateChat(ctx, current); err != nil {
-			// title generation is best-effort; just log
-			fmt.Printf("[ai-chat] auto-title persist failed for chat %s: %v\n", chatID, err)
+			log.WithField("chatId", chatID).Warnf("ai-chat: auto-title persist failed: %v", err)
+			return
 		}
+		log.WithFields(log.Fields{"chatId": chatID, "title": title}).Info("ai-chat: auto-title set")
 	})
 }
 
@@ -717,7 +722,7 @@ func (s *aiChatServiceImpl) maybeCompactBefore(ctx context.Context, chat *entity
 	chat.LastTurnTokens = nil
 	if err := s.repo.UpdateChat(ctx, chat); err != nil {
 		// Best-effort: a failed UPDATE just means no compaction takes effect this turn.
-		fmt.Printf("[ai-chat] persist compaction failed for chat %s: %v\n", chat.ID, err)
+		log.WithField("chatId", chat.ID).Warnf("ai-chat: persist compaction failed: %v", err)
 		return false, nil
 	}
 	return true, map[string]interface{}{
