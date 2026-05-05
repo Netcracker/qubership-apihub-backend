@@ -1644,6 +1644,7 @@ select
     o.kind,
     o.type,
     o.metadata,
+    o.document_id,
     parent_package_names(o.package_id) parent_names
 from operation o
          inner join (
@@ -1660,7 +1661,7 @@ from operation o
         and ts.api_type = ?api_type
         and (?versions = '{}' or version like ANY(
 						select id from unnest(?versions::text[]) id))
-        and (package_id like ANY(
+        and (?packages = '{}' or package_id like ANY(
 						select id from unnest(?packages::text[]) id
 						union
 						select id||'.%' from unnest(?packages::text[]) id))

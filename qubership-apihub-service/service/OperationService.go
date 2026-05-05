@@ -649,6 +649,10 @@ func (o operationServiceImpl) LiteSearchForOperations(searchReq view.SearchQuery
 }
 
 func (o operationServiceImpl) GlobalSearchForOperations(searchReq view.SearchQueryReq) (*view.SearchResult, error) {
+	packages := searchReq.PackageIds
+	if packages == nil {
+		packages = make([]string, 0)
+	}
 	versions := searchReq.Versions
 	if versions == nil {
 		versions = make([]string, 0)
@@ -666,7 +670,7 @@ func (o operationServiceImpl) GlobalSearchForOperations(searchReq view.SearchQue
 	searchQuery := &entity.GlobalOperationSearchQuery{
 		OriginalTextInput: searchReq.SearchString,
 		ApiType:           searchReq.ApiType,
-		Packages:          searchReq.PackageIds,
+		Packages:          packages,
 		Versions:          versions,
 		Status:            searchReq.Status,
 		StartDate:         startDate,
