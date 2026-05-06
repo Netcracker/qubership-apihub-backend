@@ -72,8 +72,9 @@ func (r *aiChatRepositoryImpl) UpdateChat(ctx context.Context, row *entity.AiCha
 }
 
 func (r *aiChatRepositoryImpl) DeleteChat(ctx context.Context, chatID, userID string) (int, error) {
+	// Do not chain TableExpr("ai_chat"): the entity tag already names ai_chat and go-pg
+	// would emit invalid SQL (PostgreSQL 42712: table specified more than once).
 	res, err := r.cp.GetConnection().ModelContext(ctx, (*entity.AiChatEntity)(nil)).
-		TableExpr("ai_chat").
 		Where("id = ?", chatID).
 		Where("user_id = ?", userID).
 		Delete()
@@ -107,10 +108,17 @@ func (r *aiChatRepositoryImpl) ListChats(ctx context.Context, f AiChatsListFilte
 }
 
 func (r *aiChatRepositoryImpl) CountPinnedChats(ctx context.Context, userID string) (int, error) {
-	return r.cp.GetConnection().ModelContext(ctx, (*entity.AiChatEntity)(nil)).
-		TableExpr("ai_chat").
-		Where("user_id = ? AND pinned = true", userID).
-		Count()
+	// Raw COUNT avoids go-pg Model(nil) quirks that can produce PostgreSQL 42712
+	// (table name specified more than once), same class of issue as DeleteChat + TableExpr.
+	var count int
+	_, err := r.cp.GetConnection().QueryOneContext(ctx, pg.Scan(&count),
+		`SELECT COUNT(*) FROM ai_chat WHERE user_id = ? AND pinned = true`,
+		userID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 func (r *aiChatRepositoryImpl) InsertMessage(ctx context.Context, m *entity.AiChatMessageEntity) error {
