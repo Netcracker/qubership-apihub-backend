@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/metrics"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -77,6 +79,11 @@ func (m mcpService) ExecuteSearchTool(ctx context.Context, req mcp.CallToolReque
 	page := req.GetInt("page", 0)
 	group := req.GetString("group", mcpWorkspace)
 	releaseVersion := req.GetString("release", CalculateNearestCompletedReleaseVersion())
+
+	if !strings.HasPrefix(group, mcpWorkspace) {
+		log.Errorf("Group parameter should start with %s. Given: %s", mcpWorkspace, group)
+		return mcp.NewToolResultError(fmt.Sprintf("Requested package is not allowed for search, only packages from workspace %s are allowed", mcpWorkspace)), nil
+	}
 
 	log.Infof("search_api_operations: apiType=%s, query=%s, limit=%d, page=%d, group=%s, releaseVersion=%s", apiType, q, limit, page, group, releaseVersion)
 
