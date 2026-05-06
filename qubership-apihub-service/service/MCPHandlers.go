@@ -91,6 +91,7 @@ func (m mcpService) ExecuteSearchTool(ctx context.Context, req mcp.CallToolReque
 		SearchString: q,
 		ApiType:      apiType,
 		PackageIds:   packageIds,
+		Workspace:    mcpWorkspace,
 		Versions:     []string{releaseVersion},
 		Status:       "release",
 		Limit:        limit,
