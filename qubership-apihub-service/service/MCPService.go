@@ -90,8 +90,11 @@ func (m mcpService) MakeMCPServer() *mcpserver.MCPServer {
 		ToolNameGetOperationSpec: m.ExecuteGetSpecTool,
 		ToolNameGetOperationDiff: m.ExecuteGetOperationDiffTool,
 		ToolNameGetDocument:      m.ExecuteGetDocumentTool,
+		LegacyToolNameSearchRestOperations:        m.ExecuteLegacyRestSearchTool,
+		LegacyToolNameGetRestOperationSpec:        m.ExecuteLegacyRestGetSpecTool,
+		LegacyToolNameGetRestOperationDiff:        m.ExecuteLegacyRestGetOperationDiffTool,
 	}
-	for _, meta := range getToolMetadata() {
+	for _, meta := range getMCPServerToolMetadata() {
 		handler, ok := toolHandlers[meta.Name]
 		if !ok {
 			log.Warnf("MCP tool %s has metadata but no handler", meta.Name)
@@ -344,6 +347,10 @@ const (
 	ToolNameGetOperationSpec = "get_api_operation_specification"
 	ToolNameGetOperationDiff = "get_api_operation_diff"
 	ToolNameGetDocument      = "get_document"
+
+	LegacyToolNameSearchRestOperations = "search_rest_api_operations"
+	LegacyToolNameGetRestOperationSpec = "get_rest_api_operations_specification"
+	LegacyToolNameGetRestOperationDiff = "get_rest_api_operation_diff"
 )
 
 // Tool descriptions for MCP server
@@ -417,6 +424,21 @@ LLM INSTRUCTIONS:
 - Do not invent slug values
 - Use documentId from a selected search_api_operations result as this tool's slug parameter
 - Return the full documentData from the response; use documentType to interpret specification semantics and format to render text payloads`
+
+	LegacyToolDescriptionSearchOperationsMCP = `Deprecated compatibility alias for search_api_operations.
+
+This tool preserves the old REST-only contract for legacy clients.
+It behaves like search_api_operations with apiType=rest and should not be used by new clients.`
+
+	LegacyToolDescriptionGetOperationSpecMCP = `Deprecated compatibility alias for get_api_operation_specification.
+
+This tool preserves the old REST-only contract for legacy clients.
+It behaves like get_api_operation_specification with apiType=rest and should not be used by new clients.`
+
+	LegacyToolDescriptionGetOperationDiffMCP = `Deprecated compatibility alias for get_api_operation_diff.
+
+This tool preserves the old REST-only contract for legacy clients.
+It behaves like get_api_operation_diff with apiType=rest and should not be used by new clients.`
 )
 
 // Tool descriptions for OpenAI
@@ -594,6 +616,66 @@ var (
 		},
 		"required": ["apiType","packageId","version","slug"]
 	}`)
+
+	legacySearchOperationsSchema = json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"query": {
+				"type": "string"
+			},
+			"limit": {
+				"type": "integer",
+				"minimum": 10,
+				"maximum": 100
+			},
+			"page": {
+					"type": "integer",
+				"minimum": 0
+			},
+			"release": {
+				"type": "string"
+			},
+			"group": {
+				"type": "string"
+			}
+		},
+		"required": ["query"]
+	}`)
+
+	legacyGetOperationSpecSchema = json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"operationId": {
+				"type": "string"
+			},
+			"packageId": {
+				"type": "string"
+			},
+			"version": {
+				"type": "string"
+			}
+		},
+		"required": ["operationId","packageId","version"]
+	}`)
+
+	legacyGetOperationDiffSchema = json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"operationId": {
+				"type": "string"
+			},
+			"packageId": {
+				"type": "string"
+			},
+			"version": {
+				"type": "string"
+			},
+			"previousVersion": {
+				"type": "string"
+			}
+		},
+		"required": ["operationId","packageId","version","previousVersion"]
+	}`)
 )
 
 // getToolMetadata returns metadata for all tools
@@ -624,6 +706,28 @@ func getToolMetadata() []view.ToolMetadata {
 			DescriptionOpenAI: ToolDescriptionGetDocumentOpenAI,
 		},
 	}
+}
+
+func getMCPServerToolMetadata() []view.ToolMetadata {
+	metadata := append([]view.ToolMetadata{}, getToolMetadata()...)
+	metadata = append(metadata,
+		view.ToolMetadata{
+			Name:           LegacyToolNameSearchRestOperations,
+			Schema:         legacySearchOperationsSchema,
+			DescriptionMCP: LegacyToolDescriptionSearchOperationsMCP,
+		},
+		view.ToolMetadata{
+			Name:           LegacyToolNameGetRestOperationSpec,
+			Schema:         legacyGetOperationSpecSchema,
+			DescriptionMCP: LegacyToolDescriptionGetOperationSpecMCP,
+		},
+		view.ToolMetadata{
+			Name:           LegacyToolNameGetRestOperationDiff,
+			Schema:         legacyGetOperationDiffSchema,
+			DescriptionMCP: LegacyToolDescriptionGetOperationDiffMCP,
+		},
+	)
+	return metadata
 }
 
 // GetToolsForOpenAI returns MCP tools in OpenAI format

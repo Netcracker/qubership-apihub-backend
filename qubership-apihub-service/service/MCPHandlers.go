@@ -10,6 +10,59 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+func withInjectedMCPArg(req mcp.CallToolRequest, key string, value any) mcp.CallToolRequest {
+	src, _ := req.Params.Arguments.(map[string]any)
+	args := make(map[string]any, len(src)+1)
+	for k, v := range src {
+		args[k] = v
+	}
+	if _, exists := args[key]; !exists {
+		args[key] = value
+	}
+	req.Params.Arguments = args
+	return req
+}
+
+func mcpLegacyMetricKey(ctx context.Context, packageOrGroup string) string {
+	return MCPClientLabelFromCtx(ctx) + "|" + packageOrGroup
+}
+
+func (m mcpService) ExecuteLegacyRestSearchTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	mcpWorkspace := m.systemInfoService.GetAiMCPConfig().Workspace
+	group := req.GetString("group", mcpWorkspace)
+	m.monitoringService.IncreaseBusinessMetricCounter(
+		UserIDFromMCPCtx(ctx),
+		metrics.MCPLegacySearchToolCalled,
+		mcpLegacyMetricKey(ctx, group),
+	)
+	log.Infof("%s: delegating to %s with apiType=rest", LegacyToolNameSearchRestOperations, ToolNameSearchOperations)
+	return m.ExecuteSearchTool(ctx, withInjectedMCPArg(req, "apiType", string(view.RestApiType)))
+}
+
+func (m mcpService) ExecuteLegacyRestGetSpecTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if packageId, err := req.RequireString("packageId"); err == nil {
+		m.monitoringService.IncreaseBusinessMetricCounter(
+			UserIDFromMCPCtx(ctx),
+			metrics.MCPLegacyGetSpecToolCalled,
+			mcpLegacyMetricKey(ctx, packageId),
+		)
+	}
+	log.Infof("%s: delegating to %s with apiType=rest", LegacyToolNameGetRestOperationSpec, ToolNameGetOperationSpec)
+	return m.ExecuteGetSpecTool(ctx, withInjectedMCPArg(req, "apiType", string(view.RestApiType)))
+}
+
+func (m mcpService) ExecuteLegacyRestGetOperationDiffTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if packageId, err := req.RequireString("packageId"); err == nil {
+		m.monitoringService.IncreaseBusinessMetricCounter(
+			UserIDFromMCPCtx(ctx),
+			metrics.MCPLegacyGetDiffToolCalled,
+			mcpLegacyMetricKey(ctx, packageId),
+		)
+	}
+	log.Infof("%s: delegating to %s with apiType=rest", LegacyToolNameGetRestOperationDiff, ToolNameGetOperationDiff)
+	return m.ExecuteGetOperationDiffTool(ctx, withInjectedMCPArg(req, "apiType", string(view.RestApiType)))
+}
+
 // ExecuteGetSpecTool executes the get_api_operation_specification tool
 func (m mcpService) ExecuteGetSpecTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	apiType, err := requireMCPApiType(req, view.RestApiType, view.AsyncapiApiType)

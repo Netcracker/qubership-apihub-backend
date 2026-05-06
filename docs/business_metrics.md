@@ -60,6 +60,9 @@ The following table lists constants (values stored in `metric`), their meaning, 
 | `global_search_called` | Global search. The key combines search level with a suffix (`searchLevel`, workspace, or the first `package_id` in the request, depending on the endpoint). |
 | `global_search_default_publication_date_modified` | The publication date interval differs from the default range; key is `searchLevel` (string). |
 | `mcp_session_initialized` | MCP session initialization; key is a client label such as `<name>/<version>` or `"unknown"`. |
+| `mcp_search_rest_operations_tool_called` | Deprecated REST-only MCP search alias invocation; key is `<MCP client label>\|<group or packageId>`. Useful for tracking remaining legacy clients. |
+| `mcp_get_rest_operation_spec_tool_called` | Deprecated REST-only MCP operation specification alias invocation; key is `<MCP client label>\|<package_id>`. Useful for tracking remaining legacy clients. |
+| `mcp_get_rest_operation_diff_tool_called` | Deprecated REST-only MCP operation diff alias invocation; key is `<MCP client label>\|<package_id>`. Useful for tracking remaining legacy clients. |
 | `mcp_search_operations_tool_called` | MCP search-operations tool invocation; key is `<apiType>\|<MCP client label>\|<group or packageId>`. |
 | `mcp_get_operation_spec_tool_called` | MCP operation specification tool; key is `<apiType>\|<MCP client label>\|<package_id>`. |
 | `mcp_get_operation_diff_tool_called` | MCP operation diff tool; key is `<apiType>\|<MCP client label>\|<package_id>`. |
