@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/metrics"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -27,9 +29,20 @@ func mcpLegacyMetricKey(ctx context.Context, packageOrGroup string) string {
 	return MCPClientLabelFromCtx(ctx) + "|" + packageOrGroup
 }
 
+func validateMCPGroup(group, workspace string) error {
+	if workspace != "" && !strings.HasPrefix(group, workspace) {
+		log.Errorf("Group parameter should start with %s. Given: %s", workspace, group)
+		return fmt.Errorf("Requested package is not allowed for search, only packages from workspace %s are allowed", workspace)
+	}
+	return nil
+}
+
 func (m mcpService) ExecuteLegacyRestSearchTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	mcpWorkspace := m.systemInfoService.GetAiMCPConfig().Workspace
 	group := req.GetString("group", mcpWorkspace)
+	if err := validateMCPGroup(group, mcpWorkspace); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
 	m.monitoringService.IncreaseBusinessMetricCounter(
 		UserIDFromMCPCtx(ctx),
 		metrics.MCPLegacySearchToolCalled,
@@ -130,6 +143,9 @@ func (m mcpService) ExecuteSearchTool(ctx context.Context, req mcp.CallToolReque
 	page := req.GetInt("page", 0)
 	group := req.GetString("group", mcpWorkspace)
 	releaseVersion := req.GetString("release", CalculateNearestCompletedReleaseVersion())
+	if err := validateMCPGroup(group, mcpWorkspace); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
 
 	log.Infof("search_api_operations: apiType=%s, query=%s, limit=%d, page=%d, group=%s, releaseVersion=%s", apiType, q, limit, page, group, releaseVersion)
 
