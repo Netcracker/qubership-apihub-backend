@@ -22,6 +22,7 @@ const responseWriteDeadline = 5 * time.Minute
 type deadlineResponseWriter struct {
 	http.ResponseWriter
 	deadlineSet bool
+	deadline    time.Duration
 }
 
 func (w *deadlineResponseWriter) setDeadlineOnce() {
@@ -30,7 +31,7 @@ func (w *deadlineResponseWriter) setDeadlineOnce() {
 	}
 	w.deadlineSet = true
 	rc := http.NewResponseController(w.ResponseWriter)
-	if err := rc.SetWriteDeadline(time.Now().Add(responseWriteDeadline)); err != nil {
+	if err := rc.SetWriteDeadline(time.Now().Add(w.deadline)); err != nil {
 		log.Warnf("Failed to set response write deadline: %v", err)
 	}
 }
@@ -57,6 +58,16 @@ func (w *deadlineResponseWriter) Flush() {
 
 func WriteDeadlineMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		next.ServeHTTP(&deadlineResponseWriter{ResponseWriter: w}, r)
+		// MCP uses long-lived streaming responses, so a fixed write deadline
+		// would terminate healthy streams and force clients to reconnect.
+		if isMCPPath(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		d := responseWriteDeadline
+		if isAiChatSSEPath(r.URL.Path) {
+			d = StreamingResponseWriteDeadline
+		}
+		next.ServeHTTP(&deadlineResponseWriter{ResponseWriter: w, deadline: d}, r)
 	})
 }
