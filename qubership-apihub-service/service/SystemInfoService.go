@@ -243,12 +243,11 @@ func (g *systemInfoServiceImpl) setDefaults() {
 	viper.SetDefault("cleanup.unreferencedData.timeoutMinutes", 360)    //6 hours
 	viper.SetDefault("cleanup.maintenanceVacuum.schedule", "0 2 * * 1") //at 2 AM on Monday
 	viper.SetDefault("cleanup.maintenanceVacuum.timeoutMinutes", 300)   //5 hours
-	viper.SetDefault("openAI.model", "gpt-4o")
-	viper.SetDefault("openAI.temperature", 1.0)
-	viper.SetDefault("openAI.reasoningEffort", "medium")
-	viper.SetDefault("openAI.verbosity", "medium")
-
 	viper.SetDefault("ai.chat.enabled", false)
+	viper.SetDefault("ai.chat.openAI.model", "gpt-4o")
+	viper.SetDefault("ai.chat.openAI.temperature", 1.0)
+	viper.SetDefault("ai.chat.openAI.reasoningEffort", "medium")
+	viper.SetDefault("ai.chat.openAI.verbosity", "medium")
 	viper.SetDefault("ai.chat.retentionDays", 30)
 	viper.SetDefault("ai.chat.pinnedForeverCount", 10)
 	viper.SetDefault("ai.chat.compactAtContextPercent", 80)

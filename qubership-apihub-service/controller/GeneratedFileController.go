@@ -3,7 +3,6 @@ package controller
 import (
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
@@ -62,12 +61,8 @@ func (c *GeneratedFileController) Download(w http.ResponseWriter, r *http.Reques
 	} else {
 		w.Header().Set("Content-Type", "application/octet-stream")
 	}
-	if f.SizeBytes != nil {
-		w.Header().Set("Content-Length", strconv.FormatInt(*f.SizeBytes, 10))
-	}
 	disp := "attachment; filename=\"" + escapeFilename(f.Filename) + "\""
 	w.Header().Set("Content-Disposition", disp)
-	w.WriteHeader(200)
 	http.ServeFile(w, r, f.StoragePath)
 }
 
