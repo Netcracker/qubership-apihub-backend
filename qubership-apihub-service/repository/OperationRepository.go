@@ -13,6 +13,9 @@ import (
 	"github.com/go-pg/pg/v10/orm"
 )
 
+// globalSearchWorkMem limits lossy GIN bitmap recheck during FTS on fts_operation_search_text when server default work_mem is very low.
+const globalSearchWorkMem = "16MB"
+
 type OperationRepository interface {
 	GetOperationsByIds(packageId string, version string, revision int, operationIds []string) ([]entity.OperationEntity, error)
 	GetOperations(packageId string, version string, revision int, operationType string, skipRefs bool, searchReq view.OperationListReq) ([]entity.OperationRichEntity, error)
@@ -1624,10 +1627,6 @@ func (o operationRepositoryImpl) GetOperationsByModelHash(packageId string, vers
 }
 
 func (o operationRepositoryImpl) GlobalSearchForOperations(searchQuery *entity.GlobalOperationSearchQuery) ([]entity.OperationSearchResult, error) {
-	_, err := o.cp.GetConnection().Exec("select websearch_to_tsquery(?)", searchQuery.OriginalTextInput)
-	if err != nil {
-		return nil, fmt.Errorf("invalid search string: %v", err.Error())
-	}
 	var result []entity.OperationSearchResult
 
 	operationsSearchQuery := `
@@ -1689,7 +1688,20 @@ order by all_ts.rank desc, o.operation_id
 limit ?limit;
 `
 
-	_, err = o.cp.GetConnection().Model(searchQuery).Query(&result, operationsSearchQuery)
+	ctx := context.Background()
+	err := o.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
+		if _, err := tx.Exec("SET LOCAL work_mem = ?", globalSearchWorkMem); err != nil {
+			return err
+		}
+		if _, err := tx.Exec("select websearch_to_tsquery(?)", searchQuery.OriginalTextInput); err != nil {
+			return fmt.Errorf("invalid search string: %v", err.Error())
+		}
+		_, err := tx.Model(searchQuery).Query(&result, operationsSearchQuery)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return nil, nil
