@@ -382,7 +382,7 @@ LLM INSTRUCTIONS:
 - If user asks for more results - increment page, simplify query, or search in other packages/versions
 - DO NOT use get_api_operation_specification in advance - first show a list of operations to choose from, even if only one is found
 - Use get_api_operation_specification only when user explicitly requests details about a REST or AsyncAPI operation
-- If user explicitly requests a specific version - use 'release' parameter in YYYY.Q format (prefer versions from api-packages-list resource)
+- VERSION — IMPORTANT: the default "latest completed version" is computed from the current calendar date (e.g., current quarter 2026.2), NOT from the latest version actually published in the system. If the user mentions any version number (e.g., "2025.4"), ALWAYS pass it explicitly as the 'release' parameter. Never assume the default will match what the user expects. Check api-packages-list for available versions when uncertain
 - If user requests results from a specific package - use 'group' parameter with packageId (not packageName)`
 
 	ToolDescriptionGetOperationSpecMCP = `Get operation-level specification data extracted from an OpenAPI or AsyncAPI specification.
@@ -470,7 +470,7 @@ LLM INSTRUCTIONS:
 - If user asks for more results - increment page, simplify query, or search in other packages/versions
 - DO NOT use get_api_operation_specification in advance - first show a list of operations to choose from in markdown format, even if only one is found
 - Use get_api_operation_specification only when user explicitly requests details about a REST or AsyncAPI operation
-- If user explicitly requests a specific version - use 'release' parameter in YYYY.Q format (prefer versions from api-packages-list resource)
+- VERSION — IMPORTANT: the default "latest completed version" is computed from the current calendar date (e.g., current quarter 2026.2), NOT from the latest version actually published in the system. If the user mentions any version number (e.g., "2025.4"), ALWAYS pass it explicitly as the 'release' parameter. Never assume the default will match what the user expects. Check api-packages-list for available versions when uncertain
 - If user requests results from a specific package - use 'group' parameter with packageId (not packageName)
 - REQUIRED: Convert metadata to markdown links (relative, without baseUrl):
 	* packageId -> [packageId](/portal/packages/<packageId>)
@@ -768,7 +768,7 @@ func getParameterDescription(toolName, paramName string) string {
 			"query":   "Text search query for finding API operations. Important: search is lexical and index-bound, so try different query variations (simplified, with keywords)",
 			"limit":   "Maximum number of results to return (10-100). For the first search, it's recommended to use 100",
 			"page":    "Page number for pagination (starts from 0). Use to get additional results",
-			"release": "Release version in YYYY.Q format (e.g., 2024.3). By default, the latest completed version is used. Specify only if user explicitly requests a specific version",
+			"release": "Release version in YYYY.Q format (e.g., 2024.3). WARNING: the default 'latest completed version' is computed from the current calendar date, not from the latest version actually published in the system. If the user mentions any version number, always pass it here explicitly. Omit only when the user has not mentioned any specific version.",
 			"group":   "Package ID (packageId) to filter search by a specific package. Use packageId from api-packages-list resource, not packageName",
 		},
 		ToolNameGetOperationSpec: {
