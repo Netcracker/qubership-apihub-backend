@@ -125,9 +125,11 @@ type PackageInfoFile struct {
 	Refs                     []BCRef                `json:"refs"`
 	Revision                 int                    `json:"-"`
 	PreviousVersionRevision  int                    `json:"-"`
-	CreatedBy                string                 `json:"createdBy"`
-	BuilderVersion           string                 `json:"builderVersion"`
-	PublishedAt              *time.Time             `json:"publishedAt"`           //for migration
+	CreatedBy                     string                 `json:"createdBy"`
+	BuilderVersion                string                 `json:"builderVersion"`
+	PreviousVersionBuilderVersion string                 `json:"previousVersionBuilderVersion,omitempty"`
+	CurrentVersionBuilderVersion  string                 `json:"currentVersionBuilderVersion,omitempty"`
+	PublishedAt                   *time.Time             `json:"publishedAt"`           //for migration
 	MigrationBuild           bool                   `json:"migrationBuild"`        //for migration
 	MigrationId              string                 `json:"migrationId"`           //for migration
 	NoChangelog              bool                   `json:"noChangeLog,omitempty"` //for migration
