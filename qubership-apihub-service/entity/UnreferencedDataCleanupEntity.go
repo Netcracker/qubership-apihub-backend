@@ -23,4 +23,6 @@ type DeletedItemsCounts struct {
 	PublishedData                  int `json:"publishedData"`
 	VersionInternalDocumentData    int `json:"versionInternalDocumentData"`
 	ComparisonInternalDocumentData int `json:"comparisonInternalDocumentData"`
+	DdlContractData                int `json:"ddlContractData"`
+	McpContractData                int `json:"mcpContractData"`
 }

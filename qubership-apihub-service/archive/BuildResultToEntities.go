@@ -710,6 +710,159 @@ func (a *BuildResultToEntitiesReader) ReadComparisonInternalDocumentsToEntities(
 	return comparisonInternalDocEntities, comparisonInternalDocDataEntities, nil
 }
 
+func (a *BuildResultToEntitiesReader) ReadDdlContractsToEntities() ([]*entity.DDLContractEntity, []*entity.DDLContractDataEntity, []*entity.DDLContractSearchTextEntity, error) {
+	contractEntities := make([]*entity.DDLContractEntity, 0)
+	dataEntities := make([]*entity.DDLContractDataEntity, 0)
+	searchTextEntities := make([]*entity.DDLContractSearchTextEntity, 0)
+
+	for _, contract := range a.PackageDdlContracts.Contracts {
+		var dataHash *string
+		if fileHeader, exists := a.ContractsDdlFileHeaders[contract.ContentPath]; exists {
+			fileData, err := ReadZipFile(fileHeader)
+			if err != nil {
+				return nil, nil, nil, &exception.CustomError{
+					Status:  http.StatusBadRequest,
+					Code:    exception.InvalidPackageArchivedFile,
+					Message: exception.InvalidPackageArchivedFileMsg,
+					Params:  map[string]interface{}{"file": contract.ContentPath, "error": err.Error()},
+				}
+			}
+			hash := utils.GetEncodedXXHash128(fileData)
+			dataHash = &hash
+			dataEntities = append(dataEntities, &entity.DDLContractDataEntity{
+				DataHash: hash,
+				Data:     fileData,
+			})
+			title := contract.Title
+			if title == "" {
+				title = contract.Name
+			}
+			searchText := title + " " + contract.SchemaName + " " + contract.Name
+			searchDataHash := utils.GetEncodedXXHash128([]byte(searchText))
+			searchTextEntities = append(searchTextEntities, &entity.DDLContractSearchTextEntity{
+				PackageId:      a.PackageInfo.PackageId,
+				Version:        a.PackageInfo.Version,
+				Revision:       a.PackageInfo.Revision,
+				DdlTableId:     contract.DdlTableId,
+				Status:         a.PackageInfo.Status,
+				Kind:           contract.Kind,
+				SearchDataHash: searchDataHash,
+				DataVector:     searchText,
+			})
+		}
+		contractEntities = append(contractEntities, &entity.DDLContractEntity{
+			PackageId:  a.PackageInfo.PackageId,
+			Version:    a.PackageInfo.Version,
+			Revision:   a.PackageInfo.Revision,
+			DdlTableId: contract.DdlTableId,
+			Kind:       contract.Kind,
+			Title:      contract.Title,
+			SchemaName: contract.SchemaName,
+			Name:       contract.Name,
+			Deprecated: contract.Deprecated,
+			Metadata:   entity.Metadata(contract.Metadata),
+			DataHash:   dataHash,
+			DocumentId: contract.DocumentId,
+		})
+	}
+	return contractEntities, dataEntities, searchTextEntities, nil
+}
+
+func (a *BuildResultToEntitiesReader) ReadDdlContractComparisonsToEntities(comparisonId string) ([]*entity.DDLContractComparisonEntity, error) {
+	comparisonEntities := make([]*entity.DDLContractComparisonEntity, 0)
+	for _, comparison := range a.PackageDdlComparisons.Comparisons {
+		var dataHash, previousDataHash *string
+		if comparison.DataHash != "" {
+			h := comparison.DataHash
+			dataHash = &h
+		}
+		if comparison.PreviousDataHash != "" {
+			h := comparison.PreviousDataHash
+			previousDataHash = &h
+		}
+		var changesSummary view.ChangeSummary
+		if comparison.ChangesSummary != nil {
+			if b, err := json.Marshal(comparison.ChangesSummary); err == nil {
+				_ = json.Unmarshal(b, &changesSummary)
+			}
+		}
+		previousPackageId := a.PackageInfo.PreviousVersionPackageId
+		if previousPackageId == "" {
+			previousPackageId = a.PackageInfo.PackageId
+		}
+		comparisonEntities = append(comparisonEntities, &entity.DDLContractComparisonEntity{
+			PackageId:          a.PackageInfo.PackageId,
+			Version:            a.PackageInfo.Version,
+			Revision:           a.PackageInfo.Revision,
+			PreviousPackageId:  previousPackageId,
+			PreviousVersion:    a.PackageInfo.PreviousVersion,
+			PreviousRevision:   a.PackageInfo.PreviousVersionRevision,
+			DdlTableId:         comparison.DdlTableId,
+			PreviousDdlTableId: comparison.PreviousDdlTableId,
+			ComparisonId:       comparisonId,
+			DataHash:           dataHash,
+			PreviousDataHash:   previousDataHash,
+			ChangesSummary:     changesSummary,
+			Changes:            comparison.Changes,
+		})
+	}
+	return comparisonEntities, nil
+}
+
+func (a *BuildResultToEntitiesReader) ReadMcpContractsToEntities() ([]*entity.MCPContractEntity, []*entity.MCPContractDataEntity, []*entity.MCPContractSearchTextEntity, error) {
+	contractEntities := make([]*entity.MCPContractEntity, 0)
+	dataEntities := make([]*entity.MCPContractDataEntity, 0)
+	searchTextEntities := make([]*entity.MCPContractSearchTextEntity, 0)
+
+	for _, contract := range a.PackageMcpContracts.Contracts {
+		var dataHash *string
+		if fileHeader, exists := a.ContractsMcpFileHeaders[contract.ContentPath]; exists {
+			fileData, err := ReadZipFile(fileHeader)
+			if err != nil {
+				return nil, nil, nil, &exception.CustomError{
+					Status:  http.StatusBadRequest,
+					Code:    exception.InvalidPackageArchivedFile,
+					Message: exception.InvalidPackageArchivedFileMsg,
+					Params:  map[string]interface{}{"file": contract.ContentPath, "error": err.Error()},
+				}
+			}
+			hash := utils.GetEncodedXXHash128(fileData)
+			dataHash = &hash
+			dataEntities = append(dataEntities, &entity.MCPContractDataEntity{
+				DataHash: hash,
+				Data:     fileData,
+			})
+			searchText := contract.Title + " " + contract.ServerName + " " + contract.McpEndpoint
+			searchDataHash := utils.GetEncodedXXHash128([]byte(searchText))
+			searchTextEntities = append(searchTextEntities, &entity.MCPContractSearchTextEntity{
+				PackageId:      a.PackageInfo.PackageId,
+				Version:        a.PackageInfo.Version,
+				Revision:       a.PackageInfo.Revision,
+				McpEntityId:    contract.McpEntityId,
+				Status:         string(a.PackageInfo.Status),
+				Kind:           contract.Kind,
+				SearchDataHash: searchDataHash,
+				DataVector:     searchText,
+			})
+		}
+		contractEntities = append(contractEntities, &entity.MCPContractEntity{
+			PackageId:   a.PackageInfo.PackageId,
+			Version:     a.PackageInfo.Version,
+			Revision:    a.PackageInfo.Revision,
+			McpEntityId: contract.McpEntityId,
+			Kind:        contract.Kind,
+			Title:       contract.Title,
+			McpEndpoint: contract.McpEndpoint,
+			ServerName:  contract.ServerName,
+			Deprecated:  contract.Deprecated,
+			Metadata:    entity.Metadata(contract.Metadata),
+			DataHash:    dataHash,
+			DocumentId:  contract.DocumentId,
+		})
+	}
+	return contractEntities, dataEntities, searchTextEntities, nil
+}
+
 func (a *BuildResultToEntitiesReader) calculateOperationsExternalMetadataMap() map[view.OperationExternalMetadataKey]map[string]interface{} {
 	result := map[view.OperationExternalMetadataKey]map[string]interface{}{}
 	if a.PackageInfo.ExternalMetadata == nil {

@@ -72,12 +72,14 @@ const (
 	GraphQLSchemaType string = "graphql-schema"
 	GraphAPIType      string = "graphapi"
 	IntrospectionType string = "introspection"
+	DDLType           string = "ddl"
+	MCPType           string = "mcp"
 	UnknownType       string = "unknown"
 )
 
 func InvalidDocumentType(documentType string) bool {
 	switch documentType {
-	case OpenAPI31Type, OpenAPI30Type, OpenAPI20Type, Asyncapi30Type, Protobuf3Type, JsonSchemaType, MDType, GraphQLSchemaType, GraphAPIType, IntrospectionType, UnknownType:
+	case OpenAPI31Type, OpenAPI30Type, OpenAPI20Type, Asyncapi30Type, Protobuf3Type, JsonSchemaType, MDType, GraphQLSchemaType, GraphAPIType, IntrospectionType, DDLType, MCPType, UnknownType:
 		return false
 	}
 	return true

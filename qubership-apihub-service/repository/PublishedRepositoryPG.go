@@ -1213,7 +1213,11 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 	versionComparisons []*entity.VersionComparisonEntity, serviceName string, pkg *entity.PackageEntity, versionComparisonsFromCache []string,
 	versionInternalDocEntities []*entity.VersionInternalDocumentEntity, versionInternalDocDataEntities []*entity.VersionInternalDocumentDataEntity,
 	comparisonInternalDocEntities []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocDataEntities []*entity.ComparisonInternalDocumentDataEntity,
-	operationSearchTexts []*entity.OperationSearchTextEntity) error {
+	operationSearchTexts []*entity.OperationSearchTextEntity,
+	ddlContractEntities []*entity.DDLContractEntity, ddlContractDataEntities []*entity.DDLContractDataEntity,
+	ddlContractSearchTexts []*entity.DDLContractSearchTextEntity, ddlContractComparisonEntities []*entity.DDLContractComparisonEntity,
+	mcpContractEntities []*entity.MCPContractEntity, mcpContractDataEntities []*entity.MCPContractDataEntity,
+	mcpContractSearchTexts []*entity.MCPContractSearchTextEntity) error {
 	if len(content) == 0 && len(refs) == 0 {
 		return nil
 	}
@@ -1619,6 +1623,103 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 			return err
 		}
 		utils.PerfLog(time.Since(start).Milliseconds(), 200, "CreateVersionWithData: comparison internal documents insert")
+
+		// DDL contracts
+		if len(ddlContractDataEntities) > 0 {
+			start = time.Now()
+			for _, d := range ddlContractDataEntities {
+				var count int
+				_, err = tx.Query(pg.Scan(&count), `SELECT count(data_hash) FROM ddl_table_data WHERE data_hash = ? LIMIT 1`, d.DataHash)
+				if err != nil {
+					return err
+				}
+				if count == 0 {
+					_, err = tx.Model(d).OnConflict("(data_hash) DO NOTHING").Insert()
+					if err != nil {
+						return fmt.Errorf("failed to insert ddl_table_data: %w", err)
+					}
+				}
+			}
+			utils.PerfLog(time.Since(start).Milliseconds(), 100, "CreateVersionWithData: ddl_table_data insert")
+		}
+		if len(ddlContractEntities) > 0 {
+			start = time.Now()
+			_, err = tx.Model(&ddlContractEntities).OnConflict("(package_id, version, revision, ddl_table_id) DO UPDATE").Insert()
+			if err != nil {
+				return fmt.Errorf("failed to insert ddl_tables: %w", err)
+			}
+			utils.PerfLog(time.Since(start).Milliseconds(), 100, "CreateVersionWithData: ddl_tables insert")
+		}
+		if len(ddlContractSearchTexts) > 0 && !pkg.ExcludeFromSearch {
+			start = time.Now()
+			for _, st := range ddlContractSearchTexts {
+				_, err = tx.Exec(`
+					INSERT INTO fts_ddl_search_text (package_id, version, revision, ddl_table_id, status, kind, search_data_hash, data_vector)
+					VALUES (?, ?, ?, ?, ?, ?, ?, to_tsvector(convert_from(?, 'UTF-8')))
+					ON CONFLICT (package_id, version, revision, ddl_table_id) DO UPDATE
+						SET search_data_hash = EXCLUDED.search_data_hash,
+							data_vector = EXCLUDED.data_vector`,
+					version.PackageId, version.Version, version.Revision, st.DdlTableId,
+					version.Status, st.Kind, st.SearchDataHash, st.DataVector)
+				if err != nil {
+					return fmt.Errorf("failed to insert fts_ddl_search_text for %s: %w", st.DdlTableId, err)
+				}
+			}
+			utils.PerfLog(time.Since(start).Milliseconds(), 100, "CreateVersionWithData: fts_ddl_search_text insert")
+		}
+		if len(ddlContractComparisonEntities) > 0 {
+			start = time.Now()
+			_, err = tx.Model(&ddlContractComparisonEntities).OnConflict(
+				"(package_id, version, revision, previous_package_id, previous_version, previous_revision, ddl_table_id, previous_ddl_table_id) DO UPDATE").Insert()
+			if err != nil {
+				return fmt.Errorf("failed to insert ddl_comparison: %w", err)
+			}
+			utils.PerfLog(time.Since(start).Milliseconds(), 100, "CreateVersionWithData: ddl_comparison insert")
+		}
+
+		// MCP contracts
+		if len(mcpContractDataEntities) > 0 {
+			start = time.Now()
+			for _, d := range mcpContractDataEntities {
+				var count int
+				_, err = tx.Query(pg.Scan(&count), `SELECT count(data_hash) FROM mcp_entity_data WHERE data_hash = ? LIMIT 1`, d.DataHash)
+				if err != nil {
+					return err
+				}
+				if count == 0 {
+					_, err = tx.Model(d).OnConflict("(data_hash) DO NOTHING").Insert()
+					if err != nil {
+						return fmt.Errorf("failed to insert mcp_entity_data: %w", err)
+					}
+				}
+			}
+			utils.PerfLog(time.Since(start).Milliseconds(), 100, "CreateVersionWithData: mcp_entity_data insert")
+		}
+		if len(mcpContractEntities) > 0 {
+			start = time.Now()
+			_, err = tx.Model(&mcpContractEntities).OnConflict("(package_id, version, revision, mcp_entity_id) DO UPDATE").Insert()
+			if err != nil {
+				return fmt.Errorf("failed to insert mcp_entities: %w", err)
+			}
+			utils.PerfLog(time.Since(start).Milliseconds(), 100, "CreateVersionWithData: mcp_entities insert")
+		}
+		if len(mcpContractSearchTexts) > 0 && !pkg.ExcludeFromSearch {
+			start = time.Now()
+			for _, st := range mcpContractSearchTexts {
+				_, err = tx.Exec(`
+					INSERT INTO fts_mcp_search_text (package_id, version, revision, mcp_entity_id, status, kind, search_data_hash, data_vector)
+					VALUES (?, ?, ?, ?, ?, ?, ?, to_tsvector(convert_from(?, 'UTF-8')))
+					ON CONFLICT (package_id, version, revision, mcp_entity_id) DO UPDATE
+						SET search_data_hash = EXCLUDED.search_data_hash,
+							data_vector = EXCLUDED.data_vector`,
+					version.PackageId, version.Version, version.Revision, st.McpEntityId,
+					version.Status, st.Kind, st.SearchDataHash, st.DataVector)
+				if err != nil {
+					return fmt.Errorf("failed to insert fts_mcp_search_text for %s: %w", st.McpEntityId, err)
+				}
+			}
+			utils.PerfLog(time.Since(start).Milliseconds(), 100, "CreateVersionWithData: fts_mcp_search_text insert")
+		}
 
 		if len(existingGroupedOperations) > 0 {
 			// Restore grouped operations
@@ -4122,6 +4223,30 @@ func (p publishedRepositoryImpl) DeleteSoftDeletedPackagesBeforeDate(ctx context
 			return fmt.Errorf("failed to delete fts_latest_release_operation_data: %w", err)
 		}
 
+		logger.Trace(ctx, "Deleting DDL contract data for packages")
+		_, err = tx.ExecContext(ctx, `DELETE FROM fts_ddl_search_text WHERE package_id IN (?)`, pg.In(packageIds))
+		if err != nil {
+			return fmt.Errorf("failed to delete fts_ddl_search_text: %w", err)
+		}
+		_, err = tx.ExecContext(ctx, `DELETE FROM ddl_comparison WHERE package_id IN (?)`, pg.In(packageIds))
+		if err != nil {
+			return fmt.Errorf("failed to delete ddl_comparison: %w", err)
+		}
+		_, err = tx.ExecContext(ctx, `DELETE FROM ddl_tables WHERE package_id IN (?)`, pg.In(packageIds))
+		if err != nil {
+			return fmt.Errorf("failed to delete ddl_tables: %w", err)
+		}
+
+		logger.Trace(ctx, "Deleting MCP contract data for packages")
+		_, err = tx.ExecContext(ctx, `DELETE FROM fts_mcp_search_text WHERE package_id IN (?)`, pg.In(packageIds))
+		if err != nil {
+			return fmt.Errorf("failed to delete fts_mcp_search_text: %w", err)
+		}
+		_, err = tx.ExecContext(ctx, `DELETE FROM mcp_entities WHERE package_id IN (?)`, pg.In(packageIds))
+		if err != nil {
+			return fmt.Errorf("failed to delete mcp_entities: %w", err)
+		}
+
 		logger.Tracef(ctx, "Deleting packages: %v", packageIds)
 		deletePackagesQuery := `
 			DELETE FROM package_group
@@ -4201,6 +4326,27 @@ func (p publishedRepositoryImpl) DeleteSoftDeletedPackageRevisionsBeforeDate(ctx
 		_, err = tx.ExecContext(ctx, deleteFtsLiteSearchQuery, args...)
 		if err != nil {
 			return fmt.Errorf("failed to delete fts_latest_release_operation_data: %w", err)
+		}
+
+		_, err = tx.ExecContext(ctx, `DELETE FROM fts_ddl_search_text WHERE (package_id, version, revision) IN (`+valuesClause+`)`, args...)
+		if err != nil {
+			return fmt.Errorf("failed to delete fts_ddl_search_text: %w", err)
+		}
+		_, err = tx.ExecContext(ctx, `DELETE FROM ddl_comparison WHERE (package_id, version, revision) IN (`+valuesClause+`)`, args...)
+		if err != nil {
+			return fmt.Errorf("failed to delete ddl_comparison: %w", err)
+		}
+		_, err = tx.ExecContext(ctx, `DELETE FROM ddl_tables WHERE (package_id, version, revision) IN (`+valuesClause+`)`, args...)
+		if err != nil {
+			return fmt.Errorf("failed to delete ddl_tables: %w", err)
+		}
+		_, err = tx.ExecContext(ctx, `DELETE FROM fts_mcp_search_text WHERE (package_id, version, revision) IN (`+valuesClause+`)`, args...)
+		if err != nil {
+			return fmt.Errorf("failed to delete fts_mcp_search_text: %w", err)
+		}
+		_, err = tx.ExecContext(ctx, `DELETE FROM mcp_entities WHERE (package_id, version, revision) IN (`+valuesClause+`)`, args...)
+		if err != nil {
+			return fmt.Errorf("failed to delete mcp_entities: %w", err)
 		}
 
 		logger.Tracef(ctx, "Deleting package revisions: %v", revisionKeys)

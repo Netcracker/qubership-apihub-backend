@@ -183,6 +183,56 @@ type PackageComparisonsFile struct {
 	Comparisons []VersionComparison `json:"comparisons" validate:"dive,required"`
 }
 
+// --- Contract archive types ---
+
+type PackageDdlContractsFile struct {
+	Contracts []PackageDdlContract `json:"contracts"`
+}
+
+type PackageDdlContract struct {
+	DdlTableId  string                 `json:"ddlTableId"`
+	Kind        string                 `json:"kind"`
+	Title       string                 `json:"title,omitempty"`
+	SchemaName  string                 `json:"schemaName,omitempty"`
+	Name        string                 `json:"name,omitempty"`
+	Deprecated  bool                   `json:"deprecated"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	DocumentId  string                 `json:"documentId,omitempty"`
+	ContentPath string                 `json:"contentPath"`
+	DataHash    string                 `json:"dataHash,omitempty"`
+}
+
+type PackageDdlComparisonsFile struct {
+	Comparisons []PackageDdlComparison `json:"comparisons"`
+}
+
+type PackageDdlComparison struct {
+	DdlTableId         string                 `json:"ddlTableId"`
+	PreviousDdlTableId string                 `json:"previousDdlTableId"`
+	DataHash           string                 `json:"dataHash,omitempty"`
+	PreviousDataHash   string                 `json:"previousDataHash,omitempty"`
+	ChangesSummary     map[string]interface{} `json:"changesSummary,omitempty"`
+	Changes            interface{}            `json:"changes,omitempty"`
+	ComparisonPath     string                 `json:"comparisonPath"`
+}
+
+type PackageMcpContractsFile struct {
+	Contracts []PackageMcpContract `json:"contracts"`
+}
+
+type PackageMcpContract struct {
+	McpEntityId string                 `json:"mcpEntityId"`
+	Kind        string                 `json:"kind"`
+	Title       string                 `json:"title,omitempty"`
+	McpEndpoint string                 `json:"mcpEndpoint"`
+	ServerName  string                 `json:"serverName"`
+	Deprecated  bool                   `json:"deprecated"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	DocumentId  string                 `json:"documentId,omitempty"`
+	ContentPath string                 `json:"contentPath"`
+	DataHash    string                 `json:"dataHash,omitempty"`
+}
+
 type VersionComparison struct {
 	PackageId                string          `json:"packageId"`
 	Version                  string          `json:"version"`

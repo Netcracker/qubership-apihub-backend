@@ -53,6 +53,8 @@ tags:
     description: APIs for role management.
   - name: Operations
     description: Operations APIs.
+  - name: Contracts
+    description: DDL and MCP contract APIs.
   - name: Documents
     description: Documents APIs.
   - name: Changes
@@ -3228,6 +3230,8 @@ paths:
                                   operationsCount:
                                     type: number
                                     description: Number of operations in which the apiAudience was changed from previousAudience to currentAudience
+                      contracts:
+                        $ref: "#/components/schemas/VersionContractsSummary"
                   - type: object
                     properties:
                       operationGroups:
@@ -3357,6 +3361,8 @@ paths:
                         type: boolean
                         description: true - operation comparison cache is not stored in database
                         default: false
+                      contracts:
+                        $ref: "#/components/schemas/VersionComparisonContractsSummary"
                   - type: object
                     title: dashboardComparison
                     required:
@@ -3411,6 +3417,8 @@ paths:
                               type: boolean
                               description: true - operation comparison cache is not stored in database
                               default: false
+                            contracts:
+                              $ref: "#/components/schemas/VersionComparisonContractsSummary"
                       packages:
                         description: |
                           A mapped list of the packageId and version name concatenation with At sign to the package objects.
@@ -6019,6 +6027,435 @@ paths:
               examples:
                 IncorrectInputParams:
                   $ref: "#/components/examples/IncorrectInputParameters"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v1/packages/{packageId}/versions/{version}/ddl/tables":
+    get:
+      tags:
+        - Contracts
+      summary: Get DDL tables and views
+      description: |
+        Get DDL contract entities for a package version. The response contains both tables and views; use `kind` to filter.
+      operationId: getPackageVersionDdlTables
+      parameters:
+        - $ref: "#/components/parameters/packageId"
+        - $ref: "#/components/parameters/version"
+        - name: kind
+          in: query
+          description: Filter DDL contract entities by kind.
+          schema:
+            $ref: "#/components/schemas/DdlContractKind"
+        - name: searchString
+          in: query
+          description: Search text for full-text matching.
+          schema:
+            type: string
+        - name: textFilter
+          in: query
+          description: Filter by table or view title/name.
+          schema:
+            type: string
+        - $ref: "#/components/parameters/limit"
+        - name: offset
+          in: query
+          description: Number of records to skip.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tables:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: "#/components/schemas/DdlTableContract"
+                        - type: object
+                          properties:
+                            packageRef:
+                              description: Parent package and version link.
+                              type: string
+                              example: "QS.CloudQSS.CPQ.Q-TMF@2023.2"
+                  packages:
+                    description: A mapped list of referenced package objects.
+                    type: object
+                    additionalProperties:
+                      allOf:
+                        - $ref: "#/components/schemas/ReferencedPackage"
+                        - type: object
+        "301":
+          description: Moved Permanently
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                IncorrectInputParams:
+                  $ref: "#/components/examples/IncorrectInputParameters"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v1/packages/{packageId}/versions/{version}/ddl/tables/{tableId}":
+    get:
+      tags:
+        - Contracts
+      summary: Get DDL table or view details
+      description: Get DDL contract entity details, including the structural payload.
+      operationId: getPackageVersionDdlTable
+      parameters:
+        - $ref: "#/components/parameters/packageId"
+        - $ref: "#/components/parameters/version"
+        - name: tableId
+          in: path
+          required: true
+          description: DDL table/view logical identifier. Clients must percent-encode unsafe characters.
+          schema:
+            type: string
+            example: "public.users"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/DdlTableContract"
+                  - type: object
+                    properties:
+                      data:
+                        description: Full structural definition of the DDL table or view.
+                        type: object
+        "301":
+          description: Moved Permanently
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v1/packages/{packageId}/versions/{version}/ddl/tables/{tableId}/changes":
+    get:
+      tags:
+        - Contracts
+        - Changes
+      summary: Get DDL table or view changes
+      description: Get per-entity DDL contract changes between current and previous published package versions.
+      operationId: getPackageVersionDdlTableChanges
+      parameters:
+        - $ref: "#/components/parameters/packageId"
+        - $ref: "#/components/parameters/version"
+        - name: tableId
+          in: path
+          required: true
+          description: DDL table/view logical identifier. Clients must percent-encode unsafe characters.
+          schema:
+            type: string
+            example: "public.users"
+        - $ref: "#/components/parameters/severity"
+        - in: query
+          name: previousVersion
+          schema:
+            type: string
+          description: If both previousVersion and previousVersionPackageId are not specified, then previous **release** version will be used.
+          example: "2022.2"
+        - in: query
+          name: previousVersionPackageId
+          schema:
+            type: string
+          description: If both previousVersion and previousVersionPackageId are not specified, then previous **release** version will be used.
+          example: QS.RUNENV.K8S-SERVER.CJM-QSS-DEV-2.Q-TMF
+        - in: query
+          name: previousTableId
+          description: Previous DDL entity identifier. Empty if requested entity was added in the current version.
+          schema:
+            type: string
+            example: public.accounts
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  changes:
+                    description: List of discrepancies data in the DDL entity.
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SingleOperationChange"
+        "301":
+          description: Moved Permanently
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v1/packages/{packageId}/versions/{version}/mcp/{entity}":
+    get:
+      tags:
+        - Contracts
+      summary: Get MCP contract entities
+      description: Get MCP discovery contract entities for a package version.
+      operationId: getPackageVersionMcpEntities
+      parameters:
+        - $ref: "#/components/parameters/packageId"
+        - $ref: "#/components/parameters/version"
+        - name: entity
+          in: path
+          required: true
+          description: MCP entity collection to list.
+          schema:
+            type: string
+            enum:
+              - init
+              - tools
+              - prompts
+              - resources
+        - name: searchString
+          in: query
+          description: Search text for full-text matching.
+          schema:
+            type: string
+        - name: textFilter
+          in: query
+          description: Filter by MCP entity title/name/URI.
+          schema:
+            type: string
+        - $ref: "#/components/parameters/limit"
+        - name: offset
+          in: query
+          description: Number of records to skip.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entities:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: "#/components/schemas/McpContract"
+                        - type: object
+                          properties:
+                            packageRef:
+                              description: Parent package and version link.
+                              type: string
+                              example: "QS.CloudQSS.CPQ.Q-TMF@2023.2"
+                  packages:
+                    description: A mapped list of referenced package objects.
+                    type: object
+                    additionalProperties:
+                      allOf:
+                        - $ref: "#/components/schemas/ReferencedPackage"
+                        - type: object
+        "301":
+          description: Moved Permanently
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                IncorrectInputParams:
+                  $ref: "#/components/examples/IncorrectInputParameters"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v1/packages/{packageId}/versions/{version}/mcp/{entity}/{entityId}":
+    get:
+      tags:
+        - Contracts
+      summary: Get MCP contract entity details
+      description: Get MCP discovery contract entity details.
+      operationId: getPackageVersionMcpEntity
+      parameters:
+        - $ref: "#/components/parameters/packageId"
+        - $ref: "#/components/parameters/version"
+        - name: entity
+          in: path
+          required: true
+          description: MCP entity collection.
+          schema:
+            type: string
+            enum:
+              - init
+              - tools
+              - prompts
+              - resources
+        - name: entityId
+          in: path
+          required: true
+          description: MCP logical entity identifier. Clients must percent-encode unsafe characters.
+          schema:
+            type: string
+            example: "weather-mcp/tool/get_forecast"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/McpContract"
+                  - type: object
+                    properties:
+                      data:
+                        description: Original MCP discovery entity payload.
+                        type: object
+        "301":
+          description: Moved Permanently
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
         "401":
           description: Unauthorized
           content:
@@ -9474,7 +9911,6 @@ paths:
               type: object
               required:
                 - searchString
-                - apiType
                 - workspace
                 - status
               title: searchCommonParamsV4
@@ -9485,12 +9921,27 @@ paths:
                   type: string
                   example: "Billing account"
                 apiType:
-                  description: Type of the API to search for.
+                  description: Type of the API to search for. Deprecated; use `types` to search operations and contracts together.
+                  deprecated: true
                   type: string
                   enum:
                     - rest
                     - graphql
                     - asyncapi
+                    - protobuf
+                types:
+                  description: Entity type filters. Operation API types and contract type tokens can be combined.
+                  type: array
+                  items:
+                    type: string
+                    enum:
+                      - rest
+                      - graphql
+                      - protobuf
+                      - asyncapi
+                      - ddl
+                      - mcp
+                  example: ["rest", "ddl"]
                 workspace:
                   description: Top-level workspace ID (no dots).
                   type: string
@@ -9542,6 +9993,10 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/SearchResultOperation"
+                  contracts:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SearchResultContract"
                   documents:
                     type: array
                     items:
@@ -10083,6 +10538,163 @@ components:
         - graphql
         - protobuf
         - asyncapi
+    DdlContractKind:
+      title: DDL contract kind
+      description: DDL contract entity kind.
+      type: string
+      enum:
+        - table
+        - view
+    McpContractKind:
+      title: MCP contract kind
+      description: MCP discovery contract entity kind.
+      type: string
+      enum:
+        - init
+        - tool
+        - prompt
+        - resource
+    DdlTableContract:
+      description: DDL table or view contract entity.
+      type: object
+      required:
+        - tableId
+        - kind
+      properties:
+        tableId:
+          description: DDL table/view logical identifier.
+          type: string
+          example: "public.users"
+        title:
+          description: Human-readable title.
+          type: string
+          example: "users"
+        kind:
+          $ref: "#/components/schemas/DdlContractKind"
+        schemaName:
+          description: SQL schema name.
+          type: string
+          example: "public"
+        tableName:
+          description: Unqualified table or view name.
+          type: string
+          example: "users"
+        columnsCount:
+          description: Number of columns for table-like DDL entities.
+          type: integer
+          example: 12
+        deprecated:
+          type: boolean
+          default: false
+        documentId:
+          description: Source document identifier.
+          type: string
+          example: "schema-sql"
+        metadata:
+          description: Kind-specific DDL facets, such as columns, constraints, indexes, or view definition.
+          type: object
+    McpContract:
+      description: MCP discovery contract entity.
+      type: object
+      required:
+        - mcpEntityId
+        - kind
+        - mcpEndpoint
+        - serverName
+      properties:
+        mcpEntityId:
+          description: MCP contract logical identifier.
+          type: string
+          example: "weather-mcp/tool/get_forecast"
+        kind:
+          $ref: "#/components/schemas/McpContractKind"
+        name:
+          description: MCP source entity name or URI.
+          type: string
+          example: "get_forecast"
+        title:
+          description: Human-readable title.
+          type: string
+          example: "Get forecast"
+        serverName:
+          description: Logical MCP server name.
+          type: string
+          example: "weather-mcp"
+        mcpEndpoint:
+          description: MCP endpoint URL from file-level publish metadata.
+          type: string
+          example: "https://api.example.com/mcp"
+        description:
+          type: string
+        inputSchema:
+          description: MCP tool input schema.
+          type: object
+        outputSchema:
+          description: MCP tool output schema.
+          type: object
+        uri:
+          description: MCP resource URI.
+          type: string
+        mimeType:
+          description: MCP resource MIME type.
+          type: string
+        deprecated:
+          type: boolean
+          default: false
+        documentId:
+          description: Source document identifier.
+          type: string
+          example: "tools-forecast-json"
+        metadata:
+          description: Kind-specific MCP discovery metadata.
+          type: object
+    VersionComparisonContractsSummary:
+      description: Contract comparison summary. MCP is omitted in v1 because MCP discovery entities are not diffed.
+      type: object
+      properties:
+        ddl:
+          type: object
+          properties:
+            entityKinds:
+              type: array
+              items:
+                type: object
+                properties:
+                  entityKind:
+                    $ref: "#/components/schemas/DdlContractKind"
+                  changesSummary:
+                    $ref: "#/components/schemas/ChangeSummary"
+    VersionContractsSummary:
+      description: Counts of contract entities published in a package version.
+      type: object
+      properties:
+        ddl:
+          type: object
+          properties:
+            tables:
+              type: integer
+              default: 0
+            views:
+              type: integer
+              default: 0
+            deprecated:
+              type: integer
+              default: 0
+        mcp:
+          type: object
+          properties:
+            init:
+              type: integer
+              default: 0
+            tools:
+              type: integer
+              default: 0
+            prompts:
+              type: integer
+              default: 0
+            resources:
+              type: integer
+              default: 0
     ExportVersion:
       type: object
       title: Export entire version
@@ -11140,6 +11752,8 @@ components:
         - introspection
         - protobuf-3
         - asyncapi-3-0
+        - ddl
+        - mcp
         - unknown
     DocumentFormat:
       title: format
@@ -11152,6 +11766,7 @@ components:
         - graphql
         - gql
         - proto
+        - sql
         - unknown
     Operation:
       description: Operation object
@@ -11290,6 +11905,47 @@ components:
             - version
             - status
           properties:
+            packageId:
+              description: Package unique string identifier (full alias)
+              type: string
+              example: "QS.CloudQSS.CPQ.Q-TMF"
+            name:
+              description: Package name
+              type: string
+              example: "Quote TMF Service"
+            parentPackages:
+              description: Array of parent package names
+              type: array
+              items:
+                type: string
+            version:
+              description: Package version name
+              type: string
+              example: "2022.2@5"
+            status:
+              $ref: "#/components/schemas/VersionStatusEnum"
+    SearchResultContract:
+      description: Global search result for DDL or MCP contracts; returned when searchLevel = operations and `types` includes `ddl` or `mcp`.
+      title: SearchResultContract
+      allOf:
+        - oneOf:
+          - $ref: "#/components/schemas/DdlTableContract"
+          - $ref: "#/components/schemas/McpContract"
+        - type: object
+          required:
+            - packageId
+            - name
+            - parentPackages
+            - version
+            - status
+            - contractType
+          properties:
+            contractType:
+              description: Contract type.
+              type: string
+              enum:
+                - ddl
+                - mcp
             packageId:
               description: Package unique string identifier (full alias)
               type: string
@@ -11905,12 +12561,21 @@ components:
             **changelog** - Only the changelog calculation, no API contracts version will be created.
             The ```files``` and ```refs``` objects are not required in this case.
 
-            **documentGroup** - Process to transform documents so that they will contain operations only from specific operations group.
+            **prefix-groups-changelog** - Changelog calculation for prefixed operation groups.
+
+            **documentGroup** - Deprecated. Process to transform documents so that they will contain operations only from specific operations group.
+
+            **exportGraphqlOperationsGroup** - Export GraphQL operations group.
+
+            **exportAsyncapiOperationsGroup** - Export AsyncAPI operations group.
           type: string
           enum:
             - build
             - changelog
+            - prefix-groups-changelog
             - documentGroup
+            - exportGraphqlOperationsGroup
+            - exportAsyncapiOperationsGroup
           default: build
         metadata:
           description: Common publish metadata.
@@ -12001,6 +12666,15 @@ components:
                 description: Custom x-api-kind parameter for the file. Specify if this API is backward compatible.
                 type: string
                 example: "no-BWC"
+              metadata:
+                description: |
+                  Open-ended file-level metadata.
+                  For MCP discovery files, use `mcpEndpoint` and optional `mcpServerName`; DDL files typically omit this object.
+                type: object
+                additionalProperties: true
+                example:
+                  mcpEndpoint: "https://api.example.com/mcp"
+                  mcpServerName: "weather-mcp"
         refs:
           description: |
             Detailed data about referenced versions for current package version.

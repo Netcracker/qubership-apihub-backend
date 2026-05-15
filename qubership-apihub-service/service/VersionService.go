@@ -73,7 +73,9 @@ func NewVersionService(favoritesRepo repository.FavoritesRepository,
 	versionCleanupRepository repository.VersionCleanupRepository,
 	operationGroupService OperationGroupService,
 	monitoringService MonitoringService,
-	roleService RoleService) VersionService {
+	roleService RoleService,
+	ddlContractService DDLContractService,
+	mcpContractService MCPContractService) VersionService {
 	return &versionServiceImpl{
 		favoritesRepo:                   favoritesRepo,
 		publishedRepo:                   publishedRepo,
@@ -89,6 +91,8 @@ func NewVersionService(favoritesRepo repository.FavoritesRepository,
 		operationGroupService:           operationGroupService,
 		monitoringService:               monitoringService,
 		roleService:                     roleService,
+		ddlContractService:              ddlContractService,
+		mcpContractService:              mcpContractService,
 	}
 }
 
@@ -108,6 +112,8 @@ type versionServiceImpl struct {
 	operationGroupService           OperationGroupService
 	monitoringService               MonitoringService
 	roleService                     RoleService
+	ddlContractService              DDLContractService
+	mcpContractService              MCPContractService
 }
 
 func (v *versionServiceImpl) SetBuildService(buildService BuildService) {
@@ -669,6 +675,23 @@ func (v versionServiceImpl) GetPackageVersionContent(packageId string, version s
 	}
 
 	versionContent.OperationTypes = versionOperationTypes
+
+	if includeSummary {
+		ddlSummary, err := v.ddlContractService.GetVersionSummary(packageId, versionEnt.Version)
+		if err != nil {
+			return nil, err
+		}
+		mcpSummary, err := v.mcpContractService.GetVersionSummary(packageId, versionEnt.Version)
+		if err != nil {
+			return nil, err
+		}
+		if ddlSummary != nil || mcpSummary != nil {
+			versionContent.Contracts = &view.VersionContractsSummary{
+				DDL: ddlSummary,
+				MCP: mcpSummary,
+			}
+		}
+	}
 
 	return versionContent, nil
 }
