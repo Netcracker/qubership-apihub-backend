@@ -1,5 +1,16 @@
 This is a draft version of the backend development guide, to be updated.
 
+# AI-assisted development
+
+When using Cursor, Claude Code, or other coding agents on this repository:
+
+- Read [`AGENTS.md`](../AGENTS.md) at the repository root for agent-specific conventions (clarify before coding, OpenAPI sync, migrations, documentation placement).
+- Claude Code loads the same instructions via [`CLAUDE.md`](../CLAUDE.md).
+- Project skills live under `.cursor/skills/` (e.g. `apihub-backend-developer`, `apihub-self-review`); copies for Claude are under `.claude/skills/`.
+- Helm charts and Postman E2E tests live in **separate repositories** — agents should remind you using [`docs/agent/related-repositories.md`](agent/related-repositories.md) (update Helm URL there when known).
+
+This guide remains the source of truth for API-first design, logging, deprecation, and pull request conventions below.
+
 # API
 ## Design
 Backend API development follows API-first approach.
