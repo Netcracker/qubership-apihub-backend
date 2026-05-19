@@ -2,7 +2,21 @@ package entity
 
 import (
 	"time"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 )
+
+func MakeAiChatView(e *AiChatEntity) *view.AiChat {
+	pinned := e.Pinned
+	return &view.AiChat{
+		ChatID:        e.ID,
+		Title:         e.Title,
+		Pinned:        &pinned,
+		CreatedAt:     e.CreatedAt.UTC().Format(time.RFC3339),
+		LastMessageAt: e.LastMessageAt.UTC().Format(time.RFC3339),
+		MessagesCount: e.MessagesCount,
+	}
+}
 
 // AiChatEntity maps to public.ai_chat
 type AiChatEntity struct {

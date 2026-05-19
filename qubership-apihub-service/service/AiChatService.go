@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"regexp"
 	"strings"
 	"time"
@@ -29,9 +30,12 @@ const (
 	MaxAiUserMessageRunes = 32000
 	// maxAiContextMessages caps the number of messages fetched from DB to build the LLM history.
 	maxAiContextMessages = 200
+
+	chatRoleUser      = "user"
+	chatRoleAssistant = "assistant"
+	chatRoleSystem    = "system"
 )
 
-// AiChatService is the productized /api/v1/ai-chat/* backend
 type AiChatService interface {
 	ListChats(ctx context.Context, userID, search string, before *time.Time, limit int) (*view.AiChatsListResponse, error)
 	CreateChat(ctx context.Context, userID string, title *string) (*view.AiChat, error)
@@ -106,11 +110,11 @@ func (s *aiChatServiceImpl) GetFileForUser(ctx context.Context, fileID, userID s
 }
 
 func errAiNotFound() *exception.CustomError {
-	return &exception.CustomError{Status: 404, Code: "APIHUB-AI-3001", Message: "Not found"}
+	return &exception.CustomError{Status: http.StatusNotFound, Code: exception.AiChatNotFound, Message: exception.AiChatNotFoundMsg}
 }
 
 func errAiPinLimit() *exception.CustomError {
-	return &exception.CustomError{Status: 400, Code: "APIHUB-AI-4003", Message: "Maximum number of pinned chats reached"}
+	return &exception.CustomError{Status: http.StatusForbidden, Code: exception.AiChatPinLimitExceeded, Message: exception.AiChatPinLimitExceededMsg}
 }
 
 
@@ -130,7 +134,7 @@ func (s *aiChatServiceImpl) ListChats(ctx context.Context, userID, search string
 	}
 	out := make([]view.AiChat, 0, len(rows))
 	for i := range rows {
-		out = append(out, *entityToAiChatView(&rows[i]))
+		out = append(out, *entity.MakeAiChatView(&rows[i]))
 	}
 	return &view.AiChatsListResponse{Chats: out, HasMore: hasMore}, nil
 }
@@ -154,7 +158,7 @@ func (s *aiChatServiceImpl) CreateChat(ctx context.Context, userID string, title
 	if err := s.repo.CreateChat(ctx, row); err != nil {
 		return nil, err
 	}
-	return entityToAiChatView(row), nil
+	return entity.MakeAiChatView(row), nil
 }
 
 func (s *aiChatServiceImpl) GetChat(ctx context.Context, userID, chatID string) (*view.AiChat, error) {
@@ -165,12 +169,12 @@ func (s *aiChatServiceImpl) GetChat(ctx context.Context, userID, chatID string) 
 	if ch == nil {
 		return nil, errAiNotFound()
 	}
-	return entityToAiChatView(ch), nil
+	return entity.MakeAiChatView(ch), nil
 }
 
 func (s *aiChatServiceImpl) UpdateChat(ctx context.Context, userID, chatID string, req *view.AiChatUpdateRequest) (*view.AiChat, error) {
 	if req == nil {
-		return nil, &exception.CustomError{Status: 400, Code: exception.BadRequestBody, Message: "Empty body"}
+		return nil, &exception.CustomError{Status: http.StatusBadRequest, Code: exception.BadRequestBody, Message: "Empty body"}
 	}
 	ch, err := s.repo.GetChatByIDForUser(ctx, chatID, userID)
 	if err != nil {
@@ -183,23 +187,23 @@ func (s *aiChatServiceImpl) UpdateChat(ctx context.Context, userID, chatID strin
 		ch.Title = *req.Title
 	}
 	if req.Pinned != nil {
-		if *req.Pinned {
-			if !ch.Pinned {
-				n, err := s.repo.CountPinnedChats(ctx, userID)
-				if err != nil {
-					return nil, err
-				}
-				if n >= MaxAiPinnedChatsPerUser {
-					return nil, errAiPinLimit()
-				}
+		if *req.Pinned && !ch.Pinned {
+			pinned, err := s.repo.PinChatForUser(ctx, chatID, userID, MaxAiPinnedChatsPerUser)
+			if err != nil {
+				return nil, err
 			}
+			if !pinned {
+				return nil, errAiPinLimit()
+			}
+			ch.Pinned = true
+		} else if !*req.Pinned {
+			ch.Pinned = false
 		}
-		ch.Pinned = *req.Pinned
 	}
 	if err := s.repo.UpdateChat(ctx, ch); err != nil {
 		return nil, err
 	}
-	return entityToAiChatView(ch), nil
+	return entity.MakeAiChatView(ch), nil
 }
 
 func (s *aiChatServiceImpl) DeleteChat(ctx context.Context, userID, chatID string) error {
@@ -258,7 +262,7 @@ func (s *aiChatServiceImpl) SendMessage(ctx context.Context, userID, chatID stri
 		return nil, err
 	}
 	if utf8.RuneCountInString(req.Content) > MaxAiUserMessageRunes {
-		return nil, &exception.CustomError{Status: 400, Code: exception.InvalidParameterValue, Message: "Message too long", Params: map[string]interface{}{"param": "content", "max": MaxAiUserMessageRunes}}
+		return nil, &exception.CustomError{Status: http.StatusBadRequest, Code: exception.InvalidParameterValue, Message: "Message too long", Params: map[string]interface{}{"param": "content", "max": MaxAiUserMessageRunes}}
 	}
 
 	started := time.Now()
@@ -277,7 +281,7 @@ func (s *aiChatServiceImpl) SendMessageStream(ctx context.Context, userID, chatI
 		return nil, err
 	}
 	if utf8.RuneCountInString(req.Content) > MaxAiUserMessageRunes {
-		return nil, &exception.CustomError{Status: 400, Code: exception.InvalidParameterValue, Message: "Message too long"}
+		return nil, &exception.CustomError{Status: http.StatusBadRequest, Code: exception.InvalidParameterValue, Message: "Message too long"}
 	}
 
 	out := make(chan AiChatStreamChunk, 32)
@@ -287,9 +291,9 @@ func (s *aiChatServiceImpl) SendMessageStream(ctx context.Context, userID, chatI
 		_, _, err := s.runTurn(ctx, userID, chat, req, out)
 		s.observeTurn("stream", started, err)
 		if err != nil {
-			_ = s.emitStream(out, "error", map[string]interface{}{
+			_ = s.emitStream(ctx, out, "error", map[string]interface{}{
 				"type":    "error",
-				"code":    "APIHUB-AI-5000",
+				"code":    exception.AiChatInternalError,
 				"message": err.Error(),
 			})
 		}
@@ -318,12 +322,16 @@ func streamModeForChan(ch chan<- AiChatStreamChunk) string {
 	return "stream"
 }
 
-func (s *aiChatServiceImpl) emitStream(ch chan<- AiChatStreamChunk, name string, data interface{}) error {
+func (s *aiChatServiceImpl) emitStream(ctx context.Context, ch chan<- AiChatStreamChunk, name string, data interface{}) error {
 	if ch == nil {
 		return nil
 	}
-	ch <- AiChatStreamChunk{EventName: name, Data: data}
-	return nil
+	select {
+	case ch <- AiChatStreamChunk{EventName: name, Data: data}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // runTurn executes persistence + LLM; if stream is non-nil, also emits SSE
@@ -362,7 +370,7 @@ func (s *aiChatServiceImpl) runTurn(ctx context.Context, userID string, chat *en
 	um := &entity.AiChatMessageEntity{
 		ID:              uuid.NewString(),
 		ChatID:          chat.ID,
-		Role:            "user",
+		Role:            chatRoleUser,
 		Content:         req.Content,
 		ClientMessageID: clientID,
 		CreatedAt:       now,
@@ -400,7 +408,7 @@ func (s *aiChatServiceImpl) runLLMTurn(ctx context.Context, userID string, chat 
 		compacted = true
 		metrics.AiChatCompactionsTotal.Inc()
 		if stream != nil && evt != nil {
-			_ = s.emitStream(stream, "context.compacted", evt)
+			_ = s.emitStream(ctx, stream,"context.compacted", evt)
 		}
 		log.WithFields(log.Fields{
 			"chatId": chat.ID,
@@ -420,7 +428,7 @@ func (s *aiChatServiceImpl) runLLMTurn(ctx context.Context, userID string, chat 
 	var prevResponseID *string
 	if !compacted && chat.OpenAIPreviousResponseID != nil && *chat.OpenAIPreviousResponseID != "" && um != nil {
 		prevResponseID = chat.OpenAIPreviousResponseID
-		msgsForLLM = []ChatMessage{{Role: "user", Content: um.Content}}
+		msgsForLLM = []ChatMessage{{Role: chatRoleUser, Content: um.Content}}
 	} else {
 		msgsForLLM = s.buildHistoryForLLM(chat, hist)
 	}
@@ -431,7 +439,7 @@ func (s *aiChatServiceImpl) runLLMTurn(ctx context.Context, userID string, chat 
 	assistantID := uuid.NewString()
 
 	if stream != nil {
-		_ = s.emitStream(stream, "message.assistant.start", map[string]interface{}{
+		_ = s.emitStream(ctx, stream,"message.assistant.start", map[string]interface{}{
 			"type": "message.assistant.start", "messageId": assistantID,
 		})
 	}
@@ -443,7 +451,7 @@ func (s *aiChatServiceImpl) runLLMTurn(ctx context.Context, userID string, chat 
 	if stream != nil {
 		hooks = chatStreamHooks{
 			OnTextDelta: func(delta string) {
-				_ = s.emitStream(stream, "message.assistant.delta", map[string]interface{}{
+				_ = s.emitStream(ctx, stream,"message.assistant.delta", map[string]interface{}{
 					"type": "message.assistant.delta", "delta": delta,
 				})
 			},
@@ -453,12 +461,12 @@ func (s *aiChatServiceImpl) runLLMTurn(ctx context.Context, userID string, chat 
 				if name == toolNameAskClarification {
 					return
 				}
-				_ = s.emitStream(stream, "tool.started", map[string]interface{}{
+				_ = s.emitStream(ctx, stream,"tool.started", map[string]interface{}{
 					"type": "tool.started", "toolCallId": callID, "name": name,
 				})
 			},
 			OnToolCompleted: func(rec toolCallRecord) {
-				_ = s.emitStream(stream, "tool.completed", map[string]interface{}{
+				_ = s.emitStream(ctx, stream,"tool.completed", map[string]interface{}{
 					"type":       "tool.completed",
 					"toolCallId": rec.ToolCallID,
 					"name":       rec.Inv.Name,
@@ -497,9 +505,9 @@ func (s *aiChatServiceImpl) runLLMTurn(ctx context.Context, userID string, chat 
 
 	if err != nil {
 		if stream != nil {
-			_ = s.emitStream(stream, "error", map[string]interface{}{
+			_ = s.emitStream(ctx, stream,"error", map[string]interface{}{
 				"type":    "error",
-				"code":    "APIHUB-AI-5001",
+				"code":    exception.AiChatLLMError,
 				"message": err.Error(),
 			})
 		}
@@ -515,7 +523,7 @@ func (s *aiChatServiceImpl) runLLMTurn(ctx context.Context, userID string, chat 
 	assistantEnt := &entity.AiChatMessageEntity{
 		ID:               assistantID,
 		ChatID:           chat.ID,
-		Role:             "assistant",
+		Role:             chatRoleAssistant,
 		Content:          turn.AssistantContent,
 		ToolInvocations:  turn.ToolInvocations,
 		OpenaiResponseID: compPtr,
@@ -551,10 +559,10 @@ func (s *aiChatServiceImpl) runLLMTurn(ctx context.Context, userID string, chat 
 	amView, _ := s.entityToMessageView(ctx, userID, assistantEnt)
 
 	if stream != nil {
-		_ = s.emitStream(stream, "message.assistant.completed", map[string]interface{}{
+		_ = s.emitStream(ctx, stream,"message.assistant.completed", map[string]interface{}{
 			"type": "message.assistant.completed", "message": amView,
 		})
-		_ = s.emitStream(stream, "done", map[string]interface{}{"type": "done"})
+		_ = s.emitStream(ctx, stream,"done", map[string]interface{}{"type": "done"})
 	}
 
 	return umView, amView, nil
@@ -567,7 +575,7 @@ func (s *aiChatServiceImpl) runLLMTurn(ctx context.Context, userID string, chat 
 func (s *aiChatServiceImpl) replayIdempotent(ctx context.Context, userID, chatID, clientID string, stream chan<- AiChatStreamChunk) (*view.AiChatMessage, *view.AiChatMessage, error) {
 	u, err := s.repo.FindUserMessageByClientID(ctx, chatID, clientID)
 	if err != nil || u == nil {
-		return nil, nil, &exception.CustomError{Status: 500, Code: "500", Message: "Idempotent replay failed"}
+		return nil, nil, &exception.CustomError{Status: http.StatusInternalServerError, Code: exception.AiChatInternalError, Message: "Idempotent replay failed"}
 	}
 	a, err := s.repo.FindNextAssistantMessage(ctx, chatID, u.CreatedAt)
 	if err != nil {
@@ -576,7 +584,7 @@ func (s *aiChatServiceImpl) replayIdempotent(ctx context.Context, userID, chatID
 	if a == nil {
 		chat, err := s.repo.GetChatByIDForUser(ctx, chatID, userID)
 		if err != nil || chat == nil {
-			return nil, nil, &exception.CustomError{Status: 500, Code: "500", Message: "Idempotent retry failed"}
+			return nil, nil, &exception.CustomError{Status: http.StatusInternalServerError, Code: exception.AiChatInternalError, Message: "Idempotent retry failed"}
 		}
 		return s.runLLMTurn(ctx, userID, chat, u, stream)
 	}
@@ -590,7 +598,7 @@ func (s *aiChatServiceImpl) serveCachedPair(ctx context.Context, userID string, 
 	umView, _ := s.entityToMessageView(ctx, userID, u)
 	amView, _ := s.entityToMessageView(ctx, userID, a)
 	if stream != nil {
-		_ = s.emitStream(stream, "message.assistant.start", map[string]interface{}{
+		_ = s.emitStream(ctx, stream,"message.assistant.start", map[string]interface{}{
 			"type": "message.assistant.start", "messageId": a.ID,
 		})
 		if amView != nil {
@@ -600,15 +608,15 @@ func (s *aiChatServiceImpl) serveCachedPair(ctx context.Context, userID string, 
 				if end > len(runes) {
 					end = len(runes)
 				}
-				_ = s.emitStream(stream, "message.assistant.delta", map[string]interface{}{
+				_ = s.emitStream(ctx, stream,"message.assistant.delta", map[string]interface{}{
 					"type": "message.assistant.delta", "delta": string(runes[i:end]),
 				})
 			}
 		}
-		_ = s.emitStream(stream, "message.assistant.completed", map[string]interface{}{
+		_ = s.emitStream(ctx, stream,"message.assistant.completed", map[string]interface{}{
 			"type": "message.assistant.completed", "message": amView,
 		})
-		_ = s.emitStream(stream, "done", map[string]interface{}{"type": "done"})
+		_ = s.emitStream(ctx, stream,"done", map[string]interface{}{"type": "done"})
 	}
 	return umView, amView, nil
 }
@@ -616,7 +624,7 @@ func (s *aiChatServiceImpl) serveCachedPair(ctx context.Context, userID string, 
 func (s *aiChatServiceImpl) historyToViewChat(rows []entity.AiChatMessageEntity) []ChatMessage {
 	out := make([]ChatMessage, 0, len(rows))
 	for i := range rows {
-		if rows[i].Role != "user" && rows[i].Role != "assistant" {
+		if rows[i].Role != chatRoleUser && rows[i].Role != chatRoleAssistant {
 			continue
 		}
 		out = append(out, ChatMessage{Role: rows[i].Role, Content: rows[i].Content})
@@ -626,7 +634,7 @@ func (s *aiChatServiceImpl) historyToViewChat(rows []entity.AiChatMessageEntity)
 
 func (s *aiChatServiceImpl) entityToMessageView(ctx context.Context, userID string, m *entity.AiChatMessageEntity) (*view.AiChatMessage, error) {
 	content := m.Content
-	if m.Role == "assistant" {
+	if m.Role == chatRoleAssistant {
 		var err error
 		content, err = s.resignGeneratedFileLinksInContent(ctx, userID, m.Content)
 		if err != nil {
@@ -750,7 +758,7 @@ func (s *aiChatServiceImpl) buildHistoryForLLM(chat *entity.AiChatEntity, hist [
 	out := make([]ChatMessage, 0, len(rows)+1)
 	if chat.CompactionSummary != nil && strings.TrimSpace(*chat.CompactionSummary) != "" {
 		out = append(out, ChatMessage{
-			Role: "system",
+			Role: chatRoleSystem,
 			Content: "EARLIER CONVERSATION SUMMARY (replaces older messages, keep using these facts):\n" +
 				*chat.CompactionSummary,
 		})
@@ -759,18 +767,3 @@ func (s *aiChatServiceImpl) buildHistoryForLLM(chat *entity.AiChatEntity, hist [
 	return out
 }
 
-func entityToAiChatView(e *entity.AiChatEntity) *view.AiChat {
-	pinned := e.Pinned
-	var pp *bool
-	if pinned {
-		pp = &pinned
-	}
-	return &view.AiChat{
-		ChatID:        e.ID,
-		Title:         e.Title,
-		Pinned:        pp,
-		CreatedAt:     e.CreatedAt.UTC().Format(time.RFC3339),
-		LastMessageAt: e.LastMessageAt.UTC().Format(time.RFC3339),
-		MessagesCount: e.MessagesCount,
-	}
-}

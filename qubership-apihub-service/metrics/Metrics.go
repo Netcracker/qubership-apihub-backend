@@ -105,7 +105,7 @@ var AiChatTurnsTotal = prometheus.NewCounterVec(
 	[]string{"mode", "status"},
 )
 
-var AiChatTurnDuration = promauto.NewHistogramVec(
+var AiChatTurnDuration = prometheus.NewHistogramVec(
 	prometheus.HistogramOpts{
 		Name:    "apihub_ai_chat_turn_duration_seconds",
 		Help:    "End-to-end duration of an AI chat turn (LLM + tool calls + persistence).",
@@ -114,7 +114,7 @@ var AiChatTurnDuration = promauto.NewHistogramVec(
 	[]string{"mode", "status"},
 )
 
-var AiChatTurnTokens = promauto.NewHistogramVec(
+var AiChatTurnTokens = prometheus.NewHistogramVec(
 	prometheus.HistogramOpts{
 		Name:    "apihub_ai_chat_turn_tokens",
 		Help:    "Total tokens (prompt+completion) reported by the LLM provider per turn.",
@@ -145,7 +145,7 @@ var AiChatGeneratedFilesTotal = prometheus.NewCounter(
 	},
 )
 
-var AiChatGeneratedFileBytes = promauto.NewHistogram(
+var AiChatGeneratedFileBytes = prometheus.NewHistogram(
 	prometheus.HistogramOpts{
 		Name:    "apihub_ai_chat_generated_file_bytes",
 		Help:    "Size of AI-generated files in bytes.",
@@ -174,8 +174,11 @@ func RegisterAllPrometheusApplicationMetrics() {
 	prometheus.Register(NumberOfBuildRetries)
 
 	prometheus.Register(AiChatTurnsTotal)
+	prometheus.Register(AiChatTurnDuration)
+	prometheus.Register(AiChatTurnTokens)
 	prometheus.Register(AiChatToolCallsTotal)
 	prometheus.Register(AiChatCompactionsTotal)
 	prometheus.Register(AiChatGeneratedFilesTotal)
+	prometheus.Register(AiChatGeneratedFileBytes)
 	prometheus.Register(AiChatCleanupDeleted)
 }

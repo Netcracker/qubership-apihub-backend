@@ -10,18 +10,15 @@ type AiChat struct {
 	MessagesCount int    `json:"messagesCount"`
 }
 
-// AiChatsListResponse is GET /chats
 type AiChatsListResponse struct {
 	Chats   []AiChat `json:"chats"`
 	HasMore bool     `json:"hasMore"`
 }
 
-// AiChatCreateRequest is POST /chats body
 type AiChatCreateRequest struct {
 	Title *string `json:"title,omitempty" validate:"omitempty,max=120"`
 }
 
-// AiChatUpdateRequest is PATCH /chats/{id} body
 type AiChatUpdateRequest struct {
 	Title  *string `json:"title,omitempty" validate:"omitempty,min=1,max=120"`
 	Pinned *bool   `json:"pinned,omitempty"`
@@ -44,19 +41,16 @@ type AiChatToolInvocation struct {
 	DurationMs *int   `json:"durationMs,omitempty"`
 }
 
-// AiChatMessagesListResponse is GET /chats/{id}/messages
 type AiChatMessagesListResponse struct {
 	Messages []AiChatMessage `json:"messages"`
 	HasMore  bool            `json:"hasMore"`
 }
 
-// AiChatSendMessageRequest is POST .../messages
 type AiChatSendMessageRequest struct {
 	Content         string  `json:"content" validate:"required,min=1,max=32000"`
 	ClientMessageID *string `json:"clientMessageId,omitempty"`
 }
 
-// AiChatSendMessageResponse is non-streaming send result
 type AiChatSendMessageResponse struct {
 	UserMessage      AiChatMessage `json:"userMessage"`
 	AssistantMessage AiChatMessage `json:"assistantMessage"`

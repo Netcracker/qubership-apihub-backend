@@ -825,3 +825,19 @@ const ShareabilityReportDocumentNotFoundMsg = "Document with slug '$slug' not fo
 
 const ShareabilityReportSizeExceeded = "8305"
 const ShareabilityReportSizeExceededMsg = "Shareability report file size exceeded. File size limit - $size"
+
+// AI Chat error codes
+const AiChatNotFound = "APIHUB-AI-3001"
+const AiChatNotFoundMsg = "Not found"
+const AiChatTokenMissing = "APIHUB-AI-3002"
+const AiChatTokenMissingMsg = "Missing token query parameter"
+const AiChatTokenInvalid = "APIHUB-AI-3003"
+const AiChatTokenInvalidMsg = "Invalid token"
+const AiChatTokenExpired = "APIHUB-AI-4101"
+const AiChatTokenExpiredMsg = "Token expired"
+const AiChatPinLimitExceeded = "APIHUB-AI-4003"
+const AiChatPinLimitExceededMsg = "Maximum number of pinned chats reached"
+const AiChatInternalError = "APIHUB-AI-5000"
+const AiChatInternalErrorMsg = "Internal error"
+const AiChatLLMError = "APIHUB-AI-5001"
+const AiChatLLMErrorMsg = "LLM provider error"

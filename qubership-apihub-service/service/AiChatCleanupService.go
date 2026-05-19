@@ -37,7 +37,6 @@ func NewAiChatCleanupService(repo repository.AiChatRepository, lockService LockS
 	return &aiChatCleanupServiceImpl{
 		repo:        repo,
 		lockService: lockService,
-		cron:        cron.New(),
 	}
 }
 

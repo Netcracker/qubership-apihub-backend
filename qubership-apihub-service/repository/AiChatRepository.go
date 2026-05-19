@@ -29,7 +29,10 @@ type AiChatRepository interface {
 	UpdateChat(ctx context.Context, row *entity.AiChatEntity) error
 	DeleteChat(ctx context.Context, chatID, userID string) (int, error)
 	ListChats(ctx context.Context, f AiChatsListFilter) ([]entity.AiChatEntity, error)
-	CountPinnedChats(ctx context.Context, userID string) (int, error)
+	// PinChatForUser atomically pins chatID only when the user has fewer than maxPinned
+	// already-pinned chats. Returns true when the chat was pinned, false when the limit
+	// was already reached or the chat was not found.
+	PinChatForUser(ctx context.Context, chatID, userID string, maxPinned int) (bool, error)
 
 	InsertMessage(ctx context.Context, m *entity.AiChatMessageEntity) error
 	TryInsertUserMessageIdempotent(ctx context.Context, m *entity.AiChatMessageEntity) (inserted bool, err error)

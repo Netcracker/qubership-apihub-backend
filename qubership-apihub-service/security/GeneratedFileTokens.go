@@ -44,11 +44,15 @@ func ValidateGeneratedFileToken(token string) (userID, fileID string, err error)
 	return info.GetID(), fid, nil
 }
 
-// IsTokenExpiredError is a best-effort check for HTTP 410 on expired file-download JWTs
+// IsTokenExpiredError is a best-effort check for HTTP 410 on expired file-download JWTs.
+// Matches "token is expired", "token expired", "exp claim", etc. but not unrelated words
+// that happen to contain "exp" (e.g. "expected", "expression").
 func IsTokenExpiredError(err error) bool {
 	if err == nil {
 		return false
 	}
 	s := strings.ToLower(err.Error())
-	return strings.Contains(s, "exp") || strings.Contains(s, "expired")
+	return strings.Contains(s, "expired") ||
+		strings.Contains(s, "token is exp") ||
+		strings.Contains(s, "exp claim")
 }

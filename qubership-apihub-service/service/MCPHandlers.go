@@ -167,7 +167,7 @@ func (m mcpService) ExecuteSearchTool(ctx context.Context, req mcp.CallToolReque
 		Page:         page,
 	}
 
-	searchResult, err := m.operationService.GlobalSearchForOperations(searchReq)
+	searchResult, err := m.operationService.GlobalSearchForOperations(ctx, searchReq)
 	if err != nil {
 		return nil, err
 	}

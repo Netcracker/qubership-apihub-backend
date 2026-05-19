@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -24,7 +25,7 @@ type OperationService interface {
 	GetVersionChanges(packageId string, version string, apiType string, searchReq view.VersionChangesReq) (*view.VersionChangesView, error)
 	SearchForOperations(searchReq view.SearchQueryReq_deprecated) (*view.SearchResult, error)
 	LiteSearchForOperations(searchReq view.SearchQueryReq_deprecated) (*view.SearchResult, error)
-	GlobalSearchForOperations(searchReq view.SearchQueryReq) (*view.SearchResult, error)
+	GlobalSearchForOperations(ctx context.Context, searchReq view.SearchQueryReq) (*view.SearchResult, error)
 	GetDeprecatedOperations(packageId string, version string, searchReq view.DeprecatedOperationListReq) (*view.Operations, error)
 	GetOperationDeprecatedItems(searchReq view.OperationBasicSearchReq) (*view.DeprecatedItems, error)
 	GetDeprecatedOperationsSummary(packageId string, version string) (*view.DeprecatedOperationsSummary, error)
@@ -650,7 +651,7 @@ func (o operationServiceImpl) LiteSearchForOperations(searchReq view.SearchQuery
 	return &view.SearchResult{Operations: &operations}, nil
 }
 
-func (o operationServiceImpl) GlobalSearchForOperations(searchReq view.SearchQueryReq) (*view.SearchResult, error) {
+func (o operationServiceImpl) GlobalSearchForOperations(ctx context.Context, searchReq view.SearchQueryReq) (*view.SearchResult, error) {
 	log.Debugf(
 		"GlobalSearchForOperations called: searchString=%q apiType=%s workspace=%s status=%s packageIds=%v versions=%v startDate=%v endDate=%v limit=%d page=%d",
 		searchReq.SearchString,
@@ -696,7 +697,7 @@ func (o operationServiceImpl) GlobalSearchForOperations(searchReq view.SearchQue
 	}
 
 	repoSearchStart := time.Now()
-	operationEntities, err := o.operationRepository.GlobalSearchForOperations(searchQuery)
+	operationEntities, err := o.operationRepository.GlobalSearchForOperations(ctx, searchQuery)
 	repoSearchElapsed := time.Since(repoSearchStart)
 	if err != nil {
 		log.Debugf("GlobalSearchForOperations: repository search finished with error after %s: %v", repoSearchElapsed, err)

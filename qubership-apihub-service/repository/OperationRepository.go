@@ -27,7 +27,7 @@ type OperationRepository interface {
 	SearchForOperations(searchQuery *entity.OperationSearchQuery) ([]entity.OperationSearchResult_deprecated, error)
 	FullTextSearchForOperations(searchQuery *entity.OperationSearchQuery) ([]entity.OperationSearchResult_deprecated, error)
 	LiteSearchForOperations(searchQuery *entity.OperationSearchQuery) ([]entity.OperationSearchResult_deprecated, error)
-	GlobalSearchForOperations(searchQuery *entity.GlobalOperationSearchQuery) ([]entity.OperationSearchResult, error)
+	GlobalSearchForOperations(ctx context.Context, searchQuery *entity.GlobalOperationSearchQuery) ([]entity.OperationSearchResult, error)
 	GetOperationsTypeCount(packageId string, version string, revision int, showOnlyDeleted bool) ([]entity.OperationsTypeCountEntity, error)
 	GetOperationsTypes(packageId string, version string, revision int) ([]entity.OperationsTypeEntity, error)
 	GetOperationsInfo(packageId string, version string, revision int) (entity.OperationsInfoEntity, error)
@@ -1626,7 +1626,7 @@ func (o operationRepositoryImpl) GetOperationsByModelHash(packageId string, vers
 	return result, nil
 }
 
-func (o operationRepositoryImpl) GlobalSearchForOperations(searchQuery *entity.GlobalOperationSearchQuery) ([]entity.OperationSearchResult, error) {
+func (o operationRepositoryImpl) GlobalSearchForOperations(ctx context.Context, searchQuery *entity.GlobalOperationSearchQuery) ([]entity.OperationSearchResult, error) {
 	var result []entity.OperationSearchResult
 
 	operationsSearchQuery := `
@@ -1688,7 +1688,6 @@ order by all_ts.rank desc, o.operation_id
 limit ?limit;
 `
 
-	ctx := context.Background()
 	err := o.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
 		if _, err := tx.Exec("SET LOCAL work_mem = ?", globalSearchWorkMem); err != nil {
 			return err

@@ -11,8 +11,8 @@ import (
 	"github.com/go-pg/pg/v10"
 )
 
-func NewAiChatRepositoryPG(cp db.ConnectionProvider) (AiChatRepository, error) {
-	return &aiChatRepositoryImpl{cp: cp}, nil
+func NewAiChatRepositoryPG(cp db.ConnectionProvider) AiChatRepository {
+	return &aiChatRepositoryImpl{cp: cp}
 }
 
 type aiChatRepositoryImpl struct {
@@ -119,6 +119,31 @@ func (r *aiChatRepositoryImpl) CountPinnedChats(ctx context.Context, userID stri
 		return 0, err
 	}
 	return count, nil
+}
+
+func (r *aiChatRepositoryImpl) PinChatForUser(ctx context.Context, chatID, userID string, maxPinned int) (bool, error) {
+	var pinned bool
+	err := r.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
+		var count int
+		_, err := tx.QueryOneContext(ctx, pg.Scan(&count),
+			`SELECT COUNT(*) FROM ai_chat WHERE user_id = ? AND pinned = true AND id != ? FOR UPDATE`,
+			userID, chatID)
+		if err != nil {
+			return err
+		}
+		if count >= maxPinned {
+			return nil
+		}
+		res, err := tx.ExecContext(ctx,
+			`UPDATE ai_chat SET pinned = true WHERE id = ? AND user_id = ?`,
+			chatID, userID)
+		if err != nil {
+			return err
+		}
+		pinned = res.RowsAffected() > 0
+		return nil
+	})
+	return pinned, err
 }
 
 func (r *aiChatRepositoryImpl) InsertMessage(ctx context.Context, m *entity.AiChatMessageEntity) error {
