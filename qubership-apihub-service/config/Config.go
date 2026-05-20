@@ -148,21 +148,21 @@ type MCPConfig struct {
 
 // ChatConfig holds productized AI chat and OpenAI client settings
 type ChatConfig struct {
-	OpenAI         OpenAIConfig
-	Enabled        bool
-	RetentionDays  int
-	PinnedForeverCount int
-	CompactAtContextPercent int
-	CleanupSchedule    string
-	GeneratedFiles     GeneratedFilesConfig
+	OpenAI                  OpenAIConfig
+	Enabled                 bool
+	RetentionDays           int `validate:"gt=0"`
+	PinnedForeverCount      int `validate:"gte=0"`
+	CompactAtContextPercent int `validate:"gt=0,lt=100"`
+	CleanupSchedule         string
+	GeneratedFiles          GeneratedFilesConfig
 }
 
 // GeneratedFilesConfig is server-side only (temp files, TTL, cleanup)
 type GeneratedFilesConfig struct {
 	Directory       string
-	TTLMinutes      int
+	TTLMinutes      int `validate:"gt=0"`
 	CleanupSchedule string
-	MaxFileSizeMB   int
+	MaxFileSizeMB   int `validate:"gt=0,lte=8796093022207"` // 8796093022207 * 1048576 is safely below MaxInt64
 }
 
 type OpenAIConfig struct {

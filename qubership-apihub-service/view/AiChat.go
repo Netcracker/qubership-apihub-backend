@@ -1,6 +1,5 @@
 package view
 
-// AiChat is chat metadata in API responses
 type AiChat struct {
 	ChatID        string `json:"chatId"`
 	Title         string `json:"title"`
@@ -34,7 +33,6 @@ type AiChatMessage struct {
 	ToolInvocations  []AiChatToolInvocation `json:"toolInvocations,omitempty"`
 }
 
-// AiChatToolInvocation is UI-facing tool summary
 type AiChatToolInvocation struct {
 	Name       string `json:"name"`
 	Status     string `json:"status"`

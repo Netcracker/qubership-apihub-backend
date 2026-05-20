@@ -18,7 +18,7 @@ Follow `AGENTS.md` and project rules. For examples and doc routing, see [referen
 
 1. **API-first** — If REST contract changes, update OpenAPI under `docs/api/` before or alongside code (`docs/development_guide.md`).
 2. **Layers** — controller → service → repository; entity/view DTOs as per existing patterns.
-3. **Conventions** — no magic numbers; `http.StatusXXX` instead of raw status integers; repeated strings as constants; minimal comments; no route-mapping comments.
+3. **Conventions** — no magic numbers; no duplicate config defaults (viper + `validate` tags only); `http.StatusXXX` instead of raw status integers; repeated strings as constants; minimal comments; no route-mapping comments.
 4. **Converters** — dependency-free `Make{Name}View` in `entity/` next to the struct.
 5. **Wiring** — new repos/services/controllers at the **end** of their section in `Service.go`; `log.Fatalf` for fatal startup wiring errors.
 6. **Errors** — new API error codes/messages as constants in `exception/ErrorCodes.go`.

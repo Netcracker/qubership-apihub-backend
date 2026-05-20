@@ -10,12 +10,10 @@ import (
 )
 
 const (
-	// GeneratedFileDownloadTokenType is the TokenTypeExt value for short-lived file download JWTs
 	GeneratedFileDownloadTokenType = "generated-file-download"
 	fileIDExt                      = "fileId"
 )
 
-// MintGeneratedFileToken issues a short-lived RS256 JWT that authorizes a single file download
 func MintGeneratedFileToken(userID, fileID string, ttl time.Duration) (string, error) {
 	if defaultJWTValidator == nil {
 		return "", fmt.Errorf("security not initialized: JWT validator is nil")
@@ -27,7 +25,6 @@ func MintGeneratedFileToken(userID, fileID string, ttl time.Duration) (string, e
 	return jwt.IssueAccessToken(user, keeper, jwt.SetExpDuration(ttl))
 }
 
-// ValidateGeneratedFileToken returns user and file id if the token is valid for file download
 func ValidateGeneratedFileToken(token string) (userID, fileID string, err error) {
 	if defaultJWTValidator == nil {
 		return "", "", fmt.Errorf("security not initialized")
@@ -44,9 +41,7 @@ func ValidateGeneratedFileToken(token string) (userID, fileID string, err error)
 	return info.GetID(), fid, nil
 }
 
-// IsTokenExpiredError is a best-effort check for HTTP 410 on expired file-download JWTs.
-// Matches "token is expired", "token expired", "exp claim", etc. but not unrelated words
-// that happen to contain "exp" (e.g. "expected", "expression").
+// Avoid matching unrelated "exp" substrings (e.g. "expected").
 func IsTokenExpiredError(err error) bool {
 	if err == nil {
 		return false

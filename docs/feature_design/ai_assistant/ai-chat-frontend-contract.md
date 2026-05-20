@@ -125,7 +125,7 @@ See `AiChatStreamEvent` and its variants in the OpenAPI schema. Quick reference:
 
 | `event` | `data` fields |
 | --- | --- |
-| `context.compacted` | `messagesCompactedCount` |
+| `context.compacted` | `compactedUpTo`, `summaryPreview`, `messagesBefore`, `messagesKeptRaw` (compacted count ≈ `messagesBefore - messagesKeptRaw`) |
 | `message.assistant.start` | `messageId` |
 | `tool.started` | `toolCallId`, `name` |
 | `tool.completed` | `toolCallId`, `name`, `status` (`ok`/`error`), `durationMs?` |
@@ -162,8 +162,8 @@ The Markdown renderer does not need any special handling — a regular `<a>` wit
 Behaviour guarantees:
 
 * Every file has a server-controlled lifetime (order of tens of minutes — the exact value is a server-side concern and is not published to the client).
-* When the user revisits an old chat via `GET /messages`, the server re-issues fresh signed tokens in-place in the Markdown `content`, so a reload of an old chat does not leave the user with stale links — provided the underlying file has not yet been cleaned up.
-* The server returns **`410 Gone`** when the token is valid but expired and **`404`** when the file has already been cleaned up. The client does not need to handle either case specially — the browser surfaces the failure as a standard download error and the user can simply re-ask the assistant.
+* When the user revisits an old chat via `GET /messages`, file links in `content` are returned **as stored** (the token embedded at generation time). The server does not re-mint tokens on history load.
+* The download endpoint checks **file existence and expiration before validating the token**, so an expired or cleaned-up file returns **`404 Not Found`** rather than a misleading **`401`**. **`410 Gone`** is returned when the file row still exists but the signed token has expired. The client does not need special handling — the browser surfaces the failure as a standard download error and the user can re-ask the assistant.
 * The download endpoint **does not** require a session cookie or Authorization header; the short-lived token in the query string is authorisation in itself. This means: opening the link in a new tab (or sharing it within the validity window) just works.
 
 ## 6. Chat CRUD flow
@@ -195,7 +195,9 @@ Errors are returned as the standard APIHUB `ErrorResponse` body (`status`, `code
 | --- | --- |
 | `APIHUB-AI-3001` | Chat not found (or belongs to another user; the server does not disclose the difference). |
 | `APIHUB-AI-3002` | Generated file not found or already cleaned up. |
-| `APIHUB-AI-4001` | Message validation failed (length, empty content, etc.). |
+| `APIHUB-AI-3003` | Download token invalid or not valid for the requested file. |
+| `APIHUB-AI-3004` | Download token query parameter missing. |
+| `APIHUB-AI-4001` | Message validation failed (length, empty content, invalid cursor, etc.). |
 | `APIHUB-AI-4003` | Pinned-chats limit exceeded (3). |
 | `APIHUB-AI-4101` | Signed download token expired (`410 Gone`). |
 | `APIHUB-AI-5000` | Generic internal server error while processing the chat. |

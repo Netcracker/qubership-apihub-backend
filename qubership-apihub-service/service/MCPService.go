@@ -22,13 +22,7 @@ type MCPService interface {
 	ExecuteGetOperationDiffTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error)
 	ExecuteGetDocumentTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error)
 	GetPackagesList(ctx context.Context, workspaceId string) ([]mcp.ResourceContents, error)
-	// IDSAssetsAvailable reports whether the bundled IDS template and prompt
-	// were loaded from the image. Used by ChatService to decide whether to
-	// expose start_ids_generation to the model.
 	IDSAssetsAvailable() bool
-	// IDSAuthoringKit assembles the LLM-facing "how to build an IDS" instruction
-	// blob (template + rules + the user's natural-language request) returned by
-	// the start_ids_generation chat tool.
 	IDSAuthoringKit(userInput string) (string, error)
 }
 
@@ -50,12 +44,9 @@ type mcpService struct {
 	versionService    VersionService
 	monitoringService MonitoringService
 
-	// assets holds the snapshot of static/templates/resources/mcp/{prompts,resources}/*.*
-	// loaded once at startup. Image-bundled, no live reload.
 	assets *mcpAssets
 }
 
-// IDSAssetsAvailable returns true if the IDS template and prompt are both present.
 func (m mcpService) IDSAssetsAvailable() bool {
 	if m.assets == nil {
 		return false
@@ -63,7 +54,6 @@ func (m mcpService) IDSAssetsAvailable() bool {
 	return m.assets.IDSAssetsAvailable()
 }
 
-// IDSAuthoringKit builds the start_ids_generation tool's instruction payload.
 func (m mcpService) IDSAuthoringKit(userInput string) (string, error) {
 	if m.assets == nil {
 		return "", fmt.Errorf("MCP assets not loaded")
@@ -393,7 +383,7 @@ Use this tool ONLY when the user explicitly requests details about a specific RE
 
 LLM INSTRUCTIONS:
 - Always pass apiType from the selected search_api_operations result
-- The response contains JSON with REST or Async API specification - provide the full specification json in the response, display it as a code block
+- The response contains JSON with REST or Async API specification - in your user-facing reply put the full JSON inside a fenced markdown code block with the json language tag (not inline prose)
 - After the code block, add a human-readable description:
 	* Purpose and meaning of the operation
 	* Description of request, response, message, or channel structure
@@ -423,7 +413,8 @@ LLM INSTRUCTIONS:
 - Always pass apiType
 - Do not invent slug values
 - Use documentId from a selected search_api_operations result as this tool's slug parameter
-- Return the full documentData from the response; use documentType to interpret specification semantics and format to render text payloads`
+- Return the full documentData from the response; use documentType to interpret specification semantics and format to render text payloads
+- Put large JSON or YAML documentData in fenced markdown code blocks, not as inline plain text`
 
 	LegacyToolDescriptionSearchOperationsMCP = `Deprecated compatibility alias for search_api_operations.
 
@@ -485,7 +476,7 @@ Use this tool ONLY when the user explicitly requests details about a specific RE
 
 LLM INSTRUCTIONS:
 - Always pass apiType from the selected search_api_operations result
-- The response contains JSON with REST or Async API specification - provide the full specification json in the response, display it as a code block
+- The response contains JSON with REST or Async API specification - in your user-facing reply put the full JSON inside a fenced markdown code block with the json language tag (not inline prose)
 - After the code block, add a human-readable description in markdown format:
 	* Purpose and meaning of the operation
 	* Description of request, response, message, or channel structure
@@ -520,6 +511,7 @@ LLM INSTRUCTIONS:
 - Do not invent slug values
 - Use documentId from a selected search_api_operations result as this tool's slug parameter
 - Return the full documentData from the response; use documentType to interpret specification semantics and format to render text payloads
+- Put large JSON or YAML documentData in fenced markdown code blocks with the appropriate language tag, not as inline plain text
 - Format responses in markdown with well-readable markup (headings, lists, tables, code blocks)`
 )
 

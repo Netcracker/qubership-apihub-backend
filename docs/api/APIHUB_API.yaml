@@ -10222,7 +10222,7 @@ paths:
       description: |
         Appends a user message to the chat and waits synchronously for the assistant response.
         Intended for integration scripts or clients that do not want to handle SSE. Interactive UIs should use the streaming variant (`/messages/stream`) instead.
-        The request body must carry **only the new user message** — never the full history. The server reconstructs the conversation context from its own storage and from the LLM provider's conversation-state mechanism.
+        The request body must carry **only the new user message** — never the full history. The server reconstructs the conversation context from its own storage (including any compaction summary) and sends the resulting message list to the LLM on each turn.
       operationId: sendAiChatMessage
       requestBody:
         required: true
@@ -10288,7 +10288,7 @@ paths:
 
         Request semantics:
           * the body carries **only the new user message** plus (optionally) a client-generated `clientMessageId` for idempotency — never the full conversation history;
-          * the server reconstructs context from its own storage and forwards only the new message to the LLM provider, relying on the provider's native conversation-state mechanism to resume the session without re-sending the whole history;
+          * the server reconstructs context from its own storage (including any compaction summary) and sends the resulting message list to the LLM on each turn — the client never transmits prior turns;
           * on the very first message in a chat the server may auto-fill the chat title in the background.
 
         Response semantics (SSE):
@@ -13064,18 +13064,34 @@ components:
           example: 214
     AiChatStreamContextCompactedEvent:
       description: |
-        Emitted at most once per turn, before the assistant starts streaming, if the server had to auto-compact earlier history. The client may use this signal to visually indicate that the older portion of the conversation is now represented by a summary.
+        Emitted at most once per turn, before the assistant starts streaming, if the server had to auto-compact earlier history. The client may use this signal to visually indicate that the older portion of the conversation is now represented by a summary stored server-side (`ai_chat.compaction_summary`). The number of messages actually folded into that summary is `messagesBefore - messagesKeptRaw`.
       type: object
-      required: [type]
+      required: [type, compactedUpTo, summaryPreview, messagesBefore, messagesKeptRaw]
       properties:
         type:
           type: string
           enum: ["context.compacted"]
-        messagesCompactedCount:
-          description: How many preceding user/assistant messages were replaced by a single summary.
+        compactedUpTo:
+          description: |
+            Timestamp (UTC, RFC3339) of the last message included in the compaction boundary. Messages with `createdAt` after this value remain verbatim in the model context; older messages are represented only by the stored summary.
+          type: string
+          format: date-time
+          example: "2026-04-19T15:40:00Z"
+        summaryPreview:
+          description: |
+            Short preview of the compaction summary (truncated to a fixed rune limit on the server). Intended for optional UI hints or debugging — not the authoritative summary text.
+          type: string
+          example: "The user asked about REST operations in package QS.QSS.PRG.APIHUB for version 2025.4. Search returned three matching operations. The assistant recommended…"
+        messagesBefore:
+          description: Total number of user/assistant messages in the server context immediately before compaction ran.
           type: integer
           minimum: 1
-          example: 40
+          example: 48
+        messagesKeptRaw:
+          description: How many trailing messages the server kept verbatim after compaction (the recent tail of the conversation).
+          type: integer
+          minimum: 0
+          example: 8
     AiChatStreamErrorEvent:
       description: |
         Emitted when the turn cannot be completed. After this event the server closes the stream without sending `done`.
@@ -13240,7 +13256,7 @@ components:
 
         ```
         event: context.compacted
-        data: {"type":"context.compacted","messagesCompactedCount":40}
+        data: {"type":"context.compacted","compactedUpTo":"2026-04-19T15:40:00Z","summaryPreview":"The user asked about REST operations in package QS.QSS.PRG.APIHUB…","messagesBefore":48,"messagesKeptRaw":8}
 
         event: message.assistant.start
         data: {"type":"message.assistant.start","messageId":"2f5a8c6b-8c11-4b1a-9c6a-1c2e4d5f6a7b"}

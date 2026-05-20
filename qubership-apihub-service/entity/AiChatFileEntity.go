@@ -2,7 +2,6 @@ package entity
 
 import "time"
 
-// AiChatFileEntity maps to public.ai_chat_file
 type AiChatFileEntity struct {
 	tableName struct{} `pg:"ai_chat_file, alias:ai_chat_file"`
 

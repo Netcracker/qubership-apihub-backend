@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
@@ -13,23 +14,34 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// GeneratedFileController serves GET /api/v1/generated-files/{fileId}
+// Download: resolve file row (404 if missing/expired) before JWT check, then ownership.
 type GeneratedFileController struct {
-	svc aiservice.AiChatService
+	svc aiservice.GeneratedFileService
 }
 
-func NewGeneratedFileController(svc aiservice.AiChatService) *GeneratedFileController {
+func NewGeneratedFileController(svc aiservice.GeneratedFileService) *GeneratedFileController {
 	return &GeneratedFileController{svc: svc}
 }
 
 func (c *GeneratedFileController) Download(w http.ResponseWriter, r *http.Request) {
 	fileID := mux.Vars(r)["fileId"]
+
+	f, err := c.svc.GetFileByID(r.Context(), fileID)
+	if err != nil {
+		utils.RespondWithError(w, "Get file", err)
+		return
+	}
+	if f == nil || f.ExpiresAt.Before(time.Now().UTC()) {
+		utils.RespondWithCustomError(w, errAiGeneratedFileNotFound(fileID))
+		return
+	}
+
 	token := r.URL.Query().Get("token")
 	if token == "" {
 		utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusUnauthorized, Code: exception.AiChatTokenMissing, Message: exception.AiChatTokenMissingMsg})
 		return
 	}
-	uid, fid, err := security.ValidateGeneratedFileToken(token)
+	uid, tokFileID, err := security.ValidateGeneratedFileToken(token)
 	if err != nil {
 		if security.IsTokenExpiredError(err) {
 			utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusGone, Code: exception.AiChatTokenExpired, Message: exception.AiChatTokenExpiredMsg, Debug: err.Error()})
@@ -38,33 +50,25 @@ func (c *GeneratedFileController) Download(w http.ResponseWriter, r *http.Reques
 		utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusUnauthorized, Code: exception.AiChatTokenInvalid, Message: exception.AiChatTokenInvalidMsg, Debug: err.Error()})
 		return
 	}
-	if fid != fileID {
-		utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusUnauthorized, Code: exception.AiChatTokenInvalid, Message: "Token not valid for this file"})
+	if tokFileID != fileID {
+		utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusUnauthorized, Code: exception.AiChatTokenInvalid, Message: exception.AiChatTokenFileMismatchMsg})
 		return
 	}
 
-	f, err := c.svc.GetFileForUser(r.Context(), fileID, uid)
-	if err != nil {
-		utils.RespondWithError(w, "Get file", err)
-		return
-	}
-	if f == nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusNotFound, Code: exception.AiChatNotFound, Message: "File not found"})
+	if uid != f.UserID {
+		utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusUnauthorized, Code: exception.AiChatTokenInvalid, Message: exception.AiChatTokenFileMismatchMsg})
 		return
 	}
 
-	// Open the file ourselves so we can pass an io.ReadSeeker to http.ServeContent.
-	// http.ServeContent (unlike http.ServeFile) respects Content-Type/Content-Disposition
-	// headers that are already set on the response writer.
 	file, err := os.Open(f.StoragePath)
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusNotFound, Code: exception.AiChatNotFound, Message: "File not found on disk", Debug: err.Error()})
+		utils.RespondWithCustomError(w, errAiGeneratedFileNotFound(fileID))
 		return
 	}
 	defer file.Close()
 	st, err := file.Stat()
 	if err != nil || st.IsDir() {
-		utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusNotFound, Code: exception.AiChatNotFound, Message: "File not found on disk", Debug: errToString(err)})
+		utils.RespondWithCustomError(w, errAiGeneratedFileNotFound(fileID))
 		return
 	}
 
@@ -77,6 +81,15 @@ func (c *GeneratedFileController) Download(w http.ResponseWriter, r *http.Reques
 	http.ServeContent(w, r, "", st.ModTime(), file)
 }
 
+func errAiGeneratedFileNotFound(fileID string) *exception.CustomError {
+	return &exception.CustomError{
+		Status:  http.StatusNotFound,
+		Code:    exception.AiChatGeneratedFileNotFound,
+		Message: exception.AiChatGeneratedFileNotFoundMsg,
+		Params:  map[string]interface{}{"fileId": fileID},
+	}
+}
+
 func errToString(err error) string {
 	if err == nil {
 		return ""
@@ -84,8 +97,6 @@ func errToString(err error) string {
 	return err.Error()
 }
 
-// escapeFilename strips control characters and double-quotes from a filename
-// before embedding it in a Content-Disposition header value.
 func escapeFilename(s string) string {
 	s = strings.Map(func(r rune) rune {
 		if !utf8.ValidRune(r) || r < 0x20 || r == 0x7f {

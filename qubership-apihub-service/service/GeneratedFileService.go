@@ -17,17 +17,13 @@ import (
 	"github.com/google/uuid"
 )
 
-// GeneratedFileService persists LLM-produced files in a temp directory and writes a row to ai_chat_file.
-// Files are referenced by inline Markdown links of the form
-//   [<filename>](<apihubUrl>/api/v1/generated-files/<fileId>?token=<jwt>)
-// Tokens are minted by the caller (typically AiChatService) when reading messages.
 type GeneratedFileService interface {
-	// SaveFile streams content into <baseDir>/<userId>/<fileId>, writes a DB row, and returns
-	// the resulting entity together with a Markdown-ready URL (without ?token=, see AiChatService).
 	SaveFile(ctx context.Context, in GeneratedFileSaveInput) (*entity.AiChatFileEntity, string, error)
+	// No ownership check — used so download can 404 before JWT validation.
+	GetFileByID(ctx context.Context, fileID string) (*entity.AiChatFileEntity, error)
+	GetFileForUser(ctx context.Context, fileID, userID string) (*entity.AiChatFileEntity, error)
 }
 
-// GeneratedFileSaveInput is the descriptor accepted by SaveFile.
 type GeneratedFileSaveInput struct {
 	UserID    string
 	ChatID    *string
@@ -35,7 +31,6 @@ type GeneratedFileSaveInput struct {
 	Filename  string
 	MimeType  string
 	Reader    io.Reader
-	// MaxBytes optionally caps streamed bytes; if 0 the service will use config (MaxFileSizeMB).
 	MaxBytes int64
 }
 
@@ -62,16 +57,9 @@ func (s *generatedFileServiceImpl) SaveFile(ctx context.Context, in GeneratedFil
 	}
 	maxBytes := in.MaxBytes
 	if maxBytes <= 0 {
-		if cfg.MaxFileSizeMB > 0 {
-			maxBytes = int64(cfg.MaxFileSizeMB) * 1024 * 1024
-		} else {
-			maxBytes = 50 * 1024 * 1024
-		}
+		maxBytes = int64(cfg.MaxFileSizeMB) * 1024 * 1024
 	}
 	ttl := time.Duration(cfg.TTLMinutes) * time.Minute
-	if ttl <= 0 {
-		ttl = 30 * time.Minute
-	}
 
 	id := uuid.NewString()
 	userDir := filepath.Join(baseDir, sanitizeUserID(in.UserID))
@@ -115,6 +103,14 @@ func (s *generatedFileServiceImpl) SaveFile(ctx context.Context, in GeneratedFil
 	return row, "/api/v1/generated-files/" + id, nil
 }
 
+func (s *generatedFileServiceImpl) GetFileByID(ctx context.Context, fileID string) (*entity.AiChatFileEntity, error) {
+	return s.repo.GetFileByID(ctx, fileID)
+}
+
+func (s *generatedFileServiceImpl) GetFileForUser(ctx context.Context, fileID, userID string) (*entity.AiChatFileEntity, error) {
+	return s.repo.GetFileByIDForUser(ctx, fileID, userID)
+}
+
 func streamToFile(path string, r io.Reader, maxBytes int64) (int64, error) {
 	out, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
@@ -132,7 +128,6 @@ func streamToFile(path string, r io.Reader, maxBytes int64) (int64, error) {
 	return written, nil
 }
 
-// sanitizeUserID removes path separators and url-decodes anything fancy so we keep the FS layout flat.
 func sanitizeUserID(uid string) string {
 	uid = url.PathEscape(uid)
 	uid = strings.ReplaceAll(uid, string(os.PathSeparator), "_")

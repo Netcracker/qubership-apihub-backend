@@ -25,7 +25,6 @@
 
 - [Feature design — AI chat](feature_design/ai_assistant/feature-ai-chat-design.md)
 - [Feature design — IDS document generation](feature_design/ai_assistant/feature-ids-generation-design.md)
-- [Backend implementation plan](feature_design/ai_assistant/ai-chat-backend-implementation-plan.md)
 - [Frontend contract (SSE events, pagination, auth)](feature_design/ai_assistant/ai-chat-frontend-contract.md)
 - [Static resource customization (prompts and templates)](static_resources_customization.md)
 

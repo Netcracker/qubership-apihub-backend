@@ -294,13 +294,14 @@ func main() {
 		log.Info("ai-chat: routes and cleanup jobs are ENABLED")
 		aiChatRepository := repository.NewAiChatRepositoryPG(cp)
 		generatedFileService := service.NewGeneratedFileService(systemInfoService, aiChatRepository)
-		chatService := service.NewChatService(systemInfoService, mcpService, generatedFileService, security.MintGeneratedFileToken)
-		aiChatService, err := service.NewAiChatService(systemInfoService, aiChatRepository, chatService, security.MintGeneratedFileToken)
+		llmChatService := service.NewOpenAIChatService(systemInfoService)
+		chatsService := service.NewChatsService(aiChatRepository)
+		aiChatService, err := service.NewAiChatService(systemInfoService, aiChatRepository, llmChatService, mcpService, generatedFileService, security.MintGeneratedFileToken)
 		if err != nil {
 			log.Fatalf("Failed to create AiChatService: %v", err)
 		}
-		aiChatController = controller.NewAiChatController(aiChatService)
-		generatedFileController = controller.NewGeneratedFileController(aiChatService)
+		aiChatController = controller.NewAiChatController(chatsService, aiChatService)
+		generatedFileController = controller.NewGeneratedFileController(generatedFileService)
 		aiChatCleanup := service.NewAiChatCleanupService(aiChatRepository, lockService)
 		aiCfg := systemInfoService.GetAiChatConfig()
 		if err := aiChatCleanup.StartChatRetentionJob(aiCfg.CleanupSchedule, aiCfg.RetentionDays, aiCfg.PinnedForeverCount); err != nil {

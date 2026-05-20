@@ -11,6 +11,14 @@ alwaysApply: false
 - Do not use magic numbers; declare named constants.
 - If a numeric literal is unavoidable, add a brief comment explaining what it is and why that value is used.
 - If a string literal is repeated, extract it to a constant.
+- Do **not** duplicate config defaults in service code. Defaults belong in `SystemInfoService.setDefaults()` (`viper.SetDefault`); valid ranges belong on `config.Config` struct fields via `validate` tags (checked at startup by `utils.ValidateConfig`). Services read validated config directly — no `if cfg.X <= 0 { fallback }` for config-backed values.
+
+## Configuration defaults
+
+- **Single source of truth:** `viper.SetDefault` in `service/SystemInfoService.go` (`setDefaults`).
+- **Validation:** `validate` tags on types in `config/Config.go` (mirror `BusinessParameters` size limits: `gt=0`, `lte=8796093022207` where MB→bytes conversion applies).
+- **Startup:** invalid config fails fast in `SystemInfoService.Init()` via `utils.ValidateConfig`.
+- **Services:** use `GetAiChatConfig()` / other getters after init; do not re-declare the same default as a Go constant.
 
 ## HTTP status codes
 
@@ -36,3 +44,7 @@ alwaysApply: false
 ## API errors
 
 - Error codes and messages returned in HTTP responses must be constants in `exception/ErrorCodes.go`.
+- **Legacy errors:** numeric string codes (`"9"`, `"22"`) with a paired `*Msg`; blank line between pairs.
+- **AI Chat errors:** `APIHUB-AI-*` codes with the same pairing rules.
+- **Variant messages** (same code, different text): declare only `*Msg` next to the parent code block — reuse the parent `Code` at call sites (see `InvalidParameterValue` + `InvalidLimitMsg`, or `AiChatValidationFailed` + `AiChatMessageTooLongMsg`). Do not add orphan `*Msg` constants without documenting which code they belong to.
+- Do not use inline `Message:` strings for client-facing errors in new code.

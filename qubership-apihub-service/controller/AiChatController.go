@@ -13,13 +13,13 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 )
 
-// AiChatController productized /api/v1/ai-chat/chats
 type AiChatController struct {
-	svc aiservice.AiChatService
+	chatsSvc aiservice.ChatsService
+	aiSvc    aiservice.AiChatService
 }
 
-func NewAiChatController(svc aiservice.AiChatService) *AiChatController {
-	return &AiChatController{svc: svc}
+func NewAiChatController(chatsSvc aiservice.ChatsService, aiSvc aiservice.AiChatService) *AiChatController {
+	return &AiChatController{chatsSvc: chatsSvc, aiSvc: aiSvc}
 }
 
 func (c *AiChatController) ListChats(w http.ResponseWriter, r *http.Request) {
@@ -33,13 +33,13 @@ func (c *AiChatController) ListChats(w http.ResponseWriter, r *http.Request) {
 	if b := r.URL.Query().Get("before"); b != "" {
 		t, err := time.Parse(time.RFC3339, b)
 		if err != nil {
-			utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusBadRequest, Code: exception.InvalidParameterValue, Message: "Invalid before cursor", Debug: err.Error()})
+			utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusBadRequest, Code: exception.AiChatValidationFailed, Message: exception.AiChatInvalidBeforeCursorMsg, Debug: err.Error()})
 			return
 		}
 		before = &t
 	}
 	search := r.URL.Query().Get("search")
-	res, err := c.svc.ListChats(r.Context(), uid, search, before, limit)
+	res, err := c.chatsSvc.ListChats(r.Context(), uid, search, before, limit)
 	if err != nil {
 		utils.RespondWithError(w, "list chats", err)
 		return
@@ -54,7 +54,7 @@ func (c *AiChatController) CreateChat(w http.ResponseWriter, r *http.Request) {
 		utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusBadRequest, Code: exception.BadRequestBody, Message: exception.BadRequestBodyMsg, Debug: err.Error()})
 		return
 	}
-	res, err := c.svc.CreateChat(r.Context(), uid, body.Title)
+	res, err := c.chatsSvc.CreateChat(r.Context(), uid, body.Title)
 	if err != nil {
 		utils.RespondWithError(w, "create chat", err)
 		return
@@ -65,7 +65,7 @@ func (c *AiChatController) CreateChat(w http.ResponseWriter, r *http.Request) {
 func (c *AiChatController) GetChat(w http.ResponseWriter, r *http.Request) {
 	uid := context.Create(r).GetUserId()
 	chatID := getStringParam(r, "chatId")
-	res, err := c.svc.GetChat(r.Context(), uid, chatID)
+	res, err := c.chatsSvc.GetChat(r.Context(), uid, chatID)
 	if err != nil {
 		utils.RespondWithError(w, "get chat", err)
 		return
@@ -81,7 +81,7 @@ func (c *AiChatController) UpdateChat(w http.ResponseWriter, r *http.Request) {
 		utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusBadRequest, Code: exception.BadRequestBody, Message: exception.BadRequestBodyMsg, Debug: err.Error()})
 		return
 	}
-	res, err := c.svc.UpdateChat(r.Context(), uid, chatID, &body)
+	res, err := c.chatsSvc.UpdateChat(r.Context(), uid, chatID, &body)
 	if err != nil {
 		utils.RespondWithError(w, "update chat", err)
 		return
@@ -92,7 +92,7 @@ func (c *AiChatController) UpdateChat(w http.ResponseWriter, r *http.Request) {
 func (c *AiChatController) DeleteChat(w http.ResponseWriter, r *http.Request) {
 	uid := context.Create(r).GetUserId()
 	chatID := getStringParam(r, "chatId")
-	if err := c.svc.DeleteChat(r.Context(), uid, chatID); err != nil {
+	if err := c.chatsSvc.DeleteChat(r.Context(), uid, chatID); err != nil {
 		utils.RespondWithError(w, "delete chat", err)
 		return
 	}
@@ -111,12 +111,12 @@ func (c *AiChatController) ListMessages(w http.ResponseWriter, r *http.Request) 
 	if b := r.URL.Query().Get("before"); b != "" {
 		t, err := time.Parse(time.RFC3339, b)
 		if err != nil {
-			utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusBadRequest, Code: exception.InvalidParameterValue, Message: "Invalid before", Debug: err.Error()})
+			utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusBadRequest, Code: exception.AiChatValidationFailed, Message: exception.AiChatInvalidBeforeCursorMsg, Debug: err.Error()})
 			return
 		}
 		before = &t
 	}
-	res, err := c.svc.ListMessages(r.Context(), uid, chatID, before, limit)
+	res, err := c.chatsSvc.ListMessages(r.Context(), uid, chatID, before, limit)
 	if err != nil {
 		utils.RespondWithError(w, "list messages", err)
 		return
@@ -136,7 +136,7 @@ func (c *AiChatController) SendMessage(w http.ResponseWriter, r *http.Request) {
 		utils.RespondWithError(w, "validate send message request", err)
 		return
 	}
-	res, err := c.svc.SendMessage(r.Context(), uid, chatID, &body)
+	res, err := c.aiSvc.SendMessage(r.Context(), uid, chatID, &body)
 	if err != nil {
 		utils.RespondWithError(w, "send", err)
 		return
@@ -163,11 +163,11 @@ func (c *AiChatController) SendMessageStream(w http.ResponseWriter, r *http.Requ
 	w.Header().Set("X-Accel-Buffering", "no")
 	fl, ok := w.(http.Flusher)
 	if !ok {
-		utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusInternalServerError, Code: exception.AiChatInternalError, Message: "Streaming not supported"})
+		utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusInternalServerError, Code: exception.AiChatInternalError, Message: exception.AiChatStreamingNotSupportedMsg})
 		return
 	}
 
-	ch, err := c.svc.SendMessageStream(r.Context(), uid, chatID, &body)
+	ch, err := c.aiSvc.SendMessageStream(r.Context(), uid, chatID, &body)
 	if err != nil {
 		utils.RespondWithError(w, "stream", err)
 		return

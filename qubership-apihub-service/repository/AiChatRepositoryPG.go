@@ -49,20 +49,18 @@ func (r *aiChatRepositoryImpl) UpdateChat(ctx context.Context, row *entity.AiCha
 	//   - *T nil     → NULL  (for nullable columns)
 	_, err := r.cp.GetConnection().ExecContext(ctx, `
 		UPDATE ai_chat
-		SET title                       = ?,
-				pinned                      = ?,
-				last_message_at             = ?,
-				messages_count              = ?,
-				openai_previous_response_id = ?,
-				compacted_up_to_created_at  = ?,
-				compaction_summary          = ?,
-				last_turn_tokens            = ?
+		SET title                      = ?,
+				pinned                     = ?,
+				last_message_at            = ?,
+				messages_count             = ?,
+				compacted_up_to_created_at = ?,
+				compaction_summary         = ?,
+				last_turn_tokens           = ?
 		WHERE id = ?`,
 		row.Title,
 		row.Pinned,
 		row.LastMessageAt,
 		row.MessagesCount,
-		row.OpenAIPreviousResponseID,
 		row.CompactedUpToCreatedAt,
 		row.CompactionSummary,
 		row.LastTurnTokens,
@@ -235,7 +233,7 @@ func (r *aiChatRepositoryImpl) ListMessages(ctx context.Context, f AiMessagesLis
 func (r *aiChatRepositoryImpl) ListMessagesChronological(ctx context.Context, chatID string, maxMessages int) ([]entity.AiChatMessageEntity, error) {
 	var rows []entity.AiChatMessageEntity
 	if maxMessages < 1 {
-		maxMessages = 200
+		maxMessages = DefaultAiContextMessagesLimit
 	}
 	err := r.cp.GetConnection().ModelContext(ctx, &rows).
 		Where("chat_id = ?", chatID).
@@ -264,12 +262,26 @@ func (r *aiChatRepositoryImpl) GetFileByIDForUser(ctx context.Context, fileID, u
 	return res, nil
 }
 
+func (r *aiChatRepositoryImpl) GetFileByID(ctx context.Context, fileID string) (*entity.AiChatFileEntity, error) {
+	res := new(entity.AiChatFileEntity)
+	err := r.cp.GetConnection().ModelContext(ctx, res).
+		Where("id = ?", fileID).
+		Limit(1).
+		Select()
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return res, nil
+}
+
 func (r *aiChatRepositoryImpl) InsertFile(ctx context.Context, f *entity.AiChatFileEntity) error {
 	_, err := r.cp.GetConnection().ModelContext(ctx, f).Insert()
 	return err
 }
 
-// ListUserIDs returns distinct user ids that have any chat row
 func (r *aiChatRepositoryImpl) ListUserIDs(ctx context.Context) ([]string, error) {
 	var ids []string
 	_, err := r.cp.GetConnection().QueryContext(ctx, &ids, "SELECT DISTINCT user_id FROM ai_chat")
@@ -279,8 +291,6 @@ func (r *aiChatRepositoryImpl) ListUserIDs(ctx context.Context) ([]string, error
 	return ids, nil
 }
 
-// DeleteUserChatsByRetention removes non-pinned chats older than retentionDays for a user,
-// keeping the most recent pinnedForeverCount non-pinned ones; pinned chats are never removed.
 func (r *aiChatRepositoryImpl) DeleteUserChatsByRetention(ctx context.Context, userID string, retentionDays, pinnedForeverCount int) (int, error) {
 	if retentionDays < 1 {
 		return 0, nil

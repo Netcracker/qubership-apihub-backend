@@ -7,8 +7,7 @@ CREATE TABLE ai_chat (
     created_at                    timestamp without time zone NOT NULL,
     last_message_at               timestamp without time zone NOT NULL,
     messages_count                integer     NOT NULL DEFAULT 0,
-    openai_previous_response_id   text,
-    compacted_up_to_created_at     timestamp without time zone,
+    compacted_up_to_created_at    timestamp without time zone,
     compaction_summary            text,
     last_turn_tokens              integer
 );
@@ -27,7 +26,6 @@ CREATE TABLE ai_chat_message (
     content            text        NOT NULL,
     client_message_id  uuid,
     tool_invocations   jsonb,
-    openai_response_id text,
     created_at         timestamp without time zone NOT NULL
 );
 
@@ -48,9 +46,9 @@ CREATE TABLE ai_chat_file (
     filename      text        NOT NULL,
     storage_path  text        NOT NULL,
     mime_type     varchar,
-    size_bytes     bigint,
-    created_at     timestamp without time zone NOT NULL,
-    expires_at     timestamp without time zone NOT NULL
+    size_bytes    bigint,
+    created_at    timestamp without time zone NOT NULL,
+    expires_at    timestamp without time zone NOT NULL
 );
 
 CREATE INDEX ai_chat_file_expires_idx ON ai_chat_file (expires_at);

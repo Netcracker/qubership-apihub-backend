@@ -55,6 +55,7 @@ Do not silently skip: after REST, config, or env changes, check that doc’s “
 Detailed rules apply via `.cursor/rules/` and `.claude/rules/` when matching files are in context. Key points:
 
 - **No magic numbers** — use named constants; if a literal is unavoidable, add a short comment explaining why.
+- **Config defaults** — define once in `SystemInfoService.setDefaults()`; validate ranges in `config/Config.go` with `validate` tags; do not duplicate viper defaults as service-layer fallback constants.
 - **HTTP status codes** — use `net/http` constants (e.g. `http.StatusOK`, `http.StatusBadRequest`, `http.StatusNotFound`), not numeric literals like `200` or `404`.
 - **Repeated strings** — extract to constants.
 - **Comments** — only when needed for non-obvious logic; do not comment obvious code.
@@ -62,7 +63,7 @@ Detailed rules apply via `.cursor/rules/` and `.claude/rules/` when matching fil
 - **Entity → view converters** without dependencies: place in `entity/` next to the struct, named `Make{Name}View`.
 - **New repositories, services, controllers** — register at the **end** of the corresponding block in `Service.go`.
 - **`Service.go` fail-fast** — use `log.Fatalf` for fatal wiring/startup errors where applicable.
-- **API errors** — error code and message returned to clients must be constants in `exception/ErrorCodes.go`.
+- **API errors** — error code and message returned to clients must be constants in `exception/ErrorCodes.go`. AI Chat uses `APIHUB-AI-*` code+Msg pairs; variant messages reuse a parent code (legacy pattern).
 
 ## REST API and OpenAPI
 
