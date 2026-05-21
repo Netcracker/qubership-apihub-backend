@@ -163,7 +163,9 @@ Behaviour guarantees:
 
 * Every file has a server-controlled lifetime (order of tens of minutes — the exact value is a server-side concern and is not published to the client).
 * When the user revisits an old chat via `GET /messages`, file links in `content` are returned **as stored** (the token embedded at generation time). The server does not re-mint tokens on history load.
-* The download endpoint checks **file existence and expiration before validating the token**, so an expired or cleaned-up file returns **`404 Not Found`** rather than a misleading **`401`**. **`410 Gone`** is returned when the file row still exists but the signed token has expired. The client does not need special handling — the browser surfaces the failure as a standard download error and the user can re-ask the assistant.
+* The download endpoint checks **file existence and expiration before validating the token**, so an expired or cleaned-up file returns **`404 Not Found`** rather than a misleading **`401`**.
+* **`410 Gone`** is returned when the file row still exists but the signed token has expired.
+  The client does not need special handling — the browser surfaces the failure as a standard download error and the user can re-ask the assistant.
 * The download endpoint **does not** require a session cookie or Authorization header; the short-lived token in the query string is authorisation in itself. This means: opening the link in a new tab (or sharing it within the validity window) just works.
 
 ## 6. Chat CRUD flow

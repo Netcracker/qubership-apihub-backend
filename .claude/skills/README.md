@@ -1,6 +1,6 @@
 # Claude Code skills (APIHub backend)
 
-Project skills are **canonical** in [`.cursor/skills/`](../.cursor/skills/). This directory contains copies for [Claude Code](https://docs.anthropic.com/en/docs/claude-code/skills) so skills work without extra setup.
+Project skills are **canonical** in [`.cursor/skills/`](../../.cursor/skills/). This directory contains copies for [Claude Code](https://docs.anthropic.com/en/docs/claude-code/skills) so skills work without extra setup.
 
 ## Available skills
 

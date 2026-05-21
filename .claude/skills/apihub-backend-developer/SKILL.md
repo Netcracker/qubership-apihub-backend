@@ -25,7 +25,8 @@ Follow `AGENTS.md` and project rules. For examples and doc routing, see [referen
 7. **Migrations** — next unique numeric prefix; paired up/down SQL; run validation script (below).
 8. **SQL** — for non-trivial repository SQL, review indexes, joins, cardinality, N+1.
 9. **Docs** — update the appropriate doc per `docs/README.md`; do not pollute root `README.md` for small features.
-10. **GitHub** — use `gh` for issues/PRs; recommend install if missing.
+10. **CI linters** — follow `.cursor/rules/ci-linters.mdc` (see `AGENTS.md` § CI linters).
+11. **GitHub** — use `gh` for issues/PRs; recommend install if missing.
 
 ## Migration validation
 

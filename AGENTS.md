@@ -84,6 +84,18 @@ Detailed rules apply via `.cursor/rules/` and `.claude/rules/` when matching fil
 - Do **not** add minor feature notes to the repository root `README.md`.
 - Feature design docs belong under `docs/feature_design/` when warranted.
 
+## CI linters (super-linter / link checker)
+
+Pull requests run **super-linter** on changed files and **lychee** on Markdown links. Apply these **while writing** code and docs so CI passes on the first push:
+
+- **Go (EditorConfig):** tabs in `*.go`; in raw string literals (prompts), nested indented lines use tabs, not spaces.
+- **Markdown:** prose lines ≤ **400** characters (MD013); one H1 per file (MD025).
+- **Terminology (textlint):** follow `.github/linters/.textlintrc`; do not add conflicting custom terms.
+- **Markdown links:** repo-relative paths must match directory depth (see `.claude/skills/README.md` for nested-copy pitfalls).
+- **OpenAPI YAML:** no trailing whitespace in changed lines; match existing indentation; valid `$ref` / `allOf` patterns.
+
+Full checklist: `.cursor/rules/ci-linters.mdc` (and `.claude/rules/ci-linters.md`).
+
 ## SQL performance
 
 - When adding or changing non-trivial SQL in repositories, analyze performance: indexes, joins, filters, expected row counts, N+1 risks.

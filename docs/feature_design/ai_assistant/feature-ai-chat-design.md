@@ -103,38 +103,38 @@ sequenceDiagram
     participant Svc as AiChatService
     participant LLM as OpenAIChatService
     participant MCP as MCPService
-    participant OAI as OpenAI Chat Completions
+    participant OAI as "OpenAI Chat Completions"
 
-    FE->>Ctrl: POST /chats/{id}/messages/stream<br/>{ content, clientMessageId }
-    Ctrl->>Svc: SendMessageStream(userID, chatID, req)
-    Svc->>Svc: idempotency check on (chat_id, client_message_id)
+    FE->>Ctrl: POST messages stream with content and clientMessageId
+    Ctrl->>Svc: SendMessageStream
+    Svc->>Svc: idempotency check on chat and clientMessageId
     alt cached pair exists
         Svc-->>Ctrl: stream replays cached assistant message
     else fresh turn
         Svc->>Svc: persist user message
-        Svc->>Svc: load history; maybeCompactBefore(...)
-        opt compaction fired
+        Svc->>Svc: load history and maybeCompactBefore
+        alt compaction runs
             Svc-->>FE: SSE context.compacted
         end
         Svc-->>FE: SSE message.assistant.start
-        Svc->>Svc: runToolLoop(history, streaming hooks)
-        loop tool loop (≤ 10 iterations)
-            Svc->>LLM: ExecuteStreaming(LLMRequest{system, messages, tools})
-            LLM->>OAI: POST /v1/chat/completions (stream)
-            OAI-->>LLM: content deltas + tool_call fragments
-            LLM-->>FE: hooks.OnTextDelta → SSE message.assistant.delta
-            LLM-->>FE: hooks.OnToolStart → SSE tool.started
+        Svc->>Svc: runToolLoop with streaming hooks
+        loop tool loop up to 10 iterations
+            Svc->>LLM: ExecuteStreaming with system messages and tools
+            LLM->>OAI: POST chat completions stream
+            OAI-->>LLM: content deltas and tool_call fragments
+            LLM-->>FE: OnTextDelta to SSE message.assistant.delta
+            LLM-->>FE: OnToolStart to SSE tool.started
             alt model issued tool calls
-                Svc->>MCP: ExecuteSearchTool / ExecuteGetSpecTool / ...
+                Svc->>MCP: execute MCP tools
                 MCP-->>Svc: tool result JSON
-                Svc-->>FE: hooks.OnToolCompleted → SSE tool.completed
-                Svc->>Svc: append assistant+tool messages to slice
+                Svc-->>FE: OnToolCompleted to SSE tool.completed
+                Svc->>Svc: append assistant and tool messages
             else final text
                 note over Svc: loop exits
             end
         end
-        Svc->>Svc: persist assistant message; update chat (LastMsgAt, tokens)
-        Svc-->>FE: SSE message.assistant.completed { full AiChatMessage }
+        Svc->>Svc: persist assistant message and update chat metadata
+        Svc-->>FE: SSE message.assistant.completed
         Svc-->>FE: SSE done
     end
 ```
@@ -155,16 +155,16 @@ sequenceDiagram
     participant Chats as ChatsService
     participant Repo as AiChatRepositoryPG
 
-    FE->>Ctrl: GET /chats?limit=100
-    Ctrl->>Chats: ListChats(userID, before?, limit)
-    Chats->>Repo: SELECT ... ORDER BY pinned DESC, last_message_at DESC
-    Chats-->>Ctrl: { chats[], hasMore }
+    FE->>Ctrl: GET chats list with limit
+    Ctrl->>Chats: ListChats with userID before cursor and limit
+    Chats->>Repo: SELECT ordered by pinned and last_message_at
+    Chats-->>Ctrl: chats array and hasMore flag
 
-    FE->>Ctrl: GET /chats/{id}/messages?limit=100
-    Ctrl->>Chats: ListMessages(userID, chatID, before?, limit)
-    Chats->>Repo: SELECT ... ORDER BY created_at DESC
-    note right of Chats: content returned as stored;<br/>file links are not re-signed
-    Chats-->>Ctrl: { messages[], hasMore }
+    FE->>Ctrl: GET chat messages with limit
+    Ctrl->>Chats: ListMessages with userID chatID before cursor and limit
+    Chats->>Repo: SELECT ordered by created_at DESC
+    note right of Chats: content as stored, file links not re-signed
+    Chats-->>Ctrl: messages array and hasMore flag
 ```
 
 Pagination is keyset by RFC 3339 timestamps. Assistant messages containing generated-file Markdown links are returned **verbatim** from the database — the server does not re-mint download tokens on `ListMessages`.
@@ -176,19 +176,19 @@ sequenceDiagram
     participant Browser
     participant Ctrl as GeneratedFileController
     participant GF as GeneratedFileService
-    participant FS as temp dir on disk
+    participant FS as "temp dir on disk"
 
-    Browser->>Ctrl: GET /api/v1/generated-files/{fileId}?token=...
-    Ctrl->>GF: GetFileByID(fileID)
-    alt row missing or expires_at in the past
+    Browser->>Ctrl: GET generated-files with signed token query
+    Ctrl->>GF: GetFileByID
+    alt row missing or expired
         Ctrl-->>Browser: 404 Not Found
     else file exists
-        Ctrl->>Ctrl: ValidateGeneratedFileToken(token)
-        alt token invalid / wrong file / expired token
-            Ctrl-->>Browser: 401 / 410
-        else token ok and userID matches row
-            Ctrl->>FS: open storage_path & stream
-            FS-->>Browser: 200 OK + bytes
+        Ctrl->>Ctrl: ValidateGeneratedFileToken
+        alt token invalid or expired
+            Ctrl-->>Browser: 401 or 410
+        else token ok and user matches row
+            Ctrl->>FS: open storage path and stream
+            FS-->>Browser: 200 OK with bytes
         end
     end
 ```

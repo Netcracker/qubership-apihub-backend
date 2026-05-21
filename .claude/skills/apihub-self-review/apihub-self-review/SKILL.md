@@ -19,7 +19,7 @@ Independent review of backend changes. **Do not implement fixes unless the user 
 1. **Scope** — Determine diff scope:
    - `git diff` (unstaged + staged) or `git diff main...HEAD` / user-provided branch range.
    - If unclear, ask which files or commits to review.
-2. **Load standards** — Apply `AGENTS.md`, `.cursor/rules/` / `.claude/rules/`, and `docs/development_guide.md`.
+2. **Load standards** — Apply `AGENTS.md`, `.cursor/rules/` / `.claude/rules/` (including `ci-linters`), and `docs/development_guide.md`.
 3. **Review** — Walk changed files against the checklist below.
 4. **Report** — Use the output format below with file paths and line references where possible.
 
@@ -58,6 +58,12 @@ Independent review of backend changes. **Do not implement fixes unless the user 
 ### Documentation
 
 - [ ] Right doc updated per `docs/README.md`; root `README.md` not used for minor features.
+
+### CI linters
+
+- [ ] Markdown prose lines ≤400 characters; valid relative links (especially under `.claude/skills/`).
+- [ ] Go raw string prompts use tabs for nested indentation, not spaces.
+- [ ] OpenAPI / YAML edits: no trailing whitespace; `$ref` siblings valid.
 
 ### Related repositories
 

@@ -15,6 +15,17 @@ Read this file when you need examples or doc-routing detail. Keep `SKILL.md` as 
 
 Full index: `docs/README.md`.
 
+## CI linters
+
+See `.cursor/rules/ci-linters.mdc`. Highlights for agents:
+
+| Area | Rule |
+|------|------|
+| Go prompts in backticks | Tabs for indented lines inside raw strings |
+| Markdown / design docs | Prose ≤400 chars per line; fix links when editing `.claude/**` |
+| OpenAPI | Match file indentation; no trailing spaces in changed lines |
+| textlint | Use terms from `.github/linters/.textlintrc` |
+
 ## HTTP status codes
 
 **Good:**
@@ -108,7 +119,7 @@ powershell -File .cursor/skills/apihub-backend-developer/scripts/check_migration
 
 Examples:
 
-```
+```text
 feat(ai-chat): add pinned chat retention cleanup job
 
 fix(search): correct FTS config for lite operation search
