@@ -1,8 +1,8 @@
-package service
+package client
 
 import "context"
 
-type LlmChatService interface {
+type LlmClient interface {
 	Execute(ctx context.Context, req LLMRequest) (*LLMResponse, error)
 	ExecuteStreaming(
 		ctx context.Context,
@@ -17,6 +17,7 @@ type LLMRequest struct {
 	SystemMessage string
 	Messages      []ChatMessage
 	Tools         []LLMTool
+	CorrelationID string
 }
 
 type LLMResponse struct {

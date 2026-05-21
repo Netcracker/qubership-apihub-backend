@@ -97,6 +97,10 @@ type SystemInfoService interface {
 	GetApiSpecDirectory() string
 	GetFeatureFlags() view.FeatureFlags
 	GetMigrationLockMaxWaitMinutes() int
+	GetEphemeralFileDirectory() string
+	GetEphemeralFileMaxSizeMb() int
+	GetEphemeralFileTTLMinutes() int
+	GetEphemeralFilesCleanupSchedule() string
 }
 
 func (g *systemInfoServiceImpl) GetCredsFromEnv() *view.DbCredentials {
@@ -252,10 +256,10 @@ func (g *systemInfoServiceImpl) setDefaults() {
 	viper.SetDefault("ai.chat.pinnedForeverCount", 10)
 	viper.SetDefault("ai.chat.compactAtContextPercent", 80)
 	viper.SetDefault("ai.chat.cleanupSchedule", "15 3 * * *")
-	viper.SetDefault("ai.chat.generatedFiles.directory", "/tmp/apihub-ai-chat-files")
-	viper.SetDefault("ai.chat.generatedFiles.ttlMinutes", 30)
-	viper.SetDefault("ai.chat.generatedFiles.cleanupSchedule", "*/5 * * * *")
-	viper.SetDefault("ai.chat.generatedFiles.maxFileSizeMB", 50)
+	viper.SetDefault("technicalParameters.ephemeralFileDirectory", "/tmp/apihub-ephemeral-files")
+	viper.SetDefault("businessParameters.ephemeralFileMaxSizeMb", 50)
+	viper.SetDefault("businessParameters.ephemeralFileTTLMinutes", 30)
+	viper.SetDefault("cleanup.ephemeralFiles.schedule", "*/5 * * * *")
 }
 
 func (g *systemInfoServiceImpl) GetConfigFolder() string {
@@ -648,6 +652,22 @@ func (g *systemInfoServiceImpl) GetAiChatConfig() config.ChatConfig {
 
 func (g *systemInfoServiceImpl) GetAiMCPConfig() config.MCPConfig {
 	return g.config.Ai.MCP
+}
+
+func (g *systemInfoServiceImpl) GetEphemeralFileDirectory() string {
+	return g.config.TechnicalParameters.EphemeralFileDirectory
+}
+
+func (g *systemInfoServiceImpl) GetEphemeralFileMaxSizeMb() int {
+	return g.config.BusinessParameters.EphemeralFileMaxSizeMb
+}
+
+func (g *systemInfoServiceImpl) GetEphemeralFileTTLMinutes() int {
+	return g.config.BusinessParameters.EphemeralFileTTLMinutes
+}
+
+func (g *systemInfoServiceImpl) GetEphemeralFilesCleanupSchedule() string {
+	return g.config.Cleanup.EphemeralFiles.Schedule
 }
 
 func (g *systemInfoServiceImpl) GetFeatureFlags() view.FeatureFlags {

@@ -17,49 +17,46 @@ import (
 	"github.com/google/uuid"
 )
 
-type GeneratedFileService interface {
-	SaveFile(ctx context.Context, in GeneratedFileSaveInput) (*entity.AiChatFileEntity, string, error)
+type EphemeralFileService interface {
+	SaveFile(ctx context.Context, in EphemeralFileSaveInput) (*entity.EphemeralFileEntity, string, error)
 	// No ownership check — used so download can 404 before JWT validation.
-	GetFileByID(ctx context.Context, fileID string) (*entity.AiChatFileEntity, error)
-	GetFileForUser(ctx context.Context, fileID, userID string) (*entity.AiChatFileEntity, error)
+	GetFileByID(ctx context.Context, fileID string) (*entity.EphemeralFileEntity, error)
+	GetFileForUser(ctx context.Context, fileID, userID string) (*entity.EphemeralFileEntity, error)
 }
 
-type GeneratedFileSaveInput struct {
-	UserID    string
-	ChatID    *string
-	MessageID *string
-	Filename  string
-	MimeType  string
-	Reader    io.Reader
+type EphemeralFileSaveInput struct {
+	UserID   string
+	Filename string
+	MimeType string
+	Reader   io.Reader
 	MaxBytes int64
 }
 
-func NewGeneratedFileService(sis SystemInfoService, repo repository.AiChatRepository) GeneratedFileService {
-	return &generatedFileServiceImpl{sis: sis, repo: repo}
+func NewEphemeralFileService(sis SystemInfoService, repo repository.EphemeralFileRepository) EphemeralFileService {
+	return &ephemeralFileServiceImpl{sis: sis, repo: repo}
 }
 
-type generatedFileServiceImpl struct {
+type ephemeralFileServiceImpl struct {
 	sis  SystemInfoService
-	repo repository.AiChatRepository
+	repo repository.EphemeralFileRepository
 }
 
-func (s *generatedFileServiceImpl) SaveFile(ctx context.Context, in GeneratedFileSaveInput) (*entity.AiChatFileEntity, string, error) {
+func (s *ephemeralFileServiceImpl) SaveFile(ctx context.Context, in EphemeralFileSaveInput) (*entity.EphemeralFileEntity, string, error) {
 	if in.Reader == nil {
 		return nil, "", errors.New("nil reader")
 	}
 	if strings.TrimSpace(in.UserID) == "" {
 		return nil, "", errors.New("userID is required")
 	}
-	cfg := s.sis.GetAiChatConfig().GeneratedFiles
-	baseDir := strings.TrimSpace(cfg.Directory)
+	baseDir := strings.TrimSpace(s.sis.GetEphemeralFileDirectory())
 	if baseDir == "" {
-		baseDir = filepath.Join(os.TempDir(), "apihub-ai-chat-files")
+		baseDir = filepath.Join(os.TempDir(), "apihub-ephemeral-files")
 	}
 	maxBytes := in.MaxBytes
 	if maxBytes <= 0 {
-		maxBytes = int64(cfg.MaxFileSizeMB) * 1024 * 1024
+		maxBytes = int64(s.sis.GetEphemeralFileMaxSizeMb()) * 1024 * 1024
 	}
-	ttl := time.Duration(cfg.TTLMinutes) * time.Minute
+	ttl := time.Duration(s.sis.GetEphemeralFileTTLMinutes()) * time.Minute
 
 	id := uuid.NewString()
 	userDir := filepath.Join(baseDir, sanitizeUserID(in.UserID))
@@ -81,10 +78,8 @@ func (s *generatedFileServiceImpl) SaveFile(ctx context.Context, in GeneratedFil
 		mimePtr = &mime
 	}
 	size := written
-	row := &entity.AiChatFileEntity{
+	row := &entity.EphemeralFileEntity{
 		ID:          id,
-		ChatID:      in.ChatID,
-		MessageID:   in.MessageID,
 		UserID:      in.UserID,
 		Filename:    sanitizeFilename(in.Filename, id),
 		StoragePath: storagePath,
@@ -93,22 +88,22 @@ func (s *generatedFileServiceImpl) SaveFile(ctx context.Context, in GeneratedFil
 		CreatedAt:   now,
 		ExpiresAt:   now.Add(ttl),
 	}
-	if err := s.repo.InsertFile(ctx, row); err != nil {
+	if err := s.repo.Insert(ctx, row); err != nil {
 		_ = os.Remove(storagePath)
 		return nil, "", fmt.Errorf("insert file row: %w", err)
 	}
-	metrics.AiChatGeneratedFilesTotal.Inc()
-	metrics.AiChatGeneratedFileBytes.Observe(float64(written))
+	metrics.EphemeralFilesTotal.Inc()
+	metrics.EphemeralFileBytes.Observe(float64(written))
 
-	return row, "/api/v1/generated-files/" + id, nil
+	return row, "/api/v1/ephemeral-files/" + id, nil
 }
 
-func (s *generatedFileServiceImpl) GetFileByID(ctx context.Context, fileID string) (*entity.AiChatFileEntity, error) {
-	return s.repo.GetFileByID(ctx, fileID)
+func (s *ephemeralFileServiceImpl) GetFileByID(ctx context.Context, fileID string) (*entity.EphemeralFileEntity, error) {
+	return s.repo.GetByID(ctx, fileID)
 }
 
-func (s *generatedFileServiceImpl) GetFileForUser(ctx context.Context, fileID, userID string) (*entity.AiChatFileEntity, error) {
-	return s.repo.GetFileByIDForUser(ctx, fileID, userID)
+func (s *ephemeralFileServiceImpl) GetFileForUser(ctx context.Context, fileID, userID string) (*entity.EphemeralFileEntity, error) {
+	return s.repo.GetByIDForUser(ctx, fileID, userID)
 }
 
 func streamToFile(path string, r io.Reader, maxBytes int64) (int64, error) {

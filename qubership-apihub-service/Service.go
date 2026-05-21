@@ -31,6 +31,7 @@ import (
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/db"
 
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/client"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/controller"
 	midldleware "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/middleware"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/repository"
@@ -287,28 +288,33 @@ func main() {
 
 	mcpService := service.NewMCPService(systemInfoService, operationService, packageService, versionService, monitoringService)
 
+	ephemeralFileRepository := repository.NewEphemeralFileRepositoryPG(cp)
+	ephemeralFileService := service.NewEphemeralFileService(systemInfoService, ephemeralFileRepository)
+	ephemeralFileController := controller.NewEphemeralFileController(ephemeralFileService)
+	ephemeralFileCleanup := service.NewEphemeralFileCleanupService(ephemeralFileRepository, lockService)
+	if err := ephemeralFileCleanup.StartCleanupJob(systemInfoService.GetEphemeralFilesCleanupSchedule(), systemInfoService.GetEphemeralFileDirectory()); err != nil {
+		log.Warnf("Failed to start ephemeral files cleanup: %v", err)
+	}
+
 	aiChatEnabled := isAiChatEnabled(systemInfoService)
 	var aiChatController *controller.AiChatController
-	var generatedFileController *controller.GeneratedFileController
 	if aiChatEnabled {
 		log.Info("ai-chat: routes and cleanup jobs are ENABLED")
 		aiChatRepository := repository.NewAiChatRepositoryPG(cp)
-		generatedFileService := service.NewGeneratedFileService(systemInfoService, aiChatRepository)
-		llmChatService := service.NewOpenAIChatService(systemInfoService)
-		chatsService := service.NewChatsService(aiChatRepository)
-		aiChatService, err := service.NewAiChatService(systemInfoService, aiChatRepository, llmChatService, mcpService, generatedFileService, security.MintGeneratedFileToken)
+		llmClient, err := client.NewOpenAILlmClient(systemInfoService.GetAiChatConfig().OpenAI)
 		if err != nil {
-			log.Fatalf("Failed to create AiChatService: %v", err)
+			log.Fatalf("Failed to create OpenAI LLM client: %v", err)
 		}
-		aiChatController = controller.NewAiChatController(chatsService, aiChatService)
-		generatedFileController = controller.NewGeneratedFileController(generatedFileService)
-		aiChatCleanup := service.NewAiChatCleanupService(aiChatRepository, lockService)
+		aiChatsService := service.NewAiChatsService(aiChatRepository)
+		aiChatTurnService, err := service.NewAiChatTurnService(systemInfoService, aiChatRepository, llmClient, mcpService, ephemeralFileService, security.MintEphemeralFileToken)
+		if err != nil {
+			log.Fatalf("Failed to create AiChatTurnService: %v", err)
+		}
+		aiChatController = controller.NewAiChatController(aiChatsService, aiChatTurnService)
+		aiChatCleanup := service.NewChatCleanupService(aiChatRepository, lockService)
 		aiCfg := systemInfoService.GetAiChatConfig()
 		if err := aiChatCleanup.StartChatRetentionJob(aiCfg.CleanupSchedule, aiCfg.RetentionDays, aiCfg.PinnedForeverCount); err != nil {
 			log.Warnf("Failed to start ai chat retention cleanup: %v", err)
-		}
-		if err := aiChatCleanup.StartGeneratedFilesCleanupJob(aiCfg.GeneratedFiles.CleanupSchedule, aiCfg.GeneratedFiles.Directory); err != nil {
-			log.Warnf("Failed to start ai chat generated files cleanup: %v", err)
 		}
 	}
 
@@ -568,8 +574,9 @@ func main() {
 		r.HandleFunc("/api/internal/minio/download", security.Secure(minioStorageController.DownloadFilesFromMinioToDatabase)).Methods(http.MethodPost)
 	}
 
+	r.HandleFunc("/api/v1/ephemeral-files/{fileId}", security.NoSecure(ephemeralFileController.Download)).Methods(http.MethodGet)
+
 	if aiChatEnabled {
-		r.HandleFunc("/api/v1/generated-files/{fileId}", security.NoSecure(generatedFileController.Download)).Methods(http.MethodGet)
 		r.HandleFunc("/api/v1/ai-chat/chats", security.Secure(aiChatController.ListChats)).Methods(http.MethodGet)
 		r.HandleFunc("/api/v1/ai-chat/chats", security.Secure(aiChatController.CreateChat)).Methods(http.MethodPost)
 		r.HandleFunc("/api/v1/ai-chat/chats/{chatId}", security.Secure(aiChatController.GetChat)).Methods(http.MethodGet)

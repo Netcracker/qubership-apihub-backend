@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type ChatsService interface {
+type AiChatsService interface {
 	ListChats(ctx context.Context, userID, search string, before *time.Time, limit int) (*view.AiChatsListResponse, error)
 	CreateChat(ctx context.Context, userID string, title *string) (*view.AiChat, error)
 	GetChat(ctx context.Context, userID, chatID string) (*view.AiChat, error)
@@ -21,15 +21,15 @@ type ChatsService interface {
 	ListMessages(ctx context.Context, userID, chatID string, before *time.Time, limit int) (*view.AiChatMessagesListResponse, error)
 }
 
-func NewChatsService(repo repository.AiChatRepository) ChatsService {
-	return &chatsServiceImpl{repo: repo}
+func NewAiChatsService(repo repository.AiChatRepository) AiChatsService {
+	return &aiChatsServiceImpl{repo: repo}
 }
 
-type chatsServiceImpl struct {
+type aiChatsServiceImpl struct {
 	repo repository.AiChatRepository
 }
 
-func (s *chatsServiceImpl) ListChats(ctx context.Context, userID, search string, before *time.Time, limit int) (*view.AiChatsListResponse, error) {
+func (s *aiChatsServiceImpl) ListChats(ctx context.Context, userID, search string, before *time.Time, limit int) (*view.AiChatsListResponse, error) {
 	rows, err := s.repo.ListChats(ctx, repository.AiChatsListFilter{
 		UserID: userID,
 		Search: search,
@@ -50,7 +50,7 @@ func (s *chatsServiceImpl) ListChats(ctx context.Context, userID, search string,
 	return &view.AiChatsListResponse{Chats: out, HasMore: hasMore}, nil
 }
 
-func (s *chatsServiceImpl) CreateChat(ctx context.Context, userID string, title *string) (*view.AiChat, error) {
+func (s *aiChatsServiceImpl) CreateChat(ctx context.Context, userID string, title *string) (*view.AiChat, error) {
 	now := time.Now().UTC()
 	id := uuid.NewString()
 	t := ""
@@ -72,7 +72,7 @@ func (s *chatsServiceImpl) CreateChat(ctx context.Context, userID string, title 
 	return entity.MakeAiChatView(row), nil
 }
 
-func (s *chatsServiceImpl) GetChat(ctx context.Context, userID, chatID string) (*view.AiChat, error) {
+func (s *aiChatsServiceImpl) GetChat(ctx context.Context, userID, chatID string) (*view.AiChat, error) {
 	ch, err := mustGetAiChat(ctx, s.repo, userID, chatID)
 	if err != nil {
 		return nil, err
@@ -80,7 +80,7 @@ func (s *chatsServiceImpl) GetChat(ctx context.Context, userID, chatID string) (
 	return entity.MakeAiChatView(ch), nil
 }
 
-func (s *chatsServiceImpl) UpdateChat(ctx context.Context, userID, chatID string, req *view.AiChatUpdateRequest) (*view.AiChat, error) {
+func (s *aiChatsServiceImpl) UpdateChat(ctx context.Context, userID, chatID string, req *view.AiChatUpdateRequest) (*view.AiChat, error) {
 	if req == nil {
 		return nil, &exception.CustomError{Status: http.StatusBadRequest, Code: exception.AiChatValidationFailed, Message: exception.AiChatEmptyBodyMsg}
 	}
@@ -111,7 +111,7 @@ func (s *chatsServiceImpl) UpdateChat(ctx context.Context, userID, chatID string
 	return entity.MakeAiChatView(ch), nil
 }
 
-func (s *chatsServiceImpl) DeleteChat(ctx context.Context, userID, chatID string) error {
+func (s *aiChatsServiceImpl) DeleteChat(ctx context.Context, userID, chatID string) error {
 	n, err := s.repo.DeleteChat(ctx, chatID, userID)
 	if err != nil {
 		return err
@@ -122,7 +122,7 @@ func (s *chatsServiceImpl) DeleteChat(ctx context.Context, userID, chatID string
 	return nil
 }
 
-func (s *chatsServiceImpl) ListMessages(ctx context.Context, userID, chatID string, before *time.Time, limit int) (*view.AiChatMessagesListResponse, error) {
+func (s *aiChatsServiceImpl) ListMessages(ctx context.Context, userID, chatID string, before *time.Time, limit int) (*view.AiChatMessagesListResponse, error) {
 	if _, err := mustGetAiChat(ctx, s.repo, userID, chatID); err != nil {
 		return nil, err
 	}

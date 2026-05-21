@@ -9,6 +9,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/client"
 	mcpgo "github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -22,8 +23,8 @@ const (
 	maxSavedGeneratedFileSize = 2 * 1024 * 1024
 )
 
-func makeIDSChatTools() []LLMTool {
-	return []LLMTool{
+func makeIDSChatTools() []client.LLMTool {
+	return []client.LLMTool{
 		{
 			Name: toolNameStartIDSGeneration,
 			Description: `Begin authoring an Integration Design Specification (IDS) document. The tool returns:
@@ -77,7 +78,7 @@ USAGE RULES:
 	}
 }
 
-func (s *aiChatServiceImpl) executeStartIDSGeneration(_ context.Context, args map[string]interface{}) (*mcpgo.CallToolResult, error) {
+func (s *aiChatTurnServiceImpl) executeStartIDSGeneration(_ context.Context, args map[string]interface{}) (*mcpgo.CallToolResult, error) {
 	userInput, _ := args["user_input"].(string)
 	userInput = strings.TrimSpace(userInput)
 	if userInput == "" {
@@ -93,7 +94,7 @@ func (s *aiChatServiceImpl) executeStartIDSGeneration(_ context.Context, args ma
 	return mcpgo.NewToolResultText(kit), nil
 }
 
-func (s *aiChatServiceImpl) executeSaveGeneratedFile(ctx context.Context, args map[string]interface{}) (*mcpgo.CallToolResult, error) {
+func (s *aiChatTurnServiceImpl) executeSaveGeneratedFile(ctx context.Context, args map[string]interface{}) (*mcpgo.CallToolResult, error) {
 	if s.generatedFiles == nil || s.mintFileToken == nil {
 		return mcpgo.NewToolResultError("generated file service is not configured"), nil
 	}
@@ -122,16 +123,8 @@ func (s *aiChatServiceImpl) executeSaveGeneratedFile(ctx context.Context, args m
 		return mcpgo.NewToolResultError(fmt.Sprintf("content is too large (%d bytes, max %d)", len(content), maxSavedGeneratedFileSize)), nil
 	}
 
-	chatID := turn.ChatID
-	var chatPtr *string
-	if chatID != "" {
-		c2 := chatID
-		chatPtr = &c2
-	}
-
-	row, relURL, err := s.generatedFiles.SaveFile(ctx, GeneratedFileSaveInput{
+	row, relURL, err := s.generatedFiles.SaveFile(ctx, EphemeralFileSaveInput{
 		UserID:   turn.UserID,
-		ChatID:   chatPtr,
 		Filename: filename,
 		MimeType: MimeTypeMarkdown,
 		Reader:   strings.NewReader(content),

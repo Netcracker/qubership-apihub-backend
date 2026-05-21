@@ -246,42 +246,6 @@ func (r *aiChatRepositoryImpl) ListMessagesChronological(ctx context.Context, ch
 	return rows, nil
 }
 
-func (r *aiChatRepositoryImpl) GetFileByIDForUser(ctx context.Context, fileID, userID string) (*entity.AiChatFileEntity, error) {
-	res := new(entity.AiChatFileEntity)
-	err := r.cp.GetConnection().ModelContext(ctx, res).
-		Where("id = ?", fileID).
-		Where("user_id = ?", userID).
-		Limit(1).
-		Select()
-	if err != nil {
-		if err == pg.ErrNoRows {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return res, nil
-}
-
-func (r *aiChatRepositoryImpl) GetFileByID(ctx context.Context, fileID string) (*entity.AiChatFileEntity, error) {
-	res := new(entity.AiChatFileEntity)
-	err := r.cp.GetConnection().ModelContext(ctx, res).
-		Where("id = ?", fileID).
-		Limit(1).
-		Select()
-	if err != nil {
-		if err == pg.ErrNoRows {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return res, nil
-}
-
-func (r *aiChatRepositoryImpl) InsertFile(ctx context.Context, f *entity.AiChatFileEntity) error {
-	_, err := r.cp.GetConnection().ModelContext(ctx, f).Insert()
-	return err
-}
-
 func (r *aiChatRepositoryImpl) ListUserIDs(ctx context.Context) ([]string, error) {
 	var ids []string
 	_, err := r.cp.GetConnection().QueryContext(ctx, &ids, "SELECT DISTINCT user_id FROM ai_chat")
@@ -314,28 +278,4 @@ WHERE c.user_id = ?
 		return 0, err
 	}
 	return res.RowsAffected(), nil
-}
-
-func (r *aiChatRepositoryImpl) ListExpiredFiles(ctx context.Context, limit int) ([]entity.AiChatFileEntity, error) {
-	if limit < 1 {
-		limit = 1000
-	}
-	var rows []entity.AiChatFileEntity
-	err := r.cp.GetConnection().ModelContext(ctx, &rows).
-		Where("expires_at < ?", time.Now().UTC()).
-		Limit(limit).
-		Select()
-	if err != nil {
-		return nil, err
-	}
-	return rows, nil
-}
-
-func (r *aiChatRepositoryImpl) DeleteFileByID(ctx context.Context, fileID string) error {
-	// Do not chain TableExpr("ai_chat_file") here: the model tag already names ai_chat_file
-	// and go-pg would emit invalid SQL (PostgreSQL 42712: table specified more than once).
-	_, err := r.cp.GetConnection().ModelContext(ctx, (*entity.AiChatFileEntity)(nil)).
-		Where("id = ?", fileID).
-		Delete()
-	return err
 }

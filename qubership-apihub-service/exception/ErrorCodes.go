@@ -832,16 +832,6 @@ const ShareabilityReportSizeExceededMsg = "Shareability report file size exceede
 const AiChatNotFound = "APIHUB-AI-3001"
 const AiChatNotFoundMsg = "chat with chatId = $chatId not found"
 
-const AiChatGeneratedFileNotFound = "APIHUB-AI-3002"
-const AiChatGeneratedFileNotFoundMsg = "generated file with fileId = $fileId not found"
-
-const AiChatTokenInvalid = "APIHUB-AI-3003"
-const AiChatTokenInvalidMsg = "Invalid download token"
-const AiChatTokenFileMismatchMsg = "download token is not valid for this file"
-
-const AiChatTokenMissing = "APIHUB-AI-3004"
-const AiChatTokenMissingMsg = "Missing token query parameter"
-
 const AiChatValidationFailed = "APIHUB-AI-4001"
 const AiChatValidationFailedMsg = "Message validation failed"
 const AiChatMessageTooLongMsg = "Message exceeds maximum length of $max characters"
@@ -850,9 +840,6 @@ const AiChatEmptyBodyMsg = "Empty body"
 
 const AiChatPinLimitExceeded = "APIHUB-AI-4003"
 const AiChatPinLimitExceededMsg = "Cannot pin chat: user already has $max pinned chats (the limit is $max)"
-
-const AiChatTokenExpired = "APIHUB-AI-4101"
-const AiChatTokenExpiredMsg = "download token expired, please request the file again"
 
 const AiChatInternalError = "APIHUB-AI-5000"
 const AiChatInternalErrorMsg = "Internal error"
@@ -865,3 +852,19 @@ const AiChatLLMErrorMsg = "LLM provider error"
 
 const AiChatMCPToolError = "APIHUB-AI-5002"
 const AiChatMCPToolErrorMsg = "MCP tool execution failed"
+
+// Ephemeral file error codes (APIHUB-EF-*). Each public error has a Code constant; variant
+// messages reuse the parent Code (same pattern as InvalidParameterValue + InvalidLimitMsg).
+
+const EphemeralFileNotFound = "APIHUB-EF-3001"
+const EphemeralFileNotFoundMsg = "ephemeral file with fileId = $fileId not found"
+
+const EphemeralFileTokenInvalid = "APIHUB-EF-3002"
+const EphemeralFileTokenInvalidMsg = "Invalid download token"
+const EphemeralFileTokenFileMismatchMsg = "download token is not valid for this file"
+
+const EphemeralFileTokenMissing = "APIHUB-EF-3003"
+const EphemeralFileTokenMissingMsg = "Missing token query parameter"
+
+const EphemeralFileTokenExpired = "APIHUB-EF-4101"
+const EphemeralFileTokenExpiredMsg = "download token expired, please request the file again"

@@ -36,12 +36,8 @@ CREATE UNIQUE INDEX ai_chat_message_client_id_idx
     ON ai_chat_message (chat_id, client_message_id)
     WHERE client_message_id IS NOT NULL;
 
-CREATE TABLE ai_chat_file (
+CREATE TABLE ephemeral_file (
     id            uuid        PRIMARY KEY,
-    chat_id       uuid
-        CONSTRAINT ai_chat_file_chat_fk REFERENCES ai_chat(id) ON DELETE SET NULL,
-    message_id    uuid
-        CONSTRAINT ai_chat_file_message_fk REFERENCES ai_chat_message(id) ON DELETE SET NULL,
     user_id       varchar     NOT NULL,
     filename      text        NOT NULL,
     storage_path  text        NOT NULL,
@@ -51,5 +47,5 @@ CREATE TABLE ai_chat_file (
     expires_at    timestamp without time zone NOT NULL
 );
 
-CREATE INDEX ai_chat_file_expires_idx ON ai_chat_file (expires_at);
-CREATE INDEX ai_chat_file_user_idx ON ai_chat_file (user_id);
+CREATE INDEX ephemeral_file_expires_idx ON ephemeral_file (expires_at);
+CREATE INDEX ephemeral_file_user_idx ON ephemeral_file (user_id);

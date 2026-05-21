@@ -34,7 +34,7 @@ Implications for the FE state management:
 
 ## 3. Endpoints at a glance
 
-Chat-management endpoints live under `/api/v1/ai-chat/*` and require the standard APIHUB session authentication (JWT / cookie). File downloads live on a deliberately generic path (`/api/v1/generated-files/*`) and use a signed query-param token instead of session authentication.
+Chat-management endpoints live under `/api/v1/ai-chat/*` and require the standard APIHUB session authentication (JWT / cookie). File downloads live on a deliberately generic path (`/api/v1/ephemeral-files/*`) and use a signed query-param token instead of session authentication.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
@@ -46,7 +46,7 @@ Chat-management endpoints live under `/api/v1/ai-chat/*` and require the standar
 | `GET` | `/api/v1/ai-chat/chats/{chatId}/messages` | Paginated history (newest first). |
 | `POST` | `/api/v1/ai-chat/chats/{chatId}/messages` | Send user message, non-streaming (scripts/tests only). |
 | `POST` | `/api/v1/ai-chat/chats/{chatId}/messages/stream` | **Main flow:** send user message, receive SSE-streamed assistant response. |
-| `GET` | `/api/v1/generated-files/{fileId}?token=...` | Download a file produced by the backend (today — by the assistant). |
+| `GET` | `/api/v1/ephemeral-files/{fileId}?token=...` | Download a file produced by the backend (today — by the assistant). |
 
 ### 3.1 Idempotency
 
@@ -154,7 +154,7 @@ If the user navigates away or clicks "Stop", abort the underlying `fetch()` requ
 Some turns produce downloadable files (CSV reports, generated docs, etc.). They appear **exclusively as ordinary Markdown links inside the assistant's `content`**, for example:
 
 ```Markdown
-Here is the report you asked for: [operations-report.csv](/api/v1/generated-files/7b6f4f87-4c8f-4d69-a66e-4a3c8a1b2c55?token=eyJhbGciOi...)
+Here is the report you asked for: [operations-report.csv](/api/v1/ephemeral-files/7b6f4f87-4c8f-4d69-a66e-4a3c8a1b2c55?token=eyJhbGciOi...)
 ```
 
 The Markdown renderer does not need any special handling — a regular `<a>` with `target="_blank"` / `download` is enough. There is **no separate `attachments` array** in the contract; the Markdown link is the single source of truth for both live and historical messages.
@@ -196,15 +196,20 @@ Errors are returned as the standard APIHUB `ErrorResponse` body (`status`, `code
 | Code | Meaning |
 | --- | --- |
 | `APIHUB-AI-3001` | Chat not found (or belongs to another user; the server does not disclose the difference). |
-| `APIHUB-AI-3002` | Generated file not found or already cleaned up. |
-| `APIHUB-AI-3003` | Download token invalid or not valid for the requested file. |
-| `APIHUB-AI-3004` | Download token query parameter missing. |
 | `APIHUB-AI-4001` | Message validation failed (length, empty content, invalid cursor, etc.). |
 | `APIHUB-AI-4003` | Pinned-chats limit exceeded (3). |
-| `APIHUB-AI-4101` | Signed download token expired (`410 Gone`). |
 | `APIHUB-AI-5000` | Generic internal server error while processing the chat. |
 | `APIHUB-AI-5001` | Upstream LLM provider failure. |
 | `APIHUB-AI-5002` | MCP tool failure bubbled up through the stream. |
+
+Ephemeral file download errors (`GET /api/v1/ephemeral-files/{fileId}`) use a separate code namespace:
+
+| Code | Meaning |
+| --- | --- |
+| `APIHUB-EF-3001` | Ephemeral file not found or already cleaned up. |
+| `APIHUB-EF-3002` | Download token invalid or not valid for the requested file. |
+| `APIHUB-EF-3003` | Download token query parameter missing. |
+| `APIHUB-EF-4101` | Signed download token expired (`410 Gone`). |
 
 Non-streaming endpoints return the error in the response body. The streaming endpoint returns validation/authz errors as a regular HTTP error *before* any SSE frame is written, and returns mid-turn errors via the `error` SSE event (see §4.3).
 
@@ -227,7 +232,7 @@ Minimum viable integration:
   - [ ] (optional) render live tool pills from `tool.started` / `tool.completed`; after a reload the same pills reappear from `toolInvocations` on the persisted message;
   - [ ] (optional) show the compaction indicator when `context.compacted` arrives.
 - [ ] Handle the standard chat actions (create, rename, pin/unpin, delete). Surface the `APIHUB-AI-4003` error as a toast.
-- [ ] Let the Markdown renderer handle file links — they are regular `<a>` elements pointing at `/api/v1/generated-files/...`.
+- [ ] Let the Markdown renderer handle file links — they are regular `<a>` elements pointing at `/api/v1/ephemeral-files/...`.
 
 Non-essential but recommended:
 
@@ -236,6 +241,6 @@ Non-essential but recommended:
 
 ## 9. Versioning and compatibility
 
-* The contract lives under `/api/v1/ai-chat/*` (chat CRUD + messaging) and `/api/v1/generated-files/*` (downloads) and is considered stable going forward.
+* The contract lives under `/api/v1/ai-chat/*` (chat CRUD + messaging) and `/api/v1/ephemeral-files/*` (downloads) and is considered stable going forward.
 * Additions (new event types, new optional fields) are non-breaking. Consumers **must** ignore unknown `event` types gracefully and unknown JSON fields silently.
 * The previous PoC endpoints (`POST /api/v1/ai-chat` and `POST /api/v1/ai-chat/stream` with the "full history" payload) are removed as part of this rollout. They existed only in non-production builds.

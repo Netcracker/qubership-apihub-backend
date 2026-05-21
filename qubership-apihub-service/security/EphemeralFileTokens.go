@@ -10,26 +10,26 @@ import (
 )
 
 const (
-	GeneratedFileDownloadTokenType = "generated-file-download"
+	EphemeralFileDownloadTokenType = "ephemeral-file-download"
 	fileIDExt                      = "fileId"
 )
 
-func MintGeneratedFileToken(userID, fileID string, ttl time.Duration) (string, error) {
+func MintEphemeralFileToken(userID, fileID string, ttl time.Duration) (string, error) {
 	if defaultJWTValidator == nil {
 		return "", fmt.Errorf("security not initialized: JWT validator is nil")
 	}
 	user := auth.NewUserInfo("", userID, nil, auth.Extensions{})
 	ext := user.GetExtensions()
-	ext.Set(TokenTypeExt, GeneratedFileDownloadTokenType)
+	ext.Set(TokenTypeExt, EphemeralFileDownloadTokenType)
 	ext.Set(fileIDExt, fileID)
 	return jwt.IssueAccessToken(user, keeper, jwt.SetExpDuration(ttl))
 }
 
-func ValidateGeneratedFileToken(token string) (userID, fileID string, err error) {
+func ValidateEphemeralFileToken(token string) (userID, fileID string, err error) {
 	if defaultJWTValidator == nil {
 		return "", "", fmt.Errorf("security not initialized")
 	}
-	info, exp, err := defaultJWTValidator.ValidateToken(token, GeneratedFileDownloadTokenType)
+	info, exp, err := defaultJWTValidator.ValidateToken(token, EphemeralFileDownloadTokenType)
 	if err != nil {
 		return "", "", err
 	}

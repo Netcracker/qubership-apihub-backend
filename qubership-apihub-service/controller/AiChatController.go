@@ -14,11 +14,11 @@ import (
 )
 
 type AiChatController struct {
-	chatsSvc aiservice.ChatsService
-	aiSvc    aiservice.AiChatService
+	chatsSvc aiservice.AiChatsService
+	aiSvc    aiservice.AiChatTurnService
 }
 
-func NewAiChatController(chatsSvc aiservice.ChatsService, aiSvc aiservice.AiChatService) *AiChatController {
+func NewAiChatController(chatsSvc aiservice.AiChatsService, aiSvc aiservice.AiChatTurnService) *AiChatController {
 	return &AiChatController{chatsSvc: chatsSvc, aiSvc: aiSvc}
 }
 

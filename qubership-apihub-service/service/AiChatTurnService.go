@@ -10,6 +10,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/client"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/metrics"
@@ -29,7 +30,7 @@ const (
 	maxCompactionSummaryPreviewRunes = 240
 )
 
-type AiChatService interface {
+type AiChatTurnService interface {
 	SendMessage(ctx context.Context, userID, chatID string, req *view.AiChatSendMessageRequest) (*view.AiChatSendMessageResponse, error)
 	SendMessageStream(ctx context.Context, userID, chatID string, req *view.AiChatSendMessageRequest) (<-chan AiChatStreamChunk, error)
 }
@@ -89,7 +90,7 @@ type toolCallRecord struct {
 
 type chatTurnResult struct {
 	AssistantContent string
-	Usage            *ChatUsage
+	Usage            *client.ChatUsage
 	ToolInvocations  []view.AiChatToolInvocation
 	ToolCallRecords  []toolCallRecord
 }
@@ -102,8 +103,8 @@ type chatStreamHooks struct {
 
 const toolNameAskClarification = "ask_clarification"
 
-func makeAskClarificationTool() LLMTool {
-	return LLMTool{
+func makeAskClarificationTool() client.LLMTool {
+	return client.LLMTool{
 		Name: toolNameAskClarification,
 		Description: "Ask the user a single clarifying question when their request is too ambiguous to answer reliably. " +
 			"The question you provide will be shown to the user as your response. " +
@@ -121,14 +122,14 @@ func makeAskClarificationTool() LLMTool {
 	}
 }
 
-type aiChatServiceImpl struct {
+type aiChatTurnServiceImpl struct {
 	sis            SystemInfoService
 	repo           repository.AiChatRepository
 	mcpService     MCPService
-	generatedFiles GeneratedFileService
+	generatedFiles EphemeralFileService
 	mintFileToken  FileTokenMinter
-	llm            LlmChatService
-	mcpTools       []LLMTool
+	llm            client.LlmClient
+	mcpTools       []client.LLMTool
 
 	packagesListCache struct {
 		mu        sync.RWMutex
@@ -137,14 +138,14 @@ type aiChatServiceImpl struct {
 	}
 }
 
-func NewAiChatService(
+func NewAiChatTurnService(
 	sis SystemInfoService,
 	repo repository.AiChatRepository,
-	llm LlmChatService,
+	llm client.LlmClient,
 	mcp MCPService,
-	generatedFiles GeneratedFileService,
+	generatedFiles EphemeralFileService,
 	mint FileTokenMinter,
-) (AiChatService, error) {
+) (AiChatTurnService, error) {
 	if mint == nil {
 		return nil, fmt.Errorf("file token minter is required")
 	}
@@ -162,7 +163,7 @@ func NewAiChatService(
 		log.Debugf("LLM tool available: %s - %s", tool.Name, tool.Description)
 	}
 
-	return &aiChatServiceImpl{
+	return &aiChatTurnServiceImpl{
 		sis:            sis,
 		repo:           repo,
 		mcpService:     mcp,
@@ -173,7 +174,7 @@ func NewAiChatService(
 	}, nil
 }
 
-func (s *aiChatServiceImpl) SendMessage(ctx context.Context, userID, chatID string, req *view.AiChatSendMessageRequest) (*view.AiChatSendMessageResponse, error) {
+func (s *aiChatTurnServiceImpl) SendMessage(ctx context.Context, userID, chatID string, req *view.AiChatSendMessageRequest) (*view.AiChatSendMessageResponse, error) {
 	chat, err := mustGetAiChat(ctx, s.repo, userID, chatID)
 	if err != nil {
 		return nil, err
@@ -196,7 +197,7 @@ func (s *aiChatServiceImpl) SendMessage(ctx context.Context, userID, chatID stri
 	return &view.AiChatSendMessageResponse{UserMessage: *um, AssistantMessage: *am}, nil
 }
 
-func (s *aiChatServiceImpl) SendMessageStream(ctx context.Context, userID, chatID string, req *view.AiChatSendMessageRequest) (<-chan AiChatStreamChunk, error) {
+func (s *aiChatTurnServiceImpl) SendMessageStream(ctx context.Context, userID, chatID string, req *view.AiChatSendMessageRequest) (<-chan AiChatStreamChunk, error) {
 	chat, err := mustGetAiChat(ctx, s.repo, userID, chatID)
 	if err != nil {
 		return nil, err
@@ -222,7 +223,7 @@ func (s *aiChatServiceImpl) SendMessageStream(ctx context.Context, userID, chatI
 	return out, nil
 }
 
-func (s *aiChatServiceImpl) observeTurn(mode string, started time.Time, err error) {
+func (s *aiChatTurnServiceImpl) observeTurn(mode string, started time.Time, err error) {
 	status := AiChatToolStatusOK
 	if err != nil {
 		status = AiChatToolStatusError
@@ -238,7 +239,7 @@ func streamModeForChan(ch chan<- AiChatStreamChunk) string {
 	return AiChatTurnModeStream
 }
 
-func (s *aiChatServiceImpl) emitStream(ctx context.Context, ch chan<- AiChatStreamChunk, name string, data interface{}) error {
+func (s *aiChatTurnServiceImpl) emitStream(ctx context.Context, ch chan<- AiChatStreamChunk, name string, data interface{}) error {
 	if ch == nil {
 		return nil
 	}
@@ -252,7 +253,7 @@ func (s *aiChatServiceImpl) emitStream(ctx context.Context, ch chan<- AiChatStre
 
 // Idempotency: cached pair when user+assistant exist for clientMessageId; retry LLM when user
 // exists without assistant; concurrent inserts race on partial unique index and replay.
-func (s *aiChatServiceImpl) runTurn(ctx context.Context, userID string, chat *entity.AiChatEntity, req *view.AiChatSendMessageRequest, stream chan<- AiChatStreamChunk) (*view.AiChatMessage, *view.AiChatMessage, error) {
+func (s *aiChatTurnServiceImpl) runTurn(ctx context.Context, userID string, chat *entity.AiChatEntity, req *view.AiChatSendMessageRequest, stream chan<- AiChatStreamChunk) (*view.AiChatMessage, *view.AiChatMessage, error) {
 	var clientID *string
 	if req.ClientMessageID != nil && *req.ClientMessageID != "" {
 		c := *req.ClientMessageID
@@ -294,7 +295,7 @@ func (s *aiChatServiceImpl) runTurn(ctx context.Context, userID string, chat *en
 	return s.runLLMTurn(ctx, userID, chat, um, stream)
 }
 
-func (s *aiChatServiceImpl) runLLMTurn(ctx context.Context, userID string, chat *entity.AiChatEntity, um *entity.AiChatMessageEntity, stream chan<- AiChatStreamChunk) (*view.AiChatMessage, *view.AiChatMessage, error) {
+func (s *aiChatTurnServiceImpl) runLLMTurn(ctx context.Context, userID string, chat *entity.AiChatEntity, um *entity.AiChatMessageEntity, stream chan<- AiChatStreamChunk) (*view.AiChatMessage, *view.AiChatMessage, error) {
 	if AiChatCorrelationIDFromContext(ctx) == "" {
 		ctx = WithAiChatCorrelationID(ctx, uuid.NewString())
 	}
@@ -410,7 +411,7 @@ func (s *aiChatServiceImpl) runLLMTurn(ctx context.Context, userID string, chat 
 	return umView, amView, nil
 }
 
-func (s *aiChatServiceImpl) replayIdempotent(ctx context.Context, userID, chatID, clientID string, stream chan<- AiChatStreamChunk) (*view.AiChatMessage, *view.AiChatMessage, error) {
+func (s *aiChatTurnServiceImpl) replayIdempotent(ctx context.Context, userID, chatID, clientID string, stream chan<- AiChatStreamChunk) (*view.AiChatMessage, *view.AiChatMessage, error) {
 	u, err := s.repo.FindUserMessageByClientID(ctx, chatID, clientID)
 	if err != nil || u == nil {
 		return nil, nil, &exception.CustomError{Status: http.StatusInternalServerError, Code: exception.AiChatInternalError, Message: exception.AiChatIdempotentReplayFailedMsg}
@@ -429,7 +430,7 @@ func (s *aiChatServiceImpl) replayIdempotent(ctx context.Context, userID, chatID
 	return s.serveCachedPair(ctx, u, a, stream)
 }
 
-func (s *aiChatServiceImpl) serveCachedPair(ctx context.Context, u, a *entity.AiChatMessageEntity, stream chan<- AiChatStreamChunk) (*view.AiChatMessage, *view.AiChatMessage, error) {
+func (s *aiChatTurnServiceImpl) serveCachedPair(ctx context.Context, u, a *entity.AiChatMessageEntity, stream chan<- AiChatStreamChunk) (*view.AiChatMessage, *view.AiChatMessage, error) {
 	umView := entity.MakeAiChatMessageView(u)
 	amView := entity.MakeAiChatMessageView(a)
 	if stream != nil {
@@ -456,22 +457,23 @@ func (s *aiChatServiceImpl) serveCachedPair(ctx context.Context, u, a *entity.Ai
 	return umView, amView, nil
 }
 
-func (s *aiChatServiceImpl) runToolLoop(ctx context.Context, history []ChatMessage, streaming bool, hooks chatStreamHooks) (*chatTurnResult, error) {
+func (s *aiChatTurnServiceImpl) runToolLoop(ctx context.Context, history []client.ChatMessage, streaming bool, hooks chatStreamHooks) (*chatTurnResult, error) {
 	systemMsg := s.buildSystemMessage(ctx)
-	messages := append([]ChatMessage(nil), history...)
+	messages := append([]client.ChatMessage(nil), history...)
 
-	var totalUsage ChatUsage
+	var totalUsage client.ChatUsage
 	var allToolInvocations []view.AiChatToolInvocation
 	var allToolCallRecords []toolCallRecord
 	var assistantText strings.Builder
 
 	for iteration := 0; iteration < maxToolLoopIterations; iteration++ {
-		req := LLMRequest{
+		req := client.LLMRequest{
 			SystemMessage: systemMsg,
 			Messages:      messages,
 			Tools:         s.mcpTools,
+			CorrelationID: AiChatCorrelationIDFromContext(ctx),
 		}
-		var resp *LLMResponse
+		var resp *client.LLMResponse
 		var err error
 		if streaming {
 			resp, err = s.llm.ExecuteStreaming(ctx, req, hooks.OnTextDelta, hooks.OnToolStart)
@@ -502,7 +504,7 @@ func (s *aiChatServiceImpl) runToolLoop(ctx context.Context, history []ChatMessa
 			break
 		}
 
-		messages = append(messages, ChatMessage{
+		messages = append(messages, client.ChatMessage{
 			Role:      ChatRoleAssistant,
 			Content:   resp.AssistantText,
 			ToolCalls: resp.ToolCalls,
@@ -523,7 +525,7 @@ func (s *aiChatServiceImpl) runToolLoop(ctx context.Context, history []ChatMessa
 		}
 
 		for i, tc := range resp.ToolCalls {
-			messages = append(messages, ChatMessage{
+			messages = append(messages, client.ChatMessage{
 				Role:       ChatRoleTool,
 				ToolCallID: tc.ID,
 				Content:    toolResultStrs[i],
@@ -544,7 +546,7 @@ func (s *aiChatServiceImpl) runToolLoop(ctx context.Context, history []ChatMessa
 	}, nil
 }
 
-func extractClarificationQuestion(toolCalls []LLMToolCall) (string, bool) {
+func extractClarificationQuestion(toolCalls []client.LLMToolCall) (string, bool) {
 	for _, tc := range toolCalls {
 		if tc.Name != toolNameAskClarification {
 			continue
@@ -566,7 +568,7 @@ func extractClarificationQuestion(toolCalls []LLMToolCall) (string, bool) {
 	return "", false
 }
 
-func (s *aiChatServiceImpl) executeToolCalls(ctx context.Context, toolCalls []LLMToolCall) ([]string, []view.AiChatToolInvocation, []toolCallRecord, error) {
+func (s *aiChatTurnServiceImpl) executeToolCalls(ctx context.Context, toolCalls []client.LLMToolCall) ([]string, []view.AiChatToolInvocation, []toolCallRecord, error) {
 	results := make([]string, len(toolCalls))
 	invocations := make([]view.AiChatToolInvocation, 0, len(toolCalls))
 	records := make([]toolCallRecord, 0, len(toolCalls))
@@ -670,18 +672,18 @@ func (s *aiChatServiceImpl) executeToolCalls(ctx context.Context, toolCalls []LL
 	return results, invocations, records, nil
 }
 
-func (s *aiChatServiceImpl) historyRowsToChatMessages(rows []entity.AiChatMessageEntity) []ChatMessage {
-	out := make([]ChatMessage, 0, len(rows))
+func (s *aiChatTurnServiceImpl) historyRowsToChatMessages(rows []entity.AiChatMessageEntity) []client.ChatMessage {
+	out := make([]client.ChatMessage, 0, len(rows))
 	for i := range rows {
 		if rows[i].Role != ChatRoleUser && rows[i].Role != ChatRoleAssistant {
 			continue
 		}
-		out = append(out, ChatMessage{Role: rows[i].Role, Content: rows[i].Content})
+		out = append(out, client.ChatMessage{Role: rows[i].Role, Content: rows[i].Content})
 	}
 	return out
 }
 
-func (s *aiChatServiceImpl) buildHistoryForLLM(chat *entity.AiChatEntity, hist []entity.AiChatMessageEntity) []ChatMessage {
+func (s *aiChatTurnServiceImpl) buildHistoryForLLM(chat *entity.AiChatEntity, hist []entity.AiChatMessageEntity) []client.ChatMessage {
 	rows := hist
 	if chat.CompactedUpToCreatedAt != nil {
 		filtered := rows[:0:0]
@@ -692,9 +694,9 @@ func (s *aiChatServiceImpl) buildHistoryForLLM(chat *entity.AiChatEntity, hist [
 		}
 		rows = filtered
 	}
-	out := make([]ChatMessage, 0, len(rows)+1)
+	out := make([]client.ChatMessage, 0, len(rows)+1)
 	if chat.CompactionSummary != nil && strings.TrimSpace(*chat.CompactionSummary) != "" {
-		out = append(out, ChatMessage{
+		out = append(out, client.ChatMessage{
 			Role: ChatRoleSystem,
 			Content: "EARLIER CONVERSATION SUMMARY (replaces older messages, keep using these facts):\n" +
 				*chat.CompactionSummary,
@@ -704,7 +706,7 @@ func (s *aiChatServiceImpl) buildHistoryForLLM(chat *entity.AiChatEntity, hist [
 	return out
 }
 
-func (s *aiChatServiceImpl) maybeCompactBefore(ctx context.Context, chat *entity.AiChatEntity, hist []entity.AiChatMessageEntity) (bool, map[string]interface{}) {
+func (s *aiChatTurnServiceImpl) maybeCompactBefore(ctx context.Context, chat *entity.AiChatEntity, hist []entity.AiChatMessageEntity) (bool, map[string]interface{}) {
 	if chat.LastTurnTokens == nil {
 		return false, nil
 	}
@@ -750,7 +752,7 @@ func (s *aiChatServiceImpl) maybeCompactBefore(ctx context.Context, chat *entity
 	}
 }
 
-func (s *aiChatServiceImpl) buildSystemMessage(ctx context.Context) string {
+func (s *aiChatTurnServiceImpl) buildSystemMessage(ctx context.Context) string {
 	mcpWorkspace := s.sis.GetAiMCPConfig().Workspace
 	if mcpWorkspace == "" {
 		return systemMessageBaseContent
@@ -795,16 +797,17 @@ func (s *aiChatServiceImpl) buildSystemMessage(ctx context.Context) string {
 	return systemMessageBaseContent
 }
 
-func (s *aiChatServiceImpl) generateChatTitle(ctx context.Context, userText, assistantText string) string {
+func (s *aiChatTurnServiceImpl) generateChatTitle(ctx context.Context, userText, assistantText string) string {
 	const sysPrompt = `You write very short (no more than 6 words) chat titles.
 Return ONLY the title text - no quotes, no markdown, no trailing punctuation.
 Capture the main topic or task of the conversation.`
 	prompt := "User asked: " + truncateRunes(userText, MaxTitlePromptRunesPerSide) +
 		"\n\nAssistant replied: " + truncateRunes(assistantText, MaxTitlePromptRunesPerSide)
 
-	resp, err := s.llm.Execute(ctx, LLMRequest{
+	resp, err := s.llm.Execute(ctx, client.LLMRequest{
 		SystemMessage: sysPrompt,
-		Messages:      []ChatMessage{{Role: ChatRoleUser, Content: prompt}},
+		Messages:      []client.ChatMessage{{Role: ChatRoleUser, Content: prompt}},
+		CorrelationID: AiChatCorrelationIDFromContext(ctx),
 	})
 	if err != nil || resp == nil {
 		log.Warnf("ai-chat: generateChatTitle LLM call failed: %v", err)
@@ -818,7 +821,7 @@ Capture the main topic or task of the conversation.`
 	return title
 }
 
-func (s *aiChatServiceImpl) summarizeForCompaction(ctx context.Context, prior *string, msgs []ChatMessage) string {
+func (s *aiChatTurnServiceImpl) summarizeForCompaction(ctx context.Context, prior *string, msgs []client.ChatMessage) string {
 	if len(msgs) == 0 {
 		if prior != nil {
 			return *prior
@@ -850,9 +853,10 @@ Return plain text, 4-12 sentences, no markdown headings.`
 		b.WriteString(truncateRunes(m.Content, MaxCompactionMessageRunes))
 		b.WriteString("\n")
 	}
-	resp, err := s.llm.Execute(ctx, LLMRequest{
+	resp, err := s.llm.Execute(ctx, client.LLMRequest{
 		SystemMessage: sysPrompt,
-		Messages:      []ChatMessage{{Role: ChatRoleUser, Content: b.String()}},
+		Messages:      []client.ChatMessage{{Role: ChatRoleUser, Content: b.String()}},
+		CorrelationID: AiChatCorrelationIDFromContext(ctx),
 	})
 	if err != nil || resp == nil {
 		log.Warnf("ai-chat: summarizeForCompaction failed: %v", err)
@@ -864,7 +868,7 @@ Return plain text, 4-12 sentences, no markdown headings.`
 	return strings.TrimSpace(resp.AssistantText)
 }
 
-func (s *aiChatServiceImpl) scheduleAutoTitle(chatID, userID, userText, assistantText string) {
+func (s *aiChatTurnServiceImpl) scheduleAutoTitle(chatID, userID, userText, assistantText string) {
 	utils.SafeAsync(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), AutoTitleGenerationTimeout)
 		defer cancel()

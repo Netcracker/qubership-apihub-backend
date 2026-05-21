@@ -138,17 +138,17 @@ var AiChatCompactionsTotal = prometheus.NewCounter(
 	},
 )
 
-var AiChatGeneratedFilesTotal = prometheus.NewCounter(
+var EphemeralFilesTotal = prometheus.NewCounter(
 	prometheus.CounterOpts{
-		Name: "apihub_ai_chat_generated_files_total",
-		Help: "Number of AI-generated files persisted.",
+		Name: "apihub_ephemeral_files_total",
+		Help: "Number of ephemeral files persisted.",
 	},
 )
 
-var AiChatGeneratedFileBytes = prometheus.NewHistogram(
+var EphemeralFileBytes = prometheus.NewHistogram(
 	prometheus.HistogramOpts{
-		Name:    "apihub_ai_chat_generated_file_bytes",
-		Help:    "Size of AI-generated files in bytes.",
+		Name:    "apihub_ephemeral_file_bytes",
+		Help:    "Size of ephemeral files in bytes.",
 		Buckets: []float64{1024, 8 * 1024, 64 * 1024, 512 * 1024, 4 * 1024 * 1024, 32 * 1024 * 1024},
 	},
 )
@@ -178,7 +178,7 @@ func RegisterAllPrometheusApplicationMetrics() {
 	prometheus.Register(AiChatTurnTokens)
 	prometheus.Register(AiChatToolCallsTotal)
 	prometheus.Register(AiChatCompactionsTotal)
-	prometheus.Register(AiChatGeneratedFilesTotal)
-	prometheus.Register(AiChatGeneratedFileBytes)
+	prometheus.Register(EphemeralFilesTotal)
+	prometheus.Register(EphemeralFileBytes)
 	prometheus.Register(AiChatCleanupDeleted)
 }

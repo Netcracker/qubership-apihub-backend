@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/client"
 	secctx "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/metrics"
@@ -16,7 +17,7 @@ import (
 
 type MCPService interface {
 	MakeMCPServer() *mcpserver.MCPServer
-	MakeLLMTools() []LLMTool
+	MakeLLMTools() []client.LLMTool
 	ExecuteGetSpecTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error)
 	ExecuteSearchTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error)
 	ExecuteGetOperationDiffTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error)
@@ -179,12 +180,12 @@ const (
 	idsPromptArgUserInput = "user_input"
 )
 
-func (m mcpService) MakeLLMTools() []LLMTool {
+func (m mcpService) MakeLLMTools() []client.LLMTool {
 	openAIToolsRaw := GetToolsForOpenAI()
-	toolsList := make([]LLMTool, len(openAIToolsRaw))
+	toolsList := make([]client.LLMTool, len(openAIToolsRaw))
 	for i, toolRaw := range openAIToolsRaw {
 		functionRaw := toolRaw["function"].(map[string]interface{})
-		toolsList[i] = LLMTool{
+		toolsList[i] = client.LLMTool{
 			Name:        functionRaw["name"].(string),
 			Description: functionRaw["description"].(string),
 			Parameters:  functionRaw["parameters"].(map[string]interface{}),

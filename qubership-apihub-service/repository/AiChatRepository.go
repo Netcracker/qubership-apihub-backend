@@ -36,12 +36,7 @@ type AiChatRepository interface {
 	FindNextAssistantMessage(ctx context.Context, chatID string, afterCreatedAt time.Time) (*entity.AiChatMessageEntity, error)
 	ListMessages(ctx context.Context, f AiMessagesListFilter) ([]entity.AiChatMessageEntity, error)
 	ListMessagesChronological(ctx context.Context, chatID string, maxMessages int) ([]entity.AiChatMessageEntity, error)
-	GetFileByIDForUser(ctx context.Context, fileID, userID string) (*entity.AiChatFileEntity, error)
-	GetFileByID(ctx context.Context, fileID string) (*entity.AiChatFileEntity, error)
-	InsertFile(ctx context.Context, f *entity.AiChatFileEntity) error
 
 	ListUserIDs(ctx context.Context) ([]string, error)
 	DeleteUserChatsByRetention(ctx context.Context, userID string, retentionDays, pinnedForeverCount int) (int, error)
-	ListExpiredFiles(ctx context.Context, limit int) ([]entity.AiChatFileEntity, error)
-	DeleteFileByID(ctx context.Context, fileID string) error
 }

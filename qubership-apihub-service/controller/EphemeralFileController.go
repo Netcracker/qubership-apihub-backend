@@ -15,15 +15,15 @@ import (
 )
 
 // Download: resolve file row (404 if missing/expired) before JWT check, then ownership.
-type GeneratedFileController struct {
-	svc aiservice.GeneratedFileService
+type EphemeralFileController struct {
+	svc aiservice.EphemeralFileService
 }
 
-func NewGeneratedFileController(svc aiservice.GeneratedFileService) *GeneratedFileController {
-	return &GeneratedFileController{svc: svc}
+func NewEphemeralFileController(svc aiservice.EphemeralFileService) *EphemeralFileController {
+	return &EphemeralFileController{svc: svc}
 }
 
-func (c *GeneratedFileController) Download(w http.ResponseWriter, r *http.Request) {
+func (c *EphemeralFileController) Download(w http.ResponseWriter, r *http.Request) {
 	fileID := mux.Vars(r)["fileId"]
 
 	f, err := c.svc.GetFileByID(r.Context(), fileID)
@@ -32,43 +32,43 @@ func (c *GeneratedFileController) Download(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if f == nil || f.ExpiresAt.Before(time.Now().UTC()) {
-		utils.RespondWithCustomError(w, errAiGeneratedFileNotFound(fileID))
+		utils.RespondWithCustomError(w, errEphemeralFileNotFound(fileID))
 		return
 	}
 
 	token := r.URL.Query().Get("token")
 	if token == "" {
-		utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusUnauthorized, Code: exception.AiChatTokenMissing, Message: exception.AiChatTokenMissingMsg})
+		utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusUnauthorized, Code: exception.EphemeralFileTokenMissing, Message: exception.EphemeralFileTokenMissingMsg})
 		return
 	}
-	uid, tokFileID, err := security.ValidateGeneratedFileToken(token)
+	uid, tokFileID, err := security.ValidateEphemeralFileToken(token)
 	if err != nil {
 		if security.IsTokenExpiredError(err) {
-			utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusGone, Code: exception.AiChatTokenExpired, Message: exception.AiChatTokenExpiredMsg, Debug: err.Error()})
+			utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusGone, Code: exception.EphemeralFileTokenExpired, Message: exception.EphemeralFileTokenExpiredMsg, Debug: err.Error()})
 			return
 		}
-		utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusUnauthorized, Code: exception.AiChatTokenInvalid, Message: exception.AiChatTokenInvalidMsg, Debug: err.Error()})
+		utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusUnauthorized, Code: exception.EphemeralFileTokenInvalid, Message: exception.EphemeralFileTokenInvalidMsg, Debug: err.Error()})
 		return
 	}
 	if tokFileID != fileID {
-		utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusUnauthorized, Code: exception.AiChatTokenInvalid, Message: exception.AiChatTokenFileMismatchMsg})
+		utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusUnauthorized, Code: exception.EphemeralFileTokenInvalid, Message: exception.EphemeralFileTokenFileMismatchMsg})
 		return
 	}
 
 	if uid != f.UserID {
-		utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusUnauthorized, Code: exception.AiChatTokenInvalid, Message: exception.AiChatTokenFileMismatchMsg})
+		utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusUnauthorized, Code: exception.EphemeralFileTokenInvalid, Message: exception.EphemeralFileTokenFileMismatchMsg})
 		return
 	}
 
 	file, err := os.Open(f.StoragePath)
 	if err != nil {
-		utils.RespondWithCustomError(w, errAiGeneratedFileNotFound(fileID))
+		utils.RespondWithCustomError(w, errEphemeralFileNotFound(fileID))
 		return
 	}
 	defer file.Close()
 	st, err := file.Stat()
 	if err != nil || st.IsDir() {
-		utils.RespondWithCustomError(w, errAiGeneratedFileNotFound(fileID))
+		utils.RespondWithCustomError(w, errEphemeralFileNotFound(fileID))
 		return
 	}
 
@@ -81,20 +81,13 @@ func (c *GeneratedFileController) Download(w http.ResponseWriter, r *http.Reques
 	http.ServeContent(w, r, "", st.ModTime(), file)
 }
 
-func errAiGeneratedFileNotFound(fileID string) *exception.CustomError {
+func errEphemeralFileNotFound(fileID string) *exception.CustomError {
 	return &exception.CustomError{
 		Status:  http.StatusNotFound,
-		Code:    exception.AiChatGeneratedFileNotFound,
-		Message: exception.AiChatGeneratedFileNotFoundMsg,
+		Code:    exception.EphemeralFileNotFound,
+		Message: exception.EphemeralFileNotFoundMsg,
 		Params:  map[string]interface{}{"fileId": fileID},
 	}
-}
-
-func errToString(err error) string {
-	if err == nil {
-		return ""
-	}
-	return err.Error()
 }
 
 func escapeFilename(s string) string {
