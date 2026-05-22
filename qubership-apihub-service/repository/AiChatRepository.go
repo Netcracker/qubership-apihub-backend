@@ -10,16 +10,18 @@ import (
 const DefaultAiContextMessagesLimit = 200
 
 type AiChatsListFilter struct {
-	UserID  string
-	Search  string
-	Before  *time.Time
-	Limit   int
+	UserID   string
+	Search   string
+	Before   *time.Time
+	BeforeID string
+	Limit    int
 }
 
 type AiMessagesListFilter struct {
-	ChatID string
-	Before *time.Time
-	Limit  int
+	ChatID   string
+	Before   *time.Time
+	BeforeID string
+	Limit    int
 }
 
 type AiChatRepository interface {

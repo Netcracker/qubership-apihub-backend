@@ -48,4 +48,3 @@ CREATE TABLE ephemeral_file (
 );
 
 CREATE INDEX ephemeral_file_expires_idx ON ephemeral_file (expires_at);
-CREATE INDEX ephemeral_file_user_idx ON ephemeral_file (user_id);

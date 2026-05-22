@@ -38,8 +38,9 @@ func (c *AiChatController) ListChats(w http.ResponseWriter, r *http.Request) {
 		}
 		before = &t
 	}
+	beforeID := r.URL.Query().Get("beforeId")
 	search := r.URL.Query().Get("search")
-	res, err := c.chatsSvc.ListChats(r.Context(), uid, search, before, limit)
+	res, err := c.chatsSvc.ListChats(r.Context(), uid, search, before, beforeID, limit)
 	if err != nil {
 		utils.RespondWithError(w, "list chats", err)
 		return
@@ -116,7 +117,8 @@ func (c *AiChatController) ListMessages(w http.ResponseWriter, r *http.Request) 
 		}
 		before = &t
 	}
-	res, err := c.chatsSvc.ListMessages(r.Context(), uid, chatID, before, limit)
+	beforeID := r.URL.Query().Get("beforeId")
+	res, err := c.chatsSvc.ListMessages(r.Context(), uid, chatID, before, beforeID, limit)
 	if err != nil {
 		utils.RespondWithError(w, "list messages", err)
 		return

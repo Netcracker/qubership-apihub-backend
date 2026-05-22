@@ -29,7 +29,6 @@ type EphemeralFileSaveInput struct {
 	Filename string
 	MimeType string
 	Reader   io.Reader
-	MaxBytes int64
 }
 
 func NewEphemeralFileService(sis SystemInfoService, repo repository.EphemeralFileRepository) EphemeralFileService {
@@ -49,13 +48,7 @@ func (s *ephemeralFileServiceImpl) SaveFile(ctx context.Context, in EphemeralFil
 		return nil, "", errors.New("userID is required")
 	}
 	baseDir := strings.TrimSpace(s.sis.GetEphemeralFileDirectory())
-	if baseDir == "" {
-		baseDir = filepath.Join(os.TempDir(), "apihub-ephemeral-files")
-	}
-	maxBytes := in.MaxBytes
-	if maxBytes <= 0 {
-		maxBytes = int64(s.sis.GetEphemeralFileMaxSizeMb()) * 1024 * 1024
-	}
+	maxBytes := int64(s.sis.GetEphemeralFileMaxSizeMb()) * 1024 * 1024
 	ttl := time.Duration(s.sis.GetEphemeralFileTTLMinutes()) * time.Minute
 
 	id := uuid.NewString()
@@ -143,8 +136,9 @@ func sanitizeFilename(name, fallback string) string {
 	name = strings.ReplaceAll(name, "\\", "_")
 	name = strings.ReplaceAll(name, "/", "_")
 	name = strings.ReplaceAll(name, "\x00", "")
-	if len(name) > 255 {
-		name = name[:255]
+	runes := []rune(name)
+	if len(runes) > 255 {
+		name = string(runes[:255])
 	}
 	return name
 }

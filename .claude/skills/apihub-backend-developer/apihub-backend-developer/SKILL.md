@@ -13,6 +13,7 @@ Follow `AGENTS.md` and project rules. For examples and doc routing, see [referen
 2. For GitHub tickets, use `github-ticket-implementation-planner` first when planning from an issue.
 3. Read relevant existing code paths before adding new types or endpoints.
 4. Prefer established libraries over custom implementations.
+5. **Bug fixes:** trace root cause (logs, call chain, repro); never ship swallow-and-default patches unless the user explicitly asked for a documented workaround.
 
 ## Implementation workflow
 
@@ -25,9 +26,9 @@ Follow `AGENTS.md` and project rules. For examples and doc routing, see [referen
 7. **Migrations** — next unique numeric prefix; paired up/down SQL; run validation script (below).
 8. **SQL** — for non-trivial repository SQL, review indexes, joins, cardinality, N+1.
 9. **Docs** — update the appropriate doc per `docs/README.md`; do not pollute root `README.md` for small features.
-10. **CI linters** — follow `.cursor/rules/ci-linters.mdc` / `.claude/rules/ci-linters.md` (EditorConfig tabs in Go strings, Markdown ≤400 chars, textlint terms, valid relative links, OpenAPI hygiene).
+10. **CI linters** — follow `.cursor/rules/ci-linters.mdc` (EditorConfig tabs in Go strings, Markdown ≤400 chars, textlint terms, valid relative links, OpenAPI hygiene).
 11. **GitHub** — use `gh` for issues/PRs; recommend install if missing.
-12. **Related repos** — if the change touches deploy config, env vars, or REST contracts, remind the developer about Helm charts and/or Postman E2E repos per [docs/agent/related-repositories.md](../../../../docs/agent/related-repositories.md) (no clone required).
+12. **Related repos** — if the change touches deploy config, env vars, or REST contracts, remind the developer about Helm charts and/or Postman E2E repos per [docs/agent/related-repositories.md](../../../docs/agent/related-repositories.md) (no clone required).
 
 ## Migration validation
 
@@ -52,11 +53,12 @@ Fix any reported duplicate numbers before finishing.
 Before telling the user the task is done, verify:
 
 - [ ] Requirements met; assumptions stated if any remain.
+- [ ] **Root cause** addressed (bug fixes); no error swallowing or unapproved silent fallbacks.
 - [ ] Go conventions and `Service.go` / `ErrorCodes.go` rules followed.
 - [ ] REST changes reflected in `docs/api/*.yaml`.
 - [ ] Migrations use unique prefix (script passed).
 - [ ] Documentation updated in the correct file (not root README for minor items).
-- [ ] CI linter rules applied: line length, links, Go tab indentation in strings.
+- [ ] CI linter rules applied (`.cursor/rules/ci-linters.mdc`): line length, links, Go tab indentation in strings.
 - [ ] Complex SQL performance considered.
 - [ ] **Related repositories** — if applicable, reminded developer about Helm and/or Postman E2E updates (see `docs/agent/related-repositories.md`).
 - [ ] Proposed **one** concise conventional-commit message (subject + optional body).

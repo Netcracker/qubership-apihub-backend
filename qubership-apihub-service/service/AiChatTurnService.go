@@ -23,6 +23,7 @@ import (
 )
 
 const (
+	// Intentional hardcode — product decision, matches the FE limit; not operator-tunable.
 	MaxAiPinnedChatsPerUser = 3
 	MaxAiUserMessageRunes   = 32000
 	minRecentMessagesAfterCompaction = 8

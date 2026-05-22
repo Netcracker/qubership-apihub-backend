@@ -9,6 +9,30 @@ Instructions for AI assistants working on this repository (Cursor, Claude Code, 
 - For GitHub ticket work, use the project skill `github-ticket-implementation-planner` before implementation.
 - If you must assume something, state assumptions explicitly and keep changes minimal until confirmed.
 
+## Error handling: fail fast, fix root cause (not symptoms)
+
+Applies to **bug fixes and new features**.
+
+### Bug fixes
+
+- **Find and fix the root cause** — trace the failure (logs, stack, data flow, repro). Do not mask symptoms.
+- **Forbidden as a “fix”** unless the user explicitly requests a temporary workaround and documents it:
+  - Swallowing errors (`_ = err`, empty `catch`, `return nil` after failed I/O/DB/API calls).
+  - Silent fallbacks to “default” behavior when an operation failed (empty result, zero value, skip step, pretend success).
+  - Broad `recover()` or generic handlers that hide the real failure.
+  - Replacing a returned error with a generic message without fixing why it failed.
+
+### New code and refactors
+
+- **Propagate errors** up the stack; return `error` from services/repositories; let controllers map to API error responses via `exception/ErrorCodes.go`.
+- **Fail fast** when state is invalid or required setup failed (`log.Fatalf` in `Service.go` wiring, panic only where the codebase already does for unrecoverable programmer errors).
+- **Log errors** at the appropriate layer (see `docs/development_guide.md` — errors to ERROR log); do not log-and-ignore.
+- A **deliberate** fallback or default is allowed only when product requirements define it; document why in code or the ticket, and still log at WARN/ERROR when the primary path failed.
+
+### Before submitting a bug-fix diff
+
+Briefly state: **root cause**, **why the change fixes it**, and confirm you did **not** add swallow-and-continue logic.
+
 ## Libraries and dependencies
 
 - Do **not** reimplement functionality that exists in well-established, industry-standard libraries.
@@ -63,6 +87,7 @@ Detailed rules apply via `.cursor/rules/` and `.claude/rules/` when matching fil
 - **Entity → view converters** without dependencies: place in `entity/` next to the struct, named `Make{Name}View`.
 - **New repositories, services, controllers** — register at the **end** of the corresponding block in `Service.go`.
 - **`Service.go` fail-fast** — use `log.Fatalf` for fatal wiring/startup errors where applicable.
+- **Errors** — propagate and fix root cause; no swallowing, no silent defaults on failure (see **Error handling** above).
 - **API errors** — error code and message returned to clients must be constants in `exception/ErrorCodes.go`. AI Chat uses `APIHUB-AI-*` code+Msg pairs; variant messages reuse a parent code (legacy pattern).
 
 ## REST API and OpenAPI

@@ -311,7 +311,7 @@ func main() {
 			log.Fatalf("Failed to create AiChatTurnService: %v", err)
 		}
 		aiChatController = controller.NewAiChatController(aiChatsService, aiChatTurnService)
-		aiChatCleanup := service.NewChatCleanupService(aiChatRepository, lockService)
+		aiChatCleanup := service.NewAiChatCleanupService(aiChatRepository, lockService)
 		aiCfg := systemInfoService.GetAiChatConfig()
 		if err := aiChatCleanup.StartChatRetentionJob(aiCfg.CleanupSchedule, aiCfg.RetentionDays, aiCfg.PinnedForeverCount); err != nil {
 			log.Warnf("Failed to start ai chat retention cleanup: %v", err)

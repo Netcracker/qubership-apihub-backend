@@ -13,12 +13,12 @@ import (
 )
 
 type AiChatsService interface {
-	ListChats(ctx context.Context, userID, search string, before *time.Time, limit int) (*view.AiChatsListResponse, error)
+	ListChats(ctx context.Context, userID, search string, before *time.Time, beforeID string, limit int) (*view.AiChatsListResponse, error)
 	CreateChat(ctx context.Context, userID string, title *string) (*view.AiChat, error)
 	GetChat(ctx context.Context, userID, chatID string) (*view.AiChat, error)
 	UpdateChat(ctx context.Context, userID, chatID string, req *view.AiChatUpdateRequest) (*view.AiChat, error)
 	DeleteChat(ctx context.Context, userID, chatID string) error
-	ListMessages(ctx context.Context, userID, chatID string, before *time.Time, limit int) (*view.AiChatMessagesListResponse, error)
+	ListMessages(ctx context.Context, userID, chatID string, before *time.Time, beforeID string, limit int) (*view.AiChatMessagesListResponse, error)
 }
 
 func NewAiChatsService(repo repository.AiChatRepository) AiChatsService {
@@ -29,12 +29,13 @@ type aiChatsServiceImpl struct {
 	repo repository.AiChatRepository
 }
 
-func (s *aiChatsServiceImpl) ListChats(ctx context.Context, userID, search string, before *time.Time, limit int) (*view.AiChatsListResponse, error) {
+func (s *aiChatsServiceImpl) ListChats(ctx context.Context, userID, search string, before *time.Time, beforeID string, limit int) (*view.AiChatsListResponse, error) {
 	rows, err := s.repo.ListChats(ctx, repository.AiChatsListFilter{
-		UserID: userID,
-		Search: search,
-		Before: before,
-		Limit:  limit + 1,
+		UserID:   userID,
+		Search:   search,
+		Before:   before,
+		BeforeID: beforeID,
+		Limit:    limit + 1,
 	})
 	if err != nil {
 		return nil, err
@@ -122,14 +123,15 @@ func (s *aiChatsServiceImpl) DeleteChat(ctx context.Context, userID, chatID stri
 	return nil
 }
 
-func (s *aiChatsServiceImpl) ListMessages(ctx context.Context, userID, chatID string, before *time.Time, limit int) (*view.AiChatMessagesListResponse, error) {
+func (s *aiChatsServiceImpl) ListMessages(ctx context.Context, userID, chatID string, before *time.Time, beforeID string, limit int) (*view.AiChatMessagesListResponse, error) {
 	if _, err := mustGetAiChat(ctx, s.repo, userID, chatID); err != nil {
 		return nil, err
 	}
 	rows, err := s.repo.ListMessages(ctx, repository.AiMessagesListFilter{
-		ChatID: chatID,
-		Before: before,
-		Limit:  limit + 1,
+		ChatID:   chatID,
+		Before:   before,
+		BeforeID: beforeID,
+		Limit:    limit + 1,
 	})
 	if err != nil {
 		return nil, err

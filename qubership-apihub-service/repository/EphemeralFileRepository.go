@@ -62,9 +62,6 @@ func (r *ephemeralFileRepositoryImpl) GetByID(ctx context.Context, fileID string
 }
 
 func (r *ephemeralFileRepositoryImpl) ListExpired(ctx context.Context, limit int) ([]entity.EphemeralFileEntity, error) {
-	if limit < 1 {
-		limit = 1000
-	}
 	var rows []entity.EphemeralFileEntity
 	err := r.cp.GetConnection().ModelContext(ctx, &rows).
 		Where("expires_at < ?", time.Now().UTC()).

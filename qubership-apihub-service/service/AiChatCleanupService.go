@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -19,30 +20,32 @@ const (
 	aiChatCleanupLockHeartbeatSeconds = 30
 )
 
-type ChatCleanupService interface {
+var errAiChatLockBusy = errors.New("AI chat cleanup lock is held by another instance")
+
+type AiChatCleanupService interface {
 	StartChatRetentionJob(schedule string, retentionDays, pinnedForeverCount int) error
 }
 
-func NewChatCleanupService(repo repository.AiChatRepository, lockService LockService) ChatCleanupService {
-	return &chatCleanupServiceImpl{
+func NewAiChatCleanupService(repo repository.AiChatRepository, lockService LockService) AiChatCleanupService {
+	return &aiChatCleanupServiceImpl{
 		repo:        repo,
 		lockService: lockService,
 	}
 }
 
-type chatCleanupServiceImpl struct {
+type aiChatCleanupServiceImpl struct {
 	repo        repository.AiChatRepository
 	lockService LockService
 	cron        *cron.Cron
 	started     bool
 }
 
-func (s *chatCleanupServiceImpl) StartChatRetentionJob(schedule string, retentionDays, pinnedForeverCount int) error {
+func (s *aiChatCleanupServiceImpl) StartChatRetentionJob(schedule string, retentionDays, pinnedForeverCount int) error {
 	if strings.TrimSpace(schedule) == "" {
-		log.Info("[ChatCleanup] chat retention job not scheduled (empty schedule)")
+		log.Info("[AiChatCleanup] chat retention job not scheduled (empty schedule)")
 		return nil
 	}
-	job := &chatRetentionJob{
+	job := &aiChatRetentionJob{
 		repo:               s.repo,
 		lockService:        s.lockService,
 		retentionDays:      retentionDays,
@@ -51,22 +54,18 @@ func (s *chatCleanupServiceImpl) StartChatRetentionJob(schedule string, retentio
 	return s.addJob(schedule, job, "ai-chat retention")
 }
 
-func (s *chatCleanupServiceImpl) addJob(schedule string, job cron.Job, label string) error {
+func (s *aiChatCleanupServiceImpl) addJob(schedule string, job cron.Job, label string) error {
 	if !s.started {
-		location, err := time.LoadLocation("")
-		if err != nil {
-			return err
-		}
-		s.cron = cron.New(cron.WithLocation(location))
+		s.cron = cron.New(cron.WithLocation(time.UTC))
 		s.cron.Start()
 		s.started = true
 	}
 	wrapped := cron.NewChain(cron.SkipIfStillRunning(cron.DefaultLogger)).Then(job)
 	if _, err := s.cron.AddJob(schedule, wrapped); err != nil {
-		log.Warnf("[ChatCleanup] %s job not scheduled (%s): %v", label, schedule, err)
+		log.Warnf("[AiChatCleanup] %s job not scheduled (%s): %v", label, schedule, err)
 		return err
 	}
-	log.Infof("[ChatCleanup] %s job scheduled with %s", label, schedule)
+	log.Infof("[AiChatCleanup] %s job scheduled with %s", label, schedule)
 	return nil
 }
 
@@ -93,7 +92,7 @@ func withAiChatLock(parentCtx context.Context, ls LockService, lockName string, 
 			if !ok {
 				return
 			}
-			log.Warnf("[ChatCleanup] lock %s lost: %s", ev.LockName, ev.Reason)
+			log.Warnf("[AiChatCleanup] lock %s lost: %s", ev.LockName, ev.Reason)
 			cancel()
 		}()
 	}
@@ -101,25 +100,25 @@ func withAiChatLock(parentCtx context.Context, ls LockService, lockName string, 
 		releaseCtx, releaseCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer releaseCancel()
 		if rErr := ls.ReleaseLock(releaseCtx, lockName); rErr != nil {
-			log.Warnf("[ChatCleanup] release lock %s: %v", lockName, rErr)
+			log.Warnf("[AiChatCleanup] release lock %s: %v", lockName, rErr)
 		}
 	}()
 	return body(bodyCtx)
 }
 
-// chatRetentionJob deletes expired non-pinned chats per user, while keeping the most recent
+// aiChatRetentionJob deletes expired non-pinned chats per user, while keeping the most recent
 // pinnedForeverCount of them and never touching pinned ones.
-type chatRetentionJob struct {
+type aiChatRetentionJob struct {
 	repo               repository.AiChatRepository
 	lockService        LockService
 	retentionDays      int
 	pinnedForeverCount int
 }
 
-func (j *chatRetentionJob) Run() {
+func (j *aiChatRetentionJob) Run() {
 	jobID := uuid.NewString()
 	if j.retentionDays < 1 {
-		log.Debugf("[ChatCleanup] retention job %s skipped (retentionDays<1)", jobID)
+		log.Debugf("[AiChatCleanup] retention job %s skipped (retentionDays<1)", jobID)
 		return
 	}
 	parent, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
@@ -137,7 +136,7 @@ func (j *chatRetentionJob) Run() {
 			n, err := j.repo.DeleteUserChatsByRetention(ctx, uid, j.retentionDays, j.pinnedForeverCount)
 			if err != nil {
 				errs++
-				log.Warnf("[ChatCleanup] retention failed for user %s: %v", uid, err)
+				log.Warnf("[AiChatCleanup] retention failed for user %s: %v", uid, err)
 				continue
 			}
 			processed++
@@ -146,14 +145,14 @@ func (j *chatRetentionJob) Run() {
 		if deletedTotal > 0 {
 			metrics.AiChatCleanupDeleted.WithLabelValues("retention", "chat").Add(float64(deletedTotal))
 		}
-		log.Infof("[ChatCleanup] retention job %s done: users=%d deleted=%d errors=%d", jobID, processed, deletedTotal, errs)
+		log.Infof("[AiChatCleanup] retention job %s done: users=%d deleted=%d errors=%d", jobID, processed, deletedTotal, errs)
 		return nil
 	})
 	if err == errAiChatLockBusy {
-		log.Debugf("[ChatCleanup] retention job %s skipped (lock busy)", jobID)
+		log.Debugf("[AiChatCleanup] retention job %s skipped (lock busy)", jobID)
 		return
 	}
 	if err != nil {
-		log.Warnf("[ChatCleanup] retention job %s error: %v", jobID, err)
+		log.Warnf("[AiChatCleanup] retention job %s error: %v", jobID, err)
 	}
 }

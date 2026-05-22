@@ -156,9 +156,17 @@ var EphemeralFileBytes = prometheus.NewHistogram(
 var AiChatCleanupDeleted = prometheus.NewCounterVec(
 	prometheus.CounterOpts{
 		Name: "apihub_ai_chat_cleanup_deleted_total",
-		Help: "Items deleted by the AI chat cleanup jobs.",
+		Help: "Items deleted by the AI chat retention cleanup job.",
 	},
 	[]string{"job", "kind"},
+)
+
+var EphemeralFileCleanupDeleted = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "apihub_ephemeral_file_cleanup_deleted_total",
+		Help: "Items deleted by the ephemeral file cleanup job.",
+	},
+	[]string{"kind"},
 )
 
 func RegisterAllPrometheusApplicationMetrics() {
@@ -181,4 +189,5 @@ func RegisterAllPrometheusApplicationMetrics() {
 	prometheus.Register(EphemeralFilesTotal)
 	prometheus.Register(EphemeralFileBytes)
 	prometheus.Register(AiChatCleanupDeleted)
+	prometheus.Register(EphemeralFileCleanupDeleted)
 }

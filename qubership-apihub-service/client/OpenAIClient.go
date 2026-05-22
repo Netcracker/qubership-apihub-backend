@@ -27,7 +27,7 @@ type OpenAILlmClient struct {
 	cfg    config.OpenAIConfig
 }
 
-func NewOpenAILlmClient(cfg config.OpenAIConfig) (*OpenAILlmClient, error) {
+func NewOpenAILlmClient(cfg config.OpenAIConfig) (LlmClient, error) {
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,

@@ -92,7 +92,11 @@ func (r *aiChatRepositoryImpl) ListChats(ctx context.Context, f AiChatsListFilte
 		q = q.Where("title ILIKE ?", pat)
 	}
 	if f.Before != nil {
-		q = q.Where("last_message_at < ?", f.Before.UTC())
+		if f.BeforeID != "" {
+			q = q.Where("(last_message_at < ? OR (last_message_at = ? AND id < ?))", f.Before.UTC(), f.Before.UTC(), f.BeforeID)
+		} else {
+			q = q.Where("last_message_at < ?", f.Before.UTC())
+		}
 	}
 	q = q.OrderExpr("pinned DESC, last_message_at DESC, id DESC")
 	if f.Limit > 0 {
@@ -217,7 +221,11 @@ func (r *aiChatRepositoryImpl) ListMessages(ctx context.Context, f AiMessagesLis
 	q := r.cp.GetConnection().ModelContext(ctx, &rows).
 		Where("chat_id = ?", f.ChatID)
 	if f.Before != nil {
-		q = q.Where("created_at < ?", f.Before.UTC())
+		if f.BeforeID != "" {
+			q = q.Where("(created_at < ? OR (created_at = ? AND id < ?))", f.Before.UTC(), f.Before.UTC(), f.BeforeID)
+		} else {
+			q = q.Where("created_at < ?", f.Before.UTC())
+		}
 	}
 	q = q.OrderExpr("created_at DESC")
 	if f.Limit > 0 {

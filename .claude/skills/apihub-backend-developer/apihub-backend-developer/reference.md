@@ -26,6 +26,36 @@ See `.cursor/rules/ci-linters.mdc`. Highlights for agents:
 | OpenAPI | Match file indentation; no trailing spaces in changed lines |
 | textlint | Use terms from `.github/linters/.textlintrc` |
 
+## Error handling — anti-patterns
+
+**Reject as a bug fix or new code:**
+
+```go
+if err != nil {
+    log.Error(err)
+    return nil, nil // pretend success with empty data
+}
+
+_ = repo.Save(ctx, ent)
+
+result, _ := fetch() // swallowed error
+
+if err != nil {
+    return defaultConfig() // silent fallback without product requirement
+}
+```
+
+**Prefer:**
+
+```go
+if err != nil {
+    log.Errorf("failed to save entity: %s", err.Error())
+    return nil, err
+}
+```
+
+Controller maps service `error` to client response using `exception` helpers and `ErrorCodes.go`.
+
 ## HTTP status codes
 
 **Good:**
@@ -44,7 +74,7 @@ w.WriteHeader(404)
 
 ## Related repositories (Helm, E2E)
 
-See [`docs/agent/related-repositories.md`](../../../../docs/agent/related-repositories.md). Agents cannot edit those repos unless they are in the workspace; **remind** the developer with links when:
+See [`docs/agent/related-repositories.md`](../../../docs/agent/related-repositories.md). Agents cannot edit those repos unless they are in the workspace; **remind** the developer with links when:
 
 | Backend change | Likely follow-up |
 |----------------|------------------|

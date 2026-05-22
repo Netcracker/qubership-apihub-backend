@@ -6,7 +6,7 @@ This is a draft version of the backend development guide, to be updated.
 
 When using Cursor, Claude Code, or other coding agents on this repository:
 
-- Read [`AGENTS.md`](../AGENTS.md) at the repository root for agent-specific conventions (clarify before coding, OpenAPI sync, migrations, documentation placement).
+- Read [`AGENTS.md`](../AGENTS.md) at the repository root for agent-specific conventions (clarify before coding, **fail fast / root-cause bug fixes**, OpenAPI sync, migrations, documentation placement).
 - Claude Code loads the same instructions via [`CLAUDE.md`](../CLAUDE.md).
 - Project skills live under `.cursor/skills/` (e.g. `apihub-backend-developer`, `apihub-self-review`); copies for Claude are under `.claude/skills/`.
 - CI lint rules for agents (Markdown line length, EditorConfig, link paths): `.cursor/rules/ci-linters.mdc` and `AGENTS.md` § CI linters.

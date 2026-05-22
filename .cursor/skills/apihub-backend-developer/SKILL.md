@@ -13,6 +13,7 @@ Follow `AGENTS.md` and project rules. For examples and doc routing, see [referen
 2. For GitHub tickets, use `github-ticket-implementation-planner` first when planning from an issue.
 3. Read relevant existing code paths before adding new types or endpoints.
 4. Prefer established libraries over custom implementations.
+5. **Bug fixes:** trace root cause (logs, call chain, repro); never ship swallow-and-default patches unless the user explicitly asked for a documented workaround.
 
 ## Implementation workflow
 
@@ -52,6 +53,7 @@ Fix any reported duplicate numbers before finishing.
 Before telling the user the task is done, verify:
 
 - [ ] Requirements met; assumptions stated if any remain.
+- [ ] **Root cause** addressed (bug fixes); no error swallowing or unapproved silent fallbacks.
 - [ ] Go conventions and `Service.go` / `ErrorCodes.go` rules followed.
 - [ ] REST changes reflected in `docs/api/*.yaml`.
 - [ ] Migrations use unique prefix (script passed).

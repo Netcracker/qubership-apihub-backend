@@ -20,7 +20,7 @@ const (
 	ephemeralFilesBatchSize       = 500
 )
 
-var errAiChatLockBusy = errors.New("ai-chat cleanup lock is held by another instance")
+var errEphemeralFileCleanupLockBusy = errors.New("ephemeral file cleanup lock is held by another instance")
 
 type EphemeralFileCleanupService interface {
 	StartCleanupJob(schedule string, baseDir string) error
@@ -55,11 +55,7 @@ func (s *ephemeralFileCleanupServiceImpl) StartCleanupJob(schedule string, baseD
 
 func (s *ephemeralFileCleanupServiceImpl) addJob(schedule string, job cron.Job, label string) error {
 	if !s.started {
-		location, err := time.LoadLocation("")
-		if err != nil {
-			return err
-		}
-		s.cron = cron.New(cron.WithLocation(location))
+		s.cron = cron.New(cron.WithLocation(time.UTC))
 		s.cron.Start()
 		s.started = true
 	}
@@ -70,6 +66,45 @@ func (s *ephemeralFileCleanupServiceImpl) addJob(schedule string, job cron.Job, 
 	}
 	log.Infof("[EphemeralFileCleanup] %s job scheduled with %s", label, schedule)
 	return nil
+}
+
+// withEphemeralFileCleanupLock acquires the named distributed lock and runs body with a derived context.
+// The body is responsible for honoring ctx cancellation.
+func withEphemeralFileCleanupLock(parentCtx context.Context, ls LockService, lockName string, body func(ctx context.Context) error) error {
+	const leaseSeconds = 120
+	const heartbeatSeconds = 30
+	opts := LockOptions{
+		LeaseSeconds:             leaseSeconds,
+		HeartbeatIntervalSeconds: heartbeatSeconds,
+		NotifyOnLoss:             true,
+	}
+	acquired, lostCh, err := ls.AcquireLock(parentCtx, lockName, opts)
+	if err != nil {
+		return err
+	}
+	if !acquired {
+		return errEphemeralFileCleanupLockBusy
+	}
+	bodyCtx, cancel := context.WithCancel(parentCtx)
+	defer cancel()
+	if lostCh != nil {
+		go func() {
+			ev, ok := <-lostCh
+			if !ok {
+				return
+			}
+			log.Warnf("[EphemeralFileCleanup] lock %s lost: %s", ev.LockName, ev.Reason)
+			cancel()
+		}()
+	}
+	defer func() {
+		releaseCtx, releaseCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer releaseCancel()
+		if rErr := ls.ReleaseLock(releaseCtx, lockName); rErr != nil {
+			log.Warnf("[EphemeralFileCleanup] release lock %s: %v", lockName, rErr)
+		}
+	}()
+	return body(bodyCtx)
 }
 
 // ephemeralFilesCleanupJob removes DB rows past expires_at and unlinks the matching FS file.
@@ -83,7 +118,7 @@ func (j *ephemeralFilesCleanupJob) Run() {
 	jobID := uuid.NewString()
 	parent, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
-	err := withAiChatLock(parent, j.lockService, ephemeralFilesCleanupLockName, func(ctx context.Context) error {
+	err := withEphemeralFileCleanupLock(parent, j.lockService, ephemeralFilesCleanupLockName, func(ctx context.Context) error {
 		var rmFs, rmDb, errs int
 		for {
 			if ctx.Err() != nil {
@@ -123,15 +158,15 @@ func (j *ephemeralFilesCleanupJob) Run() {
 			}
 		}
 		if rmDb > 0 {
-			metrics.AiChatCleanupDeleted.WithLabelValues("ephemeral-files", "row").Add(float64(rmDb))
+			metrics.EphemeralFileCleanupDeleted.WithLabelValues("row").Add(float64(rmDb))
 		}
 		if rmFs > 0 {
-			metrics.AiChatCleanupDeleted.WithLabelValues("ephemeral-files", "fs").Add(float64(rmFs))
+			metrics.EphemeralFileCleanupDeleted.WithLabelValues("fs").Add(float64(rmFs))
 		}
 		log.Infof("[EphemeralFileCleanup] job %s done: removedFromDB=%d unlinked=%d errors=%d", jobID, rmDb, rmFs, errs)
 		return nil
 	})
-	if err == errAiChatLockBusy {
+	if err == errEphemeralFileCleanupLockBusy {
 		log.Debugf("[EphemeralFileCleanup] job %s skipped (lock busy)", jobID)
 		return
 	}

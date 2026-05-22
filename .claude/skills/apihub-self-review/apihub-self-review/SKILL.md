@@ -29,6 +29,14 @@ Independent review of backend changes. **Do not implement fixes unless the user 
 
 - [ ] Changes match stated requirements; no obvious scope creep or missing cases.
 - [ ] Ambiguous behavior was not silently assumed without documenting assumptions.
+- [ ] **Bug fix:** addresses root cause; summary explains why the failure happened and why the fix is correct.
+
+### Error handling (fail fast)
+
+- [ ] No new swallowed errors (`_ = err`, ignored `err`, empty result after failed I/O/DB).
+- [ ] No new silent “default behavior” when an operation failed, unless explicitly required and logged.
+- [ ] Errors propagated or handled at boundary with `ErrorCodes.go` and ERROR logging where appropriate.
+- [ ] No symptom-only patch that hides the original failure mode.
 
 ### Go conventions
 
