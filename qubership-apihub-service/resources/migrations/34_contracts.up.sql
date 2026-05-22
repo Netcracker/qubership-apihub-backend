@@ -6,10 +6,8 @@ CREATE TABLE IF NOT EXISTS ddl_tables
     revision     integer NOT NULL,
     ddl_table_id varchar NOT NULL,
     kind         varchar NOT NULL CHECK (kind IN ('table', 'view')),
-    title        varchar,
     schema_name  varchar,
     name         varchar,
-    deprecated   boolean NOT NULL DEFAULT false,
     metadata     jsonb,
     data_hash    varchar,
     document_id  varchar,
@@ -73,17 +71,14 @@ CREATE TABLE IF NOT EXISTS mcp_entities
     revision      integer NOT NULL,
     mcp_entity_id varchar NOT NULL,
     kind          varchar NOT NULL CHECK (kind IN ('init', 'tool', 'prompt', 'resource')),
-    title         varchar,
+    name          varchar,
     mcp_endpoint  varchar NOT NULL,
-    server_name   varchar NOT NULL,
-    deprecated    boolean NOT NULL DEFAULT false,
     metadata      jsonb,
     data_hash     varchar,
     document_id   varchar,
     CONSTRAINT pk_mcp_entities PRIMARY KEY (package_id, version, revision, mcp_entity_id)
 );
 
-CREATE INDEX IF NOT EXISTS mcp_entities_server_name_idx ON mcp_entities (package_id, version, revision, server_name);
 CREATE INDEX IF NOT EXISTS mcp_entities_kind_idx ON mcp_entities (package_id, version, revision, kind);
 CREATE INDEX IF NOT EXISTS mcp_entities_document_id_idx ON mcp_entities (document_id);
 

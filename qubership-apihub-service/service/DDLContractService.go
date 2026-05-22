@@ -122,11 +122,7 @@ func (s *ddlContractServiceImpl) GetVersionSummary(packageId, versionName string
 	if len(counts) == 0 {
 		return nil, nil
 	}
-	deprecated, err := s.ddlRepo.GetDeprecatedCount(packageId, version, revision)
-	if err != nil {
-		return nil, err
-	}
-	summary := &view.VersionDDLContractsSummary{Deprecated: deprecated}
+	summary := &view.VersionDDLContractsSummary{}
 	for _, c := range counts {
 		switch c.Kind {
 		case view.DdlKindTable:
@@ -139,24 +135,22 @@ func (s *ddlContractServiceImpl) GetVersionSummary(packageId, versionName string
 }
 
 func (s *ddlContractServiceImpl) GetChangesSummary(comparisonId string) (*view.DDLContractsSummary, error) {
-	kinds, err := s.ddlRepo.GetComparisonSummary(comparisonId)
+	changesSummary, err := s.ddlRepo.GetComparisonSummary(comparisonId)
 	if err != nil {
 		return nil, err
 	}
-	if len(kinds) == 0 {
+	if changesSummary == nil {
 		return nil, nil
 	}
-	return &view.DDLContractsSummary{EntityKinds: kinds}, nil
+	return &view.DDLContractsSummary{ChangesSummary: *changesSummary}, nil
 }
 
 func makeDdlTableView(ent *entity.DDLContractEntity, packageId, version string, revision int) *view.DdlTableView {
 	return &view.DdlTableView{
 		TableId:    ent.DdlTableId,
-		Title:      ent.Title,
 		Kind:       ent.Kind,
 		SchemaName: ent.SchemaName,
 		TableName:  ent.Name,
-		Deprecated: ent.Deprecated,
 		DocumentId: ent.DocumentId,
 		PackageRef: view.MakePackageRefKey(packageId, version, revision),
 		Metadata:   ent.Metadata,

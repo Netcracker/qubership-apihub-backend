@@ -37,7 +37,7 @@ func (r *mcpContractRepositoryImpl) ListMcpEntities(packageId, version string, r
 		query = query.Where("kind = ?", kind)
 	}
 	if textFilter != "" {
-		query = query.Where("title ILIKE ?", fmt.Sprintf("%%%s%%", textFilter))
+		query = query.Where("mcp_entity_id ILIKE ?", fmt.Sprintf("%%%s%%", textFilter))
 	}
 	if limit > 0 {
 		query = query.Limit(limit)

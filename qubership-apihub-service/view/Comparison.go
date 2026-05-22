@@ -13,11 +13,6 @@ type ContractsSummary struct {
 }
 
 type DDLContractsSummary struct {
-	EntityKinds []DDLEntityKindSummary `json:"entityKinds"`
-}
-
-type DDLEntityKindSummary struct {
-	EntityKind     string        `json:"entityKind"`
 	ChangesSummary ChangeSummary `json:"changesSummary"`
 }
 

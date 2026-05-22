@@ -6,12 +6,9 @@ type McpEntityListView struct {
 
 type McpEntityView struct {
 	EntityId    string      `json:"entityId"`
-	Name        string      `json:"name,omitempty"`
-	Title       string      `json:"title,omitempty"`
 	Kind        string      `json:"kind"`
-	ServerName  string      `json:"serverName"`
+	Name        string      `json:"name,omitempty"`
 	McpEndpoint string      `json:"mcpEndpoint"`
-	Deprecated  bool        `json:"deprecated"`
 	DocumentId  string      `json:"documentId,omitempty"`
 	PackageRef  string      `json:"packageRef,omitempty"`
 	Metadata    interface{} `json:"metadata,omitempty"`

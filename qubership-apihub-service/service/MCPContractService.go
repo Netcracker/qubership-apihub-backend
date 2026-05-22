@@ -115,11 +115,9 @@ func (s *mcpContractServiceImpl) GetVersionSummary(packageId, versionName string
 func makeMcpEntityView(ent *entity.MCPContractEntity, packageId, version string, revision int) *view.McpEntityView {
 	return &view.McpEntityView{
 		EntityId:    ent.McpEntityId,
-		Title:       ent.Title,
 		Kind:        ent.Kind,
-		ServerName:  ent.ServerName,
+		Name:        ent.Name,
 		McpEndpoint: ent.McpEndpoint,
-		Deprecated:  ent.Deprecated,
 		DocumentId:  ent.DocumentId,
 		PackageRef:  view.MakePackageRefKey(packageId, version, revision),
 		Metadata:    ent.Metadata,

@@ -8,10 +8,8 @@ type MCPContractEntity struct {
 	Revision     int      `pg:"revision, pk, type:integer"`
 	McpEntityId  string   `pg:"mcp_entity_id, pk, type:varchar"`
 	Kind         string   `pg:"kind, type:varchar, use_zero"`
-	Title        string   `pg:"title, type:varchar, use_zero"`
+	Name         string   `pg:"name, type:varchar, use_zero"`
 	McpEndpoint  string   `pg:"mcp_endpoint, type:varchar, use_zero"`
-	ServerName   string   `pg:"server_name, type:varchar, use_zero"`
-	Deprecated   bool     `pg:"deprecated, type:boolean, use_zero"`
 	Metadata     Metadata `pg:"metadata, type:jsonb"`
 	DataHash     *string  `pg:"data_hash, type:varchar"`
 	DocumentId   string   `pg:"document_id, type:varchar, use_zero"`

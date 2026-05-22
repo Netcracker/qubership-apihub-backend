@@ -27,9 +27,8 @@ type VersionContractsSummary struct {
 }
 
 type VersionDDLContractsSummary struct {
-	Tables     int `json:"tables"`
-	Views      int `json:"views"`
-	Deprecated int `json:"deprecated"`
+	Tables int `json:"tables"`
+	Views  int `json:"views"`
 }
 
 type VersionMCPContractsSummary struct {

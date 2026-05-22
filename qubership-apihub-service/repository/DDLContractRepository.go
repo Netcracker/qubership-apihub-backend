@@ -14,8 +14,7 @@ type DDLContractRepository interface {
 	GetDdlTable(packageId, version string, revision int, ddlTableId string) (*entity.DDLContractEntity, []byte, error)
 	GetDdlTableChanges(packageId, version string, revision int, ddlTableId string) (*entity.DDLContractComparisonEntity, error)
 	GetEntitiesCount(packageId, version string, revision int) ([]entity.DDLContractKindCountEntity, error)
-	GetDeprecatedCount(packageId, version string, revision int) (int, error)
-	GetComparisonSummary(comparisonId string) ([]view.DDLEntityKindSummary, error)
+	GetComparisonSummary(comparisonId string) (*view.ChangeSummary, error)
 
 	CreateDdlContracts(contracts []*entity.DDLContractEntity) error
 	CreateDdlContractData(data []*entity.DDLContractDataEntity) error
@@ -42,7 +41,7 @@ func (r *ddlContractRepositoryImpl) ListDdlTables(packageId, version string, rev
 		query = query.Where("kind = ?", kind)
 	}
 	if textFilter != "" {
-		query = query.Where("title ILIKE ?", fmt.Sprintf("%%%s%%", textFilter))
+		query = query.Where("name ILIKE ?", fmt.Sprintf("%%%s%%", textFilter))
 	}
 	if limit > 0 {
 		query = query.Limit(limit)
@@ -114,47 +113,27 @@ func (r *ddlContractRepositoryImpl) GetEntitiesCount(packageId, version string, 
 	return result, nil
 }
 
-func (r *ddlContractRepositoryImpl) GetDeprecatedCount(packageId, version string, revision int) (int, error) {
-	var result []*entity.DDLContractEntity
-	count, err := r.cp.GetConnection().Model(&result).
-		Where("package_id = ?", packageId).
-		Where("version = ?", version).
-		Where("revision = ?", revision).
-		Where("deprecated = true").
-		Count()
-	return count, err
-}
-
-func (r *ddlContractRepositoryImpl) GetComparisonSummary(comparisonId string) ([]view.DDLEntityKindSummary, error) {
+func (r *ddlContractRepositoryImpl) GetComparisonSummary(comparisonId string) (*view.ChangeSummary, error) {
 	type row struct {
-		Kind           string             `pg:"kind"`
 		ChangesSummary view.ChangeSummary `pg:"changes_summary"`
 	}
 	var rows []row
 	_, err := r.cp.GetConnection().Query(&rows,
-		`SELECT dt.kind, dc.changes_summary FROM ddl_comparison dc
-         JOIN ddl_tables dt ON dc.package_id=dt.package_id AND dc.version=dt.version AND dc.revision=dt.revision AND dc.ddl_table_id=dt.ddl_table_id
-         WHERE dc.comparison_id=?`, comparisonId)
+		`SELECT changes_summary FROM ddl_comparison WHERE comparison_id=?`, comparisonId)
 	if err != nil {
 		return nil, err
 	}
-	kindMap := map[string]*view.DDLEntityKindSummary{}
-	for _, row := range rows {
-		s, ok := kindMap[row.Kind]
-		if !ok {
-			s = &view.DDLEntityKindSummary{EntityKind: row.Kind}
-			kindMap[row.Kind] = s
-		}
-		s.ChangesSummary.Breaking += row.ChangesSummary.Breaking
-		s.ChangesSummary.SemiBreaking += row.ChangesSummary.SemiBreaking
-		s.ChangesSummary.Deprecated += row.ChangesSummary.Deprecated
-		s.ChangesSummary.NonBreaking += row.ChangesSummary.NonBreaking
-		s.ChangesSummary.Annotation += row.ChangesSummary.Annotation
-		s.ChangesSummary.Unclassified += row.ChangesSummary.Unclassified
+	if len(rows) == 0 {
+		return nil, nil
 	}
-	result := make([]view.DDLEntityKindSummary, 0, len(kindMap))
-	for _, v := range kindMap {
-		result = append(result, *v)
+	result := &view.ChangeSummary{}
+	for _, row := range rows {
+		result.Breaking += row.ChangesSummary.Breaking
+		result.SemiBreaking += row.ChangesSummary.SemiBreaking
+		result.Deprecated += row.ChangesSummary.Deprecated
+		result.NonBreaking += row.ChangesSummary.NonBreaking
+		result.Annotation += row.ChangesSummary.Annotation
+		result.Unclassified += row.ChangesSummary.Unclassified
 	}
 	return result, nil
 }

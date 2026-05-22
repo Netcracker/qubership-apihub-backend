@@ -733,11 +733,7 @@ func (a *BuildResultToEntitiesReader) ReadDdlContractsToEntities() ([]*entity.DD
 				DataHash: hash,
 				Data:     fileData,
 			})
-			title := contract.Title
-			if title == "" {
-				title = contract.Name
-			}
-			searchText := title + " " + contract.SchemaName + " " + contract.Name
+			searchText := contract.SearchText
 			searchDataHash := utils.GetEncodedXXHash128([]byte(searchText))
 			searchTextEntities = append(searchTextEntities, &entity.DDLContractSearchTextEntity{
 				PackageId:      a.PackageInfo.PackageId,
@@ -756,10 +752,8 @@ func (a *BuildResultToEntitiesReader) ReadDdlContractsToEntities() ([]*entity.DD
 			Revision:   a.PackageInfo.Revision,
 			DdlTableId: contract.DdlTableId,
 			Kind:       contract.Kind,
-			Title:      contract.Title,
 			SchemaName: contract.SchemaName,
 			Name:       contract.Name,
-			Deprecated: contract.Deprecated,
 			Metadata:   entity.Metadata(contract.Metadata),
 			DataHash:   dataHash,
 			DocumentId: contract.DocumentId,
@@ -815,6 +809,14 @@ func (a *BuildResultToEntitiesReader) ReadMcpContractsToEntities() ([]*entity.MC
 	searchTextEntities := make([]*entity.MCPContractSearchTextEntity, 0)
 
 	for _, contract := range a.PackageMcpContracts.Contracts {
+		if contract.McpEndpoint == "" {
+			return nil, nil, nil, &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.InvalidPackageArchivedFile,
+				Message: "MCP contract is missing required mcpEndpoint",
+				Params:  map[string]interface{}{"mcpEntityId": contract.McpEntityId},
+			}
+		}
 		var dataHash *string
 		if fileHeader, exists := a.ContractsMcpFileHeaders[contract.ContentPath]; exists {
 			fileData, err := ReadZipFile(fileHeader)
@@ -832,7 +834,7 @@ func (a *BuildResultToEntitiesReader) ReadMcpContractsToEntities() ([]*entity.MC
 				DataHash: hash,
 				Data:     fileData,
 			})
-			searchText := contract.Title + " " + contract.ServerName + " " + contract.McpEndpoint
+			searchText := contract.SearchText
 			searchDataHash := utils.GetEncodedXXHash128([]byte(searchText))
 			searchTextEntities = append(searchTextEntities, &entity.MCPContractSearchTextEntity{
 				PackageId:      a.PackageInfo.PackageId,
@@ -851,10 +853,8 @@ func (a *BuildResultToEntitiesReader) ReadMcpContractsToEntities() ([]*entity.MC
 			Revision:    a.PackageInfo.Revision,
 			McpEntityId: contract.McpEntityId,
 			Kind:        contract.Kind,
-			Title:       contract.Title,
+			Name:        contract.Name,
 			McpEndpoint: contract.McpEndpoint,
-			ServerName:  contract.ServerName,
-			Deprecated:  contract.Deprecated,
 			Metadata:    entity.Metadata(contract.Metadata),
 			DataHash:    dataHash,
 			DocumentId:  contract.DocumentId,

@@ -10,10 +10,8 @@ type DDLContractEntity struct {
 	Revision    int      `pg:"revision, pk, type:integer"`
 	DdlTableId  string   `pg:"ddl_table_id, pk, type:varchar"`
 	Kind        string   `pg:"kind, type:varchar, use_zero"`
-	Title       string   `pg:"title, type:varchar, use_zero"`
 	SchemaName  string   `pg:"schema_name, type:varchar, use_zero"`
 	Name        string   `pg:"name, type:varchar, use_zero"`
-	Deprecated  bool     `pg:"deprecated, type:boolean, use_zero"`
 	Metadata    Metadata `pg:"metadata, type:jsonb"`
 	DataHash    *string  `pg:"data_hash, type:varchar"`
 	DocumentId  string   `pg:"document_id, type:varchar, use_zero"`

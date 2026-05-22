@@ -6065,14 +6065,9 @@ paths:
           description: Filter DDL contract entities by kind.
           schema:
             $ref: "#/components/schemas/DdlContractKind"
-        - name: searchString
-          in: query
-          description: Search text for full-text matching.
-          schema:
-            type: string
         - name: textFilter
           in: query
-          description: Filter by table or view title/name.
+          description: Filter by table or view name (case-insensitive substring match).
           schema:
             type: string
         - $ref: "#/components/parameters/limit"
@@ -6094,21 +6089,7 @@ paths:
                   tables:
                     type: array
                     items:
-                      allOf:
-                        - $ref: "#/components/schemas/DdlTableContract"
-                        - type: object
-                          properties:
-                            packageRef:
-                              description: Parent package and version link.
-                              type: string
-                              example: "QS.CloudQSS.CPQ.Q-TMF@2023.2"
-                  packages:
-                    description: A mapped list of referenced package objects.
-                    type: object
-                    additionalProperties:
-                      allOf:
-                        - $ref: "#/components/schemas/ReferencedPackage"
-                        - type: object
+                      $ref: "#/components/schemas/DdlTableContract"
         "301":
           description: Moved Permanently
           headers:
@@ -6232,25 +6213,6 @@ paths:
           schema:
             type: string
             example: "public.users"
-        - $ref: "#/components/parameters/severity"
-        - in: query
-          name: previousVersion
-          schema:
-            type: string
-          description: If both previousVersion and previousVersionPackageId are not specified, then previous **release** version will be used.
-          example: "2022.2"
-        - in: query
-          name: previousVersionPackageId
-          schema:
-            type: string
-          description: If both previousVersion and previousVersionPackageId are not specified, then previous **release** version will be used.
-          example: QS.RUNENV.K8S-SERVER.CJM-QSS-DEV-2.Q-TMF
-        - in: query
-          name: previousTableId
-          description: Previous DDL entity identifier. Empty if requested entity was added in the current version.
-          schema:
-            type: string
-            example: public.accounts
       responses:
         "200":
           description: Success
@@ -6260,10 +6222,12 @@ paths:
                 type: object
                 properties:
                   changes:
-                    description: List of discrepancies data in the DDL entity.
+                    description: List of individual DDL entity changes.
                     type: array
                     items:
                       $ref: "#/components/schemas/SingleOperationChange"
+                  changesSummary:
+                    $ref: "#/components/schemas/ChangeSummary"
         "301":
           description: Moved Permanently
           headers:
@@ -6318,14 +6282,9 @@ paths:
               - tools
               - prompts
               - resources
-        - name: searchString
-          in: query
-          description: Search text for full-text matching.
-          schema:
-            type: string
         - name: textFilter
           in: query
-          description: Filter by MCP entity title/name/URI.
+          description: Filter by MCP entity ID (case-insensitive substring match).
           schema:
             type: string
         - $ref: "#/components/parameters/limit"
@@ -6347,21 +6306,7 @@ paths:
                   entities:
                     type: array
                     items:
-                      allOf:
-                        - $ref: "#/components/schemas/McpContract"
-                        - type: object
-                          properties:
-                            packageRef:
-                              description: Parent package and version link.
-                              type: string
-                              example: "QS.CloudQSS.CPQ.Q-TMF@2023.2"
-                  packages:
-                    description: A mapped list of referenced package objects.
-                    type: object
-                    additionalProperties:
-                      allOf:
-                        - $ref: "#/components/schemas/ReferencedPackage"
-                        - type: object
+                      $ref: "#/components/schemas/McpContract"
         "301":
           description: Moved Permanently
           headers:
@@ -6428,10 +6373,10 @@ paths:
         - name: entityId
           in: path
           required: true
-          description: MCP logical entity identifier. Clients must percent-encode unsafe characters.
+          description: MCP logical entity identifier (`entityId` from the list response). Clients must percent-encode unsafe characters.
           schema:
             type: string
-            example: "weather-mcp/tool/get_forecast"
+            example: "https___api_example_com_mcp.tool.get_forecast"
       responses:
         "200":
           description: Success
@@ -10565,10 +10510,6 @@ components:
           description: DDL table/view logical identifier.
           type: string
           example: "public.users"
-        title:
-          description: Human-readable title.
-          type: string
-          example: "users"
         kind:
           $ref: "#/components/schemas/DdlContractKind"
         schemaName:
@@ -10579,17 +10520,14 @@ components:
           description: Unqualified table or view name.
           type: string
           example: "users"
-        columnsCount:
-          description: Number of columns for table-like DDL entities.
-          type: integer
-          example: 12
-        deprecated:
-          type: boolean
-          default: false
         documentId:
           description: Source document identifier.
           type: string
           example: "schema-sql"
+        packageRef:
+          description: Package and version reference key.
+          type: string
+          example: "QS.CloudQSS.CPQ.Q-TMF@2023.2"
         metadata:
           description: Kind-specific DDL facets, such as columns, constraints, indexes, or view definition.
           type: object
@@ -10597,54 +10535,32 @@ components:
       description: MCP discovery contract entity.
       type: object
       required:
-        - mcpEntityId
+        - entityId
         - kind
         - mcpEndpoint
-        - serverName
       properties:
-        mcpEntityId:
-          description: MCP contract logical identifier.
+        entityId:
+          description: MCP contract logical identifier. Format is `{safeEndpoint}.{kind}.{name}` where non-alphanumeric characters in the endpoint are replaced with underscores.
           type: string
-          example: "weather-mcp/tool/get_forecast"
+          example: "https___api_example_com_mcp.tool.get_forecast"
         kind:
           $ref: "#/components/schemas/McpContractKind"
         name:
-          description: MCP source entity name or URI.
+          description: MCP entity name. For tools, prompts and resources this is the name from the MCP spec. For init entities the value is always "initialize".
           type: string
           example: "get_forecast"
-        title:
-          description: Human-readable title.
-          type: string
-          example: "Get forecast"
-        serverName:
-          description: Logical MCP server name.
-          type: string
-          example: "weather-mcp"
         mcpEndpoint:
           description: MCP endpoint URL from file-level publish metadata.
           type: string
           example: "https://api.example.com/mcp"
-        description:
-          type: string
-        inputSchema:
-          description: MCP tool input schema.
-          type: object
-        outputSchema:
-          description: MCP tool output schema.
-          type: object
-        uri:
-          description: MCP resource URI.
-          type: string
-        mimeType:
-          description: MCP resource MIME type.
-          type: string
-        deprecated:
-          type: boolean
-          default: false
         documentId:
           description: Source document identifier.
           type: string
           example: "tools-forecast-json"
+        packageRef:
+          description: Package and version reference key.
+          type: string
+          example: "QS.CloudQSS.CPQ.Q-TMF@2023.2"
         metadata:
           description: Kind-specific MCP discovery metadata.
           type: object
@@ -10655,15 +10571,8 @@ components:
         ddl:
           type: object
           properties:
-            entityKinds:
-              type: array
-              items:
-                type: object
-                properties:
-                  entityKind:
-                    $ref: "#/components/schemas/DdlContractKind"
-                  changesSummary:
-                    $ref: "#/components/schemas/ChangeSummary"
+            changesSummary:
+              $ref: "#/components/schemas/ChangeSummary"
     VersionContractsSummary:
       description: Counts of contract entities published in a package version.
       type: object
@@ -10675,9 +10584,6 @@ components:
               type: integer
               default: 0
             views:
-              type: integer
-              default: 0
-            deprecated:
               type: integer
               default: 0
         mcp:

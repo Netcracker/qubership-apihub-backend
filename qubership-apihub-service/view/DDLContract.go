@@ -6,11 +6,9 @@ type DdlTableListView struct {
 
 type DdlTableView struct {
 	TableId    string      `json:"tableId"`
-	Title      string      `json:"title,omitempty"`
 	Kind       string      `json:"kind"`
 	SchemaName string      `json:"schemaName,omitempty"`
 	TableName  string      `json:"tableName,omitempty"`
-	Deprecated bool        `json:"deprecated"`
 	DocumentId string      `json:"documentId,omitempty"`
 	PackageRef string      `json:"packageRef,omitempty"`
 	Metadata   interface{} `json:"metadata,omitempty"`

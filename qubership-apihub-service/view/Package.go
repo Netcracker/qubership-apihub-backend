@@ -192,10 +192,9 @@ type PackageDdlContractsFile struct {
 type PackageDdlContract struct {
 	DdlTableId  string                 `json:"ddlTableId"`
 	Kind        string                 `json:"kind"`
-	Title       string                 `json:"title,omitempty"`
 	SchemaName  string                 `json:"schemaName,omitempty"`
 	Name        string                 `json:"name,omitempty"`
-	Deprecated  bool                   `json:"deprecated"`
+	SearchText  string                 `json:"searchText,omitempty"`
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 	DocumentId  string                 `json:"documentId,omitempty"`
 	ContentPath string                 `json:"contentPath"`
@@ -223,10 +222,9 @@ type PackageMcpContractsFile struct {
 type PackageMcpContract struct {
 	McpEntityId string                 `json:"mcpEntityId"`
 	Kind        string                 `json:"kind"`
-	Title       string                 `json:"title,omitempty"`
+	Name        string                 `json:"name,omitempty"`
 	McpEndpoint string                 `json:"mcpEndpoint"`
-	ServerName  string                 `json:"serverName"`
-	Deprecated  bool                   `json:"deprecated"`
+	SearchText  string                 `json:"searchText,omitempty"`
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 	DocumentId  string                 `json:"documentId,omitempty"`
 	ContentPath string                 `json:"contentPath"`
