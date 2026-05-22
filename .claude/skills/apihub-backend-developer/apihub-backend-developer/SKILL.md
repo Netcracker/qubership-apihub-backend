@@ -28,7 +28,7 @@ Follow `AGENTS.md` and project rules. For examples and doc routing, see [referen
 9. **Docs** — update the appropriate doc per `docs/README.md`; do not pollute root `README.md` for small features.
 10. **CI linters** — follow `.cursor/rules/ci-linters.mdc` (EditorConfig tabs in Go strings, Markdown ≤400 chars, textlint terms, valid relative links, OpenAPI hygiene).
 11. **GitHub** — use `gh` for issues/PRs; recommend install if missing.
-12. **Related repos** — if the change touches deploy config, env vars, or REST contracts, remind the developer about Helm charts and/or Postman E2E repos per [docs/agent/related-repositories.md](../../../docs/agent/related-repositories.md) (no clone required).
+12. **Related repos** — if the change touches deploy config, env vars, or REST contracts, remind the developer about Helm charts and/or Postman E2E repos per [docs/agent/related-repositories.md](../../../../docs/agent/related-repositories.md) (no clone required).
 
 ## Migration validation
 

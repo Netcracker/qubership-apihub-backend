@@ -74,7 +74,7 @@ w.WriteHeader(404)
 
 ## Related repositories (Helm, E2E)
 
-See [`docs/agent/related-repositories.md`](../../../docs/agent/related-repositories.md). Agents cannot edit those repos unless they are in the workspace; **remind** the developer with links when:
+See [`docs/agent/related-repositories.md`](../../../../docs/agent/related-repositories.md). Agents cannot edit those repos unless they are in the workspace; **remind** the developer with links when:
 
 | Backend change | Likely follow-up |
 |----------------|------------------|
