@@ -10064,8 +10064,8 @@ paths:
               examples:
                 PinLimitExceeded:
                   $ref: "#/components/examples/AiChatPinLimitExceeded"
-                IncorrectInputParams:
-                  $ref: "#/components/examples/IncorrectInputParameters"
+                AiChatValidationFailed:
+                  $ref: "#/components/examples/AiChatValidationFailed"
         "401":
           description: Unauthorized
           content:
@@ -10252,8 +10252,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
               examples:
-                IncorrectInputParams:
-                  $ref: "#/components/examples/IncorrectInputParameters"
+                AiChatValidationFailed:
+                  $ref: "#/components/examples/AiChatValidationFailed"
         "401":
           description: Unauthorized
           content:
@@ -10339,8 +10339,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
               examples:
-                IncorrectInputParams:
-                  $ref: "#/components/examples/IncorrectInputParameters"
+                AiChatValidationFailed:
+                  $ref: "#/components/examples/AiChatValidationFailed"
         "401":
           description: Unauthorized
           content:
@@ -10417,6 +10417,11 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                EphemeralFileTokenMissing:
+                  $ref: "#/components/examples/EphemeralFileTokenMissing"
+                EphemeralFileTokenInvalid:
+                  $ref: "#/components/examples/EphemeralFileTokenInvalid"
         "404":
           description: File not found or already cleaned up.
           content:
@@ -13108,11 +13113,11 @@ components:
           enum: ["error"]
         code:
           description: |
-            Stable error code. Known values:
+            Stable error code for mid-turn failures (HTTP validation/auth errors use the same codes in a JSON body before any SSE frame). Known values:
               * `APIHUB-AI-5001` — upstream LLM provider error;
-              * `APIHUB-AI-5002` — MCP tool failure propagated as stream error;
               * `APIHUB-AI-4001` — message validation failed mid-flight (rare);
               * `APIHUB-AI-5000` — internal error.
+            MCP tool failures are surfaced as `tool.completed` with `status: error` and do not terminate the stream with a dedicated error code.
           type: string
           example: "APIHUB-AI-5001"
         message:
@@ -13296,6 +13301,14 @@ components:
         status: 400
         code: "APIHUB-AI-4003"
         message: "Cannot pin chat: user already has 3 pinned chats (the limit is 3)"
+    AiChatValidationFailed:
+      description: AI chat request validation failed (empty content, message too long, invalid cursor, malformed JSON body, etc.).
+      value:
+        status: 400
+        code: "APIHUB-AI-4001"
+        message: "Message exceeds maximum length of 32000 characters"
+        params:
+          max: 32000
     EphemeralFileNotFound:
       description: Ephemeral file not found or already cleaned up.
       value:
@@ -13308,6 +13321,18 @@ components:
         status: 410
         code: "APIHUB-EF-4101"
         message: "download token expired, please request the file again"
+    EphemeralFileTokenMissing:
+      description: Download token query parameter missing.
+      value:
+        status: 401
+        code: "APIHUB-EF-3003"
+        message: "Missing token query parameter"
+    EphemeralFileTokenInvalid:
+      description: Download token invalid or not valid for the requested file.
+      value:
+        status: 401
+        code: "APIHUB-EF-3002"
+        message: "Invalid download token"
   securitySchemes:
     BearerAuth:
       type: http

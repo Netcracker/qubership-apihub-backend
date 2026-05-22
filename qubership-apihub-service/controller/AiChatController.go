@@ -24,7 +24,7 @@ func NewAiChatController(chatsSvc aiservice.AiChatsService, aiSvc aiservice.AiCh
 
 func (c *AiChatController) ListChats(w http.ResponseWriter, r *http.Request) {
 	uid := context.Create(r).GetUserId()
-	limit, ce := getLimitQueryParam(r)
+	limit, ce := getAiChatLimitQueryParam(r)
 	if ce != nil {
 		utils.RespondWithCustomError(w, ce)
 		return
@@ -51,8 +51,8 @@ func (c *AiChatController) ListChats(w http.ResponseWriter, r *http.Request) {
 func (c *AiChatController) CreateChat(w http.ResponseWriter, r *http.Request) {
 	uid := context.Create(r).GetUserId()
 	var body view.AiChatCreateRequest
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
-		utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusBadRequest, Code: exception.BadRequestBody, Message: exception.BadRequestBodyMsg, Debug: err.Error()})
+	if ce := decodeAiChatJSONBody(r, &body, true); ce != nil {
+		utils.RespondWithCustomError(w, ce)
 		return
 	}
 	res, err := c.chatsSvc.CreateChat(r.Context(), uid, body.Title)
@@ -78,8 +78,8 @@ func (c *AiChatController) UpdateChat(w http.ResponseWriter, r *http.Request) {
 	uid := context.Create(r).GetUserId()
 	chatID := getStringParam(r, "chatId")
 	var body view.AiChatUpdateRequest
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusBadRequest, Code: exception.BadRequestBody, Message: exception.BadRequestBodyMsg, Debug: err.Error()})
+	if ce := decodeAiChatJSONBody(r, &body, false); ce != nil {
+		utils.RespondWithCustomError(w, ce)
 		return
 	}
 	res, err := c.chatsSvc.UpdateChat(r.Context(), uid, chatID, &body)
@@ -103,7 +103,7 @@ func (c *AiChatController) DeleteChat(w http.ResponseWriter, r *http.Request) {
 func (c *AiChatController) ListMessages(w http.ResponseWriter, r *http.Request) {
 	uid := context.Create(r).GetUserId()
 	chatID := getStringParam(r, "chatId")
-	limit, ce := getLimitQueryParam(r)
+	limit, ce := getAiChatLimitQueryParam(r)
 	if ce != nil {
 		utils.RespondWithCustomError(w, ce)
 		return
@@ -130,12 +130,12 @@ func (c *AiChatController) SendMessage(w http.ResponseWriter, r *http.Request) {
 	uid := context.Create(r).GetUserId()
 	chatID := getStringParam(r, "chatId")
 	var body view.AiChatSendMessageRequest
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusBadRequest, Code: exception.BadRequestBody, Message: exception.BadRequestBodyMsg, Debug: err.Error()})
+	if ce := decodeAiChatJSONBody(r, &body, false); ce != nil {
+		utils.RespondWithCustomError(w, ce)
 		return
 	}
-	if err := utils.ValidateObject(body); err != nil {
-		utils.RespondWithError(w, "validate send message request", err)
+	if ce := validateAiChatSendMessageRequest(&body); ce != nil {
+		utils.RespondWithCustomError(w, ce)
 		return
 	}
 	res, err := c.aiSvc.SendMessage(r.Context(), uid, chatID, &body)
@@ -150,12 +150,12 @@ func (c *AiChatController) SendMessageStream(w http.ResponseWriter, r *http.Requ
 	uid := context.Create(r).GetUserId()
 	chatID := getStringParam(r, "chatId")
 	var body view.AiChatSendMessageRequest
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusBadRequest, Code: exception.BadRequestBody, Message: exception.BadRequestBodyMsg, Debug: err.Error()})
+	if ce := decodeAiChatJSONBody(r, &body, false); ce != nil {
+		utils.RespondWithCustomError(w, ce)
 		return
 	}
-	if err := utils.ValidateObject(body); err != nil {
-		utils.RespondWithError(w, "validate stream request", err)
+	if ce := validateAiChatSendMessageRequest(&body); ce != nil {
+		utils.RespondWithCustomError(w, ce)
 		return
 	}
 

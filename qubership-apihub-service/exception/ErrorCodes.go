@@ -850,9 +850,6 @@ const AiChatStreamingNotSupportedMsg = "Streaming not supported"
 const AiChatLLMError = "APIHUB-AI-5001"
 const AiChatLLMErrorMsg = "LLM provider error"
 
-const AiChatMCPToolError = "APIHUB-AI-5002"
-const AiChatMCPToolErrorMsg = "MCP tool execution failed"
-
 // Ephemeral file error codes (APIHUB-EF-*). Each public error has a Code constant; variant
 // messages reuse the parent Code (same pattern as InvalidParameterValue + InvalidLimitMsg).
 

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -55,11 +56,20 @@ func errAiNotFound(chatID string) *exception.CustomError {
 
 func errAiPinLimit() *exception.CustomError {
 	return &exception.CustomError{
-		Status:  http.StatusForbidden,
+		Status:  http.StatusBadRequest,
 		Code:    exception.AiChatPinLimitExceeded,
 		Message: exception.AiChatPinLimitExceededMsg,
 		Params:  map[string]interface{}{"max": MaxAiPinnedChatsPerUser},
 	}
+}
+
+// aiChatStreamErrorPayload maps a turn failure to a single terminal SSE error frame.
+func aiChatStreamErrorPayload(err error) (code string, message string) {
+	var ce *exception.CustomError
+	if errors.As(err, &ce) && ce.Code != "" {
+		return ce.Code, ce.Error()
+	}
+	return exception.AiChatLLMError, err.Error()
 }
 
 func mustGetAiChat(ctx context.Context, repo repository.AiChatRepository, userID, chatID string) (*entity.AiChatEntity, error) {
@@ -214,10 +224,11 @@ func (s *aiChatTurnServiceImpl) SendMessageStream(ctx context.Context, userID, c
 		_, _, err := s.runTurn(ctx, userID, chat, req, out)
 		s.observeTurn(AiChatTurnModeStream, started, err)
 		if err != nil {
+			code, message := aiChatStreamErrorPayload(err)
 			_ = s.emitStream(ctx, out, aiChatSSEError, map[string]interface{}{
 				aiChatSSEFieldType: aiChatSSEError,
-				"code":    exception.AiChatInternalError,
-				"message": err.Error(),
+				"code":             code,
+				"message":          message,
 			})
 		}
 	}()
@@ -358,13 +369,6 @@ func (s *aiChatTurnServiceImpl) runLLMTurn(ctx context.Context, userID string, c
 
 	turn, err := s.runToolLoop(ctx, msgsForLLM, stream != nil, hooks)
 	if err != nil {
-		if stream != nil {
-			_ = s.emitStream(ctx, stream, aiChatSSEError, map[string]interface{}{
-				aiChatSSEFieldType: aiChatSSEError,
-				"code":    exception.AiChatLLMError,
-				"message": err.Error(),
-			})
-		}
 		return nil, nil, err
 	}
 
