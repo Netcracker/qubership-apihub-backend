@@ -126,9 +126,16 @@ func (r *aiChatRepositoryImpl) CountPinnedChats(ctx context.Context, userID stri
 func (r *aiChatRepositoryImpl) PinChatForUser(ctx context.Context, chatID, userID string, maxPinned int) (bool, error) {
 	var pinned bool
 	err := r.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
+		// Lock pinned rows and the target chat first; PostgreSQL rejects FOR UPDATE on aggregates (COUNT).
+		_, err := tx.ExecContext(ctx,
+			`SELECT id FROM ai_chat WHERE user_id = ? AND (pinned = true OR id = ?) FOR UPDATE`,
+			userID, chatID)
+		if err != nil {
+			return err
+		}
 		var count int
-		_, err := tx.QueryOneContext(ctx, pg.Scan(&count),
-			`SELECT COUNT(*) FROM ai_chat WHERE user_id = ? AND pinned = true AND id != ? FOR UPDATE`,
+		_, err = tx.QueryOneContext(ctx, pg.Scan(&count),
+			`SELECT COUNT(*) FROM ai_chat WHERE user_id = ? AND pinned = true AND id != ?`,
 			userID, chatID)
 		if err != nil {
 			return err
