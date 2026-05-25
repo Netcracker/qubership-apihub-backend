@@ -5,6 +5,8 @@ import "time"
 const SearchLevelOperations = "operations"
 const SearchLevelPackages = "packages"
 const SearchLevelDocuments = "documents"
+const SearchLevelDDL = "ddl"
+const SearchLevelMCP = "mcp"
 
 const ScopeAll = "all"
 
@@ -59,9 +61,11 @@ func (r SearchQueryReq) ToDeprecated() SearchQueryReq_deprecated {
 }
 
 type SearchResult struct {
-	Operations *[]interface{}          `json:"operations,omitempty"`
-	Packages   *[]PackageSearchResult  `json:"packages,omitempty"`
-	Documents  *[]DocumentSearchResult `json:"documents,omitempty"`
+	Operations  *[]interface{}          `json:"operations,omitempty"`
+	Packages    *[]PackageSearchResult  `json:"packages,omitempty"`
+	Documents   *[]DocumentSearchResult `json:"documents,omitempty"`
+	DdlContracts *[]interface{}         `json:"ddlContracts,omitempty"`
+	McpContracts *[]interface{}         `json:"mcpContracts,omitempty"`
 }
 
 type OperationSearchWeightsDebug struct {

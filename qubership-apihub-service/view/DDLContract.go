@@ -26,3 +26,15 @@ type DdlTableChangesView struct {
 
 const DdlKindTable = "table"
 const DdlKindView = "view"
+
+type DdlContractSearchResult struct {
+	PackageId      string   `json:"packageId"`
+	PackageName    string   `json:"name"`
+	ParentPackages []string `json:"parentPackages"`
+	VersionStatus  string   `json:"status"`
+	Version        string   `json:"version"`
+	TableId        string   `json:"tableId"`
+	Kind           string   `json:"kind"`
+	SchemaName     string   `json:"schemaName,omitempty"`
+	TableName      string   `json:"tableName,omitempty"`
+}

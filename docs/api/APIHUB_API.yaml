@@ -6053,9 +6053,9 @@ paths:
     get:
       tags:
         - Contracts
-      summary: Get DDL tables and views
+      summary: Get DDL tables
       description: |
-        Get DDL contract entities for a package version. The response contains both tables and views; use `kind` to filter.
+        Get DDL contract entities for a package version. In v1 only `table` kind entities are emitted; the `kind` filter is accepted for forward compatibility and will return results when views are introduced.
       operationId: getPackageVersionDdlTables
       parameters:
         - $ref: "#/components/parameters/packageId"
@@ -6200,8 +6200,8 @@ paths:
       tags:
         - Contracts
         - Changes
-      summary: Get DDL table or view changes
-      description: Get per-entity DDL contract changes between current and previous published package versions.
+      summary: Get DDL table changes
+      description: Get per-entity DDL contract changes between current and previous published package versions. In v1 only table entities are diffed.
       operationId: getPackageVersionDdlTableChanges
       parameters:
         - $ref: "#/components/parameters/packageId"
@@ -9838,6 +9838,8 @@ paths:
             - operations
             - documents
             - packages
+            - ddl
+            - mcp
     post:
       x-nc-api-audience: noBWC
       tags:
@@ -9859,34 +9861,22 @@ paths:
                 - workspace
                 - status
               title: searchCommonParamsV4
-              description: Common parameters for Global search v4
+              description: |
+                Common parameters for Global search v4.
+                `apiType` is required when `searchLevel = operations`; it is ignored for `ddl` and `mcp` search levels.
               properties:
                 searchString:
                   description: Search text
                   type: string
                   example: "Billing account"
                 apiType:
-                  description: Type of the API to search for. Deprecated; use `types` to search operations and contracts together.
-                  deprecated: true
+                  description: Type of the API to search for. Required when `searchLevel = operations`.
                   type: string
                   enum:
                     - rest
                     - graphql
                     - asyncapi
                     - protobuf
-                types:
-                  description: Entity type filters. Operation API types and contract type tokens can be combined.
-                  type: array
-                  items:
-                    type: string
-                    enum:
-                      - rest
-                      - graphql
-                      - protobuf
-                      - asyncapi
-                      - ddl
-                      - mcp
-                  example: ["rest", "ddl"]
                 workspace:
                   description: Top-level workspace ID (no dots).
                   type: string
@@ -9935,18 +9925,27 @@ paths:
                 type: object
                 properties:
                   operations:
+                    description: Returned when `searchLevel = operations`.
                     type: array
                     items:
                       $ref: "#/components/schemas/SearchResultOperation"
-                  contracts:
+                  ddlContracts:
+                    description: Returned when `searchLevel = ddl`.
                     type: array
                     items:
-                      $ref: "#/components/schemas/SearchResultContract"
+                      $ref: "#/components/schemas/SearchResultDDLContract"
+                  mcpContracts:
+                    description: Returned when `searchLevel = mcp`.
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SearchResultMCPContract"
                   documents:
+                    description: Returned when `searchLevel = documents`.
                     type: array
                     items:
                       $ref: "#/components/schemas/SearchResultDocument"
                   packages:
+                    description: Returned when `searchLevel = packages`.
                     type: array
                     items:
                       $ref: "#/components/schemas/SearchResultPackage"
@@ -10529,7 +10528,7 @@ components:
           type: string
           example: "QS.CloudQSS.CPQ.Q-TMF@2023.2"
         metadata:
-          description: Kind-specific DDL facets, such as columns, constraints, indexes, or view definition.
+          description: File-level metadata from the publish config. Typically empty for DDL files.
           type: object
     McpContract:
       description: MCP discovery contract entity.
@@ -11830,47 +11829,99 @@ components:
               example: "2022.2@5"
             status:
               $ref: "#/components/schemas/VersionStatusEnum"
-    SearchResultContract:
-      description: Global search result for DDL or MCP contracts; returned when searchLevel = operations and `types` includes `ddl` or `mcp`.
-      title: SearchResultContract
-      allOf:
-        - oneOf:
-          - $ref: "#/components/schemas/DdlTableContract"
-          - $ref: "#/components/schemas/McpContract"
-        - type: object
-          required:
-            - packageId
-            - name
-            - parentPackages
-            - version
-            - status
-            - contractType
-          properties:
-            contractType:
-              description: Contract type.
-              type: string
-              enum:
-                - ddl
-                - mcp
-            packageId:
-              description: Package unique string identifier (full alias)
-              type: string
-              example: "QS.CloudQSS.CPQ.Q-TMF"
-            name:
-              description: Package name
-              type: string
-              example: "Quote TMF Service"
-            parentPackages:
-              description: Array of parent package names
-              type: array
-              items:
-                type: string
-            version:
-              description: Package version name
-              type: string
-              example: "2022.2@5"
-            status:
-              $ref: "#/components/schemas/VersionStatusEnum"
+    SearchResultDDLContract:
+      description: Global search result for a DDL table or view contract; returned when `searchLevel = ddl`.
+      title: SearchResultDDLContract
+      type: object
+      required:
+        - packageId
+        - name
+        - parentPackages
+        - version
+        - status
+        - tableId
+        - kind
+      properties:
+        packageId:
+          description: Package unique string identifier (full alias)
+          type: string
+          example: "QS.CloudQSS.CPQ.Q-TMF"
+        name:
+          description: Package name
+          type: string
+          example: "Quote TMF Service"
+        parentPackages:
+          description: Array of parent package names
+          type: array
+          items:
+            type: string
+        version:
+          description: Package version name
+          type: string
+          example: "2022.2@5"
+        status:
+          $ref: "#/components/schemas/VersionStatusEnum"
+        tableId:
+          description: DDL table/view logical identifier.
+          type: string
+          example: "public.users"
+        kind:
+          $ref: "#/components/schemas/DdlContractKind"
+        schemaName:
+          description: SQL schema name.
+          type: string
+          example: "public"
+        tableName:
+          description: Unqualified table or view name.
+          type: string
+          example: "users"
+    SearchResultMCPContract:
+      description: Global search result for an MCP contract entity; returned when `searchLevel = mcp`.
+      title: SearchResultMCPContract
+      type: object
+      required:
+        - packageId
+        - name
+        - parentPackages
+        - version
+        - status
+        - entityId
+        - kind
+        - mcpEndpoint
+      properties:
+        packageId:
+          description: Package unique string identifier (full alias)
+          type: string
+          example: "QS.CloudQSS.CPQ.Q-TMF"
+        name:
+          description: Package name
+          type: string
+          example: "Quote TMF Service"
+        parentPackages:
+          description: Array of parent package names
+          type: array
+          items:
+            type: string
+        version:
+          description: Package version name
+          type: string
+          example: "2022.2@5"
+        status:
+          $ref: "#/components/schemas/VersionStatusEnum"
+        entityId:
+          description: MCP contract logical identifier.
+          type: string
+          example: "https___api_example_com_mcp.tool.get_forecast"
+        kind:
+          $ref: "#/components/schemas/McpContractKind"
+        entityName:
+          description: MCP entity name.
+          type: string
+          example: "get_forecast"
+        mcpEndpoint:
+          description: MCP endpoint URL.
+          type: string
+          example: "https://api.example.com/mcp"
     SearchResultPackage:
       title: SearchResultPackage
       description: |
@@ -12575,12 +12626,11 @@ components:
               metadata:
                 description: |
                   Open-ended file-level metadata.
-                  For MCP discovery files, use `mcpEndpoint` and optional `mcpServerName`; DDL files typically omit this object.
+                  For MCP discovery files, set `mcpEndpoint` to the MCP server URL; DDL files typically omit this object.
                 type: object
                 additionalProperties: true
                 example:
                   mcpEndpoint: "https://api.example.com/mcp"
-                  mcpServerName: "weather-mcp"
         refs:
           description: |
             Detailed data about referenced versions for current package version.

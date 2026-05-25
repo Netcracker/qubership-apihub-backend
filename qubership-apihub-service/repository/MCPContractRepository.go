@@ -12,6 +12,7 @@ type MCPContractRepository interface {
 	ListMcpEntities(packageId, version string, revision int, kind, textFilter string, limit, offset int) ([]*entity.MCPContractEntity, error)
 	GetMcpEntity(packageId, version string, revision int, mcpEntityId string) (*entity.MCPContractEntity, []byte, error)
 	GetEntitiesCount(packageId, version string, revision int) ([]entity.MCPContractKindCountEntity, error)
+	GlobalSearchForMCP(searchQuery *entity.GlobalContractSearchQuery) ([]entity.MCPContractSearchResult, error)
 
 	CreateMcpContracts(contracts []*entity.MCPContractEntity) error
 	CreateMcpContractData(data []*entity.MCPContractDataEntity) error
@@ -87,6 +88,76 @@ func (r *mcpContractRepositoryImpl) GetEntitiesCount(packageId, version string, 
 		`SELECT kind, count(*) as count FROM mcp_entities WHERE package_id=? AND version=? AND revision=? GROUP BY kind`,
 		packageId, version, revision)
 	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (r *mcpContractRepositoryImpl) GlobalSearchForMCP(searchQuery *entity.GlobalContractSearchQuery) ([]entity.MCPContractSearchResult, error) {
+	_, err := r.cp.GetConnection().Exec("select websearch_to_tsquery(?)", searchQuery.OriginalTextInput)
+	if err != nil {
+		return nil, fmt.Errorf("invalid search string: %v", err.Error())
+	}
+	var result []entity.MCPContractSearchResult
+	mcpSearchQuery := `
+select
+    me.package_id,
+    pg.name,
+    me.version,
+    me.revision,
+    pv.status,
+    me.mcp_entity_id,
+    me.kind,
+    me.name,
+    me.mcp_endpoint,
+    parent_package_names(me.package_id) parent_names
+from mcp_entities me
+         inner join (
+    SELECT DISTINCT ON (rank, package_id, mcp_entity_id)
+        ts_rank(data_vector, search_query) as rank,
+        ts.package_id    as package_id,
+        ts.mcp_entity_id as mcp_entity_id,
+        ts.version       as version,
+        ts.revision      as revision
+
+    FROM fts_mcp_search_text ts,
+         websearch_to_tsquery(?original_text_input) search_query
+    WHERE ts.status = ?status
+        and (?kinds = '{}' or ts.kind = ANY(?kinds::text[]))
+        and (?versions = '{}' or version like ANY(
+						select id from unnest(?versions::text[]) id))
+        and (package_id like ANY(
+						select id from unnest(?packages::text[]) id
+						union
+						select id||'.%' from unnest(?packages::text[]) id))
+        and search_query @@ data_vector
+    ORDER BY ts_rank(data_vector, search_query) DESC,
+             package_id,
+             mcp_entity_id desc,
+             version DESC,
+             revision DESC
+    LIMIT ?limit OFFSET ?offset
+) all_ts
+                   on all_ts.package_id = me.package_id and
+                      all_ts.version = me.version and
+                      all_ts.revision = me.revision and
+                      all_ts.mcp_entity_id = me.mcp_entity_id
+
+inner join published_version pv on me.package_id=pv.package_id and me.version=pv.version and me.revision=pv.revision
+inner join package_group pg on me.package_id=pg.id
+
+where all_ts.rank > 0
+and pv.deleted_at is null
+and pv.published_at >= ?start_date
+and pv.published_at <= ?end_date
+order by all_ts.rank desc, me.mcp_entity_id
+limit ?limit;
+`
+	_, err = r.cp.GetConnection().Model(searchQuery).Query(&result, mcpSearchQuery)
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return result, nil

@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
@@ -16,6 +17,7 @@ type DDLContractService interface {
 	GetDdlTableChanges(packageId, versionName, ddlTableId string) (*view.DdlTableChangesView, error)
 	GetVersionSummary(packageId, versionName string) (*view.VersionDDLContractsSummary, error)
 	GetChangesSummary(comparisonId string) (*view.DDLContractsSummary, error)
+	GlobalSearchForDDL(searchReq view.SearchQueryReq) (*view.SearchResult, error)
 }
 
 func NewDDLContractService(ddlRepo repository.DDLContractRepository, publishedRepo repository.PublishedRepository) DDLContractService {
@@ -143,6 +145,44 @@ func (s *ddlContractServiceImpl) GetChangesSummary(comparisonId string) (*view.D
 		return nil, nil
 	}
 	return &view.DDLContractsSummary{ChangesSummary: *changesSummary}, nil
+}
+
+func (s *ddlContractServiceImpl) GlobalSearchForDDL(searchReq view.SearchQueryReq) (*view.SearchResult, error) {
+	versions := searchReq.Versions
+	if versions == nil {
+		versions = make([]string, 0)
+	}
+	startDate := searchReq.PublicationDateInterval.StartDate
+	endDate := searchReq.PublicationDateInterval.EndDate
+	if startDate.IsZero() {
+		startDate = time.Unix(0, 0)
+	}
+	if endDate.IsZero() {
+		endDate = time.Unix(2556057600, 0)
+	}
+	searchQuery := &entity.GlobalContractSearchQuery{
+		OriginalTextInput: searchReq.SearchString,
+		Kinds:             make([]string, 0),
+		Packages:          searchReq.PackageIds,
+		Versions:          versions,
+		Status:            searchReq.Status,
+		StartDate:         startDate,
+		EndDate:           endDate,
+		Limit:             searchReq.Limit,
+		Offset:            searchReq.Limit * searchReq.Page,
+	}
+	if searchQuery.Packages == nil {
+		searchQuery.Packages = make([]string, 0)
+	}
+	entities, err := s.ddlRepo.GlobalSearchForDDL(searchQuery)
+	if err != nil {
+		return nil, err
+	}
+	results := make([]interface{}, 0, len(entities))
+	for _, ent := range entities {
+		results = append(results, entity.MakeGlobalDDLSearchResultView(ent))
+	}
+	return &view.SearchResult{DdlContracts: &results}, nil
 }
 
 func makeDdlTableView(ent *entity.DDLContractEntity, packageId, version string, revision int) *view.DdlTableView {

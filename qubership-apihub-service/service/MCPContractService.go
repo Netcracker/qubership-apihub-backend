@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
@@ -14,6 +15,7 @@ type MCPContractService interface {
 	ListMcpEntities(packageId, versionName, kind, textFilter string, limit, offset int) (*view.McpEntityListView, error)
 	GetMcpEntity(packageId, versionName, mcpEntityId string) (interface{}, error)
 	GetVersionSummary(packageId, versionName string) (*view.VersionMCPContractsSummary, error)
+	GlobalSearchForMCP(searchReq view.SearchQueryReq) (*view.SearchResult, error)
 }
 
 func NewMCPContractService(mcpRepo repository.MCPContractRepository, publishedRepo repository.PublishedRepository) MCPContractService {
@@ -110,6 +112,44 @@ func (s *mcpContractServiceImpl) GetVersionSummary(packageId, versionName string
 		}
 	}
 	return summary, nil
+}
+
+func (s *mcpContractServiceImpl) GlobalSearchForMCP(searchReq view.SearchQueryReq) (*view.SearchResult, error) {
+	versions := searchReq.Versions
+	if versions == nil {
+		versions = make([]string, 0)
+	}
+	startDate := searchReq.PublicationDateInterval.StartDate
+	endDate := searchReq.PublicationDateInterval.EndDate
+	if startDate.IsZero() {
+		startDate = time.Unix(0, 0)
+	}
+	if endDate.IsZero() {
+		endDate = time.Unix(2556057600, 0)
+	}
+	searchQuery := &entity.GlobalContractSearchQuery{
+		OriginalTextInput: searchReq.SearchString,
+		Kinds:             make([]string, 0),
+		Packages:          searchReq.PackageIds,
+		Versions:          versions,
+		Status:            searchReq.Status,
+		StartDate:         startDate,
+		EndDate:           endDate,
+		Limit:             searchReq.Limit,
+		Offset:            searchReq.Limit * searchReq.Page,
+	}
+	if searchQuery.Packages == nil {
+		searchQuery.Packages = make([]string, 0)
+	}
+	entities, err := s.mcpRepo.GlobalSearchForMCP(searchQuery)
+	if err != nil {
+		return nil, err
+	}
+	results := make([]interface{}, 0, len(entities))
+	for _, ent := range entities {
+		results = append(results, entity.MakeGlobalMCPSearchResultView(ent))
+	}
+	return &view.SearchResult{McpContracts: &results}, nil
 }
 
 func makeMcpEntityView(ent *entity.MCPContractEntity, packageId, version string, revision int) *view.McpEntityView {

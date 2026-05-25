@@ -745,6 +745,13 @@ func (a *BuildResultToEntitiesReader) ReadDdlContractsToEntities() ([]*entity.DD
 				SearchDataHash: searchDataHash,
 				DataVector:     searchText,
 			})
+		} else {
+			return nil, nil, nil, &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.InvalidPackageArchivedFile,
+				Message: exception.InvalidPackageArchivedFileMsg,
+				Params:  map[string]interface{}{"file": contract.ContentPath, "error": "file not found"},
+			}
 		}
 		contractEntities = append(contractEntities, &entity.DDLContractEntity{
 			PackageId:  a.PackageInfo.PackageId,
@@ -846,6 +853,13 @@ func (a *BuildResultToEntitiesReader) ReadMcpContractsToEntities() ([]*entity.MC
 				SearchDataHash: searchDataHash,
 				DataVector:     searchText,
 			})
+		} else {
+			return nil, nil, nil, &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.InvalidPackageArchivedFile,
+				Message: exception.InvalidPackageArchivedFileMsg,
+				Params:  map[string]interface{}{"file": contract.ContentPath, "error": "file not found"},
+			}
 		}
 		contractEntities = append(contractEntities, &entity.MCPContractEntity{
 			PackageId:   a.PackageInfo.PackageId,

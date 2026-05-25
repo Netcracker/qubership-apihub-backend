@@ -114,6 +114,9 @@ func (c *ddlContractControllerImpl) GetDdlTable(w http.ResponseWriter, r *http.R
 		})
 		return
 	}
+
+	// TODO: includeData flag
+
 	result, svcErr := c.ddlService.GetDdlTable(packageId, versionName, tableId)
 	if svcErr != nil {
 		handlePkgRedirectOrRespondWithError(w, r, c.ptHandler, packageId, "Failed to get DDL table", svcErr)
