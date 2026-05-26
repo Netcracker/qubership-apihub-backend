@@ -824,7 +824,7 @@ func (p publishedRepositoryImpl) validateMigrationResult(tx *pg.Tx, packageInfo 
 	}
 
 	// fts_operation_search_text is stored only for the latest revision of a version
-	// so validate it only for the latest revision — otherwise non-latest revisions are falsely flagged as suspicious.
+	// so validate it only for the latest revision — otherwise non-latest revisions are falsely flagged as suspicious
 	if version.Revision == maxRevision {
 		currentTable = "fts_operation_search_text"
 		oldSearchTexts := make([]entity.FtsOperationSearchTextEntity, 0)
