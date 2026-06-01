@@ -147,3 +147,24 @@ Notable sections:
 
 Full developer and operator documentation lives in [docs/](./docs/README.md).
 
+## AI agent configuration (APM)
+
+Agent skills and rules for this repository are distributed from the central store in
+[`qubership-apihub-ci/agent-skills`](https://github.com/Netcracker/qubership-apihub-ci/tree/main/agent-skills)
+using [APM](https://microsoft.github.io/apm/). They are **not** committed here; run APM
+after cloning to populate `.cursor/` and `.claude/`:
+
+```bash
+# one-time: install APM (see https://microsoft.github.io/apm/)
+brew install microsoft/apm/apm   # or: pip install apm-cli
+
+# from the repository root:
+apm install --target cursor,claude --legacy-skill-paths
+```
+
+This reads `apm.yml`, pins versions in `apm.lock.yaml`, and deploys the skills/rules into
+`.cursor/` and `.claude/`. To update, re-run `apm install`.
+
+During the APM migration, dependencies may pin the store branch with `#apm_migration`; after
+the store PR merges, drop the suffix and run `apm install` again to track the default branch.
+
