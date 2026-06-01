@@ -149,10 +149,14 @@ Full developer and operator documentation lives in [docs/](./docs/README.md).
 
 ## AI agent configuration (APM)
 
-Agent skills and rules for this repository are distributed from the central store in
-[`qubership-apihub-ci/agent-skills`](https://github.com/Netcracker/qubership-apihub-ci/tree/main/agent-skills)
-using [APM](https://microsoft.github.io/apm/). They are **not** committed here; run APM
-after cloning to populate `.cursor/` and `.claude/`:
+Agent context is split between a **central store** and **this repository**:
+
+| Scope | Location |
+|-------|----------|
+| Generic skills/rules (Go conventions, planner, …) | [`qubership-apihub-ci/agent-skills`](https://github.com/Netcracker/qubership-apihub-ci/tree/main/agent-skills) |
+| Backend-specific skills/rules | [`agent-skills/`](agent-skills/) in this repo |
+
+Deployed `.cursor/` and `.claude/` trees are **not** committed; run APM after clone:
 
 ```bash
 # one-time: install APM (see https://microsoft.github.io/apm/)
@@ -162,9 +166,9 @@ brew install microsoft/apm/apm   # or: pip install apm-cli
 apm install --target cursor,claude --legacy-skill-paths
 ```
 
-This reads `apm.yml`, pins versions in `apm.lock.yaml`, and deploys the skills/rules into
-`.cursor/` and `.claude/`. To update, re-run `apm install`.
+This reads root `apm.yml` (CI dependencies + local `agent-skills/`), pins versions in
+`apm.lock.yaml`, and deploys into `.cursor/` and `.claude/`. Re-run `apm install` to update.
 
-During the APM migration, dependencies may pin the store branch with `#apm_migration`; after
-the store PR merges, drop the suffix and run `apm install` again to track the default branch.
+During migration, CI dependencies may use `#apm_migration`; drop the suffix after the store PR
+merges.
 

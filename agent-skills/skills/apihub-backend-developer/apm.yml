@@ -1,0 +1,6 @@
+name: apihub-backend-developer
+version: 0.1.0
+description: APIHub backend service specifics (Service.go, ErrorCodes, migrations, OpenAPI files)
+dependencies:
+  apm:
+    - Netcracker/qubership-apihub-ci/agent-skills/skills/apihub-go-developer#apm_migration

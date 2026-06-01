@@ -1,0 +1,3 @@
+name: backend-conventions
+version: 0.1.0
+description: qubership-apihub-backend-specific Go conventions (config, ErrorCodes, Service.go, OpenAPI files, migrations)
