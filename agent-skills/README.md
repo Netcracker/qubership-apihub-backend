@@ -1,7 +1,7 @@
 # Backend-local agent skills and rules
 
 Repository-specific agent packages for `qubership-apihub-backend`. Generic skills and
-rules come from [`qubership-apihub-ci/agent-skills`](https://github.com/Netcracker/qubership-apihub-ci/tree/main/agent-skills);
+rules come from [`qubership-apihub-ci/agent-skills`](https://github.com/Netcracker/qubership-apihub-ci/tree/apm_migration/agent-skills);
 this folder holds content that applies **only** to this service.
 
 ## Packages

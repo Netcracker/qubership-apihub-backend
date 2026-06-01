@@ -153,7 +153,7 @@ Agent context is split between a **central store** and **this repository**:
 
 | Scope | Location |
 |-------|----------|
-| Generic skills/rules (Go conventions, planner, …) | [`qubership-apihub-ci/agent-skills`](https://github.com/Netcracker/qubership-apihub-ci/tree/main/agent-skills) |
+| Generic skills/rules (Go conventions, planner, …) | [`qubership-apihub-ci/agent-skills`](https://github.com/Netcracker/qubership-apihub-ci/tree/apm_migration/agent-skills) |
 | Backend-specific skills/rules | [`agent-skills/`](agent-skills/) in this repo |
 
 Deployed `.cursor/` and `.claude/` trees are **not** committed; run APM after clone:
