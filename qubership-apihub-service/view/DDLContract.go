@@ -12,11 +12,7 @@ type DdlTableView struct {
 	DocumentId string      `json:"documentId,omitempty"`
 	PackageRef string      `json:"packageRef,omitempty"`
 	Metadata   interface{} `json:"metadata,omitempty"`
-}
-
-type DdlTableDetailView struct {
-	DdlTableView
-	Data interface{} `json:"data,omitempty"`
+	Data       string      `json:"data,omitempty"`
 }
 
 type DdlTableChangesView struct {

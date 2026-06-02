@@ -1,7 +1,6 @@
 package service
 
 import (
-	"encoding/json"
 	"net/http"
 	"time"
 
@@ -13,7 +12,7 @@ import (
 
 type DDLContractService interface {
 	ListDdlTables(packageId, versionName, kind, textFilter string, limit, offset int) (*view.DdlTableListView, error)
-	GetDdlTable(packageId, versionName, ddlTableId string) (interface{}, error)
+	GetDdlTable(packageId, versionName, ddlTableId string, includeData bool) (*view.DdlTableView, error)
 	GetDdlTableChanges(packageId, versionName, ddlTableId string) (*view.DdlTableChangesView, error)
 	GetVersionSummary(packageId, versionName string) (*view.VersionDDLContractsSummary, error)
 	GetChangesSummary(comparisonId string) (*view.DDLContractsSummary, error)
@@ -56,17 +55,17 @@ func (s *ddlContractServiceImpl) ListDdlTables(packageId, versionName, kind, tex
 	}
 	result := &view.DdlTableListView{Tables: make([]interface{}, 0, len(entities))}
 	for _, ent := range entities {
-		result.Tables = append(result.Tables, makeDdlTableView(ent, packageId, version, revision))
+		result.Tables = append(result.Tables, entity.MakeDdlTableView(ent, nil))
 	}
 	return result, nil
 }
 
-func (s *ddlContractServiceImpl) GetDdlTable(packageId, versionName, ddlTableId string) (interface{}, error) {
+func (s *ddlContractServiceImpl) GetDdlTable(packageId, versionName, ddlTableId string, includeData bool) (*view.DdlTableView, error) {
 	version, revision, err := s.resolveRevision(packageId, versionName)
 	if err != nil {
 		return nil, err
 	}
-	ent, data, err := s.ddlRepo.GetDdlTable(packageId, version, revision, ddlTableId)
+	ent, data, err := s.ddlRepo.GetDdlTable(packageId, version, revision, ddlTableId, includeData)
 	if err != nil {
 		return nil, err
 	}
@@ -78,14 +77,7 @@ func (s *ddlContractServiceImpl) GetDdlTable(packageId, versionName, ddlTableId 
 			Params:  map[string]interface{}{"ddlTableId": ddlTableId},
 		}
 	}
-	detail := view.DdlTableDetailView{DdlTableView: *makeDdlTableView(ent, packageId, version, revision)}
-	if len(data) > 0 {
-		var parsed interface{}
-		if err := json.Unmarshal(data, &parsed); err == nil {
-			detail.Data = parsed
-		}
-	}
-	return detail, nil
+	return entity.MakeDdlTableView(ent, data), nil
 }
 
 func (s *ddlContractServiceImpl) GetDdlTableChanges(packageId, versionName, ddlTableId string) (*view.DdlTableChangesView, error) {
@@ -183,16 +175,4 @@ func (s *ddlContractServiceImpl) GlobalSearchForDDL(searchReq view.SearchQueryRe
 		results = append(results, entity.MakeGlobalDDLSearchResultView(ent))
 	}
 	return &view.SearchResult{DdlContracts: &results}, nil
-}
-
-func makeDdlTableView(ent *entity.DDLContractEntity, packageId, version string, revision int) *view.DdlTableView {
-	return &view.DdlTableView{
-		TableId:    ent.DdlTableId,
-		Kind:       ent.Kind,
-		SchemaName: ent.SchemaName,
-		TableName:  ent.Name,
-		DocumentId: ent.DocumentId,
-		PackageRef: view.MakePackageRefKey(packageId, version, revision),
-		Metadata:   ent.Metadata,
-	}
 }

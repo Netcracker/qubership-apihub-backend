@@ -10,7 +10,7 @@ import (
 
 type MCPContractRepository interface {
 	ListMcpEntities(packageId, version string, revision int, kind, textFilter string, limit, offset int) ([]*entity.MCPContractEntity, error)
-	GetMcpEntity(packageId, version string, revision int, mcpEntityId string) (*entity.MCPContractEntity, []byte, error)
+	GetMcpEntity(packageId, version string, revision int, mcpEntityId string, includeData bool) (*entity.MCPContractEntity, []byte, error)
 	GetEntitiesCount(packageId, version string, revision int) ([]entity.MCPContractKindCountEntity, error)
 	GlobalSearchForMCP(searchQuery *entity.GlobalContractSearchQuery) ([]entity.MCPContractSearchResult, error)
 
@@ -56,7 +56,7 @@ func (r *mcpContractRepositoryImpl) ListMcpEntities(packageId, version string, r
 	return result, nil
 }
 
-func (r *mcpContractRepositoryImpl) GetMcpEntity(packageId, version string, revision int, mcpEntityId string) (*entity.MCPContractEntity, []byte, error) {
+func (r *mcpContractRepositoryImpl) GetMcpEntity(packageId, version string, revision int, mcpEntityId string, includeData bool) (*entity.MCPContractEntity, []byte, error) {
 	conn := r.cp.GetConnection()
 	ent := new(entity.MCPContractEntity)
 	err := conn.Model(ent).
@@ -72,7 +72,7 @@ func (r *mcpContractRepositoryImpl) GetMcpEntity(packageId, version string, revi
 		return nil, nil, err
 	}
 	var data []byte
-	if ent.DataHash != nil {
+	if includeData && ent.DataHash != nil {
 		dataEnt := new(entity.MCPContractDataEntity)
 		err = conn.Model(dataEnt).Where("data_hash = ?", *ent.DataHash).First()
 		if err == nil {

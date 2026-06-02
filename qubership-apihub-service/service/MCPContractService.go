@@ -13,7 +13,7 @@ import (
 
 type MCPContractService interface {
 	ListMcpEntities(packageId, versionName, kind, textFilter string, limit, offset int) (*view.McpEntityListView, error)
-	GetMcpEntity(packageId, versionName, mcpEntityId string) (interface{}, error)
+	GetMcpEntity(packageId, versionName, mcpEntityId string, includeData bool) (interface{}, error)
 	GetVersionSummary(packageId, versionName string) (*view.VersionMCPContractsSummary, error)
 	GlobalSearchForMCP(searchReq view.SearchQueryReq) (*view.SearchResult, error)
 }
@@ -59,12 +59,12 @@ func (s *mcpContractServiceImpl) ListMcpEntities(packageId, versionName, kind, t
 	return result, nil
 }
 
-func (s *mcpContractServiceImpl) GetMcpEntity(packageId, versionName, mcpEntityId string) (interface{}, error) {
+func (s *mcpContractServiceImpl) GetMcpEntity(packageId, versionName, mcpEntityId string, includeData bool) (interface{}, error) {
 	version, revision, err := s.resolveRevision(packageId, versionName)
 	if err != nil {
 		return nil, err
 	}
-	ent, data, err := s.mcpRepo.GetMcpEntity(packageId, version, revision, mcpEntityId)
+	ent, data, err := s.mcpRepo.GetMcpEntity(packageId, version, revision, mcpEntityId, includeData)
 	if err != nil {
 		return nil, err
 	}

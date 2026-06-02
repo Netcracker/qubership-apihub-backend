@@ -115,9 +115,22 @@ func (c *ddlContractControllerImpl) GetDdlTable(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// TODO: includeData flag
+	includeData := true
+	if r.URL.Query().Get("includeData") != "" {
+		includeData, err = strconv.ParseBool(r.URL.Query().Get("includeData"))
+		if err != nil {
+			utils.RespondWithCustomError(w, &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.IncorrectParamType,
+				Message: exception.IncorrectParamTypeMsg,
+				Params:  map[string]interface{}{"param": "includeData", "type": "boolean"},
+				Debug:   err.Error(),
+			})
+			return
+		}
+	}
 
-	result, svcErr := c.ddlService.GetDdlTable(packageId, versionName, tableId)
+	result, svcErr := c.ddlService.GetDdlTable(packageId, versionName, tableId, includeData)
 	if svcErr != nil {
 		handlePkgRedirectOrRespondWithError(w, r, c.ptHandler, packageId, "Failed to get DDL table", svcErr)
 		return

@@ -11,7 +11,7 @@ import (
 
 type DDLContractRepository interface {
 	ListDdlTables(packageId, version string, revision int, kind, textFilter string, limit, offset int) ([]*entity.DDLContractEntity, error)
-	GetDdlTable(packageId, version string, revision int, ddlTableId string) (*entity.DDLContractEntity, []byte, error)
+	GetDdlTable(packageId, version string, revision int, ddlTableId string, includeData bool) (*entity.DDLContractEntity, []byte, error)
 	GetDdlTableChanges(packageId, version string, revision int, ddlTableId string) (*entity.DDLContractComparisonEntity, error)
 	GetEntitiesCount(packageId, version string, revision int) ([]entity.DDLContractKindCountEntity, error)
 	GetComparisonSummary(comparisonId string) (*view.ChangeSummary, error)
@@ -60,7 +60,7 @@ func (r *ddlContractRepositoryImpl) ListDdlTables(packageId, version string, rev
 	return result, nil
 }
 
-func (r *ddlContractRepositoryImpl) GetDdlTable(packageId, version string, revision int, ddlTableId string) (*entity.DDLContractEntity, []byte, error) {
+func (r *ddlContractRepositoryImpl) GetDdlTable(packageId, version string, revision int, ddlTableId string, includeData bool) (*entity.DDLContractEntity, []byte, error) {
 	conn := r.cp.GetConnection()
 	ent := new(entity.DDLContractEntity)
 	err := conn.Model(ent).
@@ -76,12 +76,16 @@ func (r *ddlContractRepositoryImpl) GetDdlTable(packageId, version string, revis
 		return nil, nil, err
 	}
 	var data []byte
-	if ent.DataHash != nil {
+	if includeData && ent.DataHash != nil {
 		dataEnt := new(entity.DDLContractDataEntity)
 		err = conn.Model(dataEnt).Where("data_hash = ?", *ent.DataHash).First()
-		if err == nil {
-			data = dataEnt.Data
+		if err != nil {
+			if err == pg.ErrNoRows {
+				return nil, nil, fmt.Errorf("no data found for ddl table %s data hash = %s", ddlTableId, ent.DataHash)
+			}
+			return nil, nil, err
 		}
+		data = dataEnt.Data
 	}
 	return ent, data, nil
 }
