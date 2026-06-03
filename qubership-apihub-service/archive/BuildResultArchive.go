@@ -20,12 +20,12 @@ const (
 	VersionInternalDocumentsFilePath    = "version-internal-documents.json"
 	ComparisonInternalDocumentsFilePath = "comparison-internal-documents.json"
 
-	ContractsDdlFilePath              = "contracts/ddl.json"
-	ContractsDdlComparisonsFilePath   = "contracts/ddl-comparisons.json"
-	ContractsMcpFilePath              = "contracts/mcp.json"
-	ContractsDdlRootFolder            = "contracts/ddl/"
-	ContractsMcpRootFolder            = "contracts/mcp/"
-	ContractsDdlComparisonsRootFolder = "contracts/ddl-comparisons/"
+	ContractsDdlFilePath              = "ddl.json"
+	ContractsDdlComparisonsFilePath   = "ddl-comparisons.json"
+	ContractsMcpFilePath              = "mcp.json"
+	ContractsDdlRootFolder            = "ddl/"
+	ContractsMcpRootFolder            = "mcp/"
+	ContractsDdlComparisonsRootFolder = "ddl-comparisons/"
 
 	DocumentsRootFolder                   = "documents/"
 	ComparisonsRootFolder                 = "comparisons/"
