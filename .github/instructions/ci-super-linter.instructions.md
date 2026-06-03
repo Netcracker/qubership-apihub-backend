@@ -1,6 +1,6 @@
 ---
-paths:
-  - "**"
+description: CI super-linter and MD link checker rules for changed files in APIHub repositories
+applyTo: "**"
 ---
 
 # CI linters (super-linter / link checker)
