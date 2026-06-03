@@ -135,6 +135,6 @@ Full checklist: deployed CI linter rules (`.cursor/rules/ci-super-linter.mdc` af
 Project skills and rules are provisioned by APM
 (`apm install --target cursor,claude --legacy-skill-paths`); the agent discovers them automatically from
 `.cursor/skills/` and `.claude/skills/`. Generic packages come from the
-[CI store](https://github.com/Netcracker/qubership-apihub-ci/tree/apm_migration/agent-skills);
-backend-specific sources live in [`agent-skills/`](agent-skills/). See
+[CI store](https://github.com/Netcracker/qubership-apihub-ci/tree/apm_migration/agent-packages);
+backend-specific sources live in [`agent-packages/`](agent-packages/). See
 [README — AI agent configuration (APM)](README.md#ai-agent-configuration-apm).

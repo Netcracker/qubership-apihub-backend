@@ -153,10 +153,11 @@ Agent context is split between a **central store** and **this repository**:
 
 | Scope | Location |
 |-------|----------|
-| Generic skills/rules (Go conventions, planner, …) | [`qubership-apihub-ci/agent-skills`](https://github.com/Netcracker/qubership-apihub-ci/tree/apm_migration/agent-skills) |
-| Backend-specific skills/rules | [`agent-skills/`](agent-skills/) in this repo |
+| Generic skills/rules (Go conventions, planner, …) | [`qubership-apihub-ci/agent-packages`](https://github.com/Netcracker/qubership-apihub-ci/tree/apm_migration/agent-packages) |
+| Backend-specific packages | [`agent-packages/`](agent-packages/) in this repo |
+| Deployed harness output | `.cursor/` and `.claude/` (committed; refresh with APM) |
 
-Deployed `.cursor/` and `.claude/` trees are **not** committed; run APM after clone:
+After changing package sources or `apm.yml`, refresh deployed harness files:
 
 ```bash
 # one-time: install APM (see https://microsoft.github.io/apm/)
@@ -166,8 +167,9 @@ brew install microsoft/apm/apm   # or: pip install apm-cli
 apm install --target cursor,claude --legacy-skill-paths
 ```
 
-This reads root `apm.yml` (CI dependencies + local `agent-skills/`), pins versions in
-`apm.lock.yaml`, and deploys into `.cursor/` and `.claude/`. Re-run `apm install` to update.
+This reads root `apm.yml` (CI dependencies + local `agent-packages/`), updates
+`apm.lock.yaml`, and deploys into `.cursor/` and `.claude/`. Commit the refreshed harness
+trees together with package or manifest changes.
 
 During migration, CI dependencies may use `#apm_migration`; drop the suffix after the store PR
 merges.

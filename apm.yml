@@ -2,9 +2,9 @@ name: qubership-apihub-backend
 version: 0.0.0
 dependencies:
   apm:
-    - Netcracker/qubership-apihub-ci/agent-skills/skills/github-ticket-implementation-planner#apm_migration
-    - Netcracker/qubership-apihub-ci/agent-skills/instructions/common-conventions#apm_migration
-    - Netcracker/qubership-apihub-ci/agent-skills/instructions/go-conventions#apm_migration
-    - ./agent-skills/skills/apihub-backend-developer
-    - ./agent-skills/skills/apihub-backend-self-review
-    - ./agent-skills/instructions/backend-conventions
+    - Netcracker/qubership-apihub-ci/agent-packages/skills/github-ticket-implementation-planner#apm_migration
+    - Netcracker/qubership-apihub-ci/agent-packages/instructions/common-conventions#apm_migration
+    - Netcracker/qubership-apihub-ci/agent-packages/instructions/go-conventions#apm_migration
+    - ./agent-packages/skills/apihub-backend-developer
+    - ./agent-packages/skills/apihub-backend-self-review
+    - ./agent-packages/instructions/backend-conventions

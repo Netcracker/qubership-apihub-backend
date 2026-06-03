@@ -3,4 +3,4 @@ version: 0.1.0
 description: Backend-specific self-review addendum for qubership-apihub-backend
 dependencies:
   apm:
-    - Netcracker/qubership-apihub-ci/agent-skills/skills/apihub-go-self-review#apm_migration
+    - Netcracker/qubership-apihub-ci/agent-packages/skills/apihub-go-self-review#apm_migration

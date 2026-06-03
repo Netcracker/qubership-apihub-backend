@@ -8,8 +8,7 @@ When using Cursor, Claude Code, or other coding agents on this repository:
 
 - Read [`AGENTS.md`](../AGENTS.md) at the repository root for agent-specific conventions (clarify before coding, **fail fast / root-cause bug fixes**, OpenAPI sync, migrations, documentation placement).
 - Claude Code loads the same instructions via [`CLAUDE.md`](../CLAUDE.md).
-- Generic skills/rules come from `qubership-apihub-ci/agent-skills`; backend-specific sources live in this repo under `agent-skills/`. Run `apm install --target cursor,claude --legacy-skill-paths` after clone (see root `README.md`).
-- CI lint rules for agents deploy to `.cursor/rules/` and `.claude/rules/` via the same APM install.
+- Generic packages come from `qubership-apihub-ci/agent-packages`; backend-specific sources live in this repo under `agent-packages/`. After changing packages or `apm.yml`, run `apm install --target cursor,claude --legacy-skill-paths` and commit refreshed `.cursor/` / `.claude/` trees (see root `README.md`).
 - Helm charts and Postman E2E tests live in **separate repositories** — agents should remind you using [`docs/agent/related-repositories.md`](agent/related-repositories.md) (update Helm URL there when known).
 
 This guide remains the source of truth for API-first design, logging, deprecation, and pull request conventions below.

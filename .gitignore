@@ -32,9 +32,5 @@ qubership-apihub-service/local_config/config.yaml
 docs/local_development/docker-compose/DB/data/**
 
 
-# APM dependencies and deployed agent context
+# APM cache (installed package sources)
 apm_modules/
-.cursor/skills/
-.cursor/rules/
-.claude/skills/
-.claude/rules/
