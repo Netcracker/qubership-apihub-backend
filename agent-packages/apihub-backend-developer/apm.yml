@@ -4,6 +4,6 @@ description: APIHub backend service specifics (Service.go, ErrorCodes, migration
 author: Qubership
 dependencies:
   apm:
-    - Netcracker/qubership-apihub-ci/agent-packages/apihub-go-developer#apm_migration
+    - Netcracker/qubership-apihub-ci/agent-packages/apihub-go-developer
 
 
