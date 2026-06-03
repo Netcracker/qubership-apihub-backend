@@ -77,13 +77,13 @@ func (m mcpService) MakeMCPServer() *mcpserver.MCPServer {
 	)
 
 	toolHandlers := map[string]func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error){
-		ToolNameSearchOperations: m.ExecuteSearchTool,
-		ToolNameGetOperationSpec: m.ExecuteGetSpecTool,
-		ToolNameGetOperationDiff: m.ExecuteGetOperationDiffTool,
-		ToolNameGetDocument:      m.ExecuteGetDocumentTool,
-		LegacyToolNameSearchRestOperations:        m.ExecuteLegacyRestSearchTool,
-		LegacyToolNameGetRestOperationSpec:        m.ExecuteLegacyRestGetSpecTool,
-		LegacyToolNameGetRestOperationDiff:        m.ExecuteLegacyRestGetOperationDiffTool,
+		ToolNameSearchOperations:           m.ExecuteSearchTool,
+		ToolNameGetOperationSpec:           m.ExecuteGetSpecTool,
+		ToolNameGetOperationDiff:           m.ExecuteGetOperationDiffTool,
+		ToolNameGetDocument:                m.ExecuteGetDocumentTool,
+		LegacyToolNameSearchRestOperations: m.ExecuteLegacyRestSearchTool,
+		LegacyToolNameGetRestOperationSpec: m.ExecuteLegacyRestGetSpecTool,
+		LegacyToolNameGetRestOperationDiff: m.ExecuteLegacyRestGetOperationDiffTool,
 	}
 	for _, meta := range getMCPServerToolMetadata() {
 		handler, ok := toolHandlers[meta.Name]
@@ -98,20 +98,20 @@ func (m mcpService) MakeMCPServer() *mcpserver.MCPServer {
 		}, handler)
 	}
 
-	mcpWorkspace := m.systemInfoService.GetAiMCPConfig().Workspace
-	if mcpWorkspace != "" {
-		// Register API packages resource
-		s.AddResource(mcp.Resource{
-			URI:         "api-packages-list",
-			Name:        "API Packages List",
-			Description: "List of all API packages in the system. The resource returns a JSON object with a 'packages' array. Each item includes package metadata (name, packageId, kind, parents, etc.) and a 'versions' list containing up to 100 release versions sorted by version desc (status=release, sortBy=version, sortOrder=desc). Package ID can serve as a hint to which domain the API belongs. Use this resource to: get a list of all available packages, find package ID by package name, and review available release versions. Package IDs from this resource should be used in the 'group' parameter of the search_api_operations tool.",
-			MIMEType:    "application/json",
-		}, func(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
-			return m.GetPackagesList(ctx, mcpWorkspace)
-		})
-	} else {
-		log.Warn("AI MCP workspace is not set, skipping API packages resource registration")
-	}
+	//mcpWorkspace := m.systemInfoService.GetAiMCPConfig().Workspace
+	//if mcpWorkspace != "" {
+	//	// Register API packages resource
+	//	s.AddResource(mcp.Resource{
+	//		URI:         "api-packages-list",
+	//		Name:        "API Packages List",
+	//		Description: "List of all API packages in the system. The resource returns a JSON object with a 'packages' array. Each item includes package metadata (name, packageId, kind, parents, etc.) and a 'versions' list containing up to 100 release versions sorted by version desc (status=release, sortBy=version, sortOrder=desc). Package ID can serve as a hint to which domain the API belongs. Use this resource to: get a list of all available packages, find package ID by package name, and review available release versions. Package IDs from this resource should be used in the 'group' parameter of the search_api_operations tool.",
+	//		MIMEType:    "application/json",
+	//	}, func(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+	//		return m.GetPackagesList(ctx, mcpWorkspace)
+	//	})
+	//} else {
+	//	log.Warn("AI MCP workspace is not set, skipping API packages resource registration")
+	//}
 
 	// Auto-register every file under resources/mcp/resources/ as a static MCP resource.
 	// URI scheme: apihub://mcp/resources/<filename> -- stable so external clients can
