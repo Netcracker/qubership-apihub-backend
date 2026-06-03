@@ -34,7 +34,7 @@ In addition to `apihub-go-self-review`:
 
 ### Related repositories
 
-- [ ] If change affects deploy config or REST contract, developer was reminded about Helm and/or Postman E2E per `docs/agent/related-repositories.md`.
+- [ ] If change affects deploy config or REST contract, deployment and Postman follow-up skills were applied (`apihub-deployment-followup`, `postman-e2e-followup`).
 - [ ] Reminder includes concrete actions (env vars, new requests), not only "update other repo".
 
 ## Output format
