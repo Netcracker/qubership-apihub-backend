@@ -1,3 +1,8 @@
+---
+paths:
+  - "**"
+---
+
 # Clarify Before Coding
 
 - Do not write or modify code until task requirements are clear.

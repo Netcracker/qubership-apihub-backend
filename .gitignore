@@ -34,3 +34,6 @@ docs/local_development/docker-compose/DB/data/**
 
 # APM cache (installed package sources)
 apm_modules/
+
+# apm pack output
+agent-packages/**/build/
