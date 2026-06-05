@@ -553,12 +553,7 @@ func (r roleServiceImpl) GetPermissionsForPackage(ctx context.SecurityContext, p
 	if apikeyPackageId := ctx.GetApikeyPackageId(); apikeyPackageId != "" {
 		apikeyRoles := ctx.GetApikeyRoles()
 		if apikeyPackageId != packageId && !strings.HasPrefix(packageId, apikeyPackageId+".") && apikeyPackageId != "*" {
-			return nil, &exception.CustomError{
-				Status:  http.StatusNotFound,
-				Code:    exception.PackageNotFound,
-				Message: exception.PackageNotFoundMsg,
-				Params:  map[string]interface{}{"packageId": packageId},
-			}
+			return make([]string, 0), nil
 		}
 		apikeyPermissions, err := r.roleRepository.GetPermissionsForRoles(apikeyRoles)
 		if err != nil {
@@ -585,6 +580,7 @@ func (r roleServiceImpl) HasRequiredPermissions(ctx context.SecurityContext, pac
 	if apikeyPackageId := ctx.GetApikeyPackageId(); apikeyPackageId != "" {
 		apikeyRoles := ctx.GetApikeyRoles()
 		if apikeyPackageId != packageId && !strings.HasPrefix(packageId, apikeyPackageId+".") && apikeyPackageId != "*" {
+			//TODO: error message is confusing
 			return false, &exception.CustomError{
 				Status:  http.StatusNotFound,
 				Code:    exception.PackageNotFound,
@@ -609,6 +605,7 @@ func (r roleServiceImpl) HasRequiredPermissions(ctx context.SecurityContext, pac
 		return false, err
 	}
 	if !utils.SliceContains(userPermissions, string(view.ReadPermission)) {
+		//TODO: error message is confusing
 		return false, &exception.CustomError{
 			Status:  http.StatusNotFound,
 			Code:    exception.PackageNotFound,
