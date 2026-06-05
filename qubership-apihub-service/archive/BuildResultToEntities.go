@@ -717,14 +717,15 @@ func (a *BuildResultToEntitiesReader) ReadDdlContractsToEntities() ([]*entity.DD
 
 	for _, contract := range a.PackageDdlContracts.Contracts {
 		var dataHash *string
-		if fileHeader, exists := a.ContractsDdlFileHeaders[contract.ContentPath]; exists {
+		fileName := getDdlContractFileName(contract.DdlTableId)
+		if fileHeader, exists := a.ContractsDdlFileHeaders[fileName]; exists {
 			fileData, err := ReadZipFile(fileHeader)
 			if err != nil {
 				return nil, nil, nil, &exception.CustomError{
 					Status:  http.StatusBadRequest,
 					Code:    exception.InvalidPackageArchivedFile,
 					Message: exception.InvalidPackageArchivedFileMsg,
-					Params:  map[string]interface{}{"file": contract.ContentPath, "error": err.Error()},
+					Params:  map[string]interface{}{"file": fileName, "error": err.Error()},
 				}
 			}
 			hash := utils.GetEncodedXXHash128(fileData)
@@ -750,7 +751,7 @@ func (a *BuildResultToEntitiesReader) ReadDdlContractsToEntities() ([]*entity.DD
 				Status:  http.StatusBadRequest,
 				Code:    exception.InvalidPackageArchivedFile,
 				Message: exception.InvalidPackageArchivedFileMsg,
-				Params:  map[string]interface{}{"file": contract.ContentPath, "error": "file not found"},
+				Params:  map[string]interface{}{"file": fileName, "error": "file not found"},
 			}
 		}
 		contractEntities = append(contractEntities, &entity.DDLContractEntity{
@@ -810,6 +811,14 @@ func (a *BuildResultToEntitiesReader) ReadDdlContractComparisonsToEntities(compa
 	return comparisonEntities, nil
 }
 
+func getDdlContractFileName(ddlTableId string) string {
+	return ddlTableId + ".sql"
+}
+
+func getMcpContractFileName(mcpEntityId string) string {
+	return mcpEntityId + ".json"
+}
+
 func (a *BuildResultToEntitiesReader) ReadMcpContractsToEntities() ([]*entity.MCPContractEntity, []*entity.MCPContractDataEntity, []*entity.MCPContractSearchTextEntity, error) {
 	contractEntities := make([]*entity.MCPContractEntity, 0)
 	dataEntities := make([]*entity.MCPContractDataEntity, 0)
@@ -825,14 +834,15 @@ func (a *BuildResultToEntitiesReader) ReadMcpContractsToEntities() ([]*entity.MC
 			}
 		}
 		var dataHash *string
-		if fileHeader, exists := a.ContractsMcpFileHeaders[contract.ContentPath]; exists {
+		fileName := getMcpContractFileName(contract.McpEntityId)
+		if fileHeader, exists := a.ContractsMcpFileHeaders[fileName]; exists {
 			fileData, err := ReadZipFile(fileHeader)
 			if err != nil {
 				return nil, nil, nil, &exception.CustomError{
 					Status:  http.StatusBadRequest,
 					Code:    exception.InvalidPackageArchivedFile,
 					Message: exception.InvalidPackageArchivedFileMsg,
-					Params:  map[string]interface{}{"file": contract.ContentPath, "error": err.Error()},
+					Params:  map[string]interface{}{"file": fileName, "error": err.Error()},
 				}
 			}
 			hash := utils.GetEncodedXXHash128(fileData)
@@ -858,7 +868,7 @@ func (a *BuildResultToEntitiesReader) ReadMcpContractsToEntities() ([]*entity.MC
 				Status:  http.StatusBadRequest,
 				Code:    exception.InvalidPackageArchivedFile,
 				Message: exception.InvalidPackageArchivedFileMsg,
-				Params:  map[string]interface{}{"file": contract.ContentPath, "error": "file not found"},
+				Params:  map[string]interface{}{"file": fileName, "error": "file not found"},
 			}
 		}
 		contractEntities = append(contractEntities, &entity.MCPContractEntity{

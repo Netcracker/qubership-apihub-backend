@@ -1531,20 +1531,20 @@ components:
               $ref: "#/components/schemas/BuildResultComparisons"
             comparisons/{comparisonFileId}:
               $ref: "#/components/schemas/BuildResultComparisonsData"
-            contracts/ddl.json:
+            ddl.json:
               $ref: "#/components/schemas/BuildResultDdlContracts"
-            contracts/ddl/{contentPath}:
-              description: Full DDL contract entity payload referenced by `contentPath` from contracts/ddl.json.
+            ddl/{ddlTableId}.sql:
+              description: Full DDL contract entity payload resolved from `ddlTableId` in ddl.json.
               type: object
-            contracts/ddl-comparisons.json:
+            ddl-comparisons.json:
               $ref: "#/components/schemas/BuildResultDdlComparisons"
-            contracts/ddl-comparisons/{comparisonPath}:
-              description: Per-DDL-entity diff payload referenced by `comparisonPath` from contracts/ddl-comparisons.json.
+            ddl-comparisons/{comparisonPath}:
+              description: Per-DDL-entity diff payload referenced by `comparisonPath` from ddl-comparisons.json.
               type: object
-            contracts/mcp.json:
+            mcp.json:
               $ref: "#/components/schemas/BuildResultMcpContracts"
-            contracts/mcp/{contentPath}:
-              description: Full MCP contract entity payload referenced by `contentPath` from contracts/mcp.json.
+            mcp/{mcpEntityId}.json:
+              description: Full MCP contract entity payload resolved from `mcpEntityId` in mcp.json.
               type: object
             operations.json:
               description: List of operations for publish.
@@ -1704,10 +1704,10 @@ components:
               $ref: "#/components/schemas/BuildResultComparisons"
             comparisons/{comparisonFileId}:
               $ref: "#/components/schemas/BuildResultComparisonsData"
-            contracts/ddl-comparisons.json:
+            ddl-comparisons.json:
               $ref: "#/components/schemas/BuildResultDdlComparisons"
-            contracts/ddl-comparisons/{comparisonPath}:
-              description: Per-DDL-entity diff payload referenced by `comparisonPath` from contracts/ddl-comparisons.json.
+            ddl-comparisons/{comparisonPath}:
+              description: Per-DDL-entity diff payload referenced by `comparisonPath` from ddl-comparisons.json.
               type: object
         - title: Build result for mergedSpecification and reducedSourceSpecifications
           description: |
@@ -2587,7 +2587,6 @@ components:
             required:
               - ddlTableId
               - kind
-              - contentPath
             properties:
               ddlTableId:
                 description: DDL table/view logical identifier.
@@ -2617,10 +2616,6 @@ components:
               documentId:
                 type: string
                 example: schema-sql
-              contentPath:
-                description: Archive path under contracts/ddl/ containing the full entity payload.
-                type: string
-                example: contracts/ddl/cHVibGljLnVzZXJz.json
               data:
                 description: Full structural definition of the DDL entity.
                 type: object
@@ -2637,7 +2632,6 @@ components:
               - kind
               - mcpEndpoint
               - serverName
-              - contentPath
             properties:
               mcpEntityId:
                 description: MCP contract logical identifier.
@@ -2671,10 +2665,6 @@ components:
               documentId:
                 type: string
                 example: tools-forecast-json
-              contentPath:
-                description: Archive path under contracts/mcp/ containing the full entity payload.
-                type: string
-                example: contracts/mcp/d2VhdGhlci1tY3AvdG9vbC9nZXRfZm9yZWNhc3Q.json
               data:
                 description: Original MCP discovery entity payload.
                 type: object
@@ -2712,9 +2702,9 @@ components:
               changesSummary:
                 $ref: "#/components/schemas/ChangeSummary"
               comparisonPath:
-                description: Archive path under contracts/ddl-comparisons/ containing detailed changes.
+                description: Archive path under ddl-comparisons/ containing detailed changes.
                 type: string
-                example: contracts/ddl-comparisons/cHVibGljLnVzZXJz.json
+                example: ddl-comparisons/cHVibGljLnVzZXJz.json
               changes:
                 description: Detailed DDL diffs.
                 type: array

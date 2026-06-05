@@ -190,15 +190,14 @@ type PackageDdlContractsFile struct {
 }
 
 type PackageDdlContract struct {
-	DdlTableId  string                 `json:"ddlTableId"`
-	Kind        string                 `json:"kind"`
-	SchemaName  string                 `json:"schemaName,omitempty"`
-	Name        string                 `json:"name,omitempty"`
-	SearchText  string                 `json:"searchText,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	DocumentId  string                 `json:"documentId,omitempty"`
-	ContentPath string                 `json:"contentPath"`
-	DataHash    string                 `json:"dataHash,omitempty"`
+	DdlTableId string                 `json:"ddlTableId"`
+	Kind       string                 `json:"kind"`
+	SchemaName string                 `json:"schemaName,omitempty"`
+	Name       string                 `json:"name,omitempty"`
+	SearchText string                 `json:"searchText,omitempty"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty"`
+	DocumentId string                 `json:"documentId,omitempty"`
+	DataHash   string                 `json:"dataHash,omitempty"`
 }
 
 type PackageDdlComparisonsFile struct {
@@ -227,7 +226,6 @@ type PackageMcpContract struct {
 	SearchText  string                 `json:"searchText,omitempty"`
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 	DocumentId  string                 `json:"documentId,omitempty"`
-	ContentPath string                 `json:"contentPath"`
 	DataHash    string                 `json:"dataHash,omitempty"`
 }
 
