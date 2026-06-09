@@ -299,12 +299,13 @@ paths:
           * **error** - build process will send a the list of errors.
           * **complete** - build process will send a result in a ZIP archive.
 
-          ZIP archive with build result can contain folders with sources, builded documents and JSON operation files. In addition, several config files are provided. The structure of these files is described in buildResult schema.
+          ZIP archive with build result can contain folders with sources, builded documents, JSON operation files, and contract files. In addition, several config files are provided. The structure of these files is described in buildResult schema.
           There are following build types:
             - build - build process for version publication. It consist of contract and operations build and validation, calculation of the changelog, creation of the final version of the published contracts.
             - changelog - only the changelog calculation, no API contracts version will be created. Both version and previousVersion fields *must* contain @<revision> suffix when using changelog buildType.
-            - reducedSourceSpecifications - proccess that finds source specifications for all operations from operation group and removes from these specifications operations other than those that are included into operation group.
-            - mergedSpecification - process the merges all operations from an operation group into one specification.
+            - prefix-groups-changelog - changelog calculation for prefixed operation groups.
+            - reducedSourceSpecifications - deprecated proccess that finds source specifications for all operations from operation group and removes from these specifications operations other than those that are included into operation group.
+            - mergedSpecification - deprecated process the merges all operations from an operation group into one specification.
             - exportVersion - process of exporting all documents from the package version.
             - exportRestDocument - process of exporting one OpenAPI document form the version.
             - exportRestOperationsGroup - process of exporting one operations group with apiType = rest.
@@ -1060,6 +1061,8 @@ components:
         - introspection
         - protobuf-3
         - asyncapi-3-0
+        - ddl
+        - mcp
         - unknown
     DocumentFormat:
       title: format
@@ -1072,6 +1075,7 @@ components:
         - graphql
         - gql
         - proto
+        - sql
         - unknown
     Operation:
       description: Operation object
@@ -1277,13 +1281,14 @@ components:
     BuildResult:
       description: |
         Result of build operation in ZIP archive.
-          - The archive can contain folders with sources, builded documents and JSON operation files.
+          - The archive can contain folders with sources, builded documents, JSON operation files, and contract files.
           - In addition, several config files are provided. The structure of these files is described in buildResult schema.
         There are following build types:
           - build - build process for version publication. It consist of contract and operations build and validation, calculation of the changelog, creation of the final version of the published contracts.
           - changelog - only the changelog calculation, no API contracts version will be created. Both version and previousVersion fields *must* contain @<revision> suffix when using changelog buildType.
-          - reducedSourceSpecifications - proccess that finds source specifications for all operations from operation group and removes from these specifications operations other than those that are included into operation group.
-          - mergedSpecification - process the merges all operations from an operation group into one specification.
+          - prefix-groups-changelog - changelog calculation for prefixed operation groups.
+          - reducedSourceSpecifications - deprecated proccess that finds source specifications for all operations from operation group and removes from these specifications operations other than those that are included into operation group.
+          - mergedSpecification - deprecated process the merges all operations from an operation group into one specification.
           - exportVersion - process of exporting all documents from the package version.
           - exportRestDocument - process of exporting one OpenAPI document form the version.
           - exportRestOperationsGroup - process of exporting one operations group with apiType = rest.
@@ -1526,6 +1531,21 @@ components:
               $ref: "#/components/schemas/BuildResultComparisons"
             comparisons/{comparisonFileId}:
               $ref: "#/components/schemas/BuildResultComparisonsData"
+            ddl.json:
+              $ref: "#/components/schemas/BuildResultDdlContracts"
+            ddl/{ddlTableId}.sql:
+              description: Full DDL contract entity payload resolved from `ddlTableId` in ddl.json.
+              type: object
+            ddl-comparisons.json:
+              $ref: "#/components/schemas/BuildResultDdlComparisons"
+            ddl-comparisons/{comparisonPath}:
+              description: Per-DDL-entity diff payload referenced by `comparisonPath` from ddl-comparisons.json.
+              type: object
+            mcp.json:
+              $ref: "#/components/schemas/BuildResultMcpContracts"
+            mcp/{mcpEntityId}.json:
+              description: Full MCP contract entity payload resolved from `mcpEntityId` in mcp.json.
+              type: object
             operations.json:
               description: List of operations for publish.
               type: object
@@ -1694,6 +1714,11 @@ components:
               $ref: "#/components/schemas/BuildResultComparisons"
             comparisons/{comparisonFileId}:
               $ref: "#/components/schemas/BuildResultComparisonsData"
+            ddl-comparisons.json:
+              $ref: "#/components/schemas/BuildResultDdlComparisons"
+            ddl-comparisons/{comparisonPath}:
+              description: Per-DDL-entity diff payload referenced by `comparisonPath` from ddl-comparisons.json.
+              type: object
         - title: Build result for mergedSpecification and reducedSourceSpecifications
           description: |
             Build result for the following buildType:
@@ -2065,6 +2090,15 @@ components:
                 description: Custom x-api-kind parameter.
                 type: string
                 example: "no-BWC"
+              metadata:
+                description: |
+                  Open-ended file-level metadata.
+                  For MCP discovery files, use `mcpEndpoint` and optional `mcpServerName`; DDL files typically omit this object.
+                type: object
+                additionalProperties: true
+                example:
+                  mcpEndpoint: "https://api.example.com/mcp"
+                  mcpServerName: "weather-mcp"
         refs:
           description: |
             Detailed data about referenced versions for current package version.
@@ -2552,6 +2586,140 @@ components:
                 type: string
                 pattern: "^[a-z0-9-]"
                 example: "qitmf-v5-11-qitmf-v5-12-merged-json"
+    BuildResultDdlContracts:
+      type: object
+      description: List of DDL contract entities for publication.
+      properties:
+        tables:
+          type: array
+          items:
+            type: object
+            required:
+              - ddlTableId
+              - kind
+            properties:
+              ddlTableId:
+                description: DDL table/view logical identifier.
+                type: string
+                example: public.users
+              kind:
+                description: DDL contract entity kind.
+                type: string
+                enum:
+                  - table
+                  - view
+              title:
+                type: string
+                example: users
+              schemaName:
+                type: string
+                example: public
+              name:
+                type: string
+                example: users
+              deprecated:
+                type: boolean
+                default: false
+              metadata:
+                description: Kind-specific DDL metadata.
+                type: object
+              documentId:
+                type: string
+                example: schema-sql
+              data:
+                description: Full structural definition of the DDL entity.
+                type: object
+    BuildResultMcpContracts:
+      type: object
+      description: List of MCP discovery contract entities for publication.
+      properties:
+        entities:
+          type: array
+          items:
+            type: object
+            required:
+              - mcpEntityId
+              - kind
+              - mcpEndpoint
+              - serverName
+            properties:
+              mcpEntityId:
+                description: MCP contract logical identifier.
+                type: string
+                example: weather-mcp/tool/get_forecast
+              kind:
+                description: MCP discovery contract entity kind.
+                type: string
+                enum:
+                  - init
+                  - tool
+                  - prompt
+                  - resource
+              title:
+                type: string
+                example: Get forecast
+              mcpEndpoint:
+                description: MCP endpoint URL from file-level publish metadata.
+                type: string
+                example: https://api.example.com/mcp
+              serverName:
+                description: Logical MCP server name.
+                type: string
+                example: weather-mcp
+              deprecated:
+                type: boolean
+                default: false
+              metadata:
+                description: Kind-specific MCP metadata.
+                type: object
+              documentId:
+                type: string
+                example: tools-forecast-json
+              data:
+                description: Original MCP discovery entity payload.
+                type: object
+    BuildResultDdlComparisons:
+      type: object
+      description: List of DDL contract comparison metadata.
+      properties:
+        comparisons:
+          type: array
+          items:
+            type: object
+            required:
+              - ddlTableId
+              - comparisonPath
+              - changesSummary
+            properties:
+              ddlTableId:
+                description: Current DDL table/view logical identifier.
+                type: string
+                example: public.users
+              previousDdlTableId:
+                description: Previous DDL table/view logical identifier. Can differ for detected renames.
+                type: string
+                example: public.accounts
+              kind:
+                description: DDL contract entity kind.
+                type: string
+                enum:
+                  - table
+                  - view
+              dataHash:
+                type: string
+              previousDataHash:
+                type: string
+              changesSummary:
+                $ref: "#/components/schemas/ChangeSummary"
+              comparisonPath:
+                description: Archive path under ddl-comparisons/ containing detailed changes.
+                type: string
+                example: ddl-comparisons/cHVibGljLnVzZXJz.json
+              changes:
+                description: Detailed DDL diffs.
+                type: array
+                items:
+                  $ref: "#/components/schemas/SingleOperationChange"
   examples:
     IncorrectInputParameters:
       description: Incorrect input parameters

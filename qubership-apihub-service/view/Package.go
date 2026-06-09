@@ -185,6 +185,59 @@ type PackageComparisonsFile struct {
 	Comparisons []VersionComparison `json:"comparisons" validate:"dive,required"`
 }
 
+// --- Contract archive types ---
+
+type PackageDdlContractsFile struct {
+	Contracts []PackageDdlContract `json:"contracts"`
+}
+
+type PackageDdlContract struct {
+	DdlTableId string                 `json:"ddlTableId"`
+	Kind       string                 `json:"kind"`
+	SchemaName string                 `json:"schemaName,omitempty"`
+	Name       string                 `json:"name,omitempty"`
+	SearchText string                 `json:"searchText,omitempty"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty"`
+	DocumentId string                 `json:"documentId,omitempty"`
+	DataHash   string                 `json:"dataHash,omitempty"`
+}
+
+type PackageDdlComparisonsFile struct {
+	Comparisons []PackageDdlComparison `json:"comparisons"`
+}
+
+type PackageDdlComparison struct {
+	DdlTableId         string                 `json:"ddlTableId"`
+	PreviousDdlTableId string                 `json:"previousDdlTableId"`
+	DataHash           string                 `json:"dataHash,omitempty"`
+	PreviousDataHash   string                 `json:"previousDataHash,omitempty"`
+	ChangesSummary     map[string]interface{} `json:"changesSummary,omitempty"`
+	Changes            interface{}            `json:"changes,omitempty"`
+	ComparisonPath     string                 `json:"comparisonPath"`
+}
+
+type PackageMcpContractsFile struct {
+	Inits     []PackageMcpContract `json:"inits"`
+	Tools     []PackageMcpContract `json:"tools"`
+	Resources []PackageMcpContract `json:"resources"`
+	Prompts   []PackageMcpContract `json:"prompts"`
+}
+
+type McpContractSearch struct {
+	UseEntityDataAsSearchText bool `json:"useEntityDataAsSearchText"`
+}
+
+type PackageMcpContract struct {
+	McpEntityId string                 `json:"mcpEntityId"`
+	Kind        string                 `json:"kind"`
+	Name        string                 `json:"name,omitempty"`
+	McpEndpoint string                 `json:"mcpEndpoint"`
+	Search      *McpContractSearch     `json:"search,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	DocumentId  string                 `json:"documentId,omitempty"`
+	DataHash    string                 `json:"dataHash,omitempty"`
+}
+
 type VersionComparison struct {
 	PackageId                string          `json:"packageId"`
 	Version                  string          `json:"version"`

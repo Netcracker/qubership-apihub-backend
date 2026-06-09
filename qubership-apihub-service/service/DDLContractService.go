@@ -1,0 +1,178 @@
+package service
+
+import (
+	"net/http"
+	"time"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/repository"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
+)
+
+type DDLContractService interface {
+	ListDdlTables(packageId, versionName, kind, textFilter string, limit, offset int) (*view.DdlTableListView, error)
+	GetDdlTable(packageId, versionName, ddlTableId string, includeData bool) (*view.DdlTableView, error)
+	GetDdlTableChanges(packageId, versionName, ddlTableId string) (*view.DdlTableChangesView, error)
+	GetVersionSummary(packageId, versionName string) (*view.VersionDDLContractsSummary, error)
+	GetChangesSummary(comparisonId string) (*view.DDLContractsSummary, error)
+	GlobalSearchForDDL(searchReq view.SearchQueryReq) (*view.SearchResult, error)
+}
+
+func NewDDLContractService(ddlRepo repository.DDLContractRepository, publishedRepo repository.PublishedRepository) DDLContractService {
+	return &ddlContractServiceImpl{ddlRepo: ddlRepo, publishedRepo: publishedRepo}
+}
+
+type ddlContractServiceImpl struct {
+	ddlRepo       repository.DDLContractRepository
+	publishedRepo repository.PublishedRepository
+}
+
+func (s *ddlContractServiceImpl) resolveRevision(packageId, versionName string) (string, int, error) {
+	version, err := s.publishedRepo.GetVersion(packageId, versionName)
+	if err != nil {
+		return "", 0, err
+	}
+	if version == nil {
+		return "", 0, &exception.CustomError{
+			Status:  http.StatusNotFound,
+			Code:    exception.PublishedVersionNotFound,
+			Message: exception.PublishedVersionNotFoundMsg,
+			Params:  map[string]interface{}{"version": versionName},
+		}
+	}
+	return version.Version, version.Revision, nil
+}
+
+func (s *ddlContractServiceImpl) ListDdlTables(packageId, versionName, kind, textFilter string, limit, offset int) (*view.DdlTableListView, error) {
+	version, revision, err := s.resolveRevision(packageId, versionName)
+	if err != nil {
+		return nil, err
+	}
+	entities, err := s.ddlRepo.ListDdlTables(packageId, version, revision, kind, textFilter, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	result := &view.DdlTableListView{Tables: make([]interface{}, 0, len(entities))}
+	for _, ent := range entities {
+		result.Tables = append(result.Tables, entity.MakeDdlTableView(ent, nil))
+	}
+	return result, nil
+}
+
+func (s *ddlContractServiceImpl) GetDdlTable(packageId, versionName, ddlTableId string, includeData bool) (*view.DdlTableView, error) {
+	version, revision, err := s.resolveRevision(packageId, versionName)
+	if err != nil {
+		return nil, err
+	}
+	ent, data, err := s.ddlRepo.GetDdlTable(packageId, version, revision, ddlTableId, includeData)
+	if err != nil {
+		return nil, err
+	}
+	if ent == nil {
+		return nil, &exception.CustomError{
+			Status:  http.StatusNotFound,
+			Code:    exception.PublishedVersionNotFound,
+			Message: "DDL table not found",
+			Params:  map[string]interface{}{"ddlTableId": ddlTableId},
+		}
+	}
+	return entity.MakeDdlTableView(ent, data), nil
+}
+
+func (s *ddlContractServiceImpl) GetDdlTableChanges(packageId, versionName, ddlTableId string) (*view.DdlTableChangesView, error) {
+	version, revision, err := s.resolveRevision(packageId, versionName)
+	if err != nil {
+		return nil, err
+	}
+	ent, err := s.ddlRepo.GetDdlTableChanges(packageId, version, revision, ddlTableId)
+	if err != nil {
+		return nil, err
+	}
+	if ent == nil {
+		return &view.DdlTableChangesView{Changes: []interface{}{}}, nil
+	}
+	var changes []interface{}
+	if ent.Changes != nil {
+		if list, ok := ent.Changes.([]interface{}); ok {
+			changes = list
+		}
+	}
+	return &view.DdlTableChangesView{
+		Changes:        changes,
+		ChangesSummary: ent.ChangesSummary,
+	}, nil
+}
+
+func (s *ddlContractServiceImpl) GetVersionSummary(packageId, versionName string) (*view.VersionDDLContractsSummary, error) {
+	version, revision, err := s.resolveRevision(packageId, versionName)
+	if err != nil {
+		return nil, err
+	}
+	counts, err := s.ddlRepo.GetEntitiesCount(packageId, version, revision)
+	if err != nil {
+		return nil, err
+	}
+	if len(counts) == 0 {
+		return nil, nil
+	}
+	summary := &view.VersionDDLContractsSummary{}
+	for _, c := range counts {
+		switch c.Kind {
+		case view.DdlKindTable:
+			summary.Tables = c.Count
+		case view.DdlKindView:
+			summary.Views = c.Count
+		}
+	}
+	return summary, nil
+}
+
+func (s *ddlContractServiceImpl) GetChangesSummary(comparisonId string) (*view.DDLContractsSummary, error) {
+	changesSummary, err := s.ddlRepo.GetComparisonSummary(comparisonId)
+	if err != nil {
+		return nil, err
+	}
+	if changesSummary == nil {
+		return nil, nil
+	}
+	return &view.DDLContractsSummary{ChangesSummary: *changesSummary}, nil
+}
+
+func (s *ddlContractServiceImpl) GlobalSearchForDDL(searchReq view.SearchQueryReq) (*view.SearchResult, error) {
+	versions := searchReq.Versions
+	if versions == nil {
+		versions = make([]string, 0)
+	}
+	startDate := searchReq.PublicationDateInterval.StartDate
+	endDate := searchReq.PublicationDateInterval.EndDate
+	if startDate.IsZero() {
+		startDate = time.Unix(0, 0)
+	}
+	if endDate.IsZero() {
+		endDate = time.Unix(2556057600, 0)
+	}
+	searchQuery := &entity.GlobalContractSearchQuery{
+		OriginalTextInput: searchReq.SearchString,
+		Kinds:             make([]string, 0),
+		Packages:          searchReq.PackageIds,
+		Versions:          versions,
+		Status:            searchReq.Status,
+		StartDate:         startDate,
+		EndDate:           endDate,
+		Limit:             searchReq.Limit,
+		Offset:            searchReq.Limit * searchReq.Page,
+	}
+	if searchQuery.Packages == nil {
+		searchQuery.Packages = make([]string, 0)
+	}
+	entities, err := s.ddlRepo.GlobalSearchForDDL(searchQuery)
+	if err != nil {
+		return nil, err
+	}
+	results := make([]interface{}, 0, len(entities))
+	for _, ent := range entities {
+		results = append(results, entity.MakeGlobalDDLSearchResultView(ent))
+	}
+	return &view.SearchResult{DdlContracts: &results}, nil
+}

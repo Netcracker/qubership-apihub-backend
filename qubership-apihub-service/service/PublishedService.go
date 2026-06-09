@@ -378,6 +378,18 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 	if err != nil {
 		return err
 	}
+	err = buildArc.ReadPackageDdlContracts(false)
+	if err != nil {
+		return err
+	}
+	err = buildArc.ReadPackageDdlContractComparisons(false)
+	if err != nil {
+		return err
+	}
+	err = buildArc.ReadPackageMcpContracts(false)
+	if err != nil {
+		return err
+	}
 	utils.PerfLog(time.Since(start).Milliseconds(), 400, "publishPackage: zip files read")
 
 	start = time.Now()
@@ -520,6 +532,33 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 	}
 
 	comparisonInternalDocEntities, comparisonInternalDocDataEntities, err := buildArcEntitiesReader.ReadComparisonInternalDocumentsToEntities(comparisonFileIdToKeyMap)
+	if err != nil {
+		return err
+	}
+
+	ddlContractEntities, ddlContractDataEntities, ddlContractSearchTexts, err := buildArcEntitiesReader.ReadDdlContractsToEntities()
+	if err != nil {
+		return err
+	}
+
+	previousPkgId := buildArc.PackageInfo.PackageId
+	if buildArc.PackageInfo.PreviousVersionPackageId != "" {
+		previousPkgId = buildArc.PackageInfo.PreviousVersionPackageId
+	}
+	ddlComparisonId := view.MakeVersionComparisonId(
+		buildArc.PackageInfo.PackageId,
+		buildArc.PackageInfo.Version,
+		buildArc.PackageInfo.Revision,
+		previousPkgId,
+		buildArc.PackageInfo.PreviousVersion,
+		previousVersionRevision,
+	)
+	ddlContractComparisonEntities, err := buildArcEntitiesReader.ReadDdlContractComparisonsToEntities(ddlComparisonId)
+	if err != nil {
+		return err
+	}
+
+	mcpContractEntities, mcpContractDataEntities, mcpContractSearchTexts, err := buildArcEntitiesReader.ReadMcpContractsToEntities()
 	if err != nil {
 		return err
 	}
@@ -680,6 +719,13 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 		comparisonInternalDocEntities,
 		comparisonInternalDocDataEntities,
 		operationSearchTexts,
+		ddlContractEntities,
+		ddlContractDataEntities,
+		ddlContractSearchTexts,
+		ddlContractComparisonEntities,
+		mcpContractEntities,
+		mcpContractDataEntities,
+		mcpContractSearchTexts,
 	)
 	utils.PerfLog(time.Since(start).Milliseconds(), 15000, "publishPackage: CreateVersionWithData")
 	if err != nil {

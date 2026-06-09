@@ -18,6 +18,24 @@ type VersionContent struct {
 	RevisionsCount           int                     `json:"revisionsCount,omitempty"`
 	OperationGroups          []VersionOperationGroup `json:"operationGroups,omitempty"`
 	ApiProcessorVersion      string                  `json:"apiProcessorVersion"`
+	Contracts                *VersionContractsSummary `json:"contracts,omitempty"`
+}
+
+type VersionContractsSummary struct {
+	DDL *VersionDDLContractsSummary `json:"ddl,omitempty"`
+	MCP *VersionMCPContractsSummary `json:"mcp,omitempty"`
+}
+
+type VersionDDLContractsSummary struct {
+	Tables int `json:"tables"`
+	Views  int `json:"views"`
+}
+
+type VersionMCPContractsSummary struct {
+	Init      int `json:"init"`
+	Tools     int `json:"tools"`
+	Prompts   int `json:"prompts"`
+	Resources int `json:"resources"`
 }
 
 type VersionOperationType struct {
