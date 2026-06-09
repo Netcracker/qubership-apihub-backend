@@ -580,12 +580,12 @@ func (r roleServiceImpl) HasRequiredPermissions(ctx context.SecurityContext, pac
 	if apikeyPackageId := ctx.GetApikeyPackageId(); apikeyPackageId != "" {
 		apikeyRoles := ctx.GetApikeyRoles()
 		if apikeyPackageId != packageId && !strings.HasPrefix(packageId, apikeyPackageId+".") && apikeyPackageId != "*" {
-			//TODO: error message is confusing
 			return false, &exception.CustomError{
 				Status:  http.StatusNotFound,
 				Code:    exception.PackageNotFound,
 				Message: exception.PackageNotFoundMsg,
 				Params:  map[string]interface{}{"packageId": packageId},
+				Debug:   fmt.Sprintf("Package %s is out of (package) scope for the api key", packageId),
 			}
 		}
 		apikeyPermissions, err := r.roleRepository.GetPermissionsForRoles(apikeyRoles)
@@ -605,12 +605,12 @@ func (r roleServiceImpl) HasRequiredPermissions(ctx context.SecurityContext, pac
 		return false, err
 	}
 	if !utils.SliceContains(userPermissions, string(view.ReadPermission)) {
-		//TODO: error message is confusing
 		return false, &exception.CustomError{
 			Status:  http.StatusNotFound,
 			Code:    exception.PackageNotFound,
 			Message: exception.PackageNotFoundMsg,
 			Params:  map[string]interface{}{"packageId": packageId},
+			Debug:   fmt.Sprintf("The user have no required read permission to access the package %s", packageId),
 		}
 	}
 	for _, requiredPermission := range requiredPermissions {
