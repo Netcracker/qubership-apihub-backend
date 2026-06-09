@@ -3,16 +3,16 @@ package entity
 type MCPContractEntity struct {
 	tableName struct{} `pg:"mcp_entities"`
 
-	PackageId    string   `pg:"package_id, pk, type:varchar"`
-	Version      string   `pg:"version, pk, type:varchar"`
-	Revision     int      `pg:"revision, pk, type:integer"`
-	McpEntityId  string   `pg:"mcp_entity_id, pk, type:varchar"`
-	Kind         string   `pg:"kind, type:varchar, use_zero"`
-	Name         string   `pg:"name, type:varchar, use_zero"`
-	McpEndpoint  string   `pg:"mcp_endpoint, type:varchar, use_zero"`
-	Metadata     Metadata `pg:"metadata, type:jsonb"`
-	DataHash     *string  `pg:"data_hash, type:varchar"`
-	DocumentId   string   `pg:"document_id, type:varchar, use_zero"`
+	PackageId   string   `pg:"package_id, pk, type:varchar"`
+	Version     string   `pg:"version, pk, type:varchar"`
+	Revision    int      `pg:"revision, pk, type:integer"`
+	McpEntityId string   `pg:"mcp_entity_id, pk, type:varchar"`
+	Kind        string   `pg:"kind, type:varchar, use_zero"`
+	Name        string   `pg:"name, type:varchar, use_zero"`
+	McpEndpoint string   `pg:"mcp_endpoint, type:varchar, use_zero"`
+	Metadata    Metadata `pg:"metadata, type:jsonb"`
+	DataHash    *string  `pg:"data_hash, type:varchar"`
+	DocumentId  string   `pg:"document_id, type:varchar, use_zero"`
 }
 
 type MCPContractDataEntity struct {
@@ -23,16 +23,16 @@ type MCPContractDataEntity struct {
 }
 
 type MCPContractSearchTextEntity struct {
-	tableName struct{} `pg:"fts_mcp_search_text"`
+	// no go-pg mapping due to different insert/lookup process
 
-	PackageId      string `pg:"package_id, type:varchar"`
-	Version        string `pg:"version, type:varchar"`
-	Revision       int    `pg:"revision, type:integer"`
-	McpEntityId    string `pg:"mcp_entity_id, type:varchar"`
-	Status         string `pg:"status, type:varchar"`
-	Kind           string `pg:"kind, type:varchar"`
-	SearchDataHash string `pg:"search_data_hash, type:varchar"`
-	DataVector     string `pg:"data_vector, type:tsvector"`
+	PackageId      string
+	Version        string
+	Revision       int
+	McpEntityId    string
+	Status         string
+	Kind           string
+	SearchDataHash string
+	SearchTextData []byte
 }
 
 type MCPContractKindCountEntity struct {

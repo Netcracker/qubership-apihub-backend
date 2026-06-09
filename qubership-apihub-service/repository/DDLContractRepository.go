@@ -16,12 +16,6 @@ type DDLContractRepository interface {
 	GetEntitiesCount(packageId, version string, revision int) ([]entity.DDLContractKindCountEntity, error)
 	GetComparisonSummary(comparisonId string) (*view.ChangeSummary, error)
 	GlobalSearchForDDL(searchQuery *entity.GlobalContractSearchQuery) ([]entity.DDLContractSearchResult, error)
-
-	CreateDdlContracts(contracts []*entity.DDLContractEntity) error
-	CreateDdlContractData(data []*entity.DDLContractDataEntity) error
-	CreateDdlContractComparisons(comparisons []*entity.DDLContractComparisonEntity) error
-	CreateDdlContractSearchText(texts []*entity.DDLContractSearchTextEntity) error
-	DeleteDdlContractsByRevision(packageId, version string, revision int) error
 }
 
 type ddlContractRepositoryImpl struct {
@@ -211,47 +205,4 @@ limit ?limit;
 		return nil, err
 	}
 	return result, nil
-}
-
-func (r *ddlContractRepositoryImpl) CreateDdlContracts(contracts []*entity.DDLContractEntity) error {
-	if len(contracts) == 0 {
-		return nil
-	}
-	_, err := r.cp.GetConnection().Model(&contracts).OnConflict("(package_id, version, revision, ddl_table_id) DO UPDATE").Insert()
-	return err
-}
-
-func (r *ddlContractRepositoryImpl) CreateDdlContractData(data []*entity.DDLContractDataEntity) error {
-	if len(data) == 0 {
-		return nil
-	}
-	_, err := r.cp.GetConnection().Model(&data).OnConflict("(data_hash) DO NOTHING").Insert()
-	return err
-}
-
-func (r *ddlContractRepositoryImpl) CreateDdlContractComparisons(comparisons []*entity.DDLContractComparisonEntity) error {
-	if len(comparisons) == 0 {
-		return nil
-	}
-	_, err := r.cp.GetConnection().Model(&comparisons).
-		OnConflict("(package_id, version, revision, previous_package_id, previous_version, previous_revision, ddl_table_id, previous_ddl_table_id) DO UPDATE").
-		Insert()
-	return err
-}
-
-func (r *ddlContractRepositoryImpl) CreateDdlContractSearchText(texts []*entity.DDLContractSearchTextEntity) error {
-	if len(texts) == 0 {
-		return nil
-	}
-	_, err := r.cp.GetConnection().Model(&texts).OnConflict("(package_id, version, revision, ddl_table_id) DO UPDATE").Insert()
-	return err
-}
-
-func (r *ddlContractRepositoryImpl) DeleteDdlContractsByRevision(packageId, version string, revision int) error {
-	_, err := r.cp.GetConnection().Model(&entity.DDLContractEntity{}).
-		Where("package_id = ?", packageId).
-		Where("version = ?", version).
-		Where("revision = ?", revision).
-		Delete()
-	return err
 }

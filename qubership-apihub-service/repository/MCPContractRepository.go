@@ -13,11 +13,6 @@ type MCPContractRepository interface {
 	GetMcpEntity(packageId, version string, revision int, mcpEntityId string, includeData bool) (*entity.MCPContractEntity, []byte, error)
 	GetEntitiesCount(packageId, version string, revision int) ([]entity.MCPContractKindCountEntity, error)
 	GlobalSearchForMCP(searchQuery *entity.GlobalContractSearchQuery) ([]entity.MCPContractSearchResult, error)
-
-	CreateMcpContracts(contracts []*entity.MCPContractEntity) error
-	CreateMcpContractData(data []*entity.MCPContractDataEntity) error
-	CreateMcpContractSearchText(texts []*entity.MCPContractSearchTextEntity) error
-	DeleteMcpContractsByRevision(packageId, version string, revision int) error
 }
 
 type mcpContractRepositoryImpl struct {
@@ -161,37 +156,4 @@ limit ?limit;
 		return nil, err
 	}
 	return result, nil
-}
-
-func (r *mcpContractRepositoryImpl) CreateMcpContracts(contracts []*entity.MCPContractEntity) error {
-	if len(contracts) == 0 {
-		return nil
-	}
-	_, err := r.cp.GetConnection().Model(&contracts).OnConflict("(package_id, version, revision, mcp_entity_id) DO UPDATE").Insert()
-	return err
-}
-
-func (r *mcpContractRepositoryImpl) CreateMcpContractData(data []*entity.MCPContractDataEntity) error {
-	if len(data) == 0 {
-		return nil
-	}
-	_, err := r.cp.GetConnection().Model(&data).OnConflict("(data_hash) DO NOTHING").Insert()
-	return err
-}
-
-func (r *mcpContractRepositoryImpl) CreateMcpContractSearchText(texts []*entity.MCPContractSearchTextEntity) error {
-	if len(texts) == 0 {
-		return nil
-	}
-	_, err := r.cp.GetConnection().Model(&texts).OnConflict("(package_id, version, revision, mcp_entity_id) DO UPDATE").Insert()
-	return err
-}
-
-func (r *mcpContractRepositoryImpl) DeleteMcpContractsByRevision(packageId, version string, revision int) error {
-	_, err := r.cp.GetConnection().Model(&entity.MCPContractEntity{}).
-		Where("package_id = ?", packageId).
-		Where("version = ?", version).
-		Where("revision = ?", revision).
-		Delete()
-	return err
 }

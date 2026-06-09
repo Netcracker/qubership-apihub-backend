@@ -43,16 +43,16 @@ type DDLContractComparisonEntity struct {
 }
 
 type DDLContractSearchTextEntity struct {
-	tableName struct{} `pg:"fts_ddl_search_text"`
+	// no go-pg mapping due to different insert/lookup process
 
-	PackageId      string `pg:"package_id, type:varchar"`
-	Version        string `pg:"version, type:varchar"`
-	Revision       int    `pg:"revision, type:integer"`
-	DdlTableId     string `pg:"ddl_table_id, type:varchar"`
-	Status         string `pg:"status, type:varchar"`
-	Kind           string `pg:"kind, type:varchar"`
-	SearchDataHash string `pg:"search_data_hash, type:varchar"`
-	DataVector     string `pg:"data_vector, type:tsvector"`
+	PackageId      string
+	Version        string
+	Revision       int
+	DdlTableId     string
+	Status         string
+	Kind           string
+	SearchDataHash string
+	SearchTextData []byte
 }
 
 type DDLContractKindCountEntity struct {

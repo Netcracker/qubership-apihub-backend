@@ -215,7 +215,14 @@ type PackageDdlComparison struct {
 }
 
 type PackageMcpContractsFile struct {
-	Contracts []PackageMcpContract `json:"contracts"`
+	Inits     []PackageMcpContract `json:"inits"`
+	Tools     []PackageMcpContract `json:"tools"`
+	Resources []PackageMcpContract `json:"resources"`
+	Prompts   []PackageMcpContract `json:"prompts"`
+}
+
+type McpContractSearch struct {
+	UseEntityDataAsSearchText bool `json:"useEntityDataAsSearchText"`
 }
 
 type PackageMcpContract struct {
@@ -223,7 +230,7 @@ type PackageMcpContract struct {
 	Kind        string                 `json:"kind"`
 	Name        string                 `json:"name,omitempty"`
 	McpEndpoint string                 `json:"mcpEndpoint"`
-	SearchText  string                 `json:"searchText,omitempty"`
+	Search      *McpContractSearch     `json:"search,omitempty"`
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 	DocumentId  string                 `json:"documentId,omitempty"`
 	DataHash    string                 `json:"dataHash,omitempty"`

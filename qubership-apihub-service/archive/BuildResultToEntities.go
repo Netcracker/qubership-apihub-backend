@@ -744,7 +744,7 @@ func (a *BuildResultToEntitiesReader) ReadDdlContractsToEntities() ([]*entity.DD
 				Status:         a.PackageInfo.Status,
 				Kind:           contract.Kind,
 				SearchDataHash: searchDataHash,
-				DataVector:     searchText,
+				SearchTextData: []byte(searchText),
 			})
 		} else {
 			return nil, nil, nil, &exception.CustomError{
@@ -815,16 +815,18 @@ func getDdlContractFileName(ddlTableId string) string {
 	return ddlTableId + ".sql"
 }
 
-func getMcpContractFileName(mcpEntityId string) string {
-	return mcpEntityId + ".json"
-}
-
 func (a *BuildResultToEntitiesReader) ReadMcpContractsToEntities() ([]*entity.MCPContractEntity, []*entity.MCPContractDataEntity, []*entity.MCPContractSearchTextEntity, error) {
 	contractEntities := make([]*entity.MCPContractEntity, 0)
 	dataEntities := make([]*entity.MCPContractDataEntity, 0)
 	searchTextEntities := make([]*entity.MCPContractSearchTextEntity, 0)
 
-	for _, contract := range a.PackageMcpContracts.Contracts {
+	allContracts := make([]view.PackageMcpContract, 0)
+	allContracts = append(allContracts, a.PackageMcpContracts.Inits...)
+	allContracts = append(allContracts, a.PackageMcpContracts.Tools...)
+	allContracts = append(allContracts, a.PackageMcpContracts.Resources...)
+	allContracts = append(allContracts, a.PackageMcpContracts.Prompts...)
+
+	for _, contract := range allContracts {
 		if contract.McpEndpoint == "" {
 			return nil, nil, nil, &exception.CustomError{
 				Status:  http.StatusBadRequest,
@@ -834,15 +836,14 @@ func (a *BuildResultToEntitiesReader) ReadMcpContractsToEntities() ([]*entity.MC
 			}
 		}
 		var dataHash *string
-		fileName := getMcpContractFileName(contract.McpEntityId)
-		if fileHeader, exists := a.ContractsMcpFileHeaders[fileName]; exists {
+		if fileHeader, exists := a.ContractsMcpFileHeaders[contract.McpEntityId]; exists {
 			fileData, err := ReadZipFile(fileHeader)
 			if err != nil {
 				return nil, nil, nil, &exception.CustomError{
 					Status:  http.StatusBadRequest,
 					Code:    exception.InvalidPackageArchivedFile,
 					Message: exception.InvalidPackageArchivedFileMsg,
-					Params:  map[string]interface{}{"file": fileName, "error": err.Error()},
+					Params:  map[string]interface{}{"file": contract.McpEntityId, "error": err.Error()},
 				}
 			}
 			hash := utils.GetEncodedXXHash128(fileData)
@@ -851,24 +852,27 @@ func (a *BuildResultToEntitiesReader) ReadMcpContractsToEntities() ([]*entity.MC
 				DataHash: hash,
 				Data:     fileData,
 			})
-			searchText := contract.SearchText
+			var searchText string
+			if contract.Search != nil && contract.Search.UseEntityDataAsSearchText {
+				searchText = string(fileData)
+			}
 			searchDataHash := utils.GetEncodedXXHash128([]byte(searchText))
 			searchTextEntities = append(searchTextEntities, &entity.MCPContractSearchTextEntity{
 				PackageId:      a.PackageInfo.PackageId,
 				Version:        a.PackageInfo.Version,
 				Revision:       a.PackageInfo.Revision,
 				McpEntityId:    contract.McpEntityId,
-				Status:         string(a.PackageInfo.Status),
+				Status:         a.PackageInfo.Status,
 				Kind:           contract.Kind,
 				SearchDataHash: searchDataHash,
-				DataVector:     searchText,
+				SearchTextData: []byte(searchText),
 			})
 		} else {
 			return nil, nil, nil, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.InvalidPackageArchivedFile,
 				Message: exception.InvalidPackageArchivedFileMsg,
-				Params:  map[string]interface{}{"file": fileName, "error": "file not found"},
+				Params:  map[string]interface{}{"file": contract.McpEntityId, "error": "file not found"},
 			}
 		}
 		contractEntities = append(contractEntities, &entity.MCPContractEntity{
