@@ -3,12 +3,12 @@ package providers
 import (
 	"context"
 	"crypto/rsa"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/crewjam/saml"
 	"github.com/crewjam/saml/samlsp"
@@ -85,7 +85,10 @@ func (i *idpManagerImpl) createOIDCProvider(idpConfig idp.IDP, userService servi
 		return nil, fmt.Errorf("OIDC configuration is invalid")
 	}
 
-	ctx := context.Background()
+	// Create a secure HTTP client for OIDC discovery
+	httpClient := createSecureHTTPClient()
+	ctx := oidc.ClientContext(context.Background(), httpClient)
+
 	provider, err := oidc.NewProvider(ctx, idpConfig.OIDCConfiguration.ProviderURL)
 	if err != nil {
 		log.Errorf("Failed to create OIDC provider: %v", err)
@@ -177,9 +180,8 @@ func CreateSAMLInstance(idpId string, samlConfig *idp.SAMLConfiguration) (*samls
 		return nil, err
 	}
 
-	tr := http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
-	cl := http.Client{Transport: &tr, Timeout: time.Second * 60}
-	idpMetadata, err := samlsp.FetchMetadata(context.Background(), &cl, *idpMetadataURL)
+	httpClient := createSecureHTTPClient()
+	idpMetadata, err := samlsp.FetchMetadata(context.Background(), httpClient, *idpMetadataURL)
 
 	if err != nil {
 		log.Errorf("idpMetadata error - %s", err)
@@ -217,4 +219,11 @@ func CreateSAMLInstance(idpId string, samlConfig *idp.SAMLConfiguration) (*samls
 	}
 	log.Infof("SAML instance initialized")
 	return samlSP, nil
+}
+
+// createSecureHTTPClient creates an HTTP client with secure TLS configuration
+// for use in OIDC provider discovery and SAML metadata fetching
+func createSecureHTTPClient() *http.Client {
+	tr := http.Transport{TLSClientConfig: utils.GetSecureTLSConfig()}
+	return &http.Client{Transport: &tr, Timeout: time.Second * 60}
 }
