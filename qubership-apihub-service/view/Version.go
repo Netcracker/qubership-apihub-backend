@@ -1,6 +1,8 @@
 package view
 
 import (
+	"fmt"
+	"strings"
 	"time"
 )
 
@@ -126,6 +128,20 @@ type PackageVersionRef struct {
 	ParentNames       []string   `json:"parentPackages,omitempty"`
 	ServiceName       string     `json:"-"`
 	NotLatestRevision bool       `json:"notLatestRevision,omitempty"`
+}
+
+type ReferencingDashboard struct {
+	PackageId string `json:"packageId"`
+	Version   string `json:"version"`
+	Revision  int    `json:"revision"`
+}
+
+func FormatDashboardKeys(dashboards []ReferencingDashboard) string {
+	items := make([]string, 0, len(dashboards))
+	for _, dash := range dashboards {
+		items = append(items, fmt.Sprintf("%s|%s@%d", dash.PackageId, dash.Version, dash.Revision))
+	}
+	return strings.Join(items, ", ")
 }
 
 type PackageVersionRevisions struct {
