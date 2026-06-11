@@ -38,6 +38,8 @@ type PublishedRepository interface {
 	GetContentData(packageId string, checksum string) (*entity.PublishedContentDataEntity, error)
 
 	GetVersionRefsV3(packageId string, version string, revision int) ([]entity.PublishedReferenceEntity, error)
+	GetVersionReferencingDashboards(packageId string, version string) ([]view.ReferencingDashboard, error)
+	GetPackageReferencingDashboards(packageId string) ([]view.ReferencingDashboard, error)
 	GetVersionsByPreviousVersion(previousPackageId string, previousVersionName string) ([]entity.PublishedVersionEntity, error)
 	GetReadonlyPackageVersionsWithLimit(searchQuery entity.PublishedVersionSearchQueryEntity, checkRevisions bool, showOnlyDeleted bool) ([]entity.PackageVersionRevisionEntity, error)
 	GetDefaultVersion(packageId string, status string) (*entity.PublishedVersionEntity, error)

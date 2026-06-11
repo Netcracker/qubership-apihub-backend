@@ -628,6 +628,21 @@ func (p packageServiceImpl) DeletePackage(ctx context.SecurityContext, id string
 			}
 		}
 	}
+	referencingDashboards, err := p.publishedRepo.GetPackageReferencingDashboards(id)
+	if err != nil {
+		return err
+	}
+	if len(referencingDashboards) > 0 {
+		return &exception.CustomError{
+			Status:  http.StatusConflict,
+			Code:    exception.ReferencedByDashboard,
+			Message: exception.PackageReferencedByDashboardMsg,
+			Params: map[string]interface{}{
+				"packageId":  id,
+				"dashboards": view.FormatDashboardKeys(referencingDashboards),
+			},
+		}
+	}
 	deletedReleaseCount, err := p.publishedRepo.DeletePackage(id, ctx.GetUserId())
 	if err != nil {
 		return err

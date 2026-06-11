@@ -1234,6 +1234,15 @@ paths:
               examples:
                 PackageNotFound:
                   $ref: "#/components/examples/PackageNotFound"
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                PackageReferencedByDashboard:
+                  $ref: "#/components/examples/PackageReferencedByDashboard"
         "500":
           description: Internal Server Error
           content:
@@ -3111,6 +3120,15 @@ paths:
               examples:
                 PackageNotFound:
                   $ref: "#/components/examples/PackageNotFound"
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                VersionReferencedByDashboard:
+                  $ref: "#/components/examples/VersionReferencedByDashboard"
         "500":
           description: Internal Server Error
           content:
@@ -13173,6 +13191,25 @@ components:
         status: 404
         code: "APIHUB-3043"
         message: "File for path $fileId not found"
+    VersionReferencedByDashboard:
+      description: Version cannot be deleted because one or more dashboard versions reference it.
+      value:
+        status: 409
+        code: "8400"
+        message: "Cannot delete version $version of package $packageId: it is referenced by these dashboard versions: $dashboards. Remove the references or delete the dashboards, then retry."
+        params:
+          packageId: "sample.package"
+          version: "2024.1"
+          dashboards: "sample.dashboard|2024.2@3, other.dashboard|2024.1@1"
+    PackageReferencedByDashboard:
+      description: Package cannot be deleted because one or more dashboard versions reference it.
+      value:
+        status: 409
+        code: "8400"
+        message: "Cannot delete package $packageId: it is referenced by these dashboard versions: $dashboards. Remove the references or delete the dashboards, then retry."
+        params:
+          packageId: "sample.package"
+          dashboards: "sample.dashboard|2024.2@3, other.dashboard|2024.1@1"
     IncorrectInputParameters:
       description: Incorrect input parameters
       value:
