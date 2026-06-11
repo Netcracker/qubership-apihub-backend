@@ -1695,6 +1695,11 @@ limit ?limit;
 		//limits the search to the requested packages and their subtrees, written as a join
 		//so the planner is free to drive the fts_operation_search_text scan from the scope btree
 		//('/' is the byte right after '.', so the range covers exactly 'parent.<anything>' and excludes siblings such as 'parentX')
+		//~>=~/~<~ compare byte-wise and match the varchar_pattern_ops index (migration 35) regardless of the database locale;
+		//plain >=/< cannot be used: they compare per the database collation, where this range does not equal
+		//the 'parent.' prefix set on non-C locales, and they cannot use a varchar_pattern_ops index (different operator family);
+		//LIKE 'parent.%' cannot be used either: its prefix-to-range index rewrite requires a plan-time constant pattern,
+		//while these bounds are computed per joined row
 		packagesSearchScopeJoin = `
             inner join unnest(?packages::text[]) as scope_pkg(parent)
                 on ts.package_id = scope_pkg.parent
