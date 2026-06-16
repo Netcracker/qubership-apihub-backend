@@ -17,70 +17,79 @@ package utils
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	log "github.com/sirupsen/logrus"
 )
 
-// GetSecureTLSConfig returns a TLS configuration with proper certificate validation.
-// It uses the system certificate pool and optionally loads custom CA certificates
-// from paths specified in the CUSTOM_CA_CERTS_PATH environment variable.
-// Multiple paths can be separated by colons (:) on Unix or semicolons (;) on Windows.
-func GetSecureTLSConfig() *tls.Config {
-	rootCAs := getSystemCertPool()
-	loadCustomCACerts(rootCAs)
+const customCACertsPathEnv = "CUSTOM_CA_CERTS_PATH"
 
-	return &tls.Config{
-		RootCAs:    rootCAs,
-		MinVersion: tls.VersionTLS12, // Enforce TLS 1.2 minimum
-	}
+var (
+	baseTLSOnce sync.Once
+	baseTLSCfg  *tls.Config
+	baseTLSErr  error
+)
+
+// ValidateTLSAtStartup validates the default TLS configuration at process startup.
+func ValidateTLSAtStartup() error {
+	_, err := BuildSecureTLSConfig(nil)
+	return err
 }
 
-// GetSecureTLSConfigWithCustomCerts returns a TLS configuration with custom CA certificates
-// added to the system certificate pool. This is useful when you need to trust specific
-// certificates in addition to the system trust store.
-func GetSecureTLSConfigWithCustomCerts(pemData []byte) *tls.Config {
-	rootCAs := getSystemCertPool()
-
-	if pemData != nil && len(pemData) > 0 {
-		if ok := rootCAs.AppendCertsFromPEM(pemData); !ok {
-			log.Warn("Failed to append custom certificate to root CA pool")
-		} else {
-			log.Debug("Successfully added custom certificate to root CA pool")
+// BuildSecureTLSConfig returns a TLS configuration with proper certificate validation.
+// It uses the system certificate pool, optional inline PEM data, and custom CA certificates
+// from paths specified in the CUSTOM_CA_CERTS_PATH environment variable.
+// Multiple paths can be separated by colons (:) on Unix or semicolons (;) on Windows.
+func BuildSecureTLSConfig(customPEM []byte) (*tls.Config, error) {
+	if len(customPEM) == 0 {
+		baseTLSOnce.Do(func() {
+			baseTLSCfg, baseTLSErr = buildSecureTLSConfig(nil)
+		})
+		if baseTLSErr != nil {
+			return nil, baseTLSErr
 		}
+		return baseTLSCfg.Clone(), nil
 	}
+	return buildSecureTLSConfig(customPEM)
+}
 
-	loadCustomCACerts(rootCAs)
-
+func buildSecureTLSConfig(customPEM []byte) (*tls.Config, error) {
+	rootCAs, err := buildRootCertPool(customPEM)
+	if err != nil {
+		return nil, err
+	}
 	return &tls.Config{
 		RootCAs:    rootCAs,
 		MinVersion: tls.VersionTLS12,
-	}
+	}, nil
 }
 
-// getSystemCertPool retrieves the system certificate pool.
-// If the system pool cannot be loaded, it returns a new empty pool.
-func getSystemCertPool() *x509.CertPool {
+func buildRootCertPool(customPEM []byte) (*x509.CertPool, error) {
 	pool, err := x509.SystemCertPool()
 	if err != nil {
-		log.Warnf("Failed to load system certificate pool, using empty pool: %v", err)
-		return x509.NewCertPool()
+		return nil, fmt.Errorf("load system certificate pool: %w", err)
 	}
-	return pool
+	if len(customPEM) > 0 {
+		if ok := pool.AppendCertsFromPEM(customPEM); !ok {
+			return nil, fmt.Errorf("parse custom PEM certificate")
+		}
+	}
+	if err := loadCustomCACertsFromEnv(pool); err != nil {
+		return nil, err
+	}
+	return pool, nil
 }
 
-// loadCustomCACerts loads custom CA certificates from paths specified in
-// the CUSTOM_CA_CERTS_PATH environment variable and adds them to the provided cert pool.
-// Paths can be files or directories. Directories are scanned recursively for .crt and .pem files.
-func loadCustomCACerts(pool *x509.CertPool) {
-	customCAPath := os.Getenv("CUSTOM_CA_CERTS_PATH")
+func loadCustomCACertsFromEnv(pool *x509.CertPool) error {
+	customCAPath := os.Getenv(customCACertsPathEnv)
 	if customCAPath == "" {
-		return
+		return nil
 	}
 
-	// Support multiple paths separated by : (Unix) or ; (Windows)
 	separator := ":"
 	if os.PathSeparator == '\\' {
 		separator = ";"
@@ -92,58 +101,63 @@ func loadCustomCACerts(pool *x509.CertPool) {
 		if path == "" {
 			continue
 		}
-
-		loadCertsFromPath(pool, path)
+		if err := loadCertsFromPath(pool, path); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
-// loadCertsFromPath loads certificates from a file or directory path
-func loadCertsFromPath(pool *x509.CertPool, path string) {
+func loadCertsFromPath(pool *x509.CertPool, path string) error {
 	info, err := os.Stat(path)
 	if err != nil {
-		log.Warnf("Failed to access custom CA certificate path %s: %v", path, err)
-		return
+		return fmt.Errorf("access custom CA certificate path %s: %w", path, err)
 	}
 
 	if info.IsDir() {
-		loadCertsFromDirectory(pool, path)
-	} else {
-		loadCertFromFile(pool, path)
+		loaded, err := loadCertsFromDirectory(pool, path)
+		if err != nil {
+			return err
+		}
+		if !loaded {
+			return fmt.Errorf("no certificates found in custom CA directory %s", path)
+		}
+		return nil
 	}
+	return loadCertFromFile(pool, path)
 }
 
-// loadCertsFromDirectory recursively loads all .crt and .pem files from a directory
-func loadCertsFromDirectory(pool *x509.CertPool, dirPath string) {
+func loadCertsFromDirectory(pool *x509.CertPool, dirPath string) (bool, error) {
+	loaded := false
 	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-
 		if !info.IsDir() {
 			ext := strings.ToLower(filepath.Ext(path))
 			if ext == ".crt" || ext == ".pem" {
-				loadCertFromFile(pool, path)
+				if err := loadCertFromFile(pool, path); err != nil {
+					return err
+				}
+				loaded = true
 			}
 		}
 		return nil
 	})
-
 	if err != nil {
-		log.Warnf("Failed to walk directory %s for certificates: %v", dirPath, err)
+		return false, fmt.Errorf("walk directory %s for certificates: %w", dirPath, err)
 	}
+	return loaded, nil
 }
 
-// loadCertFromFile loads a certificate from a file and adds it to the pool
-func loadCertFromFile(pool *x509.CertPool, filePath string) {
+func loadCertFromFile(pool *x509.CertPool, filePath string) error {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		log.Warnf("Failed to read certificate file %s: %v", filePath, err)
-		return
+		return fmt.Errorf("read certificate file %s: %w", filePath, err)
 	}
-
 	if ok := pool.AppendCertsFromPEM(data); !ok {
-		log.Warnf("Failed to parse certificate from file %s", filePath)
-	} else {
-		log.Infof("Successfully loaded custom CA certificate from %s", filePath)
+		return fmt.Errorf("parse certificate from file %s", filePath)
 	}
+	log.Infof("Successfully loaded custom CA certificate from %s", filePath)
+	return nil
 }

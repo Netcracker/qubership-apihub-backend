@@ -86,7 +86,10 @@ func (i *idpManagerImpl) createOIDCProvider(idpConfig idp.IDP, userService servi
 	}
 
 	// Create a secure HTTP client for OIDC discovery
-	httpClient := createSecureHTTPClient()
+	httpClient, err := createSecureHTTPClient()
+	if err != nil {
+		return nil, fmt.Errorf("create secure HTTP client for OIDC discovery: %w", err)
+	}
 	ctx := oidc.ClientContext(context.Background(), httpClient)
 
 	provider, err := oidc.NewProvider(ctx, idpConfig.OIDCConfiguration.ProviderURL)
@@ -180,7 +183,10 @@ func CreateSAMLInstance(idpId string, samlConfig *idp.SAMLConfiguration) (*samls
 		return nil, err
 	}
 
-	httpClient := createSecureHTTPClient()
+	httpClient, err := createSecureHTTPClient()
+	if err != nil {
+		return nil, fmt.Errorf("create secure HTTP client for SAML metadata: %w", err)
+	}
 	idpMetadata, err := samlsp.FetchMetadata(context.Background(), httpClient, *idpMetadataURL)
 
 	if err != nil {
@@ -223,7 +229,11 @@ func CreateSAMLInstance(idpId string, samlConfig *idp.SAMLConfiguration) (*samls
 
 // createSecureHTTPClient creates an HTTP client with secure TLS configuration
 // for use in OIDC provider discovery and SAML metadata fetching
-func createSecureHTTPClient() *http.Client {
-	tr := http.Transport{TLSClientConfig: utils.GetSecureTLSConfig()}
-	return &http.Client{Transport: &tr, Timeout: time.Second * 60}
+func createSecureHTTPClient() (*http.Client, error) {
+	tlsConfig, err := utils.BuildSecureTLSConfig(nil)
+	if err != nil {
+		return nil, err
+	}
+	tr := http.Transport{TLSClientConfig: tlsConfig}
+	return &http.Client{Transport: &tr, Timeout: time.Second * 60}, nil
 }

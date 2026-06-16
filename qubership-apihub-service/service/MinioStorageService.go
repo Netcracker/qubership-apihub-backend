@@ -215,8 +215,13 @@ func createMinioClient(creds *view.MinioStorageCreds) *minioClient {
 		}
 	}
 
-	// Use the centralized TLS configuration utility
-	tr.TLSClientConfig = utils.GetSecureTLSConfigWithCustomCerts(decodedCert)
+	tlsConfig, err := utils.BuildSecureTLSConfig(decodedCert)
+	if err != nil {
+		log.Warn(err.Error())
+		client.error = err
+		return client
+	}
+	tr.TLSClientConfig = tlsConfig
 
 	minioClient, err := minio.New(creds.Endpoint, &minio.Options{
 		Creds:     credentials.NewStaticV4(creds.AccessKeyId, creds.SecretAccessKey, ""),
