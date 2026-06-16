@@ -4,8 +4,8 @@ info:
   description: |
     Internal-only API contract for APIHUB services. This API is intended for trusted internal components and administrators, and includes internal management, migration, integration, and maintenance operations.
   contact:
-    name: Netcracker Opensource Group
-    email: opensourcegroup@netcracker.com
+    name: API Support
+    email: apisupport@netcracker.com
   license:
     name: Apache-2.0
     url: https://www.apache.org/licenses/LICENSE-2.0
@@ -859,11 +859,11 @@ paths:
                   description: Email address of the user
                   type: string
                   format: email
-                  example: "name.surname@qubership.org"
+                  example: "john.doe@example.com"
                 name:
                   description: Name of the user
                   type: string
-                  example: "Name Surname"
+                  example: "John Doe"
                 password:
                   type: string
                   description: User password.
@@ -1009,12 +1009,12 @@ components:
         name:
           description: Name of the user
           type: string
-          example: "Name Surname"
+          example: "John Doe"
         email:
           description: Email address of the user
           type: string
           format: email
-          example: "name.surname@qubership.org"
+          example: "john.doe@example.com"
         avatarUrl:
           description: URL of the user avatar image.
           type: string

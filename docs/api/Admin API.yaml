@@ -4,8 +4,8 @@ info:
   description: |
     External API contract for system administrators. This API covers technical administration operations such as package transitions, role management, administrator management, and selected operational actions. All endpoints require authenticated access and are intended for trusted administrative users.
   contact:
-    name: Netcracker Opensource Group
-    email: opensourcegroup@netcracker.com
+    name: API Support
+    email: apisupport@netcracker.com
   license:
     name: Apache-2.0
     url: https://www.apache.org/licenses/LICENSE-2.0
@@ -1092,12 +1092,12 @@ components:
         name:
           description: Name of the user
           type: string
-          example: "Name Surname"
+          example: "John Doe"
         email:
           description: Email address of the user
           type: string
           format: email
-          example: "name.surname@qubership.org"
+          example: "john.doe@example.com"
         avatarUrl:
           description: URL of the user avatar image.
           type: string
