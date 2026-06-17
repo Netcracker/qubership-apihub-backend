@@ -3,12 +3,10 @@ package service
 import (
 	"bytes"
 	"context"
-	"crypto/x509"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"time"
 
