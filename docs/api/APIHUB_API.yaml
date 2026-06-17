@@ -4,8 +4,8 @@ info:
   description: |
     Public-facing API contract for APIHUB. This API is intended for external and integration clients and covers package/catalog operations, publication workflows, search, user/profile actions, and selected administration capabilities secured by APIHUB authentication schemes.
   contact:
-    name: API Support
-    email: apisupport@netcracker.com
+    name: Netcracker Opensource Group
+    email: opensourcegroup@netcracker.com
   license:
     name: Apache-2.0
     url: https://www.apache.org/licenses/LICENSE-2.0

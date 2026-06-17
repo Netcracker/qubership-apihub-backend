@@ -4,8 +4,8 @@ info:
   description: |
     Internal-only API contract for system administrators. This API includes privileged technical administration endpoints for diagnostics, maintenance, and internal management operations.
   contact:
-    name: API Support
-    email: apisupport@netcracker.com
+    name: Netcracker Opensource Group
+    email: opensourcegroup@netcracker.com
   license:
     name: Apache-2.0
     url: https://www.apache.org/licenses/LICENSE-2.0
