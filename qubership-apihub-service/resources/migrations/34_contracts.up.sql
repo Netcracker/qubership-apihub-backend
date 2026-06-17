@@ -45,6 +45,11 @@ CREATE TABLE IF NOT EXISTS ddl_comparison
                                               ddl_table_id, previous_ddl_table_id)
 );
 
+alter table ddl_comparison
+    add constraint ddl_comparison_version_comparison_comparison_id_fk
+        foreign key (comparison_id) references version_comparison (comparison_id)
+            on update cascade on delete cascade;
+
 CREATE INDEX IF NOT EXISTS ddl_comparison_comparison_id_idx ON ddl_comparison (comparison_id);
 
 -- FTS source for DDL

@@ -90,7 +90,7 @@ func (m mcpService) MakeMCPServer() *mcpserver.MCPServer {
 	if mcpWorkspace != "" {
 		// Register API packages resource
 		s.AddResource(mcp.Resource{
-			URI:         "api-packages-list",
+			URI:         "mcp://api-packages-list",
 			Name:        "API Packages List",
 			Description: "List of all API packages in the system. The resource returns a JSON object with a 'packages' array. Each item includes package metadata (name, packageId, kind, parents, etc.) and a 'versions' list containing up to 100 release versions sorted by version desc (status=release, sortBy=version, sortOrder=desc). Package ID can serve as a hint to which domain the API belongs. Use this resource to: get a list of all available packages, find package ID by package name, and review available release versions. Package IDs from this resource should be used in the 'group' parameter of the search_rest_api_operations tool.",
 			MIMEType:    "application/json",
@@ -176,7 +176,7 @@ func (m mcpService) GetPackagesList(ctx context.Context, workspaceId string) ([]
 
 	return []mcp.ResourceContents{
 		&mcp.TextResourceContents{
-			URI:      "api-packages-list",
+			URI:      "mcp://api-packages-list",
 			MIMEType: "application/json",
 			Text:     string(jsonData),
 		},
