@@ -23,9 +23,9 @@ ENV GIT_HASH=$GIT_HASH
 WORKDIR /app/qubership-apihub-service
 
 COPY --chown=10001:0 --chmod=555 --from=builder /workspace/qubership-apihub-service/qubership-apihub-service ./qubership-apihub-service
-COPY --chown=10001:0 --chmod=444 qubership-apihub-service/static ./static
-COPY --chown=10001:0 --chmod=444 qubership-apihub-service/resources ./resources
-COPY --chown=10001:0 --chmod=444 docs/api ./api
+COPY --chown=10001:0 --chmod=555 qubership-apihub-service/static ./static
+COPY --chown=10001:0 --chmod=555 qubership-apihub-service/resources ./resources
+COPY --chown=10001:0 --chmod=555 docs/api ./api
 
 USER 10001:10001
 
