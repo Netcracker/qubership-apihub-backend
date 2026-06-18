@@ -2589,15 +2589,22 @@ components:
                 type: string
                 pattern: "^[a-z0-9-]"
                 example: "qitmf-v5-11-qitmf-v5-12-merged-json"
-    DdlEntityDescriptor:
+    DdlEntity:
       type: object
-      description: Human-facing identity of a DDL entity (the table descriptor).
+      description: |
+        Identified DDL entity — its stable id and descriptor (kind/name/schemaName/description). The core
+        shared by the build result and the API; each context adds its own fields via allOf.
       required:
+        - ddlEntityId
         - kind
         - name
         - schemaName
         - description
       properties:
+        ddlEntityId:
+          description: Stable DDL entity identifier, `{schemaName}-{kind}-{name}` slugified.
+          type: string
+          example: public-table-users
         kind:
           description: DDL contract entity kind. Only `table` is produced in the current version.
           type: string
@@ -2626,18 +2633,13 @@ components:
           type: array
           items:
             allOf:
-              - $ref: "#/components/schemas/DdlEntityDescriptor"
+              - $ref: "#/components/schemas/DdlEntity"
               - type: object
                 required:
-                  - ddlEntityId
                   - search
                   - documentId
                   - versionInternalDocumentId
                 properties:
-                  ddlEntityId:
-                    description: Stable DDL entity identifier, `{schemaName}-{kind}-{name}` slugified. Opaque.
-                    type: string
-                    example: public-table-users
                   search:
                     $ref: "#/components/schemas/SearchUseEntityData"
                   documentId:
@@ -2667,29 +2669,58 @@ components:
         inits:
           type: array
           items:
-            $ref: "#/components/schemas/McpContractEntity"
+            allOf:
+              - $ref: "#/components/schemas/McpEntity"
+              - type: object
+                required:
+                  - search
+                properties:
+                  search:
+                    $ref: "#/components/schemas/SearchUseEntityData"
         tools:
           type: array
           items:
-            $ref: "#/components/schemas/McpContractEntity"
+            allOf:
+              - $ref: "#/components/schemas/McpEntity"
+              - type: object
+                required:
+                  - search
+                properties:
+                  search:
+                    $ref: "#/components/schemas/SearchUseEntityData"
         resources:
           type: array
           items:
-            $ref: "#/components/schemas/McpContractEntity"
+            allOf:
+              - $ref: "#/components/schemas/McpEntity"
+              - type: object
+                required:
+                  - search
+                properties:
+                  search:
+                    $ref: "#/components/schemas/SearchUseEntityData"
         prompts:
           type: array
           items:
-            $ref: "#/components/schemas/McpContractEntity"
-    McpContractEntity:
+            allOf:
+              - $ref: "#/components/schemas/McpEntity"
+              - type: object
+                required:
+                  - search
+                properties:
+                  search:
+                    $ref: "#/components/schemas/SearchUseEntityData"
+    McpEntity:
       type: object
-      description: One MCP entity row in the mcp.json index (payload stripped).
+      description: |
+        MCP discovery contract entity. Holds the fields common to the API response and the
+        mcp.json build-result index; each context adds its own fields via allOf.
       required:
         - mcpEntityId
         - kind
         - title
         - description
         - mcpEndpoint
-        - search
         - documentId
       properties:
         mcpEntityId:
@@ -2705,8 +2736,9 @@ components:
             - prompt
             - resource
         title:
+          description: MCP entity title. For tools, prompts and resources this is the name from the MCP spec. For init entities the value is always "initialize".
           type: string
-          example: Get forecast
+          example: get_forecast
         description:
           description: Entity description, or an empty string when none is present.
           type: string
@@ -2717,12 +2749,10 @@ components:
             A relative path (e.g. `/mcp`), not an absolute URL.
           type: string
           example: /mcp
-        search:
-          $ref: "#/components/schemas/SearchUseEntityData"
         documentId:
-          description: fileId of the source MCP document this entity was extracted from.
+          description: Source document identifier.
           type: string
-          example: tools/forecast.json
+          example: tools-forecast-json
     BuildResultDdlComparisons:
       type: object
       description: |
@@ -2758,21 +2788,6 @@ components:
                               - $ref: "#/components/schemas/ChangeSummary"
                               - type: object
                                 description: Number of DDL entities impacted by each severity type.
-    DdlEntityChangeData:
-      type: object
-      description: |
-        Data of one side (current or previous) of a DDL change — the entity's id and its
-        descriptor (kind/name/schemaName/description).
-      allOf:
-        - $ref: "#/components/schemas/DdlEntityDescriptor"
-        - type: object
-          required:
-            - ddlEntityId
-          properties:
-            ddlEntityId:
-              description: Stable DDL entity identifier, `{schemaName}-{kind}-{name}` slugified.
-              type: string
-              example: public-table-users
     BuildResultDdlComparisonsData:
       type: object
       description: Per-pair DDL changes (ddl-comparisons/{comparisonFileId}). The DDL analog of comparisons/{comparisonFileId}.
@@ -2787,10 +2802,10 @@ components:
             properties:
               ddlEntityData:
                 description: Current side of the change. Omitted for a pure remove.
-                $ref: "#/components/schemas/DdlEntityChangeData"
+                $ref: "#/components/schemas/DdlEntity"
               previousDdlEntityData:
                 description: Previous side of the change. Omitted for a pure add.
-                $ref: "#/components/schemas/DdlEntityChangeData"
+                $ref: "#/components/schemas/DdlEntity"
               changeSummary:
                 $ref: "#/components/schemas/ChangeSummary"
               comparisonInternalDocumentId:
