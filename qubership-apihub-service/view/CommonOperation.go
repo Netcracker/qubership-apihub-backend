@@ -372,6 +372,17 @@ func GetDocumentTypesForApiType(apiType string) []string {
 	}
 }
 
+func GetDocumentTypesForContractType(contractType string) []string {
+	switch contractType {
+	case ContractTypeDdl:
+		return []string{DDLType}
+	case ContractTypeMcp:
+		return []string{MCPInitType, MCPToolsType, MCPResourcesType, MCPPromptsType}
+	default:
+		return []string{}
+	}
+}
+
 type OperationListReq struct {
 	Deprecated       *bool
 	Ids              []string
@@ -454,10 +465,11 @@ type PagingFilterReq struct {
 }
 
 type DocumentsFilterReq struct {
-	ApiType    string
-	Limit      int
-	Offset     int
-	TextFilter string
+	ApiType      string
+	ContractType string
+	Limit        int
+	Offset       int
+	TextFilter   string
 }
 
 type DocumentsForTransformationFilterReq struct {

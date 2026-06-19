@@ -18,24 +18,25 @@ type VersionContent struct {
 	RevisionsCount           int                     `json:"revisionsCount,omitempty"`
 	OperationGroups          []VersionOperationGroup `json:"operationGroups,omitempty"`
 	ApiProcessorVersion      string                  `json:"apiProcessorVersion"`
-	Contracts                *VersionContractsSummary `json:"contracts,omitempty"`
+	ContractsSummary         *ContractsSummaryView   `json:"contractsSummary,omitempty"`
 }
 
-type VersionContractsSummary struct {
-	DDL *VersionDDLContractsSummary `json:"ddl,omitempty"`
-	MCP *VersionMCPContractsSummary `json:"mcp,omitempty"`
+// ContractsSummaryView is an object keyed by contract type (ddl, mcp).
+type ContractsSummaryView struct {
+	DDL *DdlVersionContractSummary    `json:"ddl,omitempty"`
+	MCP map[string]McpEndpointSummary `json:"mcp,omitempty"`
 }
 
-type VersionDDLContractsSummary struct {
-	Tables int `json:"tables"`
-	Views  int `json:"views"`
+type DdlVersionContractSummary struct {
+	ChangesSummary           ChangeSummary `json:"changesSummary"`
+	NumberOfImpactedEntities ChangeSummary `json:"numberOfImpactedEntities"`
 }
 
-type VersionMCPContractsSummary struct {
-	Init      int `json:"init"`
-	Tools     int `json:"tools"`
-	Prompts   int `json:"prompts"`
-	Resources int `json:"resources"`
+// McpEndpointSummary is the per-MCP-endpoint entity counts (inits intentionally omitted).
+type McpEndpointSummary struct {
+	ToolsCount     int `json:"toolsCount"`
+	PromptsCount   int `json:"promptsCount"`
+	ResourcesCount int `json:"resourcesCount"`
 }
 
 type VersionOperationType struct {

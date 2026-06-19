@@ -5,16 +5,18 @@ import "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/
 type DDLContractEntity struct {
 	tableName struct{} `pg:"ddl_tables"`
 
-	PackageId  string   `pg:"package_id, pk, type:varchar"`
-	Version    string   `pg:"version, pk, type:varchar"`
-	Revision   int      `pg:"revision, pk, type:integer"`
-	DdlTableId string   `pg:"ddl_table_id, pk, type:varchar"`
-	Kind       string   `pg:"kind, type:varchar, use_zero"`
-	SchemaName string   `pg:"schema_name, type:varchar, use_zero"`
-	Name       string   `pg:"name, type:varchar, use_zero"`
-	Metadata   Metadata `pg:"metadata, type:jsonb"`
-	DataHash   *string  `pg:"data_hash, type:varchar"`
-	DocumentId string   `pg:"document_id, type:varchar, use_zero"`
+	PackageId                 string   `pg:"package_id, pk, type:varchar"`
+	Version                   string   `pg:"version, pk, type:varchar"`
+	Revision                  int      `pg:"revision, pk, type:integer"`
+	DdlEntityId               string   `pg:"ddl_entity_id, pk, type:varchar"`
+	Kind                      string   `pg:"kind, type:varchar, use_zero"`
+	SchemaName                string   `pg:"schema_name, type:varchar, use_zero"`
+	Name                      string   `pg:"name, type:varchar, use_zero"`
+	Description               string   `pg:"description, type:varchar, use_zero"`
+	Metadata                  Metadata `pg:"metadata, type:jsonb"`
+	DataHash                  *string  `pg:"data_hash, type:varchar"`
+	DocumentId                string   `pg:"document_id, type:varchar, use_zero"`
+	VersionInternalDocumentId string   `pg:"version_internal_document_id, type:varchar, use_zero"`
 }
 
 type DDLContractDataEntity struct {
@@ -27,19 +29,30 @@ type DDLContractDataEntity struct {
 type DDLContractComparisonEntity struct {
 	tableName struct{} `pg:"ddl_comparison"`
 
-	PackageId          string             `pg:"package_id, type:varchar, use_zero"`
-	Version            string             `pg:"version, type:varchar, use_zero"`
-	Revision           int                `pg:"revision, type:integer, use_zero"`
-	PreviousPackageId  string             `pg:"previous_package_id, type:varchar, use_zero"`
-	PreviousVersion    string             `pg:"previous_version, type:varchar, use_zero"`
-	PreviousRevision   int                `pg:"previous_revision, type:integer, use_zero"`
-	DdlTableId         string             `pg:"ddl_table_id, type:varchar"`
-	PreviousDdlTableId string             `pg:"previous_ddl_table_id, type:varchar"`
-	ComparisonId       string             `pg:"comparison_id, type:varchar"`
-	DataHash           *string            `pg:"data_hash, type:varchar"`
-	PreviousDataHash   *string            `pg:"previous_data_hash, type:varchar"`
-	ChangesSummary     view.ChangeSummary `pg:"changes_summary, type:jsonb"`
-	Changes            interface{}        `pg:"changes, type:jsonb"`
+	PackageId                    string             `pg:"package_id, type:varchar, use_zero"`
+	Version                      string             `pg:"version, type:varchar, use_zero"`
+	Revision                     int                `pg:"revision, type:integer, use_zero"`
+	PreviousPackageId            string             `pg:"previous_package_id, type:varchar, use_zero"`
+	PreviousVersion              string             `pg:"previous_version, type:varchar, use_zero"`
+	PreviousRevision             int                `pg:"previous_revision, type:integer, use_zero"`
+	DdlEntityId                  string             `pg:"ddl_entity_id, type:varchar"`
+	PreviousDdlEntityId          string             `pg:"previous_ddl_entity_id, type:varchar"`
+	ComparisonId                 string             `pg:"comparison_id, type:varchar"`
+	DataHash                     *string            `pg:"data_hash, type:varchar"`
+	PreviousDataHash             *string            `pg:"previous_data_hash, type:varchar"`
+	ApiKind                      string             `pg:"api_kind, type:varchar, use_zero"`
+	PreviousApiKind              string             `pg:"previous_api_kind, type:varchar, use_zero"`
+	Kind                         string             `pg:"kind, type:varchar, use_zero"`
+	PreviousKind                 string             `pg:"previous_kind, type:varchar, use_zero"`
+	Name                         string             `pg:"name, type:varchar, use_zero"`
+	PreviousName                 string             `pg:"previous_name, type:varchar, use_zero"`
+	SchemaName                   string             `pg:"schema_name, type:varchar, use_zero"`
+	PreviousSchemaName           string             `pg:"previous_schema_name, type:varchar, use_zero"`
+	Description                  string             `pg:"description, type:varchar, use_zero"`
+	PreviousDescription          string             `pg:"previous_description, type:varchar, use_zero"`
+	ChangesSummary               view.ChangeSummary `pg:"changes_summary, type:jsonb"`
+	Changes                      interface{}        `pg:"changes, type:jsonb"`
+	ComparisonInternalDocumentId string             `pg:"comparison_internal_document_id, type:varchar, use_zero"`
 }
 
 type DDLContractSearchTextEntity struct {
@@ -48,7 +61,7 @@ type DDLContractSearchTextEntity struct {
 	PackageId      string
 	Version        string
 	Revision       int
-	DdlTableId     string
+	DdlEntityId    string
 	Status         string
 	Kind           string
 	SearchDataHash string
@@ -60,18 +73,48 @@ type DDLContractKindCountEntity struct {
 	Count int    `pg:"count, type:integer"`
 }
 
-func MakeDdlTableView(ent *DDLContractEntity, data []byte) *view.DdlTableView {
-	result := &view.DdlTableView{
-		TableId:    ent.DdlTableId,
-		Kind:       ent.Kind,
-		SchemaName: ent.SchemaName,
-		TableName:  ent.Name,
-		DocumentId: ent.DocumentId,
-		PackageRef: view.MakePackageRefKey(ent.PackageId, ent.Version, ent.Revision),
-		Metadata:   ent.Metadata,
+func MakeDdlContractEntityView(ent *DDLContractEntity, data []byte) *view.DdlContractEntityView {
+	result := &view.DdlContractEntityView{
+		DdlEntityId:               ent.DdlEntityId,
+		SchemaName:                ent.SchemaName,
+		Name:                      ent.Name,
+		Description:               ent.Description,
+		DocumentId:                ent.DocumentId,
+		VersionInternalDocumentId: ent.VersionInternalDocumentId,
+		PackageRef:                view.MakePackageRefKey(ent.PackageId, ent.Version, ent.Revision),
 	}
 	if len(data) > 0 {
 		result.Data = string(data)
+	}
+	return result
+}
+
+// MakeDdlChangedEntityView builds the changed-DDL-entity view from a comparison row,
+// mirroring the operation changelog view (current/previous entity data + change summary).
+func MakeDdlChangedEntityView(ent *DDLContractComparisonEntity) view.DdlChangedEntityView {
+	result := view.DdlChangedEntityView{
+		ChangeSummary:                ent.ChangesSummary,
+		ComparisonInternalDocumentId: ent.ComparisonInternalDocumentId,
+	}
+	if ent.DdlEntityId != "" {
+		result.DdlEntityData = &view.DdlEntityData{
+			DdlEntityId: ent.DdlEntityId,
+			Kind:        ent.Kind,
+			Name:        ent.Name,
+			SchemaName:  ent.SchemaName,
+			Description: ent.Description,
+			PackageRef:  view.MakePackageRefKey(ent.PackageId, ent.Version, ent.Revision),
+		}
+	}
+	if ent.PreviousDdlEntityId != "" {
+		result.PreviousDdlEntityData = &view.DdlEntityData{
+			DdlEntityId: ent.PreviousDdlEntityId,
+			Kind:        ent.PreviousKind,
+			Name:        ent.PreviousName,
+			SchemaName:  ent.PreviousSchemaName,
+			Description: ent.PreviousDescription,
+			PackageRef:  view.MakePackageRefKey(ent.PreviousPackageId, ent.PreviousVersion, ent.PreviousRevision),
+		}
 	}
 	return result
 }

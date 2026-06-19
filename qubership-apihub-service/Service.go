@@ -250,8 +250,8 @@ func main() {
 	portalService := service.NewPortalService(basePath, publishedService, publishedRepository)
 
 	operationGroupService := service.NewOperationGroupService(operationRepository, publishedRepository, exportRepository, packageVersionEnrichmentService, activityTrackingService)
-	ddlContractServiceForVersion := service.NewDDLContractService(ddlContractRepository, publishedRepository)
-	mcpContractServiceForVersion := service.NewMCPContractService(mcpContractRepository, publishedRepository)
+	ddlContractServiceForVersion := service.NewDDLContractService(ddlContractRepository, publishedRepository, packageVersionEnrichmentService)
+	mcpContractServiceForVersion := service.NewMCPContractService(mcpContractRepository, publishedRepository, packageVersionEnrichmentService)
 	versionService := service.NewVersionService(favoritesRepository, publishedRepository, publishedService, operationRepository, exportRepository, operationService, activityTrackingService, systemInfoService, packageVersionEnrichmentService, portalService, versionCleanupRepository, operationGroupService, monitoringService, roleService, ddlContractServiceForVersion, mcpContractServiceForVersion)
 	packageService := service.NewPackageService(favoritesRepository, publishedRepository, versionService, roleService, activityTrackingService, monitoringService, operationGroupService, usersRepository, ptHandler, systemInfoService)
 
@@ -270,7 +270,7 @@ func main() {
 	versionService.SetBuildService(buildService)
 	operationGroupService.SetBuildService(buildService)
 
-	excelService := service.NewExcelService(publishedRepository, versionService, operationService, packageService)
+	excelService := service.NewExcelService(publishedRepository, versionService, operationService, packageService, ddlContractServiceForVersion, mcpContractServiceForVersion)
 	comparisonService := service.NewComparisonService(publishedRepository, operationRepository, packageVersionEnrichmentService, ddlContractServiceForVersion)
 	businessMetricService := service.NewBusinessMetricService(businessMetricRepository)
 
@@ -449,14 +449,22 @@ func main() {
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/deprecated/summary", security.Secure(operationController.GetDeprecatedOperationsSummary)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/operations/{operationId}/changes/summary", security.Secure(operationController.GetOperationChangesSummary)).Methods(http.MethodGet)
 
-	// DDL Contract routes
-	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/tables", security.Secure(ddlContractController.ListDdlTables)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/tables/{tableId}", security.Secure(ddlContractController.GetDdlTable)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/tables/{tableId}/changes", security.Secure(ddlContractController.GetDdlTableChanges)).Methods(http.MethodGet)
+	// DDL Contract routes.
+	// Static sub-routes (changes, export/*) are registered before the {ddlEntityId} wildcard
+	// so gorilla/mux does not shadow them.
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/entities", security.Secure(ddlContractController.ListDdlEntities)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/changes", security.Secure(ddlContractController.GetChangedDdlEntities)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/export/entities", security.Secure(exportController.GenerateDdlEntitiesExcelReport)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/export/changes", security.Secure(exportController.GenerateDdlChangesExcelReport)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/entities/{ddlEntityId}", security.Secure(ddlContractController.GetDdlEntity)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/entities/{ddlEntityId}/changes", security.Secure(ddlContractController.GetDdlEntityChanges)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/entities/{ddlEntityId}/changes/summary", security.Secure(ddlContractController.GetDdlEntityChangesSummary)).Methods(http.MethodGet)
 
-	// MCP Contract routes ({entity} ∈ {init, tools, prompts, resources})
+	// MCP Contract routes ({entity} ∈ {inits, tools, prompts, resources}).
+	// mcp/export/{entity} is registered before mcp/{entity}/{mcpEntityId} so it is not shadowed.
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/mcp/export/{entity}", security.Secure(exportController.GenerateMcpEntitiesExcelReport)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/mcp/{entity}", security.Secure(mcpContractController.ListMcpEntities)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/mcp/{entity}/{entityId}", security.Secure(mcpContractController.GetMcpEntity)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/mcp/{entity}/{mcpEntityId}", security.Secure(mcpContractController.GetMcpEntity)).Methods(http.MethodGet)
 
 	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/documents/{slug}", security.Secure(versionController.GetVersionedDocument)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/documents", security.Secure(versionController.GetVersionDocuments)).Methods(http.MethodGet)

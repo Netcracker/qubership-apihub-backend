@@ -6,12 +6,14 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/db"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
 	"github.com/go-pg/pg/v10"
+	"github.com/go-pg/pg/v10/orm"
 )
 
 type MCPContractRepository interface {
-	ListMcpEntities(packageId, version string, revision int, kind, textFilter string, limit, offset int) ([]*entity.MCPContractEntity, error)
+	ListMcpEntities(packageId, version string, revision int, kind, mcpEndpoint, textFilter string, limit, offset int) ([]*entity.MCPContractEntity, error)
 	GetMcpEntity(packageId, version string, revision int, mcpEntityId string, includeData bool) (*entity.MCPContractEntity, []byte, error)
 	GetEntitiesCount(packageId, version string, revision int) ([]entity.MCPContractKindCountEntity, error)
+	GetEntitiesCountByEndpoint(packageId, version string, revision int) ([]entity.MCPContractEndpointCountEntity, error)
 	GlobalSearchForMCP(searchQuery *entity.GlobalContractSearchQuery) ([]entity.MCPContractSearchResult, error)
 }
 
@@ -23,7 +25,7 @@ func NewMCPContractRepository(cp db.ConnectionProvider) MCPContractRepository {
 	return &mcpContractRepositoryImpl{cp: cp}
 }
 
-func (r *mcpContractRepositoryImpl) ListMcpEntities(packageId, version string, revision int, kind, textFilter string, limit, offset int) ([]*entity.MCPContractEntity, error) {
+func (r *mcpContractRepositoryImpl) ListMcpEntities(packageId, version string, revision int, kind, mcpEndpoint, textFilter string, limit, offset int) ([]*entity.MCPContractEntity, error) {
 	var result []*entity.MCPContractEntity
 	query := r.cp.GetConnection().Model(&result).
 		Where("package_id = ?", packageId).
@@ -32,8 +34,16 @@ func (r *mcpContractRepositoryImpl) ListMcpEntities(packageId, version string, r
 	if kind != "" {
 		query = query.Where("kind = ?", kind)
 	}
+	if mcpEndpoint != "" {
+		query = query.Where("mcp_endpoint = ?", mcpEndpoint)
+	}
 	if textFilter != "" {
-		query = query.Where("mcp_entity_id ILIKE ?", fmt.Sprintf("%%%s%%", textFilter))
+		pattern := fmt.Sprintf("%%%s%%", textFilter)
+		query = query.WhereGroup(func(q *orm.Query) (*orm.Query, error) {
+			q.WhereOr("name ILIKE ?", pattern).
+				WhereOr("description ILIKE ?", pattern)
+			return q, nil
+		})
 	}
 	if limit > 0 {
 		query = query.Limit(limit)
@@ -81,6 +91,17 @@ func (r *mcpContractRepositoryImpl) GetEntitiesCount(packageId, version string, 
 	var result []entity.MCPContractKindCountEntity
 	_, err := r.cp.GetConnection().Query(&result,
 		`SELECT kind, count(*) as count FROM mcp_entities WHERE package_id=? AND version=? AND revision=? GROUP BY kind`,
+		packageId, version, revision)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (r *mcpContractRepositoryImpl) GetEntitiesCountByEndpoint(packageId, version string, revision int) ([]entity.MCPContractEndpointCountEntity, error) {
+	var result []entity.MCPContractEndpointCountEntity
+	_, err := r.cp.GetConnection().Query(&result,
+		`SELECT mcp_endpoint, kind, count(*) as count FROM mcp_entities WHERE package_id=? AND version=? AND revision=? GROUP BY mcp_endpoint, kind`,
 		packageId, version, revision)
 	if err != nil {
 		return nil, err

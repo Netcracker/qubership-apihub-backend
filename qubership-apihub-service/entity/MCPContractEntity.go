@@ -6,13 +6,15 @@ type MCPContractEntity struct {
 	PackageId   string   `pg:"package_id, pk, type:varchar"`
 	Version     string   `pg:"version, pk, type:varchar"`
 	Revision    int      `pg:"revision, pk, type:integer"`
-	McpEntityId string   `pg:"mcp_entity_id, pk, type:varchar"`
-	Kind        string   `pg:"kind, type:varchar, use_zero"`
-	Name        string   `pg:"name, type:varchar, use_zero"`
-	McpEndpoint string   `pg:"mcp_endpoint, type:varchar, use_zero"`
-	Metadata    Metadata `pg:"metadata, type:jsonb"`
-	DataHash    *string  `pg:"data_hash, type:varchar"`
-	DocumentId  string   `pg:"document_id, type:varchar, use_zero"`
+	McpEntityId               string   `pg:"mcp_entity_id, pk, type:varchar"`
+	Kind                      string   `pg:"kind, type:varchar, use_zero"`
+	Name                      string   `pg:"name, type:varchar, use_zero"`
+	Description               string   `pg:"description, type:varchar, use_zero"`
+	McpEndpoint               string   `pg:"mcp_endpoint, type:varchar, use_zero"`
+	Metadata                  Metadata `pg:"metadata, type:jsonb"`
+	DataHash                  *string  `pg:"data_hash, type:varchar"`
+	DocumentId                string   `pg:"document_id, type:varchar, use_zero"`
+	VersionInternalDocumentId string   `pg:"version_internal_document_id, type:varchar, use_zero"`
 }
 
 type MCPContractDataEntity struct {
@@ -38,4 +40,10 @@ type MCPContractSearchTextEntity struct {
 type MCPContractKindCountEntity struct {
 	Kind  string `pg:"kind, type:varchar"`
 	Count int    `pg:"count, type:integer"`
+}
+
+type MCPContractEndpointCountEntity struct {
+	McpEndpoint string `pg:"mcp_endpoint, type:varchar"`
+	Kind        string `pg:"kind, type:varchar"`
+	Count       int    `pg:"count, type:integer"`
 }

@@ -524,6 +524,31 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 		return err
 	}
 
+	// DDL comparisons share version_comparison with REST. Read the DDL index/per-pair files, then
+	// merge the version-comparison rows by comparison_id (REST + DDL contractTypes on the same row;
+	// DDL-only pairs are appended so the ddl_comparison FK is satisfied for pure DDL changelogs).
+	ddlVersionComparisonEntities, ddlContractComparisonEntities, ddlComparisonFileIdToKeyMap, err := buildArcEntitiesReader.ReadDdlContractComparisonsToEntities()
+	if err != nil {
+		return err
+	}
+	versionComparisonByComparisonId := make(map[string]*entity.VersionComparisonEntity, len(operationsComparisonEntities))
+	for _, vc := range operationsComparisonEntities {
+		versionComparisonByComparisonId[vc.ComparisonId] = vc
+	}
+	for _, ddlVc := range ddlVersionComparisonEntities {
+		if existing, ok := versionComparisonByComparisonId[ddlVc.ComparisonId]; ok {
+			existing.ContractTypes = ddlVc.ContractTypes
+		} else {
+			operationsComparisonEntities = append(operationsComparisonEntities, ddlVc)
+			versionComparisonByComparisonId[ddlVc.ComparisonId] = ddlVc
+		}
+	}
+	for fileId, key := range ddlComparisonFileIdToKeyMap {
+		if _, ok := comparisonFileIdToKeyMap[fileId]; !ok {
+			comparisonFileIdToKeyMap[fileId] = key
+		}
+	}
+
 	builderNotificationsEntities := buildArcEntitiesReader.ReadBuilderNotificationsToEntities(buildSrcEnt.BuildId)
 
 	versionInternalDocEntities, versionInternalDocDataEntities, err := buildArcEntitiesReader.ReadVersionInternalDocumentsToEntities()
@@ -537,23 +562,6 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 	}
 
 	ddlContractEntities, ddlContractDataEntities, ddlContractSearchTexts, err := buildArcEntitiesReader.ReadDdlContractsToEntities()
-	if err != nil {
-		return err
-	}
-
-	previousPkgId := buildArc.PackageInfo.PackageId
-	if buildArc.PackageInfo.PreviousVersionPackageId != "" {
-		previousPkgId = buildArc.PackageInfo.PreviousVersionPackageId
-	}
-	ddlComparisonId := view.MakeVersionComparisonId(
-		buildArc.PackageInfo.PackageId,
-		buildArc.PackageInfo.Version,
-		buildArc.PackageInfo.Revision,
-		previousPkgId,
-		buildArc.PackageInfo.PreviousVersion,
-		previousVersionRevision,
-	)
-	ddlContractComparisonEntities, err := buildArcEntitiesReader.ReadDdlContractComparisonsToEntities(ddlComparisonId)
 	if err != nil {
 		return err
 	}

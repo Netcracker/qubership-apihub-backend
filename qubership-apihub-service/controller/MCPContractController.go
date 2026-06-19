@@ -78,6 +78,7 @@ func (c *mcpContractControllerImpl) ListMcpEntities(w http.ResponseWriter, r *ht
 		})
 		return
 	}
+	mcpEndpoint, _ := url.QueryUnescape(r.URL.Query().Get("mcpEndpoint"))
 	textFilter, _ := url.QueryUnescape(r.URL.Query().Get("textFilter"))
 	limit, limErr := getLimitQueryParam(r)
 	if limErr != nil {
@@ -88,7 +89,7 @@ func (c *mcpContractControllerImpl) ListMcpEntities(w http.ResponseWriter, r *ht
 	if r.URL.Query().Get("offset") != "" {
 		offset, _ = strconv.Atoi(r.URL.Query().Get("offset"))
 	}
-	result, svcErr := c.mcpContractService.ListMcpEntities(packageId, versionName, kind, textFilter, limit, offset)
+	result, svcErr := c.mcpContractService.ListMcpEntities(packageId, versionName, kind, mcpEndpoint, textFilter, limit, offset)
 	if svcErr != nil {
 		handlePkgRedirectOrRespondWithError(w, r, c.ptHandler, packageId, "Failed to list MCP entities", svcErr)
 		return
@@ -112,13 +113,13 @@ func (c *mcpContractControllerImpl) GetMcpEntity(w http.ResponseWriter, r *http.
 		})
 		return
 	}
-	entityId, err := getUnescapedStringParam(r, "entityId")
+	mcpEntityId, err := getUnescapedStringParam(r, "mcpEntityId")
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
-			Params:  map[string]interface{}{"param": "entityId"},
+			Params:  map[string]interface{}{"param": "mcpEntityId"},
 			Debug:   err.Error(),
 		})
 		return
@@ -139,7 +140,7 @@ func (c *mcpContractControllerImpl) GetMcpEntity(w http.ResponseWriter, r *http.
 		}
 	}
 
-	result, svcErr := c.mcpContractService.GetMcpEntity(packageId, versionName, entityId, includeData)
+	result, svcErr := c.mcpContractService.GetMcpEntity(packageId, versionName, mcpEntityId, includeData)
 	if svcErr != nil {
 		handlePkgRedirectOrRespondWithError(w, r, c.ptHandler, packageId, "Failed to get MCP entity", svcErr)
 		return

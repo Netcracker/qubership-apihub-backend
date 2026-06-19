@@ -298,11 +298,15 @@ func (v versionServiceImpl) GetLatestDocuments(packageId string, versionName str
 		}
 	}
 
+	documentTypesFilter := view.GetDocumentTypesForApiType(filterReq.ApiType)
+	if filterReq.ContractType != "" {
+		documentTypesFilter = view.GetDocumentTypesForContractType(filterReq.ContractType)
+	}
 	searchQuery := entity.PublishedContentSearchQueryEntity{
 		TextFilter:          filterReq.TextFilter,
 		Limit:               filterReq.Limit,
 		Offset:              filterReq.Offset,
-		DocumentTypesFilter: view.GetDocumentTypesForApiType(filterReq.ApiType),
+		DocumentTypesFilter: documentTypesFilter,
 	}
 
 	versionDocuments := make([]view.PublishedDocumentRefView, 0)
@@ -686,7 +690,7 @@ func (v versionServiceImpl) GetPackageVersionContent(packageId string, version s
 			return nil, err
 		}
 		if ddlSummary != nil || mcpSummary != nil {
-			versionContent.Contracts = &view.VersionContractsSummary{
+			versionContent.ContractsSummary = &view.ContractsSummaryView{
 				DDL: ddlSummary,
 				MCP: mcpSummary,
 			}

@@ -1703,7 +1703,7 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 		}
 		if len(ddlContractEntities) > 0 {
 			start = time.Now()
-			_, err = tx.Model(&ddlContractEntities).OnConflict("(package_id, version, revision, ddl_table_id) DO UPDATE").Insert()
+			_, err = tx.Model(&ddlContractEntities).OnConflict("(package_id, version, revision, ddl_entity_id) DO UPDATE").Insert()
 			if err != nil {
 				return fmt.Errorf("failed to insert ddl_tables: %w", err)
 			}
@@ -1716,15 +1716,15 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 			start = time.Now()
 			for _, st := range ddlContractSearchTexts {
 				_, err = tx.Exec(`
-					INSERT INTO fts_ddl_search_text (package_id, version, revision, ddl_table_id, status, kind, search_data_hash, data_vector)
+					INSERT INTO fts_ddl_search_text (package_id, version, revision, ddl_entity_id, status, kind, search_data_hash, data_vector)
 					VALUES (?, ?, ?, ?, ?, ?, ?, to_tsvector(convert_from(?, 'UTF-8')))
-					ON CONFLICT (package_id, version, revision, ddl_table_id) DO UPDATE
+					ON CONFLICT (package_id, version, revision, ddl_entity_id) DO UPDATE
 						SET search_data_hash = EXCLUDED.search_data_hash,
 							data_vector = EXCLUDED.data_vector`,
-					version.PackageId, version.Version, version.Revision, st.DdlTableId,
+					version.PackageId, version.Version, version.Revision, st.DdlEntityId,
 					version.Status, st.Kind, st.SearchDataHash, st.SearchTextData)
 				if err != nil {
-					return fmt.Errorf("failed to insert fts_ddl_search_text for %s: %w", st.DdlTableId, err)
+					return fmt.Errorf("failed to insert fts_ddl_search_text for %s: %w", st.DdlEntityId, err)
 				}
 			}
 			utils.PerfLog(time.Since(start).Milliseconds(), 100, "CreateVersionWithData: fts_ddl_search_text insert")
@@ -1732,7 +1732,7 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 		if len(ddlContractComparisonEntities) > 0 {
 			start = time.Now()
 			_, err = tx.Model(&ddlContractComparisonEntities).OnConflict(
-				"(package_id, version, revision, previous_package_id, previous_version, previous_revision, ddl_table_id, previous_ddl_table_id) DO UPDATE").Insert()
+				"(package_id, version, revision, previous_package_id, previous_version, previous_revision, ddl_entity_id, previous_ddl_entity_id) DO UPDATE").Insert()
 			if err != nil {
 				return fmt.Errorf("failed to insert ddl_comparison: %w", err)
 			}
@@ -2097,6 +2097,7 @@ func (p publishedRepositoryImpl) saveVersionChangesTx(tx *pg.Tx, operationCompar
 	_, err := tx.Model(&versionComparisons).
 		OnConflict(`(comparison_id) DO UPDATE
 		SET operation_types=EXCLUDED.operation_types,
+			contract_types=EXCLUDED.contract_types,
 			refs =			EXCLUDED.refs,
 			last_active =	EXCLUDED.last_active,
 			no_content =	EXCLUDED.no_content,

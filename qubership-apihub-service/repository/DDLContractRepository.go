@@ -7,14 +7,17 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	"github.com/go-pg/pg/v10"
+	"github.com/go-pg/pg/v10/orm"
 )
 
 type DDLContractRepository interface {
-	ListDdlTables(packageId, version string, revision int, kind, textFilter string, limit, offset int) ([]*entity.DDLContractEntity, error)
-	GetDdlTable(packageId, version string, revision int, ddlTableId string, includeData bool) (*entity.DDLContractEntity, []byte, error)
-	GetDdlTableChanges(packageId, version string, revision int, ddlTableId string) (*entity.DDLContractComparisonEntity, error)
+	ListDdlEntities(packageId, version string, revision int, textFilter string, limit, offset int) ([]*entity.DDLContractEntity, error)
+	GetDdlEntity(packageId, version string, revision int, ddlEntityId string, includeData bool) (*entity.DDLContractEntity, []byte, error)
+	GetDdlEntityChanges(comparisonId, ddlEntityId string, severities []string) (*entity.DDLContractComparisonEntity, error)
+	GetDdlEntityChangesSummary(comparisonId, ddlEntityId string) (*view.ChangeSummary, error)
+	ListChangedDdlEntities(comparisonId, refPackageId string, severities []string, textFilter string, limit, offset int) ([]*entity.DDLContractComparisonEntity, error)
 	GetEntitiesCount(packageId, version string, revision int) ([]entity.DDLContractKindCountEntity, error)
-	GetComparisonSummary(comparisonId string) (*view.ChangeSummary, error)
+	GetComparisonSummary(comparisonId string) (*view.ChangeSummary, *view.ChangeSummary, error)
 	GlobalSearchForDDL(searchQuery *entity.GlobalContractSearchQuery) ([]entity.DDLContractSearchResult, error)
 }
 
@@ -26,17 +29,19 @@ func NewDDLContractRepository(cp db.ConnectionProvider) DDLContractRepository {
 	return &ddlContractRepositoryImpl{cp: cp}
 }
 
-func (r *ddlContractRepositoryImpl) ListDdlTables(packageId, version string, revision int, kind, textFilter string, limit, offset int) ([]*entity.DDLContractEntity, error) {
+func (r *ddlContractRepositoryImpl) ListDdlEntities(packageId, version string, revision int, textFilter string, limit, offset int) ([]*entity.DDLContractEntity, error) {
 	var result []*entity.DDLContractEntity
 	query := r.cp.GetConnection().Model(&result).
 		Where("package_id = ?", packageId).
 		Where("version = ?", version).
 		Where("revision = ?", revision)
-	if kind != "" {
-		query = query.Where("kind = ?", kind)
-	}
 	if textFilter != "" {
-		query = query.Where("name ILIKE ?", fmt.Sprintf("%%%s%%", textFilter))
+		pattern := fmt.Sprintf("%%%s%%", textFilter)
+		query = query.WhereGroup(func(q *orm.Query) (*orm.Query, error) {
+			q.WhereOr("name ILIKE ?", pattern).
+				WhereOr("description ILIKE ?", pattern)
+			return q, nil
+		})
 	}
 	if limit > 0 {
 		query = query.Limit(limit)
@@ -54,14 +59,14 @@ func (r *ddlContractRepositoryImpl) ListDdlTables(packageId, version string, rev
 	return result, nil
 }
 
-func (r *ddlContractRepositoryImpl) GetDdlTable(packageId, version string, revision int, ddlTableId string, includeData bool) (*entity.DDLContractEntity, []byte, error) {
+func (r *ddlContractRepositoryImpl) GetDdlEntity(packageId, version string, revision int, ddlEntityId string, includeData bool) (*entity.DDLContractEntity, []byte, error) {
 	conn := r.cp.GetConnection()
 	ent := new(entity.DDLContractEntity)
 	err := conn.Model(ent).
 		Where("package_id = ?", packageId).
 		Where("version = ?", version).
 		Where("revision = ?", revision).
-		Where("ddl_table_id = ?", ddlTableId).
+		Where("ddl_entity_id = ?", ddlEntityId).
 		First()
 	if err != nil {
 		if err == pg.ErrNoRows {
@@ -75,7 +80,7 @@ func (r *ddlContractRepositoryImpl) GetDdlTable(packageId, version string, revis
 		err = conn.Model(dataEnt).Where("data_hash = ?", *ent.DataHash).First()
 		if err != nil {
 			if err == pg.ErrNoRows {
-				return nil, nil, fmt.Errorf("no data found for ddl table %s data hash = %s", ddlTableId, ent.DataHash)
+				return nil, nil, fmt.Errorf("no data found for ddl entity %s data hash = %s", ddlEntityId, *ent.DataHash)
 			}
 			return nil, nil, err
 		}
@@ -84,14 +89,20 @@ func (r *ddlContractRepositoryImpl) GetDdlTable(packageId, version string, revis
 	return ent, data, nil
 }
 
-func (r *ddlContractRepositoryImpl) GetDdlTableChanges(packageId, version string, revision int, ddlTableId string) (*entity.DDLContractComparisonEntity, error) {
+func (r *ddlContractRepositoryImpl) GetDdlEntityChanges(comparisonId, ddlEntityId string, severities []string) (*entity.DDLContractComparisonEntity, error) {
 	ent := new(entity.DDLContractComparisonEntity)
-	err := r.cp.GetConnection().Model(ent).
-		Where("package_id = ?", packageId).
-		Where("version = ?", version).
-		Where("revision = ?", revision).
-		Where("ddl_table_id = ?", ddlTableId).
-		First()
+	query := r.cp.GetConnection().Model(ent).
+		Where("comparison_id = ?", comparisonId).
+		Where("ddl_entity_id = ?", ddlEntityId)
+	if len(severities) > 0 {
+		query.WhereGroup(func(q *orm.Query) (*orm.Query, error) {
+			for _, severity := range severities {
+				q.WhereOr("(changes_summary->?)::int>0", severity)
+			}
+			return q, nil
+		})
+	}
+	err := query.First()
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return nil, nil
@@ -99,6 +110,71 @@ func (r *ddlContractRepositoryImpl) GetDdlTableChanges(packageId, version string
 		return nil, err
 	}
 	return ent, nil
+}
+
+func (r *ddlContractRepositoryImpl) GetDdlEntityChangesSummary(comparisonId, ddlEntityId string) (*view.ChangeSummary, error) {
+	type row struct {
+		ChangesSummary view.ChangeSummary `pg:"changes_summary"`
+	}
+	var rows []row
+	_, err := r.cp.GetConnection().Query(&rows,
+		`SELECT changes_summary FROM ddl_comparison WHERE comparison_id=? AND ddl_entity_id=?`, comparisonId, ddlEntityId)
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return &view.ChangeSummary{}, nil
+	}
+	return &rows[0].ChangesSummary, nil
+}
+
+func (r *ddlContractRepositoryImpl) ListChangedDdlEntities(comparisonId, refPackageId string, severities []string, textFilter string, limit, offset int) ([]*entity.DDLContractComparisonEntity, error) {
+	var result []*entity.DDLContractComparisonEntity
+	query := r.cp.GetConnection().Model(&result).
+		Where("comparison_id = ?", comparisonId)
+	if refPackageId != "" {
+		query = query.Where("package_id = ?", refPackageId)
+	}
+	if textFilter != "" {
+		pattern := fmt.Sprintf("%%%s%%", textFilter)
+		query = query.WhereGroup(func(q *orm.Query) (*orm.Query, error) {
+			q.WhereOr("name ILIKE ?", pattern).
+				WhereOr("description ILIKE ?", pattern).
+				WhereOr("previous_name ILIKE ?", pattern).
+				WhereOr("previous_description ILIKE ?", pattern)
+			return q, nil
+		})
+	}
+	if len(severities) > 0 {
+		query.WhereGroup(func(q *orm.Query) (*orm.Query, error) {
+			for _, severity := range severities {
+				q.WhereOr("(changes_summary->?)::int>0", severity)
+			}
+			return q, nil
+		})
+	}
+	query = query.
+		OrderExpr("(changes_summary->'breaking')::int > 0 DESC").
+		OrderExpr("(changes_summary->'semi-breaking')::int > 0 DESC").
+		OrderExpr("(changes_summary->'deprecated')::int > 0 DESC").
+		OrderExpr("(changes_summary->'non-breaking')::int > 0 DESC").
+		OrderExpr("(changes_summary->'annotation')::int > 0 DESC").
+		OrderExpr("(changes_summary->'unclassified')::int > 0 DESC").
+		Order("ddl_entity_id")
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+	if offset > 0 {
+		query = query.Offset(offset)
+	}
+	err := query.Select()
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return result, nil
 }
 
 func (r *ddlContractRepositoryImpl) GetEntitiesCount(packageId, version string, revision int) ([]entity.DDLContractKindCountEntity, error) {
@@ -112,29 +188,27 @@ func (r *ddlContractRepositoryImpl) GetEntitiesCount(packageId, version string, 
 	return result, nil
 }
 
-func (r *ddlContractRepositoryImpl) GetComparisonSummary(comparisonId string) (*view.ChangeSummary, error) {
-	type row struct {
-		ChangesSummary view.ChangeSummary `pg:"changes_summary"`
-	}
-	var rows []row
-	_, err := r.cp.GetConnection().Query(&rows,
-		`SELECT changes_summary FROM ddl_comparison WHERE comparison_id=?`, comparisonId)
+// GetComparisonSummary returns the aggregated DDL changes summary and the number of impacted
+// entities for the given comparison, read from version_comparison.contract_types (ddl entry).
+func (r *ddlContractRepositoryImpl) GetComparisonSummary(comparisonId string) (*view.ChangeSummary, *view.ChangeSummary, error) {
+	comparison := new(entity.VersionComparisonEntity)
+	err := r.cp.GetConnection().Model(comparison).
+		Where("comparison_id = ?", comparisonId).
+		First()
 	if err != nil {
-		return nil, err
+		if err == pg.ErrNoRows {
+			return nil, nil, nil
+		}
+		return nil, nil, err
 	}
-	if len(rows) == 0 {
-		return nil, nil
+	for _, ct := range comparison.ContractTypes {
+		if ct.ContractType == view.ContractTypeDdl {
+			changesSummary := ct.ChangesSummary
+			numberOfImpactedEntities := ct.NumberOfImpactedEntities
+			return &changesSummary, &numberOfImpactedEntities, nil
+		}
 	}
-	result := &view.ChangeSummary{}
-	for _, row := range rows {
-		result.Breaking += row.ChangesSummary.Breaking
-		result.SemiBreaking += row.ChangesSummary.SemiBreaking
-		result.Deprecated += row.ChangesSummary.Deprecated
-		result.NonBreaking += row.ChangesSummary.NonBreaking
-		result.Annotation += row.ChangesSummary.Annotation
-		result.Unclassified += row.ChangesSummary.Unclassified
-	}
-	return result, nil
+	return nil, nil, nil
 }
 
 func (r *ddlContractRepositoryImpl) GlobalSearchForDDL(searchQuery *entity.GlobalContractSearchQuery) ([]entity.DDLContractSearchResult, error) {
@@ -150,19 +224,19 @@ select
     dt.version,
     dt.revision,
     pv.status,
-    dt.ddl_table_id,
+    dt.ddl_entity_id,
     dt.kind,
     dt.schema_name,
     dt.name,
     parent_package_names(dt.package_id) parent_names
 from ddl_tables dt
          inner join (
-    SELECT DISTINCT ON (rank, package_id, ddl_table_id)
+    SELECT DISTINCT ON (rank, package_id, ddl_entity_id)
         ts_rank(data_vector, search_query) as rank,
-        ts.package_id   as package_id,
-        ts.ddl_table_id as ddl_table_id,
-        ts.version      as version,
-        ts.revision     as revision
+        ts.package_id    as package_id,
+        ts.ddl_entity_id as ddl_entity_id,
+        ts.version       as version,
+        ts.revision      as revision
 
     FROM fts_ddl_search_text ts,
          websearch_to_tsquery(?original_text_input) search_query
@@ -177,7 +251,7 @@ from ddl_tables dt
         and search_query @@ data_vector
     ORDER BY ts_rank(data_vector, search_query) DESC,
              package_id,
-             ddl_table_id desc,
+             ddl_entity_id desc,
              version DESC,
              revision DESC
     LIMIT ?limit OFFSET ?offset
@@ -185,7 +259,7 @@ from ddl_tables dt
                    on all_ts.package_id = dt.package_id and
                       all_ts.version = dt.version and
                       all_ts.revision = dt.revision and
-                      all_ts.ddl_table_id = dt.ddl_table_id
+                      all_ts.ddl_entity_id = dt.ddl_entity_id
 
 inner join published_version pv on dt.package_id=pv.package_id and dt.version=pv.version and dt.revision=pv.revision
 inner join package_group pg on dt.package_id=pg.id
@@ -194,7 +268,7 @@ where all_ts.rank > 0
 and pv.deleted_at is null
 and pv.published_at >= ?start_date
 and pv.published_at <= ?end_date
-order by all_ts.rank desc, dt.ddl_table_id
+order by all_ts.rank desc, dt.ddl_entity_id
 limit ?limit;
 `
 	_, err = r.cp.GetConnection().Model(searchQuery).Query(&result, ddlSearchQuery)

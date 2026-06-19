@@ -186,32 +186,72 @@ type PackageComparisonsFile struct {
 // --- Contract archive types ---
 
 type PackageDdlContractsFile struct {
-	Contracts []PackageDdlContract `json:"contracts"`
+	Tables []PackageDdlContract `json:"tables"`
+}
+
+type DdlContractSearch struct {
+	UseEntityDataAsSearchText bool `json:"useEntityDataAsSearchText"`
 }
 
 type PackageDdlContract struct {
-	DdlTableId string                 `json:"ddlTableId"`
-	Kind       string                 `json:"kind"`
-	SchemaName string                 `json:"schemaName,omitempty"`
-	Name       string                 `json:"name,omitempty"`
-	SearchText string                 `json:"searchText,omitempty"`
-	Metadata   map[string]interface{} `json:"metadata,omitempty"`
-	DocumentId string                 `json:"documentId,omitempty"`
-	DataHash   string                 `json:"dataHash,omitempty"`
+	DdlEntityId               string                 `json:"ddlEntityId"`
+	Kind                      string                 `json:"kind"`
+	SchemaName                string                 `json:"schemaName,omitempty"`
+	Name                      string                 `json:"name,omitempty"`
+	Description               string                 `json:"description,omitempty"`
+	Search                    *DdlContractSearch     `json:"search,omitempty"`
+	Metadata                  map[string]interface{} `json:"metadata,omitempty"`
+	DocumentId                string                 `json:"documentId,omitempty"`
+	VersionInternalDocumentId string                 `json:"versionInternalDocumentId,omitempty"`
 }
 
+// PackageDdlComparisonsFile models the ddl-comparisons.json index (sibling of comparisons.json).
 type PackageDdlComparisonsFile struct {
-	Comparisons []PackageDdlComparison `json:"comparisons"`
+	Comparisons []DdlVersionComparison `json:"comparisons"`
 }
 
-type PackageDdlComparison struct {
-	DdlTableId         string                 `json:"ddlTableId"`
-	PreviousDdlTableId string                 `json:"previousDdlTableId"`
-	DataHash           string                 `json:"dataHash,omitempty"`
-	PreviousDataHash   string                 `json:"previousDataHash,omitempty"`
-	ChangesSummary     map[string]interface{} `json:"changesSummary,omitempty"`
-	Changes            interface{}            `json:"changes,omitempty"`
-	ComparisonPath     string                 `json:"comparisonPath"`
+type DdlVersionComparison struct {
+	ComparisonFileId         string         `json:"comparisonFileId"`
+	PackageId                string         `json:"packageId"`
+	Version                  string         `json:"version"`
+	Revision                 int            `json:"revision"`
+	PreviousVersionPackageId string         `json:"previousVersionPackageId"`
+	PreviousVersion          string         `json:"previousVersion"`
+	PreviousVersionRevision  int            `json:"previousVersionRevision"`
+	FromCache                bool           `json:"fromCache"`
+	ContractTypes            []ContractType `json:"contractTypes"`
+}
+
+type ContractType struct {
+	ContractType             string        `json:"contractType"`
+	ChangesSummary           ChangeSummary `json:"changesSummary"`
+	NumberOfImpactedEntities ChangeSummary `json:"numberOfImpactedEntities"`
+}
+
+const ContractTypeDdl = "ddl"
+const ContractTypeMcp = "mcp"
+
+// PackageDdlContractChanges models a per-pair ddl-comparisons/<comparisonFileId> file.
+type PackageDdlContractChanges struct {
+	Entities []DdlChangesDto `json:"entities"`
+}
+
+type DdlChangesDto struct {
+	DdlEntityId                  string        `json:"ddlEntityId"`
+	PreviousDdlEntityId          string        `json:"previousDdlEntityId,omitempty"`
+	ApiKind                      string        `json:"apiKind,omitempty"`
+	PreviousApiKind              string        `json:"previousApiKind,omitempty"`
+	Kind                         string        `json:"kind,omitempty"`
+	PreviousKind                 string        `json:"previousKind,omitempty"`
+	Name                         string        `json:"name,omitempty"`
+	PreviousName                 string        `json:"previousName,omitempty"`
+	SchemaName                   string        `json:"schemaName,omitempty"`
+	PreviousSchemaName           string        `json:"previousSchemaName,omitempty"`
+	Description                  string        `json:"description,omitempty"`
+	PreviousDescription          string        `json:"previousDescription,omitempty"`
+	Changes                      interface{}   `json:"changes,omitempty"`
+	ChangeSummary                ChangeSummary `json:"changeSummary"`
+	ComparisonInternalDocumentId string        `json:"comparisonInternalDocumentId,omitempty"`
 }
 
 type PackageMcpContractsFile struct {
@@ -226,14 +266,16 @@ type McpContractSearch struct {
 }
 
 type PackageMcpContract struct {
-	McpEntityId string                 `json:"mcpEntityId"`
-	Kind        string                 `json:"kind"`
-	Name        string                 `json:"name,omitempty"`
-	McpEndpoint string                 `json:"mcpEndpoint"`
-	Search      *McpContractSearch     `json:"search,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	DocumentId  string                 `json:"documentId,omitempty"`
-	DataHash    string                 `json:"dataHash,omitempty"`
+	McpEntityId               string                 `json:"mcpEntityId"`
+	Kind                      string                 `json:"kind"`
+	Name                      string                 `json:"name,omitempty"`
+	Description               string                 `json:"description,omitempty"`
+	McpEndpoint               string                 `json:"mcpEndpoint"`
+	Search                    *McpContractSearch     `json:"search,omitempty"`
+	Metadata                  map[string]interface{} `json:"metadata,omitempty"`
+	DocumentId                string                 `json:"documentId,omitempty"`
+	VersionInternalDocumentId string                 `json:"versionInternalDocumentId,omitempty"`
+	DataHash                  string                 `json:"dataHash,omitempty"`
 }
 
 type VersionComparison struct {

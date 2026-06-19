@@ -11,21 +11,24 @@ import (
 )
 
 type DDLContractService interface {
-	ListDdlTables(packageId, versionName, kind, textFilter string, limit, offset int) (*view.DdlTableListView, error)
-	GetDdlTable(packageId, versionName, ddlTableId string, includeData bool) (*view.DdlTableView, error)
-	GetDdlTableChanges(packageId, versionName, ddlTableId string) (*view.DdlTableChangesView, error)
-	GetVersionSummary(packageId, versionName string) (*view.VersionDDLContractsSummary, error)
+	ListDdlEntities(packageId, versionName, textFilter string, limit, offset int) (*view.DdlEntityListView, error)
+	GetDdlEntity(packageId, versionName, ddlEntityId string, includeData bool) (*view.DdlEntityDetailView, error)
+	GetDdlEntityChanges(packageId, versionName, ddlEntityId, previousVersion, previousVersionPackageId string, severities []string) (*view.DdlEntityChangesView, error)
+	GetDdlEntityChangesSummary(packageId, versionName, ddlEntityId, previousVersion, previousVersionPackageId string) (*view.ChangeSummary, error)
+	GetChangedDdlEntities(packageId, versionName string, req view.DdlChangesReq) (*view.DdlChangedEntitiesView, error)
+	GetVersionSummary(packageId, versionName string) (*view.DdlVersionContractSummary, error)
 	GetChangesSummary(comparisonId string) (*view.DDLContractsSummary, error)
 	GlobalSearchForDDL(searchReq view.SearchQueryReq) (*view.SearchResult, error)
 }
 
-func NewDDLContractService(ddlRepo repository.DDLContractRepository, publishedRepo repository.PublishedRepository) DDLContractService {
-	return &ddlContractServiceImpl{ddlRepo: ddlRepo, publishedRepo: publishedRepo}
+func NewDDLContractService(ddlRepo repository.DDLContractRepository, publishedRepo repository.PublishedRepository, packageVersionEnrichmentService PackageVersionEnrichmentService) DDLContractService {
+	return &ddlContractServiceImpl{ddlRepo: ddlRepo, publishedRepo: publishedRepo, packageVersionEnrichmentService: packageVersionEnrichmentService}
 }
 
 type ddlContractServiceImpl struct {
-	ddlRepo       repository.DDLContractRepository
-	publishedRepo repository.PublishedRepository
+	ddlRepo                         repository.DDLContractRepository
+	publishedRepo                   repository.PublishedRepository
+	packageVersionEnrichmentService PackageVersionEnrichmentService
 }
 
 func (s *ddlContractServiceImpl) resolveRevision(packageId, versionName string) (string, int, error) {
@@ -44,28 +47,86 @@ func (s *ddlContractServiceImpl) resolveRevision(packageId, versionName string) 
 	return version.Version, version.Revision, nil
 }
 
-func (s *ddlContractServiceImpl) ListDdlTables(packageId, versionName, kind, textFilter string, limit, offset int) (*view.DdlTableListView, error) {
+// resolveComparison resolves the comparison id between the requested version and a previous version,
+// mirroring OperationService.GetVersionChanges. previousVersion/previousVersionPackageId default to
+// the version's own recorded previous version when omitted.
+func (s *ddlContractServiceImpl) resolveComparison(packageId, versionName, previousVersion, previousVersionPackageId string) (comparisonId, previousVersionRefKey, previousVersionPackageIdResolved string, err error) {
+	versionEnt, err := s.publishedRepo.GetVersion(packageId, versionName)
+	if err != nil {
+		return "", "", "", err
+	}
+	if versionEnt == nil {
+		return "", "", "", &exception.CustomError{
+			Status:  http.StatusNotFound,
+			Code:    exception.PublishedVersionNotFound,
+			Message: exception.PublishedVersionNotFoundMsg,
+			Params:  map[string]interface{}{"version": versionName},
+		}
+	}
+	if previousVersion == "" || previousVersionPackageId == "" {
+		if versionEnt.PreviousVersion == "" {
+			return "", "", "", &exception.CustomError{
+				Status:  http.StatusNotFound,
+				Code:    exception.NoPreviousVersion,
+				Message: exception.NoPreviousVersionMsg,
+				Params:  map[string]interface{}{"version": versionName},
+			}
+		}
+		previousVersion = versionEnt.PreviousVersion
+		if versionEnt.PreviousVersionPackageId != "" {
+			previousVersionPackageId = versionEnt.PreviousVersionPackageId
+		} else {
+			previousVersionPackageId = packageId
+		}
+	}
+	previousVersionEnt, err := s.publishedRepo.GetVersion(previousVersionPackageId, previousVersion)
+	if err != nil {
+		return "", "", "", err
+	}
+	if previousVersionEnt == nil {
+		return "", "", "", &exception.CustomError{
+			Status:  http.StatusNotFound,
+			Code:    exception.PublishedVersionNotFound,
+			Message: exception.PublishedVersionNotFoundMsg,
+			Params:  map[string]interface{}{"version": previousVersion, "packageId": previousVersionPackageId},
+		}
+	}
+	comparisonId = view.MakeVersionComparisonId(
+		versionEnt.PackageId, versionEnt.Version, versionEnt.Revision,
+		previousVersionEnt.PackageId, previousVersionEnt.Version, previousVersionEnt.Revision,
+	)
+	return comparisonId, view.MakeVersionRefKey(previousVersionEnt.Version, previousVersionEnt.Revision), previousVersionEnt.PackageId, nil
+}
+
+func (s *ddlContractServiceImpl) ListDdlEntities(packageId, versionName, textFilter string, limit, offset int) (*view.DdlEntityListView, error) {
 	version, revision, err := s.resolveRevision(packageId, versionName)
 	if err != nil {
 		return nil, err
 	}
-	entities, err := s.ddlRepo.ListDdlTables(packageId, version, revision, kind, textFilter, limit, offset)
+	entities, err := s.ddlRepo.ListDdlEntities(packageId, version, revision, textFilter, limit, offset)
 	if err != nil {
 		return nil, err
 	}
-	result := &view.DdlTableListView{Tables: make([]interface{}, 0, len(entities))}
+	result := &view.DdlEntityListView{Entities: make([]interface{}, 0, len(entities))}
+	packageVersions := make(map[string][]string)
 	for _, ent := range entities {
-		result.Tables = append(result.Tables, entity.MakeDdlTableView(ent, nil))
+		result.Entities = append(result.Entities, entity.MakeDdlContractEntityView(ent, nil))
+		packageVersions[ent.PackageId] = append(packageVersions[ent.PackageId], view.MakeVersionRefKey(ent.Version, ent.Revision))
 	}
+	packagesRefs, err := s.packageVersionEnrichmentService.GetPackageVersionRefsMap(packageVersions)
+	if err != nil {
+		return nil, err
+	}
+	result.Packages = packagesRefs
 	return result, nil
 }
 
-func (s *ddlContractServiceImpl) GetDdlTable(packageId, versionName, ddlTableId string, includeData bool) (*view.DdlTableView, error) {
+func (s *ddlContractServiceImpl) GetDdlEntity(packageId, versionName, ddlEntityId string, includeData bool) (*view.DdlEntityDetailView, error) {
 	version, revision, err := s.resolveRevision(packageId, versionName)
 	if err != nil {
 		return nil, err
 	}
-	ent, data, err := s.ddlRepo.GetDdlTable(packageId, version, revision, ddlTableId, includeData)
+	ent, data, err := s.ddlRepo.GetDdlEntity(packageId, version, revision, ddlEntityId, includeData)
 	if err != nil {
 		return nil, err
 	}
@@ -73,24 +134,32 @@ func (s *ddlContractServiceImpl) GetDdlTable(packageId, versionName, ddlTableId 
 		return nil, &exception.CustomError{
 			Status:  http.StatusNotFound,
 			Code:    exception.PublishedVersionNotFound,
-			Message: "DDL table not found",
-			Params:  map[string]interface{}{"ddlTableId": ddlTableId},
+			Message: "DDL entity not found",
+			Params:  map[string]interface{}{"ddlEntityId": ddlEntityId},
 		}
 	}
-	return entity.MakeDdlTableView(ent, data), nil
-}
-
-func (s *ddlContractServiceImpl) GetDdlTableChanges(packageId, versionName, ddlTableId string) (*view.DdlTableChangesView, error) {
-	version, revision, err := s.resolveRevision(packageId, versionName)
+	packageVersions := map[string][]string{ent.PackageId: {view.MakeVersionRefKey(ent.Version, ent.Revision)}}
+	packagesRefs, err := s.packageVersionEnrichmentService.GetPackageVersionRefsMap(packageVersions)
 	if err != nil {
 		return nil, err
 	}
-	ent, err := s.ddlRepo.GetDdlTableChanges(packageId, version, revision, ddlTableId)
+	return &view.DdlEntityDetailView{
+		DdlContractEntityView: *entity.MakeDdlContractEntityView(ent, data),
+		Packages:              packagesRefs,
+	}, nil
+}
+
+func (s *ddlContractServiceImpl) GetDdlEntityChanges(packageId, versionName, ddlEntityId, previousVersion, previousVersionPackageId string, severities []string) (*view.DdlEntityChangesView, error) {
+	comparisonId, _, _, err := s.resolveComparison(packageId, versionName, previousVersion, previousVersionPackageId)
+	if err != nil {
+		return nil, err
+	}
+	ent, err := s.ddlRepo.GetDdlEntityChanges(comparisonId, ddlEntityId, severities)
 	if err != nil {
 		return nil, err
 	}
 	if ent == nil {
-		return &view.DdlTableChangesView{Changes: []interface{}{}}, nil
+		return &view.DdlEntityChangesView{Changes: []interface{}{}}, nil
 	}
 	var changes []interface{}
 	if ent.Changes != nil {
@@ -98,45 +167,116 @@ func (s *ddlContractServiceImpl) GetDdlTableChanges(packageId, versionName, ddlT
 			changes = list
 		}
 	}
-	return &view.DdlTableChangesView{
-		Changes:        changes,
-		ChangesSummary: ent.ChangesSummary,
-	}, nil
+	if changes == nil {
+		changes = []interface{}{}
+	}
+	return &view.DdlEntityChangesView{Changes: changes}, nil
 }
 
-func (s *ddlContractServiceImpl) GetVersionSummary(packageId, versionName string) (*view.VersionDDLContractsSummary, error) {
-	version, revision, err := s.resolveRevision(packageId, versionName)
+func (s *ddlContractServiceImpl) GetDdlEntityChangesSummary(packageId, versionName, ddlEntityId, previousVersion, previousVersionPackageId string) (*view.ChangeSummary, error) {
+	comparisonId, _, _, err := s.resolveComparison(packageId, versionName, previousVersion, previousVersionPackageId)
 	if err != nil {
 		return nil, err
 	}
-	counts, err := s.ddlRepo.GetEntitiesCount(packageId, version, revision)
+	return s.ddlRepo.GetDdlEntityChangesSummary(comparisonId, ddlEntityId)
+}
+
+func (s *ddlContractServiceImpl) GetChangedDdlEntities(packageId, versionName string, req view.DdlChangesReq) (*view.DdlChangedEntitiesView, error) {
+	comparisonId, previousVersionRefKey, previousVersionPackageId, err := s.resolveComparison(packageId, versionName, req.PreviousVersion, req.PreviousVersionPackageId)
 	if err != nil {
 		return nil, err
 	}
-	if len(counts) == 0 {
+	entities, err := s.ddlRepo.ListChangedDdlEntities(comparisonId, req.RefPackageId, req.Severities, req.TextFilter, req.Limit, req.Offset)
+	if err != nil {
+		return nil, err
+	}
+	result := &view.DdlChangedEntitiesView{
+		PreviousVersion:          previousVersionRefKey,
+		PreviousVersionPackageId: previousVersionPackageId,
+		Entities:                 make([]interface{}, 0, len(entities)),
+	}
+	packageVersions := make(map[string][]string)
+	for _, ent := range entities {
+		result.Entities = append(result.Entities, entity.MakeDdlChangedEntityView(ent))
+		if ent.DdlEntityId != "" {
+			packageVersions[ent.PackageId] = append(packageVersions[ent.PackageId], view.MakeVersionRefKey(ent.Version, ent.Revision))
+		}
+		if ent.PreviousDdlEntityId != "" {
+			packageVersions[ent.PreviousPackageId] = append(packageVersions[ent.PreviousPackageId], view.MakeVersionRefKey(ent.PreviousVersion, ent.PreviousRevision))
+		}
+	}
+	packagesRefs, err := s.packageVersionEnrichmentService.GetPackageVersionRefsMap(packageVersions)
+	if err != nil {
+		return nil, err
+	}
+	result.Packages = packagesRefs
+	return result, nil
+}
+
+func (s *ddlContractServiceImpl) GetVersionSummary(packageId, versionName string) (*view.DdlVersionContractSummary, error) {
+	versionEnt, err := s.publishedRepo.GetVersion(packageId, versionName)
+	if err != nil {
+		return nil, err
+	}
+	if versionEnt == nil {
+		return nil, &exception.CustomError{
+			Status:  http.StatusNotFound,
+			Code:    exception.PublishedVersionNotFound,
+			Message: exception.PublishedVersionNotFoundMsg,
+			Params:  map[string]interface{}{"version": versionName},
+		}
+	}
+	if versionEnt.PreviousVersion == "" {
 		return nil, nil
 	}
-	summary := &view.VersionDDLContractsSummary{}
-	for _, c := range counts {
-		switch c.Kind {
-		case view.DdlKindTable:
-			summary.Tables = c.Count
-		case view.DdlKindView:
-			summary.Views = c.Count
-		}
+	previousPackageId := versionEnt.PreviousVersionPackageId
+	if previousPackageId == "" {
+		previousPackageId = packageId
+	}
+	previousVersionEnt, err := s.publishedRepo.GetVersion(previousPackageId, versionEnt.PreviousVersion)
+	if err != nil {
+		return nil, err
+	}
+	if previousVersionEnt == nil {
+		return nil, nil
+	}
+	comparisonId := view.MakeVersionComparisonId(
+		versionEnt.PackageId, versionEnt.Version, versionEnt.Revision,
+		previousVersionEnt.PackageId, previousVersionEnt.Version, previousVersionEnt.Revision,
+	)
+	changesSummary, numberOfImpactedEntities, err := s.ddlRepo.GetComparisonSummary(comparisonId)
+	if err != nil {
+		return nil, err
+	}
+	if changesSummary == nil && numberOfImpactedEntities == nil {
+		return nil, nil
+	}
+	summary := &view.DdlVersionContractSummary{}
+	if changesSummary != nil {
+		summary.ChangesSummary = *changesSummary
+	}
+	if numberOfImpactedEntities != nil {
+		summary.NumberOfImpactedEntities = *numberOfImpactedEntities
 	}
 	return summary, nil
 }
 
 func (s *ddlContractServiceImpl) GetChangesSummary(comparisonId string) (*view.DDLContractsSummary, error) {
-	changesSummary, err := s.ddlRepo.GetComparisonSummary(comparisonId)
+	changesSummary, numberOfImpactedEntities, err := s.ddlRepo.GetComparisonSummary(comparisonId)
 	if err != nil {
 		return nil, err
 	}
-	if changesSummary == nil {
+	if changesSummary == nil && numberOfImpactedEntities == nil {
 		return nil, nil
 	}
-	return &view.DDLContractsSummary{ChangesSummary: *changesSummary}, nil
+	result := &view.DDLContractsSummary{}
+	if changesSummary != nil {
+		result.ChangesSummary = *changesSummary
+	}
+	if numberOfImpactedEntities != nil {
+		result.NumberOfImpactedEntities = *numberOfImpactedEntities
+	}
+	return result, nil
 }
 
 func (s *ddlContractServiceImpl) GlobalSearchForDDL(searchReq view.SearchQueryReq) (*view.SearchResult, error) {

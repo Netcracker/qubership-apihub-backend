@@ -1,27 +1,30 @@
 package view
 
 type McpEntityListView struct {
-	Entities []interface{} `json:"entities"`
+	Entities []interface{}                `json:"entities"`
+	Packages map[string]PackageVersionRef `json:"packages,omitempty"`
 }
 
 type McpEntityView struct {
-	EntityId    string      `json:"entityId"`
-	Kind        string      `json:"kind"`
-	Name        string      `json:"name,omitempty"`
-	McpEndpoint string      `json:"mcpEndpoint"`
-	DocumentId  string      `json:"documentId,omitempty"`
-	PackageRef  string      `json:"packageRef,omitempty"`
-	Metadata    interface{} `json:"metadata,omitempty"`
+	McpEntityId               string `json:"mcpEntityId"`
+	Kind                      string `json:"kind"`
+	Title                     string `json:"title"`
+	Description               string `json:"description,omitempty"`
+	McpEndpoint               string `json:"mcpEndpoint"`
+	DocumentId                string `json:"documentId"`
+	VersionInternalDocumentId string `json:"versionInternalDocumentId"`
+	PackageRef                string `json:"packageRef,omitempty"`
 }
 
 type McpEntityDetailView struct {
 	McpEntityView
-	Data interface{} `json:"data,omitempty"`
+	Data     interface{}                  `json:"data"`
+	Packages map[string]PackageVersionRef `json:"packages,omitempty"`
 }
 
-const McpKindInit     = "init"
-const McpKindTool     = "tool"
-const McpKindPrompt   = "prompt"
+const McpKindInit = "init"
+const McpKindTool = "tool"
+const McpKindPrompt = "prompt"
 const McpKindResource = "resource"
 
 type McpEntitySearchResult struct {
@@ -38,7 +41,7 @@ type McpEntitySearchResult struct {
 
 // URL segment → kind mapping
 var McpEntitySegmentToKind = map[string]string{
-	"init":      McpKindInit,
+	"inits":     McpKindInit,
 	"tools":     McpKindTool,
 	"prompts":   McpKindPrompt,
 	"resources": McpKindResource,

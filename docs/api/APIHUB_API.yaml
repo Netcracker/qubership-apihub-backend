@@ -3230,7 +3230,7 @@ paths:
                                   operationsCount:
                                     type: number
                                     description: Number of operations in which the apiAudience was changed from previousAudience to currentAudience
-                      contracts:
+                      contractsSummary:
                         $ref: "#/components/schemas/VersionContractsSummary"
                   - type: object
                     properties:
@@ -3361,7 +3361,7 @@ paths:
                         type: boolean
                         description: true - operation comparison cache is not stored in database
                         default: false
-                      contracts:
+                      contractsChangesSummary:
                         $ref: "#/components/schemas/VersionComparisonContractsSummary"
                   - type: object
                     title: dashboardComparison
@@ -3417,7 +3417,7 @@ paths:
                               type: boolean
                               description: true - operation comparison cache is not stored in database
                               default: false
-                            contracts:
+                            contractsChangesSummary:
                               $ref: "#/components/schemas/VersionComparisonContractsSummary"
                       packages:
                         description: |
@@ -6049,25 +6049,20 @@ paths:
               examples:
                 InternalServerError:
                   $ref: "#/components/examples/InternalServerError"
-  "/api/v1/packages/{packageId}/versions/{version}/ddl/tables":
+  "/api/v1/packages/{packageId}/versions/{version}/ddl/entities":
     get:
       tags:
         - Contracts
-      summary: Get DDL tables
+      summary: Get DDL entities
       description: |
-        Get DDL contract entities for a package version. In v1 only `table` kind entities are emitted; the `kind` filter is accepted for forward compatibility and will return results when views are introduced.
-      operationId: getPackageVersionDdlTables
+        Get DDL contract entities for a package version. Only table entities are supported now; views are not yet exposed.
+      operationId: getPackageVersionDdlEntities
       parameters:
         - $ref: "#/components/parameters/packageId"
         - $ref: "#/components/parameters/version"
-        - name: kind
-          in: query
-          description: Filter DDL contract entities by kind.
-          schema:
-            $ref: "#/components/schemas/DdlContractKind"
         - name: textFilter
           in: query
-          description: Filter by table or view name (case-insensitive substring match).
+          description: Filter by entity name or description (case-insensitive substring match).
           schema:
             type: string
         - $ref: "#/components/parameters/limit"
@@ -6086,10 +6081,18 @@ paths:
               schema:
                 type: object
                 properties:
-                  tables:
+                  entities:
                     type: array
                     items:
-                      $ref: "#/components/schemas/DdlTableContract"
+                      $ref: "#/components/schemas/DdlContractEntity"
+                  packages:
+                    description: |
+                      A mapped list of the packageId and version name concatenation with At sign to the package objects.
+                    type: object
+                    additionalProperties:
+                      allOf:
+                        - $ref: "#/components/schemas/ReferencedPackage"
+                        - type: object
         "301":
           description: Moved Permanently
           headers:
@@ -6132,20 +6135,20 @@ paths:
               examples:
                 InternalServerError:
                   $ref: "#/components/examples/InternalServerError"
-  "/api/v1/packages/{packageId}/versions/{version}/ddl/tables/{tableId}":
+  "/api/v1/packages/{packageId}/versions/{version}/ddl/entities/{ddlEntityId}":
     get:
       tags:
         - Contracts
-      summary: Get DDL table or view details
+      summary: Get DDL entity details
       description: Get DDL contract entity details, including the structural payload.
-      operationId: getPackageVersionDdlTable
+      operationId: getPackageVersionDdlEntity
       parameters:
         - $ref: "#/components/parameters/packageId"
         - $ref: "#/components/parameters/version"
-        - name: tableId
+        - name: ddlEntityId
           in: path
           required: true
-          description: DDL table/view logical identifier. Clients must percent-encode unsafe characters.
+          description: DDL entity logical identifier. Clients must percent-encode unsafe characters.
           schema:
             type: string
             example: "public.users"
@@ -6156,12 +6159,22 @@ paths:
             application/json:
               schema:
                 allOf:
-                  - $ref: "#/components/schemas/DdlTableContract"
+                  - $ref: "#/components/schemas/DdlContractEntity"
                   - type: object
+                    required:
+                      - data
                     properties:
                       data:
-                        description: Full structural definition of the DDL table or view.
+                        description: Raw SQL definition of the DDL entity.
+                        type: string
+                      packages:
+                        description: |
+                          A mapped list of the packageId and version name concatenation with At sign to the package objects.
                         type: object
+                        additionalProperties:
+                          allOf:
+                            - $ref: "#/components/schemas/ReferencedPackage"
+                            - type: object
         "301":
           description: Moved Permanently
           headers:
@@ -6195,24 +6208,40 @@ paths:
               examples:
                 InternalServerError:
                   $ref: "#/components/examples/InternalServerError"
-  "/api/v1/packages/{packageId}/versions/{version}/ddl/tables/{tableId}/changes":
+  "/api/v1/packages/{packageId}/versions/{version}/ddl/entities/{ddlEntityId}/changes":
     get:
       tags:
         - Contracts
         - Changes
-      summary: Get DDL table changes
-      description: Get per-entity DDL contract changes between current and previous published package versions. In v1 only table entities are diffed.
-      operationId: getPackageVersionDdlTableChanges
+      summary: Get DDL entity changes
+      description: Get per-entity DDL contract changes between current and previous published package versions. Only table entities are diffed now.
+      operationId: getPackageVersionDdlEntityChanges
       parameters:
         - $ref: "#/components/parameters/packageId"
         - $ref: "#/components/parameters/version"
-        - name: tableId
+        - name: ddlEntityId
           in: path
           required: true
-          description: DDL table/view logical identifier. Clients must percent-encode unsafe characters.
+          description: DDL entity logical identifier. Clients must percent-encode unsafe characters.
           schema:
             type: string
             example: "public.users"
+        - name: previousVersion
+          in: query
+          description: Previous version name to compare against.
+          schema:
+            type: string
+        - name: previousVersionPackageId
+          in: query
+          description: Package ID of the previous version, if it belongs to a different package.
+          schema:
+            type: string
+        - name: previousVersionOperationId
+          in: query
+          description: Identifier of the matching entity in the previous version, if it differs.
+          schema:
+            type: string
+        - $ref: "#/components/parameters/severity"
       responses:
         "200":
           description: Success
@@ -6226,8 +6255,332 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/SingleOperationChange"
-                  changesSummary:
-                    $ref: "#/components/schemas/ChangeSummary"
+        "301":
+          description: Moved Permanently
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v1/packages/{packageId}/versions/{version}/ddl/changes":
+    get:
+      tags:
+        - Contracts
+        - Changes
+      summary: Get list of changed DDL entities
+      description: Get DDL contract changes between two compared package versions with details by entity. Only table entities are diffed now.
+      operationId: getPackageVersionDdlChanges
+      parameters:
+        - $ref: "#/components/parameters/packageId"
+        - $ref: "#/components/parameters/version"
+        - $ref: "#/components/parameters/severity"
+        - name: previousVersion
+          in: query
+          description: |
+            Package previous version.\
+            If both previousVersion and previousVersionPackageId are not specified, then previous **release** version will be used.
+          schema:
+            type: string
+            example: "2022.3"
+        - name: previousVersionPackageId
+          in: query
+          description: |
+            Package unique identifier for previous version.\
+            If both previousVersion and previousVersionPackageId are not specified, then previous **release** version will be used.
+          schema:
+            type: string
+        - name: refPackageId
+          in: query
+          description: Filter by package id of ref package and previous ref package.
+          schema:
+            type: string
+        - name: textFilter
+          in: query
+          description: Filter by entity name or description (case-insensitive substring match).
+          schema:
+            type: string
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/page"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - entities
+                properties:
+                  previousVersion:
+                    description: Name of the previous published version. The <version>@<revision> mask is used to return the revision number.
+                    type: string
+                    example: "2022.2@5"
+                  previousVersionPackageId:
+                    description: Previous release version package id.
+                    type: string
+                  entities:
+                    type: array
+                    items:
+                      type: object
+                      required:
+                        - changeSummary
+                        - comparisonInternalDocumentId
+                      properties:
+                        changeSummary:
+                          $ref: "#/components/schemas/ChangeSummary"
+                        comparisonInternalDocumentId:
+                          description: Unique string identifier of the internal merged document where diffs between the entity and the previous entity are present.
+                          type: string
+                        ddlEntityData:
+                          $ref: "#/components/schemas/DdlChangedEntityData"
+                        previousDdlEntityData:
+                          $ref: "#/components/schemas/DdlChangedEntityData"
+                  packages:
+                    description: |
+                      A mapped list of the packageId and version name concatenation with At sign to the package objects.
+                    type: object
+                    additionalProperties:
+                      allOf:
+                        - $ref: "#/components/schemas/ReferencedPackage"
+                        - type: object
+        "301":
+          description: Moved Permanently
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v1/packages/{packageId}/versions/{version}/ddl/entities/{ddlEntityId}/changes/summary":
+    get:
+      tags:
+        - Contracts
+        - Changes
+      summary: Get single DDL entity changes summary
+      description: Get the change summary for a single DDL entity between current and previous published package versions.
+      operationId: getPackageVersionDdlEntityChangesSummary
+      parameters:
+        - $ref: "#/components/parameters/packageId"
+        - $ref: "#/components/parameters/version"
+        - name: ddlEntityId
+          in: path
+          required: true
+          description: DDL entity logical identifier. Clients must percent-encode unsafe characters.
+          schema:
+            type: string
+            example: "public.users"
+        - name: previousVersion
+          in: query
+          description: Previous version name to compare against.
+          schema:
+            type: string
+        - name: previousVersionPackageId
+          in: query
+          description: Package ID of the previous version, if it belongs to a different package.
+          schema:
+            type: string
+        - name: refPackageId
+          in: query
+          description: Filter by package id of ref package and previous ref package.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChangeSummary"
+        "301":
+          description: Moved Permanently
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v1/packages/{packageId}/versions/{version}/ddl/export/entities":
+    get:
+      tags:
+        - Contracts
+      summary: Export DDL entities to xlsx file
+      description: Export DDL contract entities of a package version to an xlsx file.
+      operationId: exportPackageVersionDdlEntities
+      parameters:
+        - $ref: "#/components/parameters/packageId"
+        - $ref: "#/components/parameters/version"
+        - name: refPackageId
+          in: query
+          description: Filter by package id of ref package.
+          schema:
+            type: string
+        - name: textFilter
+          in: query
+          description: Filter by entity name or description (case-insensitive substring match).
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/xlsx:
+              schema:
+                type: string
+                format: binary
+                description: xlsx file to download
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                description: xlsx file name
+                example: attachment; filename="DDLEntities_package.id_version.xlsx"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v1/packages/{packageId}/versions/{version}/ddl/export/changes":
+    get:
+      tags:
+        - Contracts
+        - Changes
+      summary: Export DDL changes to xlsx file
+      description: Export DDL contract changes between two compared package versions to an xlsx file.
+      operationId: exportPackageVersionDdlChanges
+      parameters:
+        - $ref: "#/components/parameters/packageId"
+        - $ref: "#/components/parameters/version"
+        - $ref: "#/components/parameters/severity"
+        - name: previousVersion
+          in: query
+          description: |
+            Package previous version.\
+            If both previousVersion and previousVersionPackageId are not specified, then previous **release** version will be used.
+          schema:
+            type: string
+        - name: previousVersionPackageId
+          in: query
+          description: Package unique identifier for previous version.
+          schema:
+            type: string
+        - name: refPackageId
+          in: query
+          description: Filter by package id of ref package and previous ref package.
+          schema:
+            type: string
+        - name: textFilter
+          in: query
+          description: Filter by entity name or description (case-insensitive substring match).
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/xlsx:
+              schema:
+                type: string
+                format: binary
+                description: xlsx file to download
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                description: xlsx file name
+                example: attachment; filename="DDLChanges_package.id_version.xlsx"
         "301":
           description: Moved Permanently
           headers:
@@ -6278,13 +6631,18 @@ paths:
           schema:
             type: string
             enum:
-              - init
+              - inits
               - tools
               - prompts
               - resources
+        - name: mcpEndpoint
+          in: query
+          description: Filter MCP entities by MCP endpoint URL.
+          schema:
+            type: string
         - name: textFilter
           in: query
-          description: Filter by MCP entity ID (case-insensitive substring match).
+          description: Filter by MCP entity title or description (case-insensitive substring match).
           schema:
             type: string
         - $ref: "#/components/parameters/limit"
@@ -6306,7 +6664,15 @@ paths:
                   entities:
                     type: array
                     items:
-                      $ref: "#/components/schemas/McpContract"
+                      $ref: "#/components/schemas/McpContractEntity"
+                  packages:
+                    description: |
+                      A mapped list of the packageId and version name concatenation with At sign to the package objects.
+                    type: object
+                    additionalProperties:
+                      allOf:
+                        - $ref: "#/components/schemas/ReferencedPackage"
+                        - type: object
         "301":
           description: Moved Permanently
           headers:
@@ -6349,7 +6715,7 @@ paths:
               examples:
                 InternalServerError:
                   $ref: "#/components/examples/InternalServerError"
-  "/api/v1/packages/{packageId}/versions/{version}/mcp/{entity}/{entityId}":
+  "/api/v1/packages/{packageId}/versions/{version}/mcp/{entity}/{mcpEntityId}":
     get:
       tags:
         - Contracts
@@ -6366,14 +6732,14 @@ paths:
           schema:
             type: string
             enum:
-              - init
+              - inits
               - tools
               - prompts
               - resources
-        - name: entityId
+        - name: mcpEntityId
           in: path
           required: true
-          description: MCP logical entity identifier (`entityId` from the list response). Clients must percent-encode unsafe characters.
+          description: MCP logical entity identifier (`mcpEntityId` from the list response). Clients must percent-encode unsafe characters.
           schema:
             type: string
             example: "https___api_example_com_mcp.tool.get_forecast"
@@ -6384,12 +6750,22 @@ paths:
             application/json:
               schema:
                 allOf:
-                  - $ref: "#/components/schemas/McpContract"
+                  - $ref: "#/components/schemas/McpContractEntity"
                   - type: object
+                    required:
+                      - data
                     properties:
                       data:
                         description: Original MCP discovery entity payload.
                         type: object
+                      packages:
+                        description: |
+                          A mapped list of the packageId and version name concatenation with At sign to the package objects.
+                        type: object
+                        additionalProperties:
+                          allOf:
+                            - $ref: "#/components/schemas/ReferencedPackage"
+                            - type: object
         "301":
           description: Moved Permanently
           headers:
@@ -6401,6 +6777,83 @@ paths:
               schema:
                 type: string
               description: New packageId of moved package
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples: {}
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v1/packages/{packageId}/versions/{version}/mcp/export/{entity}":
+    get:
+      tags:
+        - Contracts
+      summary: Export MCP contract entities to xlsx file
+      description: Export MCP discovery contract entities of a package version to an xlsx file.
+      operationId: exportPackageVersionMcpEntities
+      parameters:
+        - $ref: "#/components/parameters/packageId"
+        - $ref: "#/components/parameters/version"
+        - name: entity
+          in: path
+          required: true
+          description: MCP entity collection to export.
+          schema:
+            type: string
+            enum:
+              - inits
+              - tools
+              - prompts
+              - resources
+        - name: refPackageId
+          in: query
+          description: Filter by package id of ref package.
+          schema:
+            type: string
+        - name: textFilter
+          in: query
+          description: Filter by MCP entity title or description (case-insensitive substring match).
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/xlsx:
+              schema:
+                type: string
+                format: binary
+                description: xlsx file to download
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                description: xlsx file name
+                example: attachment; filename="MCPEntities_package.id_version.xlsx"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                IncorrectInputParams:
+                  $ref: "#/components/examples/IncorrectInputParameters"
         "401":
           description: Unauthorized
           content:
@@ -8181,6 +8634,16 @@ paths:
         - $ref: "#/components/parameters/limit"
         - $ref: "#/components/parameters/page"
         - $ref: "#/components/parameters/apiTypeQueryParam"
+        - name: contractType
+          in: query
+          description: |
+            Filter documents by contract type. Mutually exclusive with `apiType` —
+            if both `apiType` and `contractType` are set, 400 is returned.
+          schema:
+            type: string
+            enum:
+              - ddl
+              - mcp
         - name: skipRefs
           in: query
           description: |
@@ -10498,56 +10961,89 @@ components:
         - tool
         - prompt
         - resource
-    DdlTableContract:
-      description: DDL table or view contract entity.
+    DdlContractEntity:
+      description: DDL contract entity. Only tables are supported now; views are not yet exposed.
       type: object
       required:
-        - tableId
-        - kind
+        - ddlEntityId
+        - schemaName
+        - name
+        - documentId
+        - versionInternalDocumentId
       properties:
-        tableId:
-          description: DDL table/view logical identifier.
+        ddlEntityId:
+          description: DDL entity logical identifier.
           type: string
           example: "public.users"
-        kind:
-          $ref: "#/components/schemas/DdlContractKind"
         schemaName:
           description: SQL schema name.
           type: string
           example: "public"
-        tableName:
-          description: Unqualified table or view name.
+        name:
+          description: Unqualified entity name.
           type: string
           example: "users"
+        description:
+          description: DDL entity description.
+          type: string
         documentId:
           description: Source document identifier.
           type: string
           example: "schema-sql"
+        versionInternalDocumentId:
+          description: Version-internal source document identifier.
+          type: string
         packageRef:
-          description: Package and version reference key.
+          description: Package and version reference key into the `packages` map.
           type: string
           example: "QS.CloudQSS.CPQ.Q-TMF@2023.2"
-        metadata:
-          description: File-level metadata from the publish config. Typically empty for DDL files.
-          type: object
-    McpContract:
+    DdlChangedEntityData:
+      description: DDL entity snapshot used inside the changed-entities response.
+      type: object
+      properties:
+        ddlEntityId:
+          description: DDL entity logical identifier.
+          type: string
+          example: "public.users"
+        kind:
+          $ref: "#/components/schemas/DdlContractKind"
+        name:
+          description: Unqualified entity name.
+          type: string
+        schemaName:
+          description: SQL schema name.
+          type: string
+        description:
+          description: DDL entity description.
+          type: string
+        packageRef:
+          description: Package and version reference key into the `packages` map.
+          type: string
+          example: "QS.CloudQSS.CPQ.Q-TMF@2023.2"
+    McpContractEntity:
       description: MCP discovery contract entity.
       type: object
       required:
-        - entityId
+        - mcpEntityId
         - kind
+        - title
         - mcpEndpoint
+        - documentId
+        - versionInternalDocumentId
       properties:
-        entityId:
+        mcpEntityId:
           description: MCP contract logical identifier. Format is `{safeEndpoint}.{kind}.{name}` where non-alphanumeric characters in the endpoint are replaced with underscores.
           type: string
           example: "https___api_example_com_mcp.tool.get_forecast"
         kind:
           $ref: "#/components/schemas/McpContractKind"
-        name:
-          description: MCP entity name. For tools, prompts and resources this is the name from the MCP spec. For init entities the value is always "initialize".
+        title:
+          description: MCP entity title. For tools, prompts and resources this is the name from the MCP spec. For init entities the value is always "initialize".
           type: string
           example: "get_forecast"
+        description:
+          description: MCP entity description.
+          type: string
         mcpEndpoint:
           description: MCP endpoint URL from file-level publish metadata.
           type: string
@@ -10556,13 +11052,13 @@ components:
           description: Source document identifier.
           type: string
           example: "tools-forecast-json"
+        versionInternalDocumentId:
+          description: Version-internal source document identifier.
+          type: string
         packageRef:
-          description: Package and version reference key.
+          description: Package and version reference key into the `packages` map.
           type: string
           example: "QS.CloudQSS.CPQ.Q-TMF@2023.2"
-        metadata:
-          description: Kind-specific MCP discovery metadata.
-          type: object
     VersionComparisonContractsSummary:
       description: Contract comparison summary. MCP is omitted in v1 because MCP discovery entities are not diffed.
       type: object
@@ -10572,34 +11068,34 @@ components:
           properties:
             changesSummary:
               $ref: "#/components/schemas/ChangeSummary"
+            numberOfImpactedEntities:
+              $ref: "#/components/schemas/ChangeSummary"
     VersionContractsSummary:
-      description: Counts of contract entities published in a package version.
+      description: Summary of contract entities published in a package version, keyed by contract type.
       type: object
       properties:
         ddl:
           type: object
           properties:
-            tables:
-              type: integer
-              default: 0
-            views:
-              type: integer
-              default: 0
+            changesSummary:
+              $ref: "#/components/schemas/ChangeSummary"
+            numberOfImpactedEntities:
+              $ref: "#/components/schemas/ChangeSummary"
         mcp:
+          description: MCP entity counts keyed by MCP endpoint URL. Init entities are intentionally not counted.
           type: object
-          properties:
-            init:
-              type: integer
-              default: 0
-            tools:
-              type: integer
-              default: 0
-            prompts:
-              type: integer
-              default: 0
-            resources:
-              type: integer
-              default: 0
+          additionalProperties:
+            type: object
+            properties:
+              toolsCount:
+                type: integer
+                default: 0
+              promptsCount:
+                type: integer
+                default: 0
+              resourcesCount:
+                type: integer
+                default: 0
     ExportVersion:
       type: object
       title: Export entire version

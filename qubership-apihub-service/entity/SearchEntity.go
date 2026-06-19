@@ -166,7 +166,7 @@ func MakeGlobalDDLSearchResultView(ent DDLContractSearchResult) interface{} {
 		ParentPackages: ent.ParentNames,
 		VersionStatus:  ent.VersionStatus,
 		Version:        view.MakeVersionRefKey(ent.Version, ent.Revision),
-		TableId:        ent.DdlTableId,
+		EntityId:       ent.DdlEntityId,
 		Kind:           ent.Kind,
 		SchemaName:     ent.SchemaName,
 		TableName:      ent.Name,
