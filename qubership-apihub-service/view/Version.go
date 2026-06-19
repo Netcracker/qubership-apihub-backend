@@ -144,6 +144,21 @@ func FormatDashboardKeys(dashboards []ReferencingDashboard) string {
 	return strings.Join(items, ", ")
 }
 
+func FormatReferencingDashboards(accessible []ReferencingDashboard, hiddenCount int) string {
+	if hiddenCount == 0 {
+		return FormatDashboardKeys(accessible)
+	}
+	noun := "versions"
+	if hiddenCount == 1 {
+		noun = "version"
+	}
+	if len(accessible) == 0 {
+		return fmt.Sprintf("%d dashboard %s you cannot access (contact system administrator)", hiddenCount, noun)
+	}
+	return fmt.Sprintf("%s, and %d more dashboard %s you cannot access (contact system administrator)",
+		FormatDashboardKeys(accessible), hiddenCount, noun)
+}
+
 type PackageVersionRevisions struct {
 	Revisions []PackageVersionRevision `json:"revisions"`
 }

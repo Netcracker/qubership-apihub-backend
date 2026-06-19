@@ -633,13 +633,19 @@ func (p packageServiceImpl) DeletePackage(ctx context.SecurityContext, id string
 		return err
 	}
 	if len(referencingDashboards) > 0 {
+		log.Warnf("Blocked deletion of package %s by user %s: referenced by dashboards [%s]",
+			id, ctx.GetUserId(), view.FormatDashboardKeys(referencingDashboards))
+		accessible, hiddenCount, err := filterAccessibleReferencingDashboards(ctx, p.roleService, referencingDashboards)
+		if err != nil {
+			return err
+		}
 		return &exception.CustomError{
 			Status:  http.StatusConflict,
 			Code:    exception.ReferencedByDashboard,
 			Message: exception.PackageReferencedByDashboardMsg,
 			Params: map[string]interface{}{
 				"packageId":  id,
-				"dashboards": view.FormatDashboardKeys(referencingDashboards),
+				"dashboards": view.FormatReferencingDashboards(accessible, hiddenCount),
 			},
 		}
 	}
@@ -663,6 +669,34 @@ func (p packageServiceImpl) DeletePackage(ctx context.SecurityContext, id string
 	})
 
 	return nil
+}
+
+func filterAccessibleReferencingDashboards(ctx context.SecurityContext, roleService RoleService, dashboards []view.ReferencingDashboard) ([]view.ReferencingDashboard, int, error) {
+	accessible := make([]view.ReferencingDashboard, 0, len(dashboards))
+	hiddenCount := 0
+	checkedDashboards := make(map[string]bool)
+	for _, dash := range dashboards {
+		canRead, checked := checkedDashboards[dash.PackageId]
+		if !checked {
+			perms, err := roleService.GetPermissionsForPackage(ctx, dash.PackageId)
+			if err != nil {
+				if customErr, ok := err.(*exception.CustomError); ok && customErr.Code == exception.PackageNotFound {
+					canRead = false
+				} else {
+					return nil, 0, err
+				}
+			} else {
+				canRead = utils.SliceContains(perms, string(view.ReadPermission))
+			}
+			checkedDashboards[dash.PackageId] = canRead
+		}
+		if canRead {
+			accessible = append(accessible, dash)
+		} else {
+			hiddenCount++
+		}
+	}
+	return accessible, hiddenCount, nil
 }
 
 func (p packageServiceImpl) FavorPackage(ctx context.SecurityContext, id string) error {

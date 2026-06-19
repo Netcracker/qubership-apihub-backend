@@ -420,6 +420,12 @@ func (v versionServiceImpl) DeleteVersion(ctx context.SecurityContext, packageId
 		return err
 	}
 	if len(referencingDashboards) > 0 {
+		log.Warnf("Blocked deletion of version %s of package %s by user %s: referenced by dashboards [%s]",
+			versionEnt.Version, packageId, ctx.GetUserId(), view.FormatDashboardKeys(referencingDashboards))
+		accessible, hiddenCount, err := filterAccessibleReferencingDashboards(ctx, v.roleService, referencingDashboards)
+		if err != nil {
+			return err
+		}
 		return &exception.CustomError{
 			Status:  http.StatusConflict,
 			Code:    exception.ReferencedByDashboard,
@@ -427,7 +433,7 @@ func (v versionServiceImpl) DeleteVersion(ctx context.SecurityContext, packageId
 			Params: map[string]interface{}{
 				"packageId":  packageId,
 				"version":    versionEnt.Version,
-				"dashboards": view.FormatDashboardKeys(referencingDashboards),
+				"dashboards": view.FormatReferencingDashboards(accessible, hiddenCount),
 			},
 		}
 	}
