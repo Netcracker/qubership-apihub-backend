@@ -333,7 +333,7 @@ func main() {
 	cleanupController := controller.NewCleanupController(cleanupService)
 
 	playgroundProxyController := controller.NewPlaygroundProxyController(systemInfoService)
-	publishV2Controller := controller.NewPublishV2Controller(buildService, publishedService, buildResultService, roleService, systemInfoService)
+	publishV2Controller := controller.NewPublishV2Controller(buildService, publishedService, buildResultService, roleService, systemInfoService, packageService)
 	exportController := controller.NewExportController(publishedService, portalService, roleService, excelService, versionService, monitoringService, exportService, packageService)
 
 	packageController := controller.NewPackageController(packageService, publishedService, portalService, roleService, monitoringService, ptHandler)
