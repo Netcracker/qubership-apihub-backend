@@ -226,37 +226,45 @@ func (s *ddlContractServiceImpl) GetVersionSummary(packageId, versionName string
 			Params:  map[string]interface{}{"version": versionName},
 		}
 	}
-	if versionEnt.PreviousVersion == "" {
-		return nil, nil
-	}
-	previousPackageId := versionEnt.PreviousVersionPackageId
-	if previousPackageId == "" {
-		previousPackageId = packageId
-	}
-	previousVersionEnt, err := s.publishedRepo.GetVersion(previousPackageId, versionEnt.PreviousVersion)
+	counts, err := s.ddlRepo.GetEntitiesCount(versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
 	if err != nil {
 		return nil, err
 	}
-	if previousVersionEnt == nil {
+
+	var changesSummary, numberOfImpactedEntities *view.ChangeSummary
+	if versionEnt.PreviousVersion != "" {
+		previousPackageId := versionEnt.PreviousVersionPackageId
+		if previousPackageId == "" {
+			previousPackageId = packageId
+		}
+		previousVersionEnt, err := s.publishedRepo.GetVersion(previousPackageId, versionEnt.PreviousVersion)
+		if err != nil {
+			return nil, err
+		}
+		if previousVersionEnt != nil {
+			comparisonId := view.MakeVersionComparisonId(
+				versionEnt.PackageId, versionEnt.Version, versionEnt.Revision,
+				previousVersionEnt.PackageId, previousVersionEnt.Version, previousVersionEnt.Revision,
+			)
+			changesSummary, numberOfImpactedEntities, err = s.ddlRepo.GetComparisonSummary(comparisonId)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	if len(counts) == 0 && changesSummary == nil && numberOfImpactedEntities == nil {
 		return nil, nil
 	}
-	comparisonId := view.MakeVersionComparisonId(
-		versionEnt.PackageId, versionEnt.Version, versionEnt.Revision,
-		previousVersionEnt.PackageId, previousVersionEnt.Version, previousVersionEnt.Revision,
-	)
-	changesSummary, numberOfImpactedEntities, err := s.ddlRepo.GetComparisonSummary(comparisonId)
-	if err != nil {
-		return nil, err
+
+	summary := &view.DdlVersionContractSummary{
+		ChangesSummary:           changesSummary,
+		NumberOfImpactedEntities: numberOfImpactedEntities,
 	}
-	if changesSummary == nil && numberOfImpactedEntities == nil {
-		return nil, nil
-	}
-	summary := &view.DdlVersionContractSummary{}
-	if changesSummary != nil {
-		summary.ChangesSummary = *changesSummary
-	}
-	if numberOfImpactedEntities != nil {
-		summary.NumberOfImpactedEntities = *numberOfImpactedEntities
+	for _, c := range counts {
+		if c.Kind == view.DdlKindTable {
+			summary.TablesCount = c.Count
+		}
 	}
 	return summary, nil
 }

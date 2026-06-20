@@ -28,8 +28,9 @@ type ContractsSummaryView struct {
 }
 
 type DdlVersionContractSummary struct {
-	ChangesSummary           ChangeSummary `json:"changesSummary"`
-	NumberOfImpactedEntities ChangeSummary `json:"numberOfImpactedEntities"`
+	TablesCount              int            `json:"tablesCount"`
+	ChangesSummary           *ChangeSummary `json:"changesSummary,omitempty"`
+	NumberOfImpactedEntities *ChangeSummary `json:"numberOfImpactedEntities,omitempty"`
 }
 
 // McpEndpointSummary is the per-MCP-endpoint entity counts (inits intentionally omitted).
