@@ -11077,9 +11077,15 @@ components:
         ddl:
           type: object
           properties:
+            tablesCount:
+              type: integer
+              default: 0
+              description: Number of DDL table entities published in the version.
             changesSummary:
+              description: Present only when the version has a previous version to compare against.
               $ref: "#/components/schemas/ChangeSummary"
             numberOfImpactedEntities:
+              description: Present only when the version has a previous version to compare against.
               $ref: "#/components/schemas/ChangeSummary"
         mcp:
           description: MCP entity counts keyed by MCP endpoint URL. Init entities are intentionally not counted.
