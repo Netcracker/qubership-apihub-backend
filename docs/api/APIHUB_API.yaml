@@ -10844,16 +10844,20 @@ components:
         ddl:
           type: object
           properties:
+            tablesCount:
+              type: integer
+              default: 0
+              description: Number of DDL table entities published in the version.
             changesSummary:
               allOf:
                 - $ref: "#/components/schemas/ChangeSummary"
                 - type: object
-                  description: Number of declarative DDL changes in the version (compared to the previous release version).
+                  description: Number of declarative DDL changes in the version (compared to the previous release version). Present only when the version has a previous version to compare against.
             numberOfImpactedEntities:
               allOf:
                 - $ref: "#/components/schemas/ChangeSummary"
                 - type: object
-                  description: Number of DDL entities impacted by each severity type.
+                  description: Number of DDL entities impacted by each severity type. Present only when the version has a previous version to compare against.
         mcp:
           description: MCP summary keyed by MCP endpoint (one entry per published MCP endpoint in this version).
           type: object
