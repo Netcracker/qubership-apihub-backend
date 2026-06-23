@@ -237,21 +237,21 @@ type PackageDdlContractChanges struct {
 }
 
 type DdlChangesDto struct {
-	DdlEntityId                  string        `json:"ddlEntityId"`
-	PreviousDdlEntityId          string        `json:"previousDdlEntityId,omitempty"`
-	ApiKind                      string        `json:"apiKind,omitempty"`
-	PreviousApiKind              string        `json:"previousApiKind,omitempty"`
-	Kind                         string        `json:"kind,omitempty"`
-	PreviousKind                 string        `json:"previousKind,omitempty"`
-	Name                         string        `json:"name,omitempty"`
-	PreviousName                 string        `json:"previousName,omitempty"`
-	SchemaName                   string        `json:"schemaName,omitempty"`
-	PreviousSchemaName           string        `json:"previousSchemaName,omitempty"`
-	Description                  string        `json:"description,omitempty"`
-	PreviousDescription          string        `json:"previousDescription,omitempty"`
+	DdlEntityData                *DdlEntity    `json:"ddlEntityData,omitempty"`
+	PreviousDdlEntityData        *DdlEntity    `json:"previousDdlEntityData,omitempty"`
 	Changes                      interface{}   `json:"changes,omitempty"`
 	ChangeSummary                ChangeSummary `json:"changeSummary"`
 	ComparisonInternalDocumentId string        `json:"comparisonInternalDocumentId,omitempty"`
+}
+
+// DdlEntity is the identified DDL entity descriptor shared by the build-result
+// indexes and per-pair comparison data (see BuildResultDdlComparisonsData in the spec).
+type DdlEntity struct {
+	DdlEntityId string `json:"ddlEntityId"`
+	Kind        string `json:"kind"`
+	Name        string `json:"name"`
+	SchemaName  string `json:"schemaName"`
+	Description string `json:"description"`
 }
 
 type PackageMcpContractsFile struct {

@@ -40,8 +40,6 @@ CREATE TABLE IF NOT EXISTS ddl_comparison
     comparison_id                  varchar,
     data_hash                      varchar,
     previous_data_hash             varchar,
-    api_kind                       varchar,
-    previous_api_kind              varchar,
     kind                           varchar,
     previous_kind                  varchar,
     name                           varchar,

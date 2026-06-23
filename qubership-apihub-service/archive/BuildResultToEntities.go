@@ -868,30 +868,33 @@ func (a *BuildResultToEntitiesReader) ReadDdlContractComparisonsToEntities() ([]
 			}
 		}
 		for _, dto := range ddlChanges.Entities {
-			ddlComparisonEntities = append(ddlComparisonEntities, &entity.DDLContractComparisonEntity{
+			ddlComparisonEnt := &entity.DDLContractComparisonEntity{
 				PackageId:                    versionComparisonEnt.PackageId,
 				Version:                      versionComparisonEnt.Version,
 				Revision:                     versionComparisonEnt.Revision,
 				PreviousPackageId:            versionComparisonEnt.PreviousPackageId,
 				PreviousVersion:              versionComparisonEnt.PreviousVersion,
 				PreviousRevision:             versionComparisonEnt.PreviousRevision,
-				DdlEntityId:                  dto.DdlEntityId,
-				PreviousDdlEntityId:          dto.PreviousDdlEntityId,
 				ComparisonId:                 versionComparisonEnt.ComparisonId,
-				ApiKind:                      dto.ApiKind,
-				PreviousApiKind:              dto.PreviousApiKind,
-				Kind:                         dto.Kind,
-				PreviousKind:                 dto.PreviousKind,
-				Name:                         dto.Name,
-				PreviousName:                 dto.PreviousName,
-				SchemaName:                   dto.SchemaName,
-				PreviousSchemaName:           dto.PreviousSchemaName,
-				Description:                  dto.Description,
-				PreviousDescription:          dto.PreviousDescription,
 				ChangesSummary:               dto.ChangeSummary,
 				Changes:                      dto.Changes,
 				ComparisonInternalDocumentId: dto.ComparisonInternalDocumentId,
-			})
+			}
+			if dto.DdlEntityData != nil {
+				ddlComparisonEnt.DdlEntityId = dto.DdlEntityData.DdlEntityId
+				ddlComparisonEnt.Kind = dto.DdlEntityData.Kind
+				ddlComparisonEnt.Name = dto.DdlEntityData.Name
+				ddlComparisonEnt.SchemaName = dto.DdlEntityData.SchemaName
+				ddlComparisonEnt.Description = dto.DdlEntityData.Description
+			}
+			if dto.PreviousDdlEntityData != nil {
+				ddlComparisonEnt.PreviousDdlEntityId = dto.PreviousDdlEntityData.DdlEntityId
+				ddlComparisonEnt.PreviousKind = dto.PreviousDdlEntityData.Kind
+				ddlComparisonEnt.PreviousName = dto.PreviousDdlEntityData.Name
+				ddlComparisonEnt.PreviousSchemaName = dto.PreviousDdlEntityData.SchemaName
+				ddlComparisonEnt.PreviousDescription = dto.PreviousDdlEntityData.Description
+			}
+			ddlComparisonEntities = append(ddlComparisonEntities, ddlComparisonEnt)
 		}
 	}
 	if mainVersionComparison != nil {

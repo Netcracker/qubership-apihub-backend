@@ -35,13 +35,11 @@ type DDLContractComparisonEntity struct {
 	PreviousPackageId            string             `pg:"previous_package_id, type:varchar, use_zero"`
 	PreviousVersion              string             `pg:"previous_version, type:varchar, use_zero"`
 	PreviousRevision             int                `pg:"previous_revision, type:integer, use_zero"`
-	DdlEntityId                  string             `pg:"ddl_entity_id, type:varchar"`
-	PreviousDdlEntityId          string             `pg:"previous_ddl_entity_id, type:varchar"`
+	DdlEntityId                  string             `pg:"ddl_entity_id, type:varchar, use_zero"`
+	PreviousDdlEntityId          string             `pg:"previous_ddl_entity_id, type:varchar, use_zero"`
 	ComparisonId                 string             `pg:"comparison_id, type:varchar"`
 	DataHash                     *string            `pg:"data_hash, type:varchar"`
 	PreviousDataHash             *string            `pg:"previous_data_hash, type:varchar"`
-	ApiKind                      string             `pg:"api_kind, type:varchar, use_zero"`
-	PreviousApiKind              string             `pg:"previous_api_kind, type:varchar, use_zero"`
 	Kind                         string             `pg:"kind, type:varchar, use_zero"`
 	PreviousKind                 string             `pg:"previous_kind, type:varchar, use_zero"`
 	Name                         string             `pg:"name, type:varchar, use_zero"`
