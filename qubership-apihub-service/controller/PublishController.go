@@ -604,21 +604,3 @@ func (p publishV2ControllerImpl) GetFreeBuild(w http.ResponseWriter, r *http.Req
 	}
 	log.Debugf("GetFreeBuild took %dms", time.Since(start).Milliseconds())
 }
-
-func validatePublishPackageKind(kind string, acceptedKinds []string) *exception.CustomError {
-	for _, acceptedKind := range acceptedKinds {
-		if kind == acceptedKind {
-			return nil
-		}
-	}
-
-	return &exception.CustomError{
-		Status:  http.StatusBadRequest,
-		Code:    exception.InvalidPackageKind,
-		Message: exception.InvalidPackageKindMsg,
-		Params: map[string]interface{}{
-			"kind":        kind,
-			"allowedKind": []string{entity.KIND_PACKAGE, entity.KIND_DASHBOARD},
-		},
-	}
-}

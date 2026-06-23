@@ -922,7 +922,7 @@ func (o operationGroupControllerImpl) StartOperationGroupPublish(w http.Response
 		}
 	}
 
-	packageInfo, err := o.packageService.GetPackage(ctx, packageId, false)
+	packageInfo, err := o.packageService.GetPackage(ctx, req.PackageId, false)
 	if err != nil {
 		utils.RespondWithError(w, "Failed to get package info", err)
 		return
