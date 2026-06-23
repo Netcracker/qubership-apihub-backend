@@ -345,7 +345,7 @@ func main() {
 	jwtPubKeyController := controller.NewJwtPubKeyController()
 	logoutController := controller.NewLogoutController(tokenRevocationService, systemInfoService)
 	operationController := controller.NewOperationController(roleService, operationService, buildService, monitoringService, ptHandler)
-	operationGroupController := controller.NewOperationGroupController(roleService, operationGroupService, versionService, systemInfoService)
+	operationGroupController := controller.NewOperationGroupController(roleService, operationGroupService, versionService, systemInfoService, packageService)
 	searchController := controller.NewSearchController(operationService, versionService, monitoringService)
 	dataMigrationController := mController.NewTempMigrationController(dbMigrationService, roleService.IsSysadm)
 	activityTrackingController := controller.NewActivityTrackingController(activityTrackingService, roleService, ptHandler)

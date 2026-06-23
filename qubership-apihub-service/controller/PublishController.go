@@ -243,7 +243,7 @@ func (p publishV2ControllerImpl) Publish(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if validationErr := validatePublishPackageKind(packageInfo.Kind); validationErr != nil {
+	if validationErr := validatePublishPackageKind(packageInfo.Kind, []string{entity.KIND_PACKAGE, entity.KIND_DASHBOARD}); validationErr != nil {
 		utils.RespondWithCustomError(w, validationErr)
 		return
 	}
@@ -605,20 +605,20 @@ func (p publishV2ControllerImpl) GetFreeBuild(w http.ResponseWriter, r *http.Req
 	log.Debugf("GetFreeBuild took %dms", time.Since(start).Milliseconds())
 }
 
-func validatePublishPackageKind(kind string) *exception.CustomError {
-	switch kind {
-	case entity.KIND_PACKAGE, entity.KIND_DASHBOARD:
-		//publish allowed
-		return nil
-	default:
-		return &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.InvalidPackageKind,
-			Message: exception.InvalidPackageKindMsg,
-			Params: map[string]interface{}{
-				"kind":        kind,
-				"allowedKind": []string{entity.KIND_PACKAGE, entity.KIND_DASHBOARD},
-			},
+func validatePublishPackageKind(kind string, acceptedKinds []string) *exception.CustomError {
+	for _, acceptedKind := range acceptedKinds {
+		if kind == acceptedKind {
+			return nil
 		}
+	}
+
+	return &exception.CustomError{
+		Status:  http.StatusBadRequest,
+		Code:    exception.InvalidPackageKind,
+		Message: exception.InvalidPackageKindMsg,
+		Params: map[string]interface{}{
+			"kind":        kind,
+			"allowedKind": []string{entity.KIND_PACKAGE, entity.KIND_DASHBOARD},
+		},
 	}
 }
