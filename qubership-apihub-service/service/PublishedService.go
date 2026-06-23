@@ -1000,9 +1000,7 @@ func (p publishedServiceImpl) GetVersionInternalDocumentData(hash string) ([]byt
 		return nil, "", err
 	}
 
-	//when the filename is empty, it means we did not find a record in the version_internal_document table using the specified hash,
-	//i.e., we are dealing with unref data, and we should not return such data
-	if docData == nil || docData.Filename == "" {
+	if docData == nil {
 		return nil, "", &exception.CustomError{
 			Status:  http.StatusNotFound,
 			Code:    exception.VersionInternalDocumentNotFound,
@@ -1011,7 +1009,9 @@ func (p publishedServiceImpl) GetVersionInternalDocumentData(hash string) ([]byt
 		}
 	}
 
-	return docData.Data, docData.Filename, nil
+	filename := fmt.Sprintf("version_internal_document_%s.json", hash)
+
+	return docData.Data, filename, nil
 }
 
 func (p publishedServiceImpl) GetComparisonInternalDocuments(packageId string, version string, previousPackageId string, previousVersion string, refPackageId string) ([]view.InternalDocument, error) {
@@ -1121,9 +1121,7 @@ func (p publishedServiceImpl) GetComparisonInternalDocumentData(hash string) ([]
 		return nil, "", err
 	}
 
-	//when the filename is empty, it means we did not find a record in the comparison_internal_document table using the specified hash,
-	//i.e., we are dealing with unref data, and we should not return such data
-	if docData == nil || docData.Filename == "" {
+	if docData == nil {
 		return nil, "", &exception.CustomError{
 			Status:  http.StatusNotFound,
 			Code:    exception.ComparisonInternalDocumentNotFound,
@@ -1132,7 +1130,9 @@ func (p publishedServiceImpl) GetComparisonInternalDocumentData(hash string) ([]
 		}
 	}
 
-	return docData.Data, docData.Filename, nil
+	filename := fmt.Sprintf("comparison_internal_document_%s.json", hash)
+
+	return docData.Data, filename, nil
 }
 
 func (p publishedServiceImpl) CheckPreviousVersionDependencyCycle(packageID string, version string, previousVersionPackageID string, prevVersion string, revision int) (bool, error) {
