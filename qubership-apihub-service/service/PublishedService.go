@@ -38,6 +38,7 @@ type PublishedService interface {
 	GetPublishedVersionBuildConfig(packageId string, versionName string) (*view.BuildConfig, error)
 	GetLatestContentDataBySlug(packageId string, versionName string, slug string) (*view.PublishedContent, *view.ContentData, error)
 	VersionPublished(packageId string, versionName string) (bool, error)
+	GetVersionStatus(packageId string, versionName string) (status string, found bool, err error)
 	DeleteVersion(ctx context.SecurityContext, packageId string, versionName string) error
 
 	PublishPackage(buildArc *archive.BuildResultArchive, buildSrcEnt *entity.BuildSourceEntity,
@@ -311,6 +312,17 @@ func (p publishedServiceImpl) VersionPublished(packageId string, versionName str
 		return false, err
 	}
 	return ent != nil, nil
+}
+
+func (p publishedServiceImpl) GetVersionStatus(packageId string, versionName string) (string, bool, error) {
+	ent, err := p.publishedRepo.GetVersion(packageId, versionName)
+	if err != nil {
+		return "", false, err
+	}
+	if ent == nil {
+		return "", false, nil
+	}
+	return ent.Status, true, nil
 }
 
 func readZipFile(zf *zip.File) ([]byte, error) {

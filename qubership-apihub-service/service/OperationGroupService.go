@@ -576,6 +576,32 @@ func (o operationGroupServiceImpl) StartOperationGroupPublish(ctx context.Securi
 			Params:  map[string]interface{}{"groupName": groupName},
 		}
 	}
+	if req.PreviousVersion != "" {
+		previousVersionPackageId := req.PreviousVersionPackageId
+		if previousVersionPackageId == "" {
+			previousVersionPackageId = req.PackageId
+		}
+		prevVersion, err := o.publishedRepo.GetVersion(previousVersionPackageId, req.PreviousVersion)
+		if err != nil {
+			return "", err
+		}
+		if prevVersion == nil {
+			return "", &exception.CustomError{
+				Status:  http.StatusNotFound,
+				Code:    exception.PublishedPackageVersionNotFound,
+				Message: exception.PublishedPackageVersionNotFoundMsg,
+				Params:  map[string]interface{}{"packageId": previousVersionPackageId, "version": req.PreviousVersion},
+			}
+		}
+		if prevVersion.Status != string(view.Release) {
+			return "", &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.PreviousPackageVersionNotRelease,
+				Message: exception.PreviousPackageVersionNotReleaseMsg,
+				Params:  map[string]interface{}{"packageId": previousVersionPackageId, "version": req.PreviousVersion},
+			}
+		}
+	}
 
 	publishId := uuid.NewString()
 	operationGroupPublishEnt := &entity.OperationGroupPublishEntity{

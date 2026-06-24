@@ -147,15 +147,23 @@ func (b *buildServiceImpl) PublishVersion(ctx context.SecurityContext, config vi
 		if config.PreviousVersionPackageId != "" {
 			previousVersionPackageId = config.PreviousVersionPackageId
 		}
-		previousVersionExists, err := b.publishService.VersionPublished(previousVersionPackageId, config.PreviousVersion)
+		previousVersionStatus, previousVersionFound, err := b.publishService.GetVersionStatus(previousVersionPackageId, config.PreviousVersion)
 		if err != nil {
 			return nil, err
 		}
-		if !previousVersionExists {
+		if !previousVersionFound {
 			return nil, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.PublishedPackageVersionNotFound,
 				Message: exception.PublishedPackageVersionNotFoundMsg,
+				Params:  map[string]interface{}{"version": config.PreviousVersion, "packageId": previousVersionPackageId},
+			}
+		}
+		if config.BuildType == view.PublishType && previousVersionStatus != string(view.Release) {
+			return nil, &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.PreviousPackageVersionNotRelease,
+				Message: exception.PreviousPackageVersionNotReleaseMsg,
 				Params:  map[string]interface{}{"version": config.PreviousVersion, "packageId": previousVersionPackageId},
 			}
 		}

@@ -2340,6 +2340,8 @@ paths:
               examples:
                 IncorrectInputParams:
                   $ref: "#/components/examples/IncorrectInputParameters"
+                PreviousVersionNotRelease:
+                  $ref: "#/components/examples/PreviousVersionNotRelease"
         "401":
           description: Unauthorized
           content:
@@ -8493,6 +8495,8 @@ paths:
               examples:
                 IncorrectInputParams:
                   $ref: "#/components/examples/IncorrectInputParameters"
+                PreviousVersionNotRelease:
+                  $ref: "#/components/examples/PreviousVersionNotRelease"
         "401":
           description: Unauthorized
           content:
@@ -13179,6 +13183,15 @@ components:
         status: 400
         code: "APIHUB-COMMON-4001"
         message: "Incorrect input parameters"
+    PreviousVersionNotRelease:
+      description: Previous version is not in the 'release' status
+      value:
+        status: 400
+        code: "48"
+        message: "Previous version 2024.1 for package QS.group.my-package is not in the 'release' status"
+        params:
+          version: "2024.1"
+          packageId: "QS.group.my-package"
     Unauthorized:
       description: Unauthorized access
       value:
