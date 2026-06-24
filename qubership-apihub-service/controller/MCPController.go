@@ -22,7 +22,7 @@ type mcpControllerImpl struct {
 func (m mcpControllerImpl) MakeMCPServer() http.Handler {
 	return mcpserver.NewStreamableHTTPServer(
 		m.mcpService.MakeMCPServer(),
-		mcpserver.WithLogger(utils.NewMCPGoLogger()),
+		mcpserver.WithStreamableHTTPLogger(utils.NewMCPGoLogger()),
 		mcpserver.WithSessionIdleTTL(15*time.Minute),
 		mcpserver.WithHTTPContextFunc(func(ctx context.Context, r *http.Request) context.Context {
 			secCtx := secctx.Create(r)
