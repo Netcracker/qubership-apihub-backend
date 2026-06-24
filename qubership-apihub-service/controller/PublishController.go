@@ -237,13 +237,13 @@ func (p publishV2ControllerImpl) Publish(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	packageInfo, err := p.packageService.GetPackage(ctx, packageId, false)
+	packageKind, err := p.packageService.GetPackageKind(packageId)
 	if err != nil {
 		utils.RespondWithError(w, "Failed to get package info", err)
 		return
 	}
 
-	if validationErr := validatePublishPackageKind(packageInfo.Kind, []string{entity.KIND_PACKAGE, entity.KIND_DASHBOARD}); validationErr != nil {
+	if validationErr := validatePublishPackageKind(packageKind, []string{entity.KIND_PACKAGE, entity.KIND_DASHBOARD}); validationErr != nil {
 		utils.RespondWithCustomError(w, validationErr)
 		return
 	}

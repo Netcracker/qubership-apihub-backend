@@ -922,13 +922,13 @@ func (o operationGroupControllerImpl) StartOperationGroupPublish(w http.Response
 		}
 	}
 
-	packageInfo, err := o.packageService.GetPackage(ctx, req.PackageId, false)
+	packageKind, err := o.packageService.GetPackageKind(req.PackageId)
 	if err != nil {
 		utils.RespondWithError(w, "Failed to get package info", err)
 		return
 	}
 
-	if validationErr := validatePublishPackageKind(packageInfo.Kind, []string{entity.KIND_PACKAGE}); validationErr != nil {
+	if validationErr := validatePublishPackageKind(packageKind, []string{entity.KIND_PACKAGE}); validationErr != nil {
 		utils.RespondWithCustomError(w, validationErr)
 		return
 	}
