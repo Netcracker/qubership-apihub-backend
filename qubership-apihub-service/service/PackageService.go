@@ -680,14 +680,9 @@ func filterAccessibleReferencingDashboards(ctx context.SecurityContext, roleServ
 		if !checked {
 			perms, err := roleService.GetPermissionsForPackage(ctx, dash.PackageId)
 			if err != nil {
-				if customErr, ok := err.(*exception.CustomError); ok && customErr.Code == exception.PackageNotFound {
-					canRead = false
-				} else {
-					return nil, 0, err
-				}
-			} else {
-				canRead = utils.SliceContains(perms, string(view.ReadPermission))
+				return nil, 0, err
 			}
+			canRead = utils.SliceContains(perms, string(view.ReadPermission))
 			checkedDashboards[dash.PackageId] = canRead
 		}
 		if canRead {
