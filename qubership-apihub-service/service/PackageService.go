@@ -719,7 +719,7 @@ func (p packageServiceImpl) GetPackageName(id string) (string, error) {
 		Status:  http.StatusNotFound,
 		Code:    exception.PackageNotFound,
 		Message: exception.PackageNotFoundMsg,
-		Params:  map[string]interface{}{"id": id},
+		Params:  map[string]interface{}{"packageId": id},
 	}
 
 }
@@ -735,7 +735,7 @@ func (p packageServiceImpl) GetPackageKind(id string) (string, error) {
 		Status:  http.StatusNotFound,
 		Code:    exception.PackageNotFound,
 		Message: exception.PackageNotFoundMsg,
-		Params:  map[string]interface{}{"id": id},
+		Params:  map[string]interface{}{"packageId": id},
 	}
 }
 
