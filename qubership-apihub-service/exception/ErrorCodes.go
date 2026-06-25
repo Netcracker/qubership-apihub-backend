@@ -826,6 +826,10 @@ const ShareabilityReportDocumentNotFoundMsg = "Document with slug '$slug' not fo
 const ShareabilityReportSizeExceeded = "8305"
 const ShareabilityReportSizeExceededMsg = "Shareability report file size exceeded. File size limit - $size"
 
+const ReferencedByDashboard = "8400"
+const VersionReferencedByDashboardMsg = "Cannot delete version $version of package $packageId: it is referenced by these dashboard versions: $dashboards. Remove the references or delete the dashboards, then retry."
+const PackageReferencedByDashboardMsg = "Cannot delete package $packageId: it is referenced by these dashboard versions: $dashboards. Remove the references or delete the dashboards, then retry."
+
 // AI Chat error codes (APIHUB-AI-*). Each public error has a Code constant; variant
 // messages reuse the parent Code (same pattern as InvalidParameterValue + InvalidLimitMsg).
 

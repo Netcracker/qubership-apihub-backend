@@ -628,6 +628,27 @@ func (p packageServiceImpl) DeletePackage(ctx context.SecurityContext, id string
 			}
 		}
 	}
+	referencingDashboards, err := p.publishedRepo.GetPackageReferencingDashboards(id)
+	if err != nil {
+		return err
+	}
+	if len(referencingDashboards) > 0 {
+		log.Warnf("Blocked deletion of package %s by user %s: referenced by dashboards [%s]",
+			id, ctx.GetUserId(), view.FormatDashboardKeys(referencingDashboards))
+		accessible, hiddenCount, err := filterAccessibleReferencingDashboards(ctx, p.roleService, referencingDashboards)
+		if err != nil {
+			return err
+		}
+		return &exception.CustomError{
+			Status:  http.StatusConflict,
+			Code:    exception.ReferencedByDashboard,
+			Message: exception.PackageReferencedByDashboardMsg,
+			Params: map[string]interface{}{
+				"packageId":  id,
+				"dashboards": view.FormatReferencingDashboards(accessible, hiddenCount),
+			},
+		}
+	}
 	deletedReleaseCount, err := p.publishedRepo.DeletePackage(id, ctx.GetUserId())
 	if err != nil {
 		return err
@@ -648,6 +669,29 @@ func (p packageServiceImpl) DeletePackage(ctx context.SecurityContext, id string
 	})
 
 	return nil
+}
+
+func filterAccessibleReferencingDashboards(ctx context.SecurityContext, roleService RoleService, dashboards []view.ReferencingDashboard) ([]view.ReferencingDashboard, int, error) {
+	accessible := make([]view.ReferencingDashboard, 0, len(dashboards))
+	hiddenCount := 0
+	checkedDashboards := make(map[string]bool)
+	for _, dash := range dashboards {
+		canRead, checked := checkedDashboards[dash.PackageId]
+		if !checked {
+			perms, err := roleService.GetPermissionsForPackage(ctx, dash.PackageId)
+			if err != nil {
+				return nil, 0, err
+			}
+			canRead = utils.SliceContains(perms, string(view.ReadPermission))
+			checkedDashboards[dash.PackageId] = canRead
+		}
+		if canRead {
+			accessible = append(accessible, dash)
+		} else {
+			hiddenCount++
+		}
+	}
+	return accessible, hiddenCount, nil
 }
 
 func (p packageServiceImpl) FavorPackage(ctx context.SecurityContext, id string) error {

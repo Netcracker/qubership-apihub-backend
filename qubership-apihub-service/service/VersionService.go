@@ -415,6 +415,28 @@ func (v versionServiceImpl) DeleteVersion(ctx context.SecurityContext, packageId
 			Message: exception.UnableToDeleteOldRevisionMsg,
 		}
 	}
+	referencingDashboards, err := v.publishedRepo.GetVersionReferencingDashboards(packageId, versionEnt.Version)
+	if err != nil {
+		return err
+	}
+	if len(referencingDashboards) > 0 {
+		log.Warnf("Blocked deletion of version %s of package %s by user %s: referenced by dashboards [%s]",
+			versionEnt.Version, packageId, ctx.GetUserId(), view.FormatDashboardKeys(referencingDashboards))
+		accessible, hiddenCount, err := filterAccessibleReferencingDashboards(ctx, v.roleService, referencingDashboards)
+		if err != nil {
+			return err
+		}
+		return &exception.CustomError{
+			Status:  http.StatusConflict,
+			Code:    exception.ReferencedByDashboard,
+			Message: exception.VersionReferencedByDashboardMsg,
+			Params: map[string]interface{}{
+				"packageId":  packageId,
+				"version":    versionEnt.Version,
+				"dashboards": view.FormatReferencingDashboards(accessible, hiddenCount),
+			},
+		}
+	}
 	err = v.publishedService.DeleteVersion(ctx, packageId, versionEnt.Version)
 	if err != nil {
 		return err
