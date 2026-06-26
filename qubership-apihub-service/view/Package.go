@@ -211,15 +211,38 @@ type PackageDdlComparisonsFile struct {
 }
 
 type DdlVersionComparison struct {
-	ComparisonFileId         string         `json:"comparisonFileId"`
-	PackageId                string         `json:"packageId"`
-	Version                  string         `json:"version"`
-	Revision                 int            `json:"revision"`
-	PreviousVersionPackageId string         `json:"previousVersionPackageId"`
-	PreviousVersion          string         `json:"previousVersion"`
-	PreviousVersionRevision  int            `json:"previousVersionRevision"`
-	FromCache                bool           `json:"fromCache"`
-	ContractTypes            []ContractType `json:"contractTypes"`
+	ComparisonFileId         string                            `json:"comparisonFileId"`
+	PackageId                string                            `json:"packageId"`
+	Version                  string                            `json:"version"`
+	Revision                 int                               `json:"revision"`
+	PreviousVersionPackageId string                            `json:"previousVersionPackageId"`
+	PreviousVersion          string                            `json:"previousVersion"`
+	PreviousVersionRevision  int                               `json:"previousVersionRevision"`
+	FromCache                bool                              `json:"fromCache"`
+	// ContractsChangesSummary is the builder format: a map keyed by contract type name.
+	ContractsChangesSummary  map[string]ContractTypeSummary    `json:"contractsChangesSummary"`
+}
+
+// ContractTypeSummary is the per-type payload inside ContractsChangesSummary.
+type ContractTypeSummary struct {
+	ChangesSummary           ChangeSummary `json:"changesSummary"`
+	NumberOfImpactedEntities ChangeSummary `json:"numberOfImpactedEntities"`
+}
+
+// ToContractTypes converts the builder map format to the internal []ContractType slice.
+func (d DdlVersionComparison) ToContractTypes() []ContractType {
+	if len(d.ContractsChangesSummary) == 0 {
+		return nil
+	}
+	result := make([]ContractType, 0, len(d.ContractsChangesSummary))
+	for typeName, summary := range d.ContractsChangesSummary {
+		result = append(result, ContractType{
+			ContractType:             typeName,
+			ChangesSummary:           summary.ChangesSummary,
+			NumberOfImpactedEntities: summary.NumberOfImpactedEntities,
+		})
+	}
+	return result
 }
 
 type ContractType struct {
@@ -268,7 +291,7 @@ type McpContractSearch struct {
 type PackageMcpContract struct {
 	McpEntityId               string                 `json:"mcpEntityId"`
 	Kind                      string                 `json:"kind"`
-	Name                      string                 `json:"name,omitempty"`
+	Title                     string                 `json:"title,omitempty"`
 	Description               string                 `json:"description,omitempty"`
 	McpEndpoint               string                 `json:"mcpEndpoint"`
 	Search                    *McpContractSearch     `json:"search,omitempty"`

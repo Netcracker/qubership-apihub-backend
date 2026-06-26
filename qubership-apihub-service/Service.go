@@ -246,7 +246,7 @@ func main() {
 	roleService := service.NewRoleService(roleRepository, userService, activityTrackingService, publishedRepository)
 	ptHandler := service.NewPackageTransitionHandler(transitionRepository)
 	publishNotificationService := service.NewPublishNotificationService(olricProvider)
-	publishedService := service.NewPublishedService(publishedRepository, buildRepository, favoritesRepository, operationRepository, activityTrackingService, monitoringService, minioStorageService, systemInfoService, publishNotificationService)
+	publishedService := service.NewPublishedService(publishedRepository, buildRepository, favoritesRepository, operationRepository, ddlContractRepository, activityTrackingService, monitoringService, minioStorageService, systemInfoService, publishNotificationService)
 	portalService := service.NewPortalService(basePath, publishedService, publishedRepository)
 
 	operationGroupService := service.NewOperationGroupService(operationRepository, publishedRepository, exportRepository, packageVersionEnrichmentService, activityTrackingService)

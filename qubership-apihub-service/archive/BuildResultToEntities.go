@@ -778,12 +778,32 @@ func (a *BuildResultToEntitiesReader) ReadDdlContractsToEntities() ([]*entity.DD
 // the ddl-comparisons.json index (creating version_comparison rows carrying contractTypes) and
 // the per-pair ddl-comparisons/<comparisonFileId> files (creating ddl_comparison rows). It mirrors
 // ReadOperationComparisonsToEntities so DDL-only changelogs still produce their version_comparison row.
-func (a *BuildResultToEntitiesReader) ReadDdlContractComparisonsToEntities() ([]*entity.VersionComparisonEntity, []*entity.DDLContractComparisonEntity, map[string]view.ComparisonKey, error) {
+func (a *BuildResultToEntitiesReader) ReadDdlContractComparisonsToEntities(publishingDdlDataHashes map[string]string, ddlRepository repository.DDLContractRepository) ([]*entity.VersionComparisonEntity, []*entity.DDLContractComparisonEntity, map[string]view.ComparisonKey, error) {
 	versionComparisonEntities := make([]*entity.VersionComparisonEntity, 0)
 	ddlComparisonEntities := make([]*entity.DDLContractComparisonEntity, 0)
 	comparisonFileIdToKeyMap := make(map[string]view.ComparisonKey)
 	var mainVersionComparison *entity.VersionComparisonEntity
 	mainVersionRefs := make([]string, 0)
+
+	// ddl_entity_id -> data_hash lookups are cached per version triple. The version being published
+	// is not yet persisted, so its current data hashes come from publishingDdlDataHashes; all other
+	// versions (refs and previous versions) are resolved from the database.
+	ddlInfoCache := make(map[string]map[string]string)
+	getDdlInfo := func(packageId, version string, revision int) (map[string]string, error) {
+		if ddlRepository == nil {
+			return nil, nil
+		}
+		key := fmt.Sprintf("%s|%s|%d", packageId, version, revision)
+		if info, ok := ddlInfoCache[key]; ok {
+			return info, nil
+		}
+		info, err := ddlRepository.GetDdlEntitiesInfo(packageId, version, revision)
+		if err != nil {
+			return nil, err
+		}
+		ddlInfoCache[key] = info
+		return info, nil
+	}
 
 	for _, comparison := range a.PackageDdlComparisons.Comparisons {
 		versionComparisonEnt := &entity.VersionComparisonEntity{}
@@ -810,7 +830,7 @@ func (a *BuildResultToEntitiesReader) ReadDdlContractComparisonsToEntities() ([]
 		}
 		versionComparisonEnt.NoContent = false
 		versionComparisonEnt.LastActive = time.Now()
-		versionComparisonEnt.ContractTypes = comparison.ContractTypes
+		versionComparisonEnt.ContractTypes = comparison.ToContractTypes()
 		versionComparisonEnt.BuilderVersion = a.PackageInfo.BuilderVersion
 		versionComparisonEnt.ComparisonId = view.MakeVersionComparisonId(
 			versionComparisonEnt.PackageId,
@@ -894,6 +914,40 @@ func (a *BuildResultToEntitiesReader) ReadDdlContractComparisonsToEntities() ([]
 				ddlComparisonEnt.PreviousSchemaName = dto.PreviousDdlEntityData.SchemaName
 				ddlComparisonEnt.PreviousDescription = dto.PreviousDdlEntityData.Description
 			}
+
+			// The build result's DDL entity descriptor does not carry the data hash, so resolve it
+			// from the published entities the same way operation comparisons do.
+			if ddlComparisonEnt.DdlEntityId != "" {
+				currentInfo := publishingDdlDataHashes
+				if !mainVersion {
+					currentInfo, err = getDdlInfo(versionComparisonEnt.PackageId, versionComparisonEnt.Version, versionComparisonEnt.Revision)
+					if err != nil {
+						return nil, nil, nil, &exception.CustomError{
+							Status:  http.StatusInternalServerError,
+							Message: "Failed to get ddl entities info for $packageId-$version-$revision",
+							Debug:   err.Error(),
+							Params:  map[string]interface{}{"packageId": versionComparisonEnt.PackageId, "version": versionComparisonEnt.Version, "revision": versionComparisonEnt.Revision},
+						}
+					}
+				}
+				if hash, ok := currentInfo[ddlComparisonEnt.DdlEntityId]; ok && hash != "" {
+					ddlComparisonEnt.DataHash = &hash
+				}
+			}
+			if ddlComparisonEnt.PreviousDdlEntityId != "" {
+				previousInfo, err := getDdlInfo(versionComparisonEnt.PreviousPackageId, versionComparisonEnt.PreviousVersion, versionComparisonEnt.PreviousRevision)
+				if err != nil {
+					return nil, nil, nil, &exception.CustomError{
+						Status:  http.StatusInternalServerError,
+						Message: "Failed to get ddl entities info for $packageId-$version-$revision",
+						Debug:   err.Error(),
+						Params:  map[string]interface{}{"packageId": versionComparisonEnt.PreviousPackageId, "version": versionComparisonEnt.PreviousVersion, "revision": versionComparisonEnt.PreviousRevision},
+					}
+				}
+				if hash, ok := previousInfo[ddlComparisonEnt.PreviousDdlEntityId]; ok && hash != "" {
+					ddlComparisonEnt.PreviousDataHash = &hash
+				}
+			}
 			ddlComparisonEntities = append(ddlComparisonEntities, ddlComparisonEnt)
 		}
 	}
@@ -964,15 +1018,15 @@ func (a *BuildResultToEntitiesReader) ReadMcpContractsToEntities() ([]*entity.MC
 			}
 		}
 		contractEntities = append(contractEntities, &entity.MCPContractEntity{
-			PackageId:   a.PackageInfo.PackageId,
-			Version:     a.PackageInfo.Version,
-			Revision:    a.PackageInfo.Revision,
+			PackageId:                 a.PackageInfo.PackageId,
+			Version:                   a.PackageInfo.Version,
+			Revision:                  a.PackageInfo.Revision,
 			McpEntityId:               contract.McpEntityId,
 			Kind:                      contract.Kind,
-			Name:                      contract.Name,
+			Title:                     contract.Title,
 			Description:               contract.Description,
 			McpEndpoint:               contract.McpEndpoint,
-			Metadata:                  entity.Metadata(contract.Metadata),
+			Metadata:                  contract.Metadata,
 			DataHash:                  dataHash,
 			DocumentId:                contract.DocumentId,
 			VersionInternalDocumentId: contract.VersionInternalDocumentId,

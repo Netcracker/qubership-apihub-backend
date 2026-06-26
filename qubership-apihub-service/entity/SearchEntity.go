@@ -182,7 +182,7 @@ func MakeGlobalMCPSearchResultView(ent MCPContractSearchResult) interface{} {
 		Version:        view.MakeVersionRefKey(ent.Version, ent.Revision),
 		EntityId:       ent.McpEntityId,
 		Kind:           ent.Kind,
-		Name:           ent.Name,
+		Name:           ent.Title,
 		McpEndpoint:    ent.McpEndpoint,
 	}
 }

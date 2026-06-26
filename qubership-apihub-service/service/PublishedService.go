@@ -58,6 +58,7 @@ func NewPublishedService(versionRepo repository.PublishedRepository,
 	buildRepository repository.BuildRepository,
 	favoritesRepo repository.FavoritesRepository,
 	operationRepo repository.OperationRepository,
+	ddlContractRepo repository.DDLContractRepository,
 	atService ActivityTrackingService,
 	monitoringService MonitoringService,
 	minioStorageService MinioStorageService,
@@ -68,6 +69,7 @@ func NewPublishedService(versionRepo repository.PublishedRepository,
 		buildRepository:            buildRepository,
 		favoritesRepo:              favoritesRepo,
 		operationRepo:              operationRepo,
+		ddlContractRepo:            ddlContractRepo,
 		atService:                  atService,
 		monitoringService:          monitoringService,
 		minioStorageService:        minioStorageService,
@@ -82,6 +84,7 @@ type publishedServiceImpl struct {
 	buildRepository            repository.BuildRepository
 	favoritesRepo              repository.FavoritesRepository
 	operationRepo              repository.OperationRepository
+	ddlContractRepo            repository.DDLContractRepository
 	atService                  ActivityTrackingService
 	monitoringService          MonitoringService
 	minioStorageService        MinioStorageService
@@ -524,10 +527,24 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 		return err
 	}
 
+	ddlContractEntities, ddlContractDataEntities, ddlContractSearchTexts, err := buildArcEntitiesReader.ReadDdlContractsToEntities()
+	if err != nil {
+		return err
+	}
+
+	// The build result's DDL comparison entries do not carry data hashes, so provide the data hashes
+	// of the version being published. ddl_comparison rows for other versions are resolved from the DB.
+	publishingDdlDataHashes := make(map[string]string, len(ddlContractEntities))
+	for _, ddlContractEntity := range ddlContractEntities {
+		if ddlContractEntity.DataHash != nil {
+			publishingDdlDataHashes[ddlContractEntity.DdlEntityId] = *ddlContractEntity.DataHash
+		}
+	}
+
 	// DDL comparisons share version_comparison with REST. Read the DDL index/per-pair files, then
 	// merge the version-comparison rows by comparison_id (REST + DDL contractTypes on the same row;
 	// DDL-only pairs are appended so the ddl_comparison FK is satisfied for pure DDL changelogs).
-	ddlVersionComparisonEntities, ddlContractComparisonEntities, ddlComparisonFileIdToKeyMap, err := buildArcEntitiesReader.ReadDdlContractComparisonsToEntities()
+	ddlVersionComparisonEntities, ddlContractComparisonEntities, ddlComparisonFileIdToKeyMap, err := buildArcEntitiesReader.ReadDdlContractComparisonsToEntities(publishingDdlDataHashes, p.ddlContractRepo)
 	if err != nil {
 		return err
 	}
@@ -557,11 +574,6 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 	}
 
 	comparisonInternalDocEntities, comparisonInternalDocDataEntities, err := buildArcEntitiesReader.ReadComparisonInternalDocumentsToEntities(comparisonFileIdToKeyMap)
-	if err != nil {
-		return err
-	}
-
-	ddlContractEntities, ddlContractDataEntities, ddlContractSearchTexts, err := buildArcEntitiesReader.ReadDdlContractsToEntities()
 	if err != nil {
 		return err
 	}

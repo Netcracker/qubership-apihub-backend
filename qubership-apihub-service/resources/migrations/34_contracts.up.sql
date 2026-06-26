@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS mcp_entities
     revision      integer NOT NULL,
     mcp_entity_id varchar NOT NULL,
     kind          varchar NOT NULL CHECK (kind IN ('init', 'tool', 'prompt', 'resource')),
-    name          varchar,
+    title         varchar,
     description   varchar,
     mcp_endpoint  varchar NOT NULL,
     metadata      jsonb,

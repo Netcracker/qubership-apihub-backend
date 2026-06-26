@@ -173,7 +173,7 @@ func makeMcpEntityView(ent *entity.MCPContractEntity, packageId, version string,
 	return &view.McpEntityView{
 		McpEntityId:               ent.McpEntityId,
 		Kind:                      ent.Kind,
-		Title:                     ent.Name,
+		Title:                     ent.Title,
 		Description:               ent.Description,
 		McpEndpoint:               ent.McpEndpoint,
 		DocumentId:                ent.DocumentId,

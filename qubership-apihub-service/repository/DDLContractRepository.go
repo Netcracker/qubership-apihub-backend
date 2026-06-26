@@ -17,6 +17,7 @@ type DDLContractRepository interface {
 	GetDdlEntityChangesSummary(comparisonId, ddlEntityId string) (*view.ChangeSummary, error)
 	ListChangedDdlEntities(comparisonId, refPackageId string, severities []string, textFilter string, limit, offset int) ([]*entity.DDLContractComparisonEntity, error)
 	GetEntitiesCount(packageId, version string, revision int) ([]entity.DDLContractKindCountEntity, error)
+	GetDdlEntitiesInfo(packageId, version string, revision int) (map[string]string, error)
 	GetComparisonSummary(comparisonId string) (*view.ChangeSummary, *view.ChangeSummary, error)
 	GlobalSearchForDDL(searchQuery *entity.GlobalContractSearchQuery) ([]entity.DDLContractSearchResult, error)
 }
@@ -184,6 +185,30 @@ func (r *ddlContractRepositoryImpl) GetEntitiesCount(packageId, version string, 
 		packageId, version, revision)
 	if err != nil {
 		return nil, err
+	}
+	return result, nil
+}
+
+// GetDdlEntitiesInfo returns a map of ddl_entity_id -> data_hash for the given version,
+// used to resolve current/previous data hashes when building ddl_comparison rows
+// (mirrors OperationRepository.GetOperationsInfo for the operation changelog).
+func (r *ddlContractRepositoryImpl) GetDdlEntitiesInfo(packageId, version string, revision int) (map[string]string, error) {
+	type row struct {
+		DdlEntityId string  `pg:"ddl_entity_id"`
+		DataHash    *string `pg:"data_hash"`
+	}
+	var rows []row
+	_, err := r.cp.GetConnection().Query(&rows,
+		`SELECT ddl_entity_id, data_hash FROM ddl_tables WHERE package_id=? AND version=? AND revision=?`,
+		packageId, version, revision)
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]string, len(rows))
+	for _, rw := range rows {
+		if rw.DataHash != nil {
+			result[rw.DdlEntityId] = *rw.DataHash
+		}
 	}
 	return result, nil
 }

@@ -1710,24 +1710,65 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 			utils.PerfLog(time.Since(start).Milliseconds(), 100, "CreateVersionWithData: ddl_tables insert")
 		}
 		if len(ddlContractSearchTexts) > 0 && !pkg.ExcludeFromSearch {
-
-			// FIXME: change like MCP!
-
-			start = time.Now()
-			for _, st := range ddlContractSearchTexts {
-				_, err = tx.Exec(`
-					INSERT INTO fts_ddl_search_text (package_id, version, revision, ddl_entity_id, status, kind, search_data_hash, data_vector)
-					VALUES (?, ?, ?, ?, ?, ?, ?, to_tsvector(convert_from(?, 'UTF-8')))
-					ON CONFLICT (package_id, version, revision, ddl_entity_id) DO UPDATE
-						SET search_data_hash = EXCLUDED.search_data_hash,
-							data_vector = EXCLUDED.data_vector`,
-					version.PackageId, version.Version, version.Revision, st.DdlEntityId,
-					version.Status, st.Kind, st.SearchDataHash, st.SearchTextData)
+			if !packageInfo.MigrationBuild {
+				start = time.Now()
+				if version.Revision > 1 {
+					cleanOldFtsSearchTextQuery := `delete from fts_ddl_search_text where package_id = ? and version = ? and revision = ?`
+					_, err = tx.Exec(cleanOldFtsSearchTextQuery,
+						version.PackageId, version.Version, version.Revision-1)
+					if err != nil {
+						return fmt.Errorf("failed to cleanup old revision fts_ddl_search_text: %w", err)
+					}
+				}
+				for _, st := range ddlContractSearchTexts {
+					_, err = tx.Exec(`
+						INSERT INTO fts_ddl_search_text (package_id, version, revision, ddl_entity_id, status, kind, search_data_hash, data_vector)
+						VALUES (?, ?, ?, ?, ?, ?, ?, to_tsvector(convert_from(?, 'UTF-8')))
+						ON CONFLICT (package_id, version, revision, ddl_entity_id) DO UPDATE
+							SET search_data_hash = EXCLUDED.search_data_hash,
+								data_vector = EXCLUDED.data_vector`,
+						version.PackageId, version.Version, version.Revision, st.DdlEntityId,
+						version.Status, st.Kind, st.SearchDataHash, st.SearchTextData)
+					if err != nil {
+						return fmt.Errorf("failed to insert fts_ddl_search_text for %s: %w", st.DdlEntityId, err)
+					}
+				}
+				utils.PerfLog(time.Since(start).Milliseconds(), 100, "CreateVersionWithData: fts_ddl_search_text insert")
+			} else if packageInfo.MigrationBuild {
+				// Store search texts in tmp table for selective recalculation at end of migration.
+				// Only populate for the latest revision of the version — older revisions are skipped.
+				var maxRevision int
+				_, err = tx.Query(pg.Scan(&maxRevision),
+					`SELECT COALESCE(MAX(revision), 0) FROM published_version WHERE package_id = ? AND version = ? AND deleted_at IS NULL`,
+					version.PackageId, version.Version)
 				if err != nil {
-					return fmt.Errorf("failed to insert fts_ddl_search_text for %s: %w", st.DdlEntityId, err)
+					return fmt.Errorf("failed to get max revision for fts_ddl_search_text: %w", err)
+				}
+				if version.Revision == maxRevision {
+					for _, st := range ddlContractSearchTexts {
+						insertTmpQuery := fmt.Sprintf(`
+							INSERT INTO migration."fts_ddl_search_text_tmp_%s"
+								(package_id, version, revision, ddl_entity_id, status, kind, search_data_hash, search_text_data)
+							SELECT ?, ?, ?, ?, ?, ?, ?, ?
+							WHERE NOT EXISTS (
+								SELECT 1 FROM fts_ddl_search_text
+								WHERE package_id = ? AND version = ? AND revision = ? AND ddl_entity_id = ?
+									AND search_data_hash = ?
+							)
+							ON CONFLICT (package_id, version, revision, ddl_entity_id) DO UPDATE
+								SET search_data_hash = EXCLUDED.search_data_hash,
+									search_text_data = EXCLUDED.search_text_data`, packageInfo.MigrationId)
+						_, err = tx.Exec(insertTmpQuery,
+							version.PackageId, version.Version, version.Revision, st.DdlEntityId,
+							version.Status, st.Kind, st.SearchDataHash, st.SearchTextData,
+							version.PackageId, version.Version, version.Revision, st.DdlEntityId,
+							st.SearchDataHash)
+						if err != nil {
+							return fmt.Errorf("failed to insert into migration.fts_ddl_search_text_tmp: %w", err)
+						}
+					}
 				}
 			}
-			utils.PerfLog(time.Since(start).Milliseconds(), 100, "CreateVersionWithData: fts_ddl_search_text insert")
 		}
 		if len(ddlContractComparisonEntities) > 0 {
 			start = time.Now()
@@ -1792,43 +1833,39 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 				}
 				utils.PerfLog(time.Since(start).Milliseconds(), 1000, "CreateVersionWithData: fts_mcp_search_text insert")
 			} else if packageInfo.MigrationBuild {
-
-				// FIXME: TODO!!!!!!!!!
-
 				// Store search texts in tmp table for selective recalculation at end of migration.
 				// Only populate for the latest revision of the version — older revisions are skipped.
-				/*var maxRevision int
+				var maxRevision int
 				_, err = tx.Query(pg.Scan(&maxRevision),
 					`SELECT COALESCE(MAX(revision), 0) FROM published_version WHERE package_id = ? AND version = ? AND deleted_at IS NULL`,
 					version.PackageId, version.Version)
 				if err != nil {
-					return fmt.Errorf("failed to get max revision for fts_operation_search_text: %w", err)
+					return fmt.Errorf("failed to get max revision for fts_mcp_search_text: %w", err)
 				}
 				if version.Revision == maxRevision {
-					for _, st := range operationSearchTexts {
+					for _, st := range mcpContractSearchTexts {
 						insertTmpQuery := fmt.Sprintf(`
-							INSERT INTO migration."fts_operation_search_text_tmp_%s"
-								(package_id, version, revision, operation_id, api_type, status, search_data_hash, search_text_data, title)
-							SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+							INSERT INTO migration."fts_mcp_search_text_tmp_%s"
+								(package_id, version, revision, mcp_entity_id, status, kind, search_data_hash, search_text_data)
+							SELECT ?, ?, ?, ?, ?, ?, ?, ?
 							WHERE NOT EXISTS (
-								SELECT 1 FROM fts_operation_search_text
-								WHERE package_id = ? AND version = ? AND revision = ? AND operation_id = ?
+								SELECT 1 FROM fts_mcp_search_text
+								WHERE package_id = ? AND version = ? AND revision = ? AND mcp_entity_id = ?
 									AND search_data_hash = ?
 							)
-							ON CONFLICT (package_id, version, revision, operation_id) DO UPDATE
+							ON CONFLICT (package_id, version, revision, mcp_entity_id) DO UPDATE
 								SET search_data_hash = EXCLUDED.search_data_hash,
-									search_text_data = EXCLUDED.search_text_data,
-									title = EXCLUDED.title`, packageInfo.MigrationId)
+									search_text_data = EXCLUDED.search_text_data`, packageInfo.MigrationId)
 						_, err = tx.Exec(insertTmpQuery,
-							version.PackageId, version.Version, version.Revision, st.OperationId,
-							st.ApiType, version.Status, st.SearchDataHash, st.SearchTextData, st.Title,
-							version.PackageId, version.Version, version.Revision, st.OperationId,
+							version.PackageId, version.Version, version.Revision, st.McpEntityId,
+							version.Status, st.Kind, st.SearchDataHash, st.SearchTextData,
+							version.PackageId, version.Version, version.Revision, st.McpEntityId,
 							st.SearchDataHash)
 						if err != nil {
-							return fmt.Errorf("failed to insert into migration.fts_operation_search_text_tmp: %w", err)
+							return fmt.Errorf("failed to insert into migration.fts_mcp_search_text_tmp: %w", err)
 						}
 					}
-				}*/
+				}
 			}
 		}
 		//////////////

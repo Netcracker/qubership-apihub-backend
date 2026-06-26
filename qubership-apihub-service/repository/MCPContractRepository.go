@@ -40,7 +40,7 @@ func (r *mcpContractRepositoryImpl) ListMcpEntities(packageId, version string, r
 	if textFilter != "" {
 		pattern := fmt.Sprintf("%%%s%%", textFilter)
 		query = query.WhereGroup(func(q *orm.Query) (*orm.Query, error) {
-			q.WhereOr("name ILIKE ?", pattern).
+			q.WhereOr("title ILIKE ?", pattern).
 				WhereOr("description ILIKE ?", pattern)
 			return q, nil
 		})
@@ -124,7 +124,7 @@ select
     pv.status,
     me.mcp_entity_id,
     me.kind,
-    me.name,
+    me.title,
     me.mcp_endpoint,
     parent_package_names(me.package_id) parent_names
 from mcp_entities me
