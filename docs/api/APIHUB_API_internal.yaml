@@ -2567,10 +2567,14 @@ components:
                 type: string
                 example: get-quoteManagement-v5-quote-id
               dataHash:
+                deprecated: true
+                x-deprecation-reason: hashes are now calculated on BE side and not available on builder during publish.
                 description: Operation hash.
                 type: string
                 example: sdfsdfsf242
               previousDataHash:
+                deprecated: true
+                x-deprecation-reason: hashes are now calculated on BE side and not available on builder during publish.
                 description: Hash of the previous published version operation.
                 type: string
                 example: sdfsdfsf24dds2
