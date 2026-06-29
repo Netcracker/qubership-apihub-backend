@@ -108,7 +108,6 @@ func (b buildRepositoryImpl) GetExtendedBuild(buildId string) (*entity.ExtendedB
 func (b buildRepositoryImpl) ListExtendedBuilds(filter ExtendedBuildFilter) ([]entity.ExtendedBuildEntity, error) {
 	var result []entity.ExtendedBuildEntity
 	query := b.cp.GetConnection().Model(&result).
-		TableExpr("build AS b").
 		ColumnExpr("b.build_id").
 		ColumnExpr("b.status").
 		ColumnExpr("b.details").
