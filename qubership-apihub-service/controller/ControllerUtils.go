@@ -212,11 +212,11 @@ func validatePublishPackageKind(kind string, allowedKinds []string) *exception.C
 
 	return &exception.CustomError{
 		Status:  http.StatusBadRequest,
-		Code:    exception.InvalidPackageKind,
-		Message: exception.InvalidPackageKindMsg,
+		Code:    exception.PublishNotAllowedForPackageKind,
+		Message: exception.PublishNotAllowedForPackageKindMsg,
 		Params: map[string]interface{}{
-			"kind":        kind,
-			"allowedKind": allowedKinds,
+			"kind":         kind,
+			"allowedKinds": strings.Join(allowedKinds, ", "),
 		},
 	}
 }
