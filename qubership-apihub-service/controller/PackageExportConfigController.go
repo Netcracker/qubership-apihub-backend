@@ -49,7 +49,7 @@ func (p packageExportConfigControllerImpl) GetConfig(w http.ResponseWriter, r *h
 
 	result, err := p.expConfSvc.GetConfig(packageId)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get package export config", err)
+		handlePkgRedirectOrRespondWithError(w, r, p.ptHandler, packageId, "Failed to get package export config", err)
 		return
 	}
 
