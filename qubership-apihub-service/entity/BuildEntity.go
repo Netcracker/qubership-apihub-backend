@@ -39,6 +39,8 @@ type BuildSourceEntity struct {
 }
 
 type ExtendedBuildEntity struct {
+	tableName struct{} `pg:"_, discard_unknown_columns"`
+
 	BuildId      string                 `pg:"build_id, type:varchar"`
 	Status       string                 `pg:"status, type:varchar"`
 	Details      string                 `pg:"details, type:varchar"`
