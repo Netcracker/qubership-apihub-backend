@@ -74,6 +74,7 @@ type DDLContractKindCountEntity struct {
 func MakeDdlContractEntityView(ent *DDLContractEntity, data []byte) *view.DdlContractEntityView {
 	result := &view.DdlContractEntityView{
 		DdlEntityId:               ent.DdlEntityId,
+		Kind:                      ent.Kind,
 		SchemaName:                ent.SchemaName,
 		Name:                      ent.Name,
 		Description:               ent.Description,

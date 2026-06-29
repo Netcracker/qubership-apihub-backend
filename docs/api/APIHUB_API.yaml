@@ -10975,6 +10975,8 @@ components:
           description: DDL entity logical identifier.
           type: string
           example: "public.users"
+        kind:
+          $ref: "#/components/schemas/DdlContractKind"
         schemaName:
           description: SQL schema name.
           type: string

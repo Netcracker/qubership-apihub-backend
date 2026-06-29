@@ -7,6 +7,7 @@ type DdlEntityListView struct {
 
 type DdlContractEntityView struct {
 	DdlEntityId               string `json:"ddlEntityId"`
+	Kind                      string `json:"kind,omitempty"`
 	SchemaName                string `json:"schemaName"`
 	Name                      string `json:"name"`
 	Description               string `json:"description,omitempty"`
