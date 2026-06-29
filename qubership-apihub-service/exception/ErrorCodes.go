@@ -717,9 +717,6 @@ const InvalidCSVFileMsg = "CSV file has invalid format: $error"
 const InvalidPackageKind = "6802"
 const InvalidPackageKindMsg = `Action is not allowed for package with kind="$kind", allowed kind - "$allowedKind"`
 
-const PublishNotAllowedForPackageKind = "6803"
-const PublishNotAllowedForPackageKindMsg = "Publication is allowed only for the following package kinds: $allowedKinds, but target package has kind=$kind"
-
 const HostNotAllowed = "6900"
 const HostNotAllowedMsg = "Host not allowed: $host"
 
@@ -828,6 +825,9 @@ const ShareabilityReportDocumentNotFoundMsg = "Document with slug '$slug' not fo
 
 const ShareabilityReportSizeExceeded = "8305"
 const ShareabilityReportSizeExceededMsg = "Shareability report file size exceeded. File size limit - $size"
+
+const PublishNotAllowedForPackageKind = "8400"
+const PublishNotAllowedForPackageKindMsg = "Publication is allowed only for the following package kinds: $allowedKinds, but target package has kind=$kind"
 
 // AI Chat error codes (APIHUB-AI-*). Each public error has a Code constant; variant
 // messages reuse the parent Code (same pattern as InvalidParameterValue + InvalidLimitMsg).
