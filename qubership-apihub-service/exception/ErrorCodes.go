@@ -826,7 +826,10 @@ const ShareabilityReportDocumentNotFoundMsg = "Document with slug '$slug' not fo
 const ShareabilityReportSizeExceeded = "8305"
 const ShareabilityReportSizeExceededMsg = "Shareability report file size exceeded. File size limit - $size"
 
-const ReferencedByDashboard = "8400"
+const PublishNotAllowedForPackageKind = "8400"
+const PublishNotAllowedForPackageKindMsg = "Publication is allowed only for the following package kinds: $allowedKinds, but target package has kind=$kind"
+
+const ReferencedByDashboard = "8500"
 const VersionReferencedByDashboardMsg = "Cannot delete version $version of package $packageId: it is referenced by these dashboard versions: $dashboards. Remove the references or delete the dashboards, then retry."
 const PackageReferencedByDashboardMsg = "Cannot delete package $packageId: it is referenced by these dashboard versions: $dashboards. Remove the references or delete the dashboards, then retry."
 
