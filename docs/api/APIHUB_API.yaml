@@ -13200,7 +13200,7 @@ components:
       description: Version cannot be deleted because one or more dashboard versions reference it.
       value:
         status: 409
-        code: "8400"
+        code: "8500"
         message: "Cannot delete version $version of package $packageId: it is referenced by these dashboard versions: $dashboards. Remove the references or delete the dashboards, then retry."
         params:
           packageId: "sample.package"
@@ -13210,7 +13210,7 @@ components:
       description: Package cannot be deleted because one or more dashboard versions reference it.
       value:
         status: 409
-        code: "8400"
+        code: "8500"
         message: "Cannot delete package $packageId: it is referenced by these dashboard versions: $dashboards. Remove the references or delete the dashboards, then retry."
         params:
           packageId: "sample.package"
