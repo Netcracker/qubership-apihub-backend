@@ -234,6 +234,7 @@ func (p publishV2ControllerImpl) Publish(w http.ResponseWriter, r *http.Request)
 				Message: exception.PackageIdMismatchMsg,
 				Params:  map[string]interface{}{"configPackageId": config.PackageId, "packageId": packageId},
 			})
+			return
 		}
 	}
 
