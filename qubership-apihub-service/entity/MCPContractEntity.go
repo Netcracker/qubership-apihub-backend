@@ -3,9 +3,9 @@ package entity
 type MCPContractEntity struct {
 	tableName struct{} `pg:"mcp_entities"`
 
-	PackageId   string   `pg:"package_id, pk, type:varchar"`
-	Version     string   `pg:"version, pk, type:varchar"`
-	Revision    int      `pg:"revision, pk, type:integer"`
+	PackageId                 string   `pg:"package_id, pk, type:varchar"`
+	Version                   string   `pg:"version, pk, type:varchar"`
+	Revision                  int      `pg:"revision, pk, type:integer"`
 	McpEntityId               string   `pg:"mcp_entity_id, pk, type:varchar"`
 	Kind                      string   `pg:"kind, type:varchar, use_zero"`
 	Title                     string   `pg:"title, type:varchar, use_zero"`

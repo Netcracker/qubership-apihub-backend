@@ -88,8 +88,6 @@ func MakeDdlContractEntityView(ent *DDLContractEntity, data []byte) *view.DdlCon
 	return result
 }
 
-// MakeDdlChangedEntityView builds the changed-DDL-entity view from a comparison row,
-// mirroring the operation changelog view (current/previous entity data + change summary).
 func MakeDdlChangedEntityView(ent *DDLContractComparisonEntity) view.DdlChangedEntityView {
 	result := view.DdlChangedEntityView{
 		ChangeSummary:                ent.ChangesSummary,
