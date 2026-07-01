@@ -315,14 +315,9 @@ func (a *BuildResultToEntitiesReader) ReadOperationsToEntities() ([]*entity.Oper
 		})
 
 		if dataHash != nil {
-			searchScope := map[string]interface{}{}
-			if allVal, ok := operation.SearchScopes[view.ScopeAll]; ok {
-				searchScope[view.ScopeAll] = allVal
-			}
 			operationDataEntities = append(operationDataEntities, &entity.OperationDataEntity{
-				DataHash:    *dataHash,
-				Data:        fileData,
-				SearchScope: searchScope,
+				DataHash: *dataHash,
+				Data:     fileData,
 			})
 		}
 
@@ -428,6 +423,12 @@ func (a *BuildResultToEntitiesReader) ReadOperationComparisonsToEntities(publish
 		versionComparisonEnt.Metadata = entity.Metadata{}
 		if a.PackageInfo.MigrationBuild {
 			versionComparisonEnt.Metadata.SetMigrationId(a.PackageInfo.MigrationId)
+		}
+		if a.PackageInfo.PreviousVersionBuilderVersion != "" {
+			versionComparisonEnt.Metadata.SetPreviousVersionBuilderVersion(a.PackageInfo.PreviousVersionBuilderVersion)
+		}
+		if a.PackageInfo.CurrentVersionBuilderVersion != "" {
+			versionComparisonEnt.Metadata.SetCurrentVersionBuilderVersion(a.PackageInfo.CurrentVersionBuilderVersion)
 		}
 		if !mainVersion {
 			mainVersionRefs = append(mainVersionRefs, versionComparisonEnt.ComparisonId)

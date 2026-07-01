@@ -7,10 +7,10 @@ info:
     name: Netcracker Opensource Group
     email: opensourcegroup@netcracker.com
   license:
-    name: Apache 2.0
-    url: https://github.com/Netcracker/qubership-apihub-backend/raw/refs/heads/main/LICENSE
+    name: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
   version: "2026.1"
-  x-nc-api-audience: BWC
+  x-api-kind: no-BWC
 externalDocs:
   description: Find out more about this project and repository documentation
   url: https://github.com/Netcracker/qubership-apihub
@@ -860,11 +860,11 @@ paths:
                   description: Email address of the user
                   type: string
                   format: email
-                  example: "name.surname@qubership.org"
+                  example: "john.doe@example.com"
                 name:
                   description: Name of the user
                   type: string
-                  example: "Name Surname"
+                  example: "John Doe"
                 password:
                   type: string
                   description: User password.
@@ -1010,12 +1010,12 @@ components:
         name:
           description: Name of the user
           type: string
-          example: "Name Surname"
+          example: "John Doe"
         email:
           description: Email address of the user
           type: string
           format: email
-          example: "name.surname@qubership.org"
+          example: "john.doe@example.com"
         avatarUrl:
           description: URL of the user avatar image.
           type: string
@@ -1662,7 +1662,17 @@ components:
                   type: string
                 builderVersion:
                   type: string
-                  description: Version of the builder with which build was made.
+                  description: Version of the builder (current api-processor version) with which this build was made.
+                previousVersionBuilderVersion:
+                  type: string
+                  description: |
+                    Version of the builder with which the previous package version was built.
+                    Only present when it differs from the current api-processor version (builderVersion).
+                currentVersionBuilderVersion:
+                  type: string
+                  description: |
+                    Version of the builder with which the current package version was built.
+                    Only present when it differs from the current api-processor version (builderVersion).
                 createdBy:
                   type: string
                   description: The user who started the build process.

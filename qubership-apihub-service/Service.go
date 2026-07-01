@@ -31,6 +31,7 @@ import (
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/db"
 
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/client"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/controller"
 	midldleware "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/middleware"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/repository"
@@ -76,6 +77,9 @@ func main() {
 	systemInfoService, err := service.NewSystemInfoService()
 	if err != nil {
 		panic(err)
+	}
+	if err := utils.ValidateTLSAtStartup(); err != nil {
+		log.Fatalf("TLS configuration failed: %v", err)
 	}
 	basePath := systemInfoService.GetBasePath()
 
@@ -292,8 +296,37 @@ func main() {
 	ddlContractService := ddlContractServiceForVersion
 	mcpContractService := mcpContractServiceForVersion
 
-	mcpService := service.NewMCPService(systemInfoService, operationService, packageService, versionService, monitoringService)
-	chatService := service.NewChatService(systemInfoService, mcpService)
+	mcpService := service.NewMCPService(systemInfoService, operationService, packageService, versionService, monitoringService, roleService)
+
+	ephemeralFileRepository := repository.NewEphemeralFileRepositoryPG(cp)
+	ephemeralFileService := service.NewEphemeralFileService(systemInfoService, ephemeralFileRepository)
+	ephemeralFileController := controller.NewEphemeralFileController(ephemeralFileService)
+	ephemeralFileCleanup := service.NewEphemeralFileCleanupService(ephemeralFileRepository, lockService)
+	if err := ephemeralFileCleanup.StartCleanupJob(systemInfoService.GetEphemeralFilesCleanupSchedule(), systemInfoService.GetEphemeralFileDirectory()); err != nil {
+		log.Warnf("Failed to start ephemeral files cleanup: %v", err)
+	}
+
+	aiChatEnabled := isAiChatEnabled(systemInfoService)
+	var aiChatController *controller.AiChatController
+	if aiChatEnabled {
+		log.Info("ai-chat: routes and cleanup jobs are ENABLED")
+		aiChatRepository := repository.NewAiChatRepositoryPG(cp)
+		llmClient, err := client.NewOpenAILlmClient(systemInfoService.GetAiChatConfig().OpenAI)
+		if err != nil {
+			log.Fatalf("Failed to create OpenAI LLM client: %v", err)
+		}
+		aiChatsService := service.NewAiChatsService(aiChatRepository)
+		aiChatTurnService, err := service.NewAiChatTurnService(systemInfoService, aiChatRepository, llmClient, mcpService, ephemeralFileService, security.MintEphemeralFileToken)
+		if err != nil {
+			log.Fatalf("Failed to create AiChatTurnService: %v", err)
+		}
+		aiChatController = controller.NewAiChatController(aiChatsService, aiChatTurnService, monitoringService)
+		aiChatCleanup := service.NewAiChatCleanupService(aiChatRepository, lockService)
+		aiCfg := systemInfoService.GetAiChatConfig()
+		if err := aiChatCleanup.StartChatRetentionJob(aiCfg.CleanupSchedule, aiCfg.RetentionDays, aiCfg.PinnedForeverCount); err != nil {
+			log.Warnf("Failed to start ai chat retention cleanup: %v", err)
+		}
+	}
 
 	idpManager, err := providers.NewIDPManager(systemInfoService.GetAuthConfig(), systemInfoService.GetAllowedHosts(), systemInfoService.IsProductionMode(), userService)
 	if err != nil {
@@ -301,7 +334,7 @@ func main() {
 		panic("Failed to initialize external IDP: " + err.Error())
 	}
 
-	publishedController := controller.NewPublishedController(publishedService, portalService)
+	publishedController := controller.NewPublishedController(publishedService, portalService, roleService)
 
 	logsController := controller.NewLogsController(logsService, roleService)
 	systemInfoController := controller.NewSystemInfoController(systemInfoService, dbMigrationService)
@@ -309,7 +342,10 @@ func main() {
 	apihubApiKeyController := controller.NewApihubApiKeyController(apihubApiKeyService, roleService)
 	cleanupController := controller.NewCleanupController(cleanupService)
 
-	playgroundProxyController := controller.NewPlaygroundProxyController(systemInfoService)
+	playgroundProxyController, err := controller.NewPlaygroundProxyController(systemInfoService)
+	if err != nil {
+		log.Fatalf("Failed to create PlaygroundProxyController: %v", err)
+	}
 	publishV2Controller := controller.NewPublishV2Controller(buildService, publishedService, buildResultService, roleService, systemInfoService)
 	exportController := controller.NewExportController(publishedService, portalService, roleService, excelService, versionService, monitoringService, exportService, packageService)
 
@@ -339,7 +375,6 @@ func main() {
 	mcpContractController := controller.NewMCPContractController(roleService, mcpContractService, ptHandler)
 
 	mcpController := controller.NewMCPController(mcpService)
-	chatController := controller.NewChatController(chatService, monitoringService)
 	buildController := controller.NewBuildController(buildResultService, buildService, roleService.IsSysadm)
 	adminPublishedController := controller.NewAdminPublishedController(publishedService, roleService.IsSysadm, systemInfoService.GetPublishArchiveSizeLimitMB())
 
@@ -347,13 +382,13 @@ func main() {
 	r.HandleFunc("/api/v1/system/configuration", samlAuthController.GetSystemSSOInfo_deprecated).Methods(http.MethodGet) //deprecated
 	r.HandleFunc("/api/v2/system/configuration", security.NoSecure(authController.GetSystemConfigurationInfo)).Methods(http.MethodGet)
 
-	r.HandleFunc("/api/v1/debug/logs", security.Secure(logsController.StoreLogs)).Methods(http.MethodPut)
+	r.HandleFunc("/api/v1/debug/logs", security.SecureUser(logsController.StoreLogs)).Methods(http.MethodPut)
 	r.HandleFunc("/api/v1/debug/logs/setLevel", security.Secure(logsController.SetLogLevel)).Methods(http.MethodPost)
 	r.HandleFunc("/api/v1/debug/logs/checkLevel", security.Secure(logsController.CheckLogLevel)).Methods(http.MethodGet)
 
 	//Search
-	r.HandleFunc("/api/v3/search/{searchLevel}", security.Secure(searchController.Search_deprecated)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v4/search/{searchLevel}", security.Secure(searchController.Search)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v3/search/{searchLevel}", security.SecureUser(searchController.Search_deprecated)).Methods(http.MethodPost) //TODO: add API key strategy after authorization fix
+	r.HandleFunc("/api/v4/search/{searchLevel}", security.SecureUser(searchController.Search)).Methods(http.MethodPost)            //TODO: add API key strategy after authorization fix
 
 	r.HandleFunc("/api/v2/builders/{builderId}/tasks", security.Secure(publishV2Controller.GetFreeBuild)).Methods(http.MethodPost)
 
@@ -477,7 +512,7 @@ func main() {
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/copy", security.Secure(versionController.CopyVersion)).Methods(http.MethodPost)
 
 	r.HandleFunc("/api/v4/packages/{packageId}/activity", security.Secure(activityTrackingController.GetActivityHistoryForPackage)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v4/activity", security.Secure(activityTrackingController.GetActivityHistory)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v4/activity", security.SecureUser(activityTrackingController.GetActivityHistory)).Methods(http.MethodGet) //TODO: add API key strategy after authorization fix
 
 	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/groups", security.Secure(operationGroupController.CreateOperationGroup)).Methods(http.MethodPost)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}", security.Secure(operationGroupController.DeleteOperationGroup)).Methods(http.MethodDelete)
@@ -570,10 +605,19 @@ func main() {
 		r.PathPrefix("/debug/").Handler(http.DefaultServeMux)
 
 		r.HandleFunc("/api/internal/minio/download", security.Secure(minioStorageController.DownloadFilesFromMinioToDatabase)).Methods(http.MethodPost)
+	}
 
-		//Chat
-		r.HandleFunc("/api/v1/ai-chat", security.Secure(chatController.Chat)).Methods(http.MethodPost)
-		r.HandleFunc("/api/v1/ai-chat/stream", security.Secure(chatController.ChatStream)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v1/ephemeral-files/{fileId}", security.NoSecure(ephemeralFileController.Download)).Methods(http.MethodGet)
+
+	if aiChatEnabled {
+		r.HandleFunc("/api/v1/ai-chat/chats", security.Secure(aiChatController.ListChats)).Methods(http.MethodGet)
+		r.HandleFunc("/api/v1/ai-chat/chats", security.Secure(aiChatController.CreateChat)).Methods(http.MethodPost)
+		r.HandleFunc("/api/v1/ai-chat/chats/{chatId}", security.Secure(aiChatController.GetChat)).Methods(http.MethodGet)
+		r.HandleFunc("/api/v1/ai-chat/chats/{chatId}", security.Secure(aiChatController.UpdateChat)).Methods(http.MethodPatch)
+		r.HandleFunc("/api/v1/ai-chat/chats/{chatId}", security.Secure(aiChatController.DeleteChat)).Methods(http.MethodDelete)
+		r.HandleFunc("/api/v1/ai-chat/chats/{chatId}/messages", security.Secure(aiChatController.ListMessages)).Methods(http.MethodGet)
+		r.HandleFunc("/api/v1/ai-chat/chats/{chatId}/messages", security.Secure(aiChatController.SendMessage)).Methods(http.MethodPost)
+		r.HandleFunc("/api/v1/ai-chat/chats/{chatId}/messages/stream", security.Secure(aiChatController.SendMessageStream)).Methods(http.MethodPost)
 	}
 
 	mcpHandler := mcpController.MakeMCPServer()
@@ -681,6 +725,10 @@ func main() {
 	log.Fatalf("Http server returned error: %v", srv.ListenAndServe())
 }
 
+func isAiChatEnabled(sis service.SystemInfoService) bool {
+	return sis.GetAiChatConfig().Enabled
+}
+
 func makeServer(systemInfoService service.SystemInfoService, r *mux.Router) *http.Server {
 	listenAddr := systemInfoService.GetListenAddress()
 
@@ -716,8 +764,12 @@ func makeServer(systemInfoService service.SystemInfoService, r *mux.Router) *htt
 	//   - http.ResponseController.SetWriteDeadline per-request (see middleware/WriteDeadlineMiddleware.go) to set
 	//     a deadline only on the response writing phase, independent of processing time.
 	//   - Context with deadline for processing time control (planned, not yet implemented).
+	corsHandler := handlers.CORS(corsOptions...)(r)
+	compressedHandler := handlers.CompressHandler(corsHandler)
+	handler := midldleware.NewSelectiveCompressionHandler(corsHandler, compressedHandler)
+
 	return &http.Server{
-		Handler:     handlers.CompressHandler(handlers.CORS(corsOptions...)(r)),
+		Handler:     handler,
 		Addr:        listenAddr,
 		ReadTimeout: 60 * time.Second,
 	}

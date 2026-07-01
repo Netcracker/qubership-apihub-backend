@@ -94,18 +94,21 @@ type TechnicalParameters struct {
 	MetricsGetterSchedule       string
 	ApiSpecDirectory            string
 	MigrationLockMaxWaitMinutes int
+	EphemeralFileDirectory      string
 }
 
 type BusinessParameters struct {
 	ExternalLinks                 []string
 	DefaultWorkspaceId            string
 	ReleaseVersionPattern         string
-	PublishArchiveSizeLimitMb     int    `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
-	PublishFileSizeLimitMb        int    `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
-	TemplateSizeLimitMb           int    `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
-	ShareabilityReportSizeLimitMb int    `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
+	PublishArchiveSizeLimitMb     int `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
+	PublishFileSizeLimitMb        int `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
+	TemplateSizeLimitMb           int `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
+	ShareabilityReportSizeLimitMb int `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
 	SystemNotification            string //TODO: replace with db impl
 	FailBuildOnBrokenRefs         bool
+	EphemeralFileMaxSizeMb        int `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
+	EphemeralFileTTLMinutes       int `validate:"gt=0"`
 }
 
 type MonitoringConfig struct {
@@ -135,6 +138,11 @@ type CleanupConfig struct {
 	UnreferencedData  UnreferencedDataCleanupConfig
 	MaintenanceVacuum MaintenanceVacuumCleanupConfig
 	Builds            BuildsCleanupConfig
+	EphemeralFiles    EphemeralFilesCleanupConfig
+}
+
+type EphemeralFilesCleanupConfig struct {
+	Schedule string
 }
 
 type AIConfig struct {
@@ -145,14 +153,23 @@ type AIConfig struct {
 type MCPConfig struct {
 	Workspace string
 }
+
+// ChatConfig holds AI chat settings (LLM client config and retention policy).
+// Ephemeral file settings (directory, TTL, max size) moved to TechnicalParameters and BusinessParameters.
+// Ephemeral file cleanup schedule moved to CleanupConfig.EphemeralFiles.
 type ChatConfig struct {
-	OpenAI OpenAIConfig
+	OpenAI                  OpenAIConfig
+	Enabled                 bool
+	RetentionDays           int `validate:"gt=0"`
+	PinnedForeverCount      int `validate:"gte=0"`
+	CompactAtContextPercent int `validate:"gt=0,lt=100"`
+	CleanupSchedule         string
 }
 
 type OpenAIConfig struct {
 	ApiKey          string `sensitive:"true"`
 	Model           string
-	ProxyURL        string  // Optional base URL for OpenAI API requests (replaces https://api.openai.com/v1); Example: "https://llmproxy.localdomain.com" or "https://llmproxy.localdomain.com/v1"
+	ProxyURL        string  // Optional base URL for OpenAI API requests (replaces https://api.openai.com/v1); Example: "https://llmproxy.example.com" or "https://llmproxy.example.com/v1"
 	Temperature     float64 // Controls randomness of the model's output. Range: 0.0 to 2.0. Lower values = more focused, higher values = more random. Default: 1.0
 	ReasoningEffort string  // Controls depth of reasoning for reasoning models (gpt-5, o-series). Values: "minimal", "low", "medium", "high". Default: "medium"
 	Verbosity       string  // Controls verbosity and detail level of the model's response. Values: "low", "medium", "high". Default: "medium"
