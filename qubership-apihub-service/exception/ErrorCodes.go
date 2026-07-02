@@ -832,6 +832,7 @@ const PublishNotAllowedForPackageKindMsg = "Publication is allowed only for the 
 const ReferencedByDashboard = "8500"
 const VersionReferencedByDashboardMsg = "Cannot delete version $version of package $packageId: it is referenced by these dashboard versions: $dashboards. Remove the references or delete the dashboards, then retry."
 const PackageReferencedByDashboardMsg = "Cannot delete package $packageId: it is referenced by these dashboard versions: $dashboards. Remove the references or delete the dashboards, then retry."
+const GroupOrWorkspaceReferencedByDashboardMsg = "Cannot delete $kind $packageId: it contains packages that are referenced by dashboards: $packages. Remove the references or delete the dashboards, then retry."
 
 // AI Chat error codes (APIHUB-AI-*). Each public error has a Code constant; variant
 // messages reuse the parent Code (same pattern as InvalidParameterValue + InvalidLimitMsg).

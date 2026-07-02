@@ -420,9 +420,9 @@ func (v versionServiceImpl) DeleteVersion(ctx context.SecurityContext, packageId
 		return err
 	}
 	if len(referencingDashboards) > 0 {
-		log.Warnf("Blocked deletion of version %s of package %s by user %s: referenced by dashboards [%s]",
-			versionEnt.Version, packageId, ctx.GetUserId(), view.FormatDashboardKeys(referencingDashboards))
-		accessible, hiddenCount, err := filterAccessibleReferencingDashboards(ctx, v.roleService, referencingDashboards)
+		log.Warnf("Blocked deletion of version %s of package %s by user %s: referenced by dashboards %v",
+			versionEnt.Version, packageId, ctx.GetUserId(), referencingDashboards)
+		accessible, hiddenCount, err := v.roleService.FilterVersionsByPackageReadAccess(ctx, referencingDashboards)
 		if err != nil {
 			return err
 		}
@@ -433,7 +433,7 @@ func (v versionServiceImpl) DeleteVersion(ctx context.SecurityContext, packageId
 			Params: map[string]interface{}{
 				"packageId":  packageId,
 				"version":    versionEnt.Version,
-				"dashboards": view.FormatReferencingDashboards(accessible, hiddenCount),
+				"dashboards": entity.FormatVersionKeysWithHidden(accessible, hiddenCount, "dashboard version"),
 			},
 		}
 	}

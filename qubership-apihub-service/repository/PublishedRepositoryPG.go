@@ -2249,8 +2249,8 @@ func (p publishedRepositoryImpl) GetVersionRefsV3(packageId string, version stri
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetVersionReferencingDashboards(packageId string, version string) ([]view.ReferencingDashboard, error) {
-	result := make([]view.ReferencingDashboard, 0)
+func (p publishedRepositoryImpl) GetVersionReferencingDashboards(packageId string, version string) ([]entity.PublishedVersionKeyEntity, error) {
+	result := make([]entity.PublishedVersionKeyEntity, 0)
 	query := `
 		SELECT DISTINCT ref.package_id, ref.version, ref.revision
 		FROM published_version_reference ref
@@ -2261,15 +2261,15 @@ func (p publishedRepositoryImpl) GetVersionReferencingDashboards(packageId strin
 			AND dash.deleted_at IS NULL
 			AND pkg.deleted_at IS NULL
 		ORDER BY ref.package_id, ref.version, ref.revision`
-	_, err := p.cp.GetConnection().Query(&result, query, packageId, version, packageId, version)
+	_, err := p.cp.GetConnection().Query(&result, query, packageId, version)
 	if err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetPackageReferencingDashboards(packageId string) ([]view.ReferencingDashboard, error) {
-	result := make([]view.ReferencingDashboard, 0)
+func (p publishedRepositoryImpl) GetPackageReferencingDashboards(packageId string) ([]entity.DashboardReferenceEntity, error) {
+	result := make([]entity.DashboardReferenceEntity, 0)
 	query := `
 		WITH RECURSIVE subtree AS (
 			SELECT id FROM package_group WHERE id = ? AND deleted_at IS NULL
@@ -2278,7 +2278,7 @@ func (p publishedRepositoryImpl) GetPackageReferencingDashboards(packageId strin
 			INNER JOIN subtree s ON c.parent_id = s.id
 			WHERE c.deleted_at IS NULL
 		)
-		SELECT DISTINCT ref.package_id, ref.version, ref.revision
+		SELECT DISTINCT ref.reference_id AS referenced_package_id, ref.package_id, ref.version, ref.revision
 		FROM published_version_reference ref
 		INNER JOIN published_version dash
 			ON dash.package_id = ref.package_id AND dash.version = ref.version AND dash.revision = ref.revision
@@ -2287,7 +2287,7 @@ func (p publishedRepositoryImpl) GetPackageReferencingDashboards(packageId strin
 			AND ref.package_id NOT IN (SELECT id FROM subtree)
 			AND dash.deleted_at IS NULL
 			AND pkg.deleted_at IS NULL
-		ORDER BY ref.package_id, ref.version, ref.revision`
+		ORDER BY ref.reference_id, ref.package_id, ref.version, ref.revision`
 	_, err := p.cp.GetConnection().Query(&result, query, packageId)
 	if err != nil {
 		return nil, err

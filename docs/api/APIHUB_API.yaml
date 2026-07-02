@@ -1243,6 +1243,8 @@ paths:
               examples:
                 PackageReferencedByDashboard:
                   $ref: "#/components/examples/PackageReferencedByDashboard"
+                GroupOrWorkspaceReferencedByDashboard:
+                  $ref: "#/components/examples/GroupOrWorkspaceReferencedByDashboard"
         "500":
           description: Internal Server Error
           content:
@@ -13215,6 +13217,18 @@ components:
         params:
           packageId: "sample.package"
           dashboards: "sample.dashboard|2024.2@3, other.dashboard|2024.1@1"
+    GroupOrWorkspaceReferencedByDashboard:
+      description: >-
+        Group or workspace cannot be deleted because dashboard versions reference packages
+        inside it.
+      value:
+        status: 409
+        code: "8500"
+        message: "Cannot delete $kind $packageId: it contains packages that are referenced by dashboards: $packages. Remove the references or delete the dashboards, then retry."
+        params:
+          kind: "group"
+          packageId: "sample.group"
+          packages: "sample.group.package1 (sample.dashboard|2024.2@3, other.dashboard|2024.1@1), sample.group.package2 (other.dashboard|1.0@1)"
     IncorrectInputParameters:
       description: Incorrect input parameters
       value:

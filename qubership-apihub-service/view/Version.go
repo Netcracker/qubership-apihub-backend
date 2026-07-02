@@ -1,8 +1,6 @@
 package view
 
 import (
-	"fmt"
-	"strings"
 	"time"
 )
 
@@ -128,35 +126,6 @@ type PackageVersionRef struct {
 	ParentNames       []string   `json:"parentPackages,omitempty"`
 	ServiceName       string     `json:"-"`
 	NotLatestRevision bool       `json:"notLatestRevision,omitempty"`
-}
-
-type ReferencingDashboard struct {
-	PackageId string `json:"packageId"`
-	Version   string `json:"version"`
-	Revision  int    `json:"revision"`
-}
-
-func FormatDashboardKeys(dashboards []ReferencingDashboard) string {
-	items := make([]string, 0, len(dashboards))
-	for _, dash := range dashboards {
-		items = append(items, fmt.Sprintf("%s|%s@%d", dash.PackageId, dash.Version, dash.Revision))
-	}
-	return strings.Join(items, ", ")
-}
-
-func FormatReferencingDashboards(accessible []ReferencingDashboard, hiddenCount int) string {
-	if hiddenCount == 0 {
-		return FormatDashboardKeys(accessible)
-	}
-	noun := "versions"
-	if hiddenCount == 1 {
-		noun = "version"
-	}
-	if len(accessible) == 0 {
-		return fmt.Sprintf("%d dashboard %s you cannot access (contact system administrator)", hiddenCount, noun)
-	}
-	return fmt.Sprintf("%s, and %d more dashboard %s you cannot access (contact system administrator)",
-		FormatDashboardKeys(accessible), hiddenCount, noun)
 }
 
 type PackageVersionRevisions struct {
