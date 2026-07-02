@@ -78,6 +78,9 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	if err := utils.ValidateTLSAtStartup(); err != nil {
+		log.Fatalf("TLS configuration failed: %v", err)
+	}
 	basePath := systemInfoService.GetBasePath()
 
 	// Create router and server to expose live and ready endpoints during initialization
@@ -332,8 +335,11 @@ func main() {
 	apihubApiKeyController := controller.NewApihubApiKeyController(apihubApiKeyService, roleService)
 	cleanupController := controller.NewCleanupController(cleanupService)
 
-	playgroundProxyController := controller.NewPlaygroundProxyController(systemInfoService)
-	publishV2Controller := controller.NewPublishV2Controller(buildService, publishedService, buildResultService, roleService, systemInfoService)
+	playgroundProxyController, err := controller.NewPlaygroundProxyController(systemInfoService)
+	if err != nil {
+		log.Fatalf("Failed to create PlaygroundProxyController: %v", err)
+	}
+	publishV2Controller := controller.NewPublishV2Controller(buildService, publishedService, buildResultService, roleService, systemInfoService, packageService)
 	exportController := controller.NewExportController(publishedService, portalService, roleService, excelService, versionService, monitoringService, exportService, packageService)
 
 	packageController := controller.NewPackageController(packageService, publishedService, portalService, roleService, monitoringService, ptHandler)
@@ -345,7 +351,7 @@ func main() {
 	jwtPubKeyController := controller.NewJwtPubKeyController()
 	logoutController := controller.NewLogoutController(tokenRevocationService, systemInfoService)
 	operationController := controller.NewOperationController(roleService, operationService, buildService, monitoringService, ptHandler)
-	operationGroupController := controller.NewOperationGroupController(roleService, operationGroupService, versionService, systemInfoService)
+	operationGroupController := controller.NewOperationGroupController(roleService, operationGroupService, versionService, systemInfoService, packageService)
 	searchController := controller.NewSearchController(operationService, versionService, monitoringService)
 	dataMigrationController := mController.NewTempMigrationController(dbMigrationService, roleService.IsSysadm)
 	activityTrackingController := controller.NewActivityTrackingController(activityTrackingService, roleService, ptHandler)

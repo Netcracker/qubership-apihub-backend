@@ -571,7 +571,7 @@ paths:
                                 memberName:
                                   description: User which was added/deleted to/from package with some role(s)
                                   type: string
-                                  example: Name Surname
+                                  example: John Doe
                                 roles:
                                   type: array
                                   items:
@@ -590,7 +590,7 @@ paths:
                                 memberName:
                                   description: User which was added/deleted to/from package with some role(s)
                                   type: string
-                                  example: Name Surname
+                                  example: John Doe
                             - type: object
                               title: ParamsForPublishAndDeleteVersion
                               description: params for publish_new_version and delete_version events
@@ -1234,6 +1234,17 @@ paths:
               examples:
                 PackageNotFound:
                   $ref: "#/components/examples/PackageNotFound"
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                PackageReferencedByDashboard:
+                  $ref: "#/components/examples/PackageReferencedByDashboard"
+                GroupOrWorkspaceReferencedByDashboard:
+                  $ref: "#/components/examples/GroupOrWorkspaceReferencedByDashboard"
         "500":
           description: Internal Server Error
           content:
@@ -1508,7 +1519,7 @@ paths:
                                 memberName:
                                   description: User which was added/deleted to/from package with some role(s)
                                   type: string
-                                  example: Name Surname
+                                  example: John Doe
                                 roles:
                                   type: array
                                   items:
@@ -1527,7 +1538,7 @@ paths:
                                 memberName:
                                   description: User which was added/deleted to/from package with some role(s)
                                   type: string
-                                  example: Name Surname
+                                  example: John Doe
                             - type: object
                               title: ParamsForPublishAndDeleteVersion
                               description: params for publish_new_version and delete_version events
@@ -3119,6 +3130,15 @@ paths:
               examples:
                 PackageNotFound:
                   $ref: "#/components/examples/PackageNotFound"
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                VersionReferencedByDashboard:
+                  $ref: "#/components/examples/VersionReferencedByDashboard"
         "500":
           description: Internal Server Error
           content:
@@ -10643,6 +10663,10 @@ components:
           description: Identifies if a full migration is currently in progress. Returns false when no migration or only a partial migration is running.
           type: boolean
           default: false
+        aiChatEnabled:
+          description: Mirrors the ai.chat.enabled kill-switch. When false, AI chat routes are not registered.
+          type: boolean
+          default: false
         featureFlags:
           description: Feature flags for the system
           type: object
@@ -11184,12 +11208,12 @@ components:
         name:
           description: Name of the user
           type: string
-          example: "Name Surname"
+          example: "John Doe"
         email:
           description: Email address of the user
           type: string
           format: email
-          example: "name.surname@qubership.org"
+          example: "john.doe@example.com"
         avatarUrl:
           description: URL of the user avatar image.
           type: string
@@ -11307,7 +11331,7 @@ components:
           items:
             type: string
             format: email
-          example: ["name.surname@qubership.org"]
+          example: ["john.doe@example.com"]
         roleIds:
           type: array
           description: List of role IDs, added to the user.
@@ -13150,6 +13174,7 @@ components:
         backendVersion: master-20250522.080756-379-RELEASE
         productionMode: true
         migrationInProgress: false
+        aiChatEnabled: false
         externalLinks:
           - User guide|https://www.example.com/guide
           - Support team|https://www.example.com/support]
@@ -13185,6 +13210,37 @@ components:
         status: 404
         code: "APIHUB-3043"
         message: "File for path $fileId not found"
+    VersionReferencedByDashboard:
+      description: Version cannot be deleted because one or more dashboard versions reference it.
+      value:
+        status: 409
+        code: "8500"
+        message: "Cannot delete version $version of package $packageId: it is referenced by these dashboard versions: $dashboards. Remove the references or delete the dashboards, then retry."
+        params:
+          packageId: "sample.package"
+          version: "2024.1"
+          dashboards: "sample.dashboard|2024.2@3, other.dashboard|2024.1@1"
+    PackageReferencedByDashboard:
+      description: Package cannot be deleted because one or more dashboard versions reference it.
+      value:
+        status: 409
+        code: "8500"
+        message: "Cannot delete package $packageId: it is referenced by these dashboard versions: $dashboards. Remove the references or delete the dashboards, then retry."
+        params:
+          packageId: "sample.package"
+          dashboards: "sample.dashboard|2024.2@3, other.dashboard|2024.1@1"
+    GroupOrWorkspaceReferencedByDashboard:
+      description: >-
+        Group or workspace cannot be deleted because dashboard versions reference packages
+        inside it.
+      value:
+        status: 409
+        code: "8500"
+        message: "Cannot delete $kind $packageId: it contains packages that are referenced by dashboards: $packages. Remove the references or delete the dashboards, then retry."
+        params:
+          kind: "group"
+          packageId: "sample.group"
+          packages: "sample.group.package1 (sample.dashboard|2024.2@3, other.dashboard|2024.1@1), sample.group.package2 (other.dashboard|1.0@1)"
     IncorrectInputParameters:
       description: Incorrect input parameters
       value:

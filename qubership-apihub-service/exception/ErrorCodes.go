@@ -826,6 +826,14 @@ const ShareabilityReportDocumentNotFoundMsg = "Document with slug '$slug' not fo
 const ShareabilityReportSizeExceeded = "8305"
 const ShareabilityReportSizeExceededMsg = "Shareability report file size exceeded. File size limit - $size"
 
+const PublishNotAllowedForPackageKind = "8400"
+const PublishNotAllowedForPackageKindMsg = "Publication is allowed only for the following package kinds: $allowedKinds, but target package has kind=$kind"
+
+const ReferencedByDashboard = "8500"
+const VersionReferencedByDashboardMsg = "Cannot delete version $version of package $packageId: it is referenced by these dashboard versions: $dashboards. Remove the references or delete the dashboards, then retry."
+const PackageReferencedByDashboardMsg = "Cannot delete package $packageId: it is referenced by these dashboard versions: $dashboards. Remove the references or delete the dashboards, then retry."
+const GroupOrWorkspaceReferencedByDashboardMsg = "Cannot delete $kind $packageId: it contains packages that are referenced by dashboards: $packages. Remove the references or delete the dashboards, then retry."
+
 const VersionReferencedAsPreviousByRelease = "8600"
 const VersionReferencedAsPreviousByReleaseMsg = "Version $version for package $packageId cannot be changed to the 'draft' status because it is the previous version of released versions: $releaseVersions"
 
