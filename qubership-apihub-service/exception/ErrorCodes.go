@@ -835,7 +835,7 @@ const PackageReferencedByDashboardMsg = "Cannot delete package $packageId: it is
 const GroupOrWorkspaceReferencedByDashboardMsg = "Cannot delete $kind $packageId: it contains packages that are referenced by dashboards: $packages. Remove the references or delete the dashboards, then retry."
 
 const VersionReferencedAsPreviousByRelease = "8600"
-const VersionReferencedAsPreviousByReleaseMsg = "Version $version for package $packageId cannot be changed to the 'draft' status because it is the previous version of released versions: $releaseVersions"
+const VersionReferencedAsPreviousByReleaseMsg = "Version $version for package $packageId cannot be changed to the 'draft' status because it is the previous version of: $releaseVersions"
 
 // AI Chat error codes (APIHUB-AI-*). Each public error has a Code constant; variant
 // messages reuse the parent Code (same pattern as InvalidParameterValue + InvalidLimitMsg).

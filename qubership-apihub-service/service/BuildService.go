@@ -160,7 +160,8 @@ func (b *buildServiceImpl) PublishVersion(ctx context.SecurityContext, config vi
 			}
 		}
 		// A release version's previous version must be a release; a draft version may reference a draft previous version.
-		if config.BuildType == view.PublishType && config.Status == string(view.Release) && previousVersionStatus == string(view.Draft) {
+		if b.systemInfoService.PreviousVersionStatusValidationEnabled() &&
+			config.BuildType == view.PublishType && config.Status == string(view.Release) && previousVersionStatus == string(view.Draft) {
 			return nil, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.PreviousPackageVersionNotRelease,
@@ -185,8 +186,9 @@ func (b *buildServiceImpl) PublishVersion(ctx context.SecurityContext, config vi
 	}
 
 	// Publishing this version as a draft must not leave a release version that references it as its previous version.
-	if config.BuildType == view.PublishType && config.Status == string(view.Draft) {
-		if err := b.publishService.CheckNoReleaseDependents(config.PackageId, config.Version); err != nil {
+	if b.systemInfoService.PreviousVersionStatusValidationEnabled() &&
+		config.BuildType == view.PublishType && config.Status == string(view.Draft) {
+		if err := b.publishService.CheckNoReleaseDependentVersions(ctx, config.PackageId, config.Version); err != nil {
 			return nil, err
 		}
 	}

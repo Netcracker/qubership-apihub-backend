@@ -502,7 +502,7 @@ func (v versionServiceImpl) PatchVersion(ctx context.SecurityContext, packageId 
 			}
 
 			// A release version's previous version must be a release.
-			if versionEnt.PreviousVersion != "" {
+			if v.systemInfoService.PreviousVersionStatusValidationEnabled() && versionEnt.PreviousVersion != "" {
 				previousVersionPackageId := versionEnt.PreviousVersionPackageId
 				if previousVersionPackageId == "" {
 					previousVersionPackageId = packageId
@@ -522,9 +522,9 @@ func (v versionServiceImpl) PatchVersion(ctx context.SecurityContext, packageId 
 			}
 		}
 
-		// Changing a release version back to draft must not leave a release that references it as its previous version.
-		if newStatus == string(view.Draft) && versionEnt.Status == string(view.Release) {
-			if err := v.publishedService.CheckNoReleaseDependents(packageId, versionEnt.Version); err != nil {
+		// Changing a release version to draft must not leave a release version that references it as its previous version.
+		if v.systemInfoService.PreviousVersionStatusValidationEnabled() && newStatus == string(view.Draft) && versionEnt.Status == string(view.Release) {
+			if err := v.publishedService.CheckNoReleaseDependentVersions(ctx, packageId, versionEnt.Version); err != nil {
 				return nil, err
 			}
 		}
@@ -1764,25 +1764,57 @@ func (v versionServiceImpl) StartPublishFromCSV(ctx context.SecurityContext, req
 		if req.PreviousVersionPackageId == "" {
 			previousVersionPackageId = req.PackageId
 		}
-		prevVersion, err := v.publishedRepo.GetVersion(previousVersionPackageId, req.PreviousVersion)
-		if err != nil {
+		if v.systemInfoService.PreviousVersionStatusValidationEnabled() {
+			previousVersionStatus, previousVersionFound, err := v.publishedService.GetVersionStatus(previousVersionPackageId, req.PreviousVersion)
+			if err != nil {
+				return "", err
+			}
+			if !previousVersionFound {
+				return "", &exception.CustomError{
+					Status:  http.StatusNotFound,
+					Code:    exception.PublishedPackageVersionNotFound,
+					Message: exception.PublishedPackageVersionNotFoundMsg,
+					Params:  map[string]interface{}{"packageId": previousVersionPackageId, "version": req.PreviousVersion},
+				}
+			}
+			// A release version's previous version must be a release; a draft version may reference a draft previous version.
+			if req.Status == string(view.Release) && previousVersionStatus == string(view.Draft) {
+				return "", &exception.CustomError{
+					Status:  http.StatusBadRequest,
+					Code:    exception.PreviousPackageVersionNotRelease,
+					Message: exception.PreviousPackageVersionNotReleaseMsg,
+					Params:  map[string]interface{}{"packageId": previousVersionPackageId, "version": req.PreviousVersion},
+				}
+			}
+		} else {
+			prevVersion, err := v.publishedRepo.GetVersion(previousVersionPackageId, req.PreviousVersion)
+			if err != nil {
+				return "", err
+			}
+			if prevVersion == nil {
+				return "", &exception.CustomError{
+					Status:  http.StatusNotFound,
+					Code:    exception.PublishedPackageVersionNotFound,
+					Message: exception.PublishedPackageVersionNotFoundMsg,
+					Params:  map[string]interface{}{"packageId": previousVersionPackageId, "version": req.PreviousVersion},
+				}
+			}
+			if prevVersion.Status != string(view.Release) {
+				// Legacy rule: any previous version must be a release, regardless of the published version status.
+				return "", &exception.CustomError{
+					Status:  http.StatusNotFound,
+					Code:    exception.PreviousPackageVersionNotRelease,
+					Message: exception.PreviousPackageVersionNotReleaseMsg,
+					Params:  map[string]interface{}{"packageId": previousVersionPackageId, "version": req.PreviousVersion},
+				}
+			}
+		}
+	}
+
+	// Publishing this version as a draft must not leave a release version that references it as its previous version.
+	if v.systemInfoService.PreviousVersionStatusValidationEnabled() && req.Status == string(view.Draft) {
+		if err := v.publishedService.CheckNoReleaseDependentVersions(ctx, req.PackageId, req.Version); err != nil {
 			return "", err
-		}
-		if prevVersion == nil {
-			return "", &exception.CustomError{
-				Status:  http.StatusNotFound,
-				Code:    exception.PublishedPackageVersionNotFound,
-				Message: exception.PublishedPackageVersionNotFoundMsg,
-				Params:  map[string]interface{}{"packageId": previousVersionPackageId, "version": req.PreviousVersion},
-			}
-		}
-		if prevVersion.Status != string(view.Release) {
-			return "", &exception.CustomError{
-				Status:  http.StatusNotFound,
-				Code:    exception.PreviousPackageVersionNotRelease,
-				Message: exception.PreviousPackageVersionNotReleaseMsg,
-				Params:  map[string]interface{}{"packageId": previousVersionPackageId, "version": req.PreviousVersion},
-			}
 		}
 	}
 

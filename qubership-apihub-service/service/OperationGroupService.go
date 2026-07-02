@@ -34,7 +34,7 @@ type OperationGroupService interface {
 }
 
 func NewOperationGroupService(operationRepository repository.OperationRepository, publishedRepo repository.PublishedRepository, exportRepository repository.ExportResultRepository,
-	packageVersionEnrichmentService PackageVersionEnrichmentService, activityTrackingService ActivityTrackingService, publishedService PublishedService) OperationGroupService {
+	packageVersionEnrichmentService PackageVersionEnrichmentService, activityTrackingService ActivityTrackingService, publishedService PublishedService, systemInfoService SystemInfoService) OperationGroupService {
 	return &operationGroupServiceImpl{
 		operationRepo:                   operationRepository,
 		publishedRepo:                   publishedRepo,
@@ -42,6 +42,7 @@ func NewOperationGroupService(operationRepository repository.OperationRepository
 		packageVersionEnrichmentService: packageVersionEnrichmentService,
 		atService:                       activityTrackingService,
 		publishedService:                publishedService,
+		systemInfoService:               systemInfoService,
 	}
 }
 
@@ -52,6 +53,7 @@ type operationGroupServiceImpl struct {
 	packageVersionEnrichmentService PackageVersionEnrichmentService
 	atService                       ActivityTrackingService
 	publishedService                PublishedService
+	systemInfoService               SystemInfoService
 	buildService                    BuildService
 }
 
@@ -578,38 +580,40 @@ func (o operationGroupServiceImpl) StartOperationGroupPublish(ctx context.Securi
 			Params:  map[string]interface{}{"groupName": groupName},
 		}
 	}
-	if req.PreviousVersion != "" {
-		previousVersionPackageId := req.PreviousVersionPackageId
-		if previousVersionPackageId == "" {
-			previousVersionPackageId = req.PackageId
-		}
-		prevVersion, err := o.publishedRepo.GetVersion(previousVersionPackageId, req.PreviousVersion)
-		if err != nil {
-			return "", err
-		}
-		if prevVersion == nil {
-			return "", &exception.CustomError{
-				Status:  http.StatusNotFound,
-				Code:    exception.PublishedPackageVersionNotFound,
-				Message: exception.PublishedPackageVersionNotFoundMsg,
-				Params:  map[string]interface{}{"packageId": previousVersionPackageId, "version": req.PreviousVersion},
+	if o.systemInfoService.PreviousVersionStatusValidationEnabled() {
+		if req.PreviousVersion != "" {
+			previousVersionPackageId := req.PreviousVersionPackageId
+			if previousVersionPackageId == "" {
+				previousVersionPackageId = req.PackageId
+			}
+			previousVersionStatus, previousVersionFound, err := o.publishedService.GetVersionStatus(previousVersionPackageId, req.PreviousVersion)
+			if err != nil {
+				return "", err
+			}
+			if !previousVersionFound {
+				return "", &exception.CustomError{
+					Status:  http.StatusNotFound,
+					Code:    exception.PublishedPackageVersionNotFound,
+					Message: exception.PublishedPackageVersionNotFoundMsg,
+					Params:  map[string]interface{}{"packageId": previousVersionPackageId, "version": req.PreviousVersion},
+				}
+			}
+			// A release version's previous version must be a release; a draft version may reference a draft previous version.
+			if req.Status == string(view.Release) && previousVersionStatus == string(view.Draft) {
+				return "", &exception.CustomError{
+					Status:  http.StatusBadRequest,
+					Code:    exception.PreviousPackageVersionNotRelease,
+					Message: exception.PreviousPackageVersionNotReleaseMsg,
+					Params:  map[string]interface{}{"packageId": previousVersionPackageId, "version": req.PreviousVersion},
+				}
 			}
 		}
-		// A release version's previous version must be a release; a draft version may reference a draft previous version.
-		if req.Status == string(view.Release) && prevVersion.Status == string(view.Draft) {
-			return "", &exception.CustomError{
-				Status:  http.StatusBadRequest,
-				Code:    exception.PreviousPackageVersionNotRelease,
-				Message: exception.PreviousPackageVersionNotReleaseMsg,
-				Params:  map[string]interface{}{"packageId": previousVersionPackageId, "version": req.PreviousVersion},
-			}
-		}
-	}
 
-	// Publishing this version as a draft must not leave a release that references it as its previous version.
-	if req.Status == string(view.Draft) {
-		if err := o.publishedService.CheckNoReleaseDependents(req.PackageId, req.Version); err != nil {
-			return "", err
+		// Publishing this version as a draft must not leave a release version that references it as its previous version.
+		if req.Status == string(view.Draft) {
+			if err := o.publishedService.CheckNoReleaseDependentVersions(ctx, req.PackageId, req.Version); err != nil {
+				return "", err
+			}
 		}
 	}
 

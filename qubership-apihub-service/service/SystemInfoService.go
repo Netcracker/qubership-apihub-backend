@@ -101,6 +101,7 @@ type SystemInfoService interface {
 	GetEphemeralFileMaxSizeMb() int
 	GetEphemeralFileTTLMinutes() int
 	GetEphemeralFilesCleanupSchedule() string
+	PreviousVersionStatusValidationEnabled() bool
 }
 
 func (g *systemInfoServiceImpl) GetCredsFromEnv() *view.DbCredentials {
@@ -261,6 +262,7 @@ func (g *systemInfoServiceImpl) setDefaults() {
 	viper.SetDefault("businessParameters.ephemeralFileMaxSizeMb", 50)
 	viper.SetDefault("businessParameters.ephemeralFileTTLMinutes", 30)
 	viper.SetDefault("cleanup.ephemeralFiles.schedule", "*/5 * * * *")
+	viper.SetDefault("featureFlags.previousVersionStatusValidation", true)
 }
 
 func (g *systemInfoServiceImpl) GetConfigFolder() string {
@@ -675,6 +677,10 @@ func (g *systemInfoServiceImpl) GetFeatureFlags() view.FeatureFlags {
 	return view.FeatureFlags{
 		UseV3Search: g.config.FeatureFlags.UseV3Search,
 	}
+}
+
+func (g *systemInfoServiceImpl) PreviousVersionStatusValidationEnabled() bool {
+	return g.config.FeatureFlags.PreviousVersionStatusValidation
 }
 
 func (g *systemInfoServiceImpl) GetMigrationLockMaxWaitMinutes() int {

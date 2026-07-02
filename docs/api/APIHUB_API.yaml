@@ -2549,6 +2549,10 @@ paths:
               examples:
                 IncorrectInputParams:
                   $ref: '#/components/examples/IncorrectInputParameters'
+                PreviousVersionNotRelease:
+                  $ref: '#/components/examples/PreviousVersionNotRelease'
+                VersionReferencedAsPreviousByRelease:
+                  $ref: '#/components/examples/VersionReferencedAsPreviousByRelease'
         '401':
           description: Unauthorized
           content:
@@ -2824,6 +2828,10 @@ paths:
               examples:
                 IncorrectInputParams:
                   $ref: '#/components/examples/IncorrectInputParameters'
+                PreviousVersionNotRelease:
+                  $ref: '#/components/examples/PreviousVersionNotRelease'
+                VersionReferencedAsPreviousByRelease:
+                  $ref: '#/components/examples/VersionReferencedAsPreviousByRelease'
         '401':
           description: Unauthorized
           content:
