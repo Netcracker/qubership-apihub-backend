@@ -478,6 +478,33 @@ func (v versionServiceImpl) PatchVersion(ctx context.SecurityContext, packageId 
 			if err != nil {
 				return nil, err
 			}
+
+			// A release version's previous version must be a release.
+			if versionEnt.PreviousVersion != "" {
+				previousVersionPackageId := versionEnt.PreviousVersionPackageId
+				if previousVersionPackageId == "" {
+					previousVersionPackageId = packageId
+				}
+				previousVersionStatus, found, err := v.publishedService.GetVersionStatus(previousVersionPackageId, versionEnt.PreviousVersion)
+				if err != nil {
+					return nil, err
+				}
+				if found && previousVersionStatus == string(view.Draft) {
+					return nil, &exception.CustomError{
+						Status:  http.StatusBadRequest,
+						Code:    exception.PreviousPackageVersionNotRelease,
+						Message: exception.PreviousPackageVersionNotReleaseMsg,
+						Params:  map[string]interface{}{"version": versionEnt.PreviousVersion, "packageId": previousVersionPackageId},
+					}
+				}
+			}
+		}
+
+		// Changing a release version back to draft must not leave a release that references it as its previous version.
+		if newStatus == string(view.Draft) && versionEnt.Status == string(view.Release) {
+			if err := v.publishedService.CheckNoReleaseDependents(packageId, versionEnt.Version); err != nil {
+				return nil, err
+			}
 		}
 
 		dataMap["oldStatus"] = versionEnt.Status

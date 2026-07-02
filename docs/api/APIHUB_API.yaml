@@ -2342,6 +2342,8 @@ paths:
                   $ref: "#/components/examples/IncorrectInputParameters"
                 PreviousVersionNotRelease:
                   $ref: "#/components/examples/PreviousVersionNotRelease"
+                VersionReferencedAsPreviousByRelease:
+                  $ref: "#/components/examples/VersionReferencedAsPreviousByRelease"
         "401":
           description: Unauthorized
           content:
@@ -3026,6 +3028,10 @@ paths:
               examples:
                 IncorrectInputParams:
                   $ref: "#/components/examples/IncorrectInputParameters"
+                PreviousVersionNotRelease:
+                  $ref: "#/components/examples/PreviousVersionNotRelease"
+                VersionReferencedAsPreviousByRelease:
+                  $ref: "#/components/examples/VersionReferencedAsPreviousByRelease"
         "401":
           description: Unauthorized
           content:
@@ -8497,6 +8503,8 @@ paths:
                   $ref: "#/components/examples/IncorrectInputParameters"
                 PreviousVersionNotRelease:
                   $ref: "#/components/examples/PreviousVersionNotRelease"
+                VersionReferencedAsPreviousByRelease:
+                  $ref: "#/components/examples/VersionReferencedAsPreviousByRelease"
         "401":
           description: Unauthorized
           content:
@@ -13192,6 +13200,16 @@ components:
         params:
           version: "2024.1"
           packageId: "QS.group.my-package"
+    VersionReferencedAsPreviousByRelease:
+      description: Version cannot be changed to 'draft' because a released version uses it as its previous version
+      value:
+        status: 400
+        code: "8600"
+        message: "Version 2024.1 for package QS.group.my-package cannot be changed to the 'draft' status because it is the previous version of released versions: QS.group.other-package|2024.2@1"
+        params:
+          version: "2024.1"
+          packageId: "QS.group.my-package"
+          releaseVersions: "QS.group.other-package|2024.2@1"
     Unauthorized:
       description: Unauthorized access
       value:

@@ -826,6 +826,9 @@ const ShareabilityReportDocumentNotFoundMsg = "Document with slug '$slug' not fo
 const ShareabilityReportSizeExceeded = "8305"
 const ShareabilityReportSizeExceededMsg = "Shareability report file size exceeded. File size limit - $size"
 
+const VersionReferencedAsPreviousByRelease = "8600"
+const VersionReferencedAsPreviousByReleaseMsg = "Version $version for package $packageId cannot be changed to the 'draft' status because it is the previous version of released versions: $releaseVersions"
+
 // AI Chat error codes (APIHUB-AI-*). Each public error has a Code constant; variant
 // messages reuse the parent Code (same pattern as InvalidParameterValue + InvalidLimitMsg).
 

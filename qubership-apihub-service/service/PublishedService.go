@@ -39,6 +39,7 @@ type PublishedService interface {
 	GetLatestContentDataBySlug(packageId string, versionName string, slug string) (*view.PublishedContent, *view.ContentData, error)
 	VersionPublished(packageId string, versionName string) (bool, error)
 	GetVersionStatus(packageId string, versionName string) (status string, found bool, err error)
+	CheckNoReleaseDependents(packageId string, version string) error
 	DeleteVersion(ctx context.SecurityContext, packageId string, versionName string) error
 
 	PublishPackage(buildArc *archive.BuildResultArchive, buildSrcEnt *entity.BuildSourceEntity,
@@ -323,6 +324,29 @@ func (p publishedServiceImpl) GetVersionStatus(packageId string, versionName str
 		return "", false, nil
 	}
 	return ent.Status, true, nil
+}
+
+func (p publishedServiceImpl) CheckNoReleaseDependents(packageId string, version string) error {
+	dependents, err := p.publishedRepo.GetVersionsByPreviousVersion(packageId, version)
+	if err != nil {
+		return err
+	}
+	releaseDependents := make([]string, 0)
+	for _, dependent := range dependents {
+		if dependent.Status == string(view.Release) {
+			//TODO: need to take into account the dependent packageId can be id of the private package
+			releaseDependents = append(releaseDependents, fmt.Sprintf("%s|%s", dependent.PackageId, view.MakeVersionRefKey(dependent.Version, dependent.Revision)))
+		}
+	}
+	if len(releaseDependents) > 0 {
+		return &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.VersionReferencedAsPreviousByRelease,
+			Message: exception.VersionReferencedAsPreviousByReleaseMsg,
+			Params:  map[string]interface{}{"version": version, "packageId": packageId, "releaseVersions": strings.Join(releaseDependents, ", ")},
+		}
+	}
+	return nil
 }
 
 func readZipFile(zf *zip.File) ([]byte, error) {
