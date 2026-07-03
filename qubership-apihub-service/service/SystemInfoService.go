@@ -101,7 +101,6 @@ type SystemInfoService interface {
 	GetEphemeralFileMaxSizeMb() int
 	GetEphemeralFileTTLMinutes() int
 	GetEphemeralFilesCleanupSchedule() string
-	PreviousVersionStatusValidationEnabled() bool
 }
 
 func (g *systemInfoServiceImpl) GetCredsFromEnv() *view.DbCredentials {
@@ -675,12 +674,9 @@ func (g *systemInfoServiceImpl) GetEphemeralFilesCleanupSchedule() string {
 
 func (g *systemInfoServiceImpl) GetFeatureFlags() view.FeatureFlags {
 	return view.FeatureFlags{
-		UseV3Search: g.config.FeatureFlags.UseV3Search,
+		UseV3Search:                     g.config.FeatureFlags.UseV3Search,
+		PreviousVersionStatusValidation: g.config.FeatureFlags.PreviousVersionStatusValidation,
 	}
-}
-
-func (g *systemInfoServiceImpl) PreviousVersionStatusValidationEnabled() bool {
-	return g.config.FeatureFlags.PreviousVersionStatusValidation
 }
 
 func (g *systemInfoServiceImpl) GetMigrationLockMaxWaitMinutes() int {

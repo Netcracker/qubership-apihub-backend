@@ -48,22 +48,24 @@ func NewBuildService(
 	packageService PackageService,
 	refResolverService RefResolverService) BuildService {
 	return &buildServiceImpl{
-		buildRepository:    buildRepository,
-		buildProcessor:     buildProcessor,
-		publishService:     publishService,
-		systemInfoService:  systemInfoService,
-		packageService:     packageService,
-		refResolverService: refResolverService,
+		buildRepository:                        buildRepository,
+		buildProcessor:                         buildProcessor,
+		publishService:                         publishService,
+		systemInfoService:                      systemInfoService,
+		packageService:                         packageService,
+		refResolverService:                     refResolverService,
+		previousVersionStatusValidationEnabled: systemInfoService.GetFeatureFlags().PreviousVersionStatusValidation,
 	}
 }
 
 type buildServiceImpl struct {
-	buildRepository    repository.BuildRepository
-	buildProcessor     BuildProcessorService
-	publishService     PublishedService
-	systemInfoService  SystemInfoService
-	packageService     PackageService
-	refResolverService RefResolverService
+	buildRepository                        repository.BuildRepository
+	buildProcessor                         BuildProcessorService
+	publishService                         PublishedService
+	systemInfoService                      SystemInfoService
+	packageService                         PackageService
+	refResolverService                     RefResolverService
+	previousVersionStatusValidationEnabled bool
 }
 
 func (b *buildServiceImpl) PublishVersion(ctx context.SecurityContext, config view.BuildConfig, src []byte, clientBuild bool, builderId string, dependencies []string, resolveRefs bool, resolveConflicts bool) (*view.PublishV2Response, error) {
@@ -160,7 +162,7 @@ func (b *buildServiceImpl) PublishVersion(ctx context.SecurityContext, config vi
 			}
 		}
 		// A release version's previous version must be a release; a draft version may reference a draft previous version.
-		if b.systemInfoService.PreviousVersionStatusValidationEnabled() &&
+		if b.previousVersionStatusValidationEnabled &&
 			config.BuildType == view.PublishType && config.Status == string(view.Release) && previousVersionStatus == string(view.Draft) {
 			return nil, &exception.CustomError{
 				Status:  http.StatusBadRequest,
@@ -186,7 +188,7 @@ func (b *buildServiceImpl) PublishVersion(ctx context.SecurityContext, config vi
 	}
 
 	// Publishing this version as a draft must not leave a release version that references it as its previous version.
-	if b.systemInfoService.PreviousVersionStatusValidationEnabled() &&
+	if b.previousVersionStatusValidationEnabled &&
 		config.BuildType == view.PublishType && config.Status == string(view.Draft) {
 		if err := b.publishService.CheckNoReleaseDependentVersions(ctx, config.PackageId, config.Version); err != nil {
 			return nil, err

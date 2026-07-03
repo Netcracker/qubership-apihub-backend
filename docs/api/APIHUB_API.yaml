@@ -10684,6 +10684,10 @@ components:
               type: boolean
               default: false
               deprecated: true
+            previousVersionStatusValidation:
+              description: When true, previous version status validation is enforced on publish and patch endpoints. When false, the system runs with the legacy behaviour.
+              type: boolean
+              default: true
     ApiKey:
       title: ApiKey
       type: object
@@ -13188,6 +13192,7 @@ components:
           - Support team|https://www.example.com/support]
         featureFlags:
           useV3Search: false
+          previousVersionStatusValidation: true
     Package:
       description: Example of the package params
       value:

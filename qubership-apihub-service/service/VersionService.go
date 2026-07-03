@@ -75,39 +75,41 @@ func NewVersionService(favoritesRepo repository.FavoritesRepository,
 	monitoringService MonitoringService,
 	roleService RoleService) VersionService {
 	return &versionServiceImpl{
-		favoritesRepo:                   favoritesRepo,
-		publishedRepo:                   publishedRepo,
-		exportRepository:                exportRepository,
-		publishedService:                publishedService,
-		operationRepo:                   operationRepo,
-		operationService:                operationService,
-		atService:                       atService,
-		systemInfoService:               systemInfoService,
-		packageVersionEnrichmentService: packageVersionEnrichmentService,
-		portalService:                   portalService,
-		versionCleanupRepository:        versionCleanupRepository,
-		operationGroupService:           operationGroupService,
-		monitoringService:               monitoringService,
-		roleService:                     roleService,
+		favoritesRepo:                          favoritesRepo,
+		publishedRepo:                          publishedRepo,
+		exportRepository:                       exportRepository,
+		publishedService:                       publishedService,
+		operationRepo:                          operationRepo,
+		operationService:                       operationService,
+		atService:                              atService,
+		systemInfoService:                      systemInfoService,
+		packageVersionEnrichmentService:        packageVersionEnrichmentService,
+		portalService:                          portalService,
+		versionCleanupRepository:               versionCleanupRepository,
+		operationGroupService:                  operationGroupService,
+		monitoringService:                      monitoringService,
+		roleService:                            roleService,
+		previousVersionStatusValidationEnabled: systemInfoService.GetFeatureFlags().PreviousVersionStatusValidation,
 	}
 }
 
 type versionServiceImpl struct {
-	favoritesRepo                   repository.FavoritesRepository
-	publishedRepo                   repository.PublishedRepository
-	publishedService                PublishedService
-	operationRepo                   repository.OperationRepository
-	exportRepository                repository.ExportResultRepository
-	operationService                OperationService
-	atService                       ActivityTrackingService
-	systemInfoService               SystemInfoService
-	packageVersionEnrichmentService PackageVersionEnrichmentService
-	portalService                   PortalService
-	versionCleanupRepository        repository.VersionCleanupRepository
-	buildService                    BuildService
-	operationGroupService           OperationGroupService
-	monitoringService               MonitoringService
-	roleService                     RoleService
+	favoritesRepo                          repository.FavoritesRepository
+	publishedRepo                          repository.PublishedRepository
+	publishedService                       PublishedService
+	operationRepo                          repository.OperationRepository
+	exportRepository                       repository.ExportResultRepository
+	operationService                       OperationService
+	atService                              ActivityTrackingService
+	systemInfoService                      SystemInfoService
+	packageVersionEnrichmentService        PackageVersionEnrichmentService
+	portalService                          PortalService
+	versionCleanupRepository               repository.VersionCleanupRepository
+	buildService                           BuildService
+	operationGroupService                  OperationGroupService
+	monitoringService                      MonitoringService
+	roleService                            RoleService
+	previousVersionStatusValidationEnabled bool
 }
 
 func (v *versionServiceImpl) SetBuildService(buildService BuildService) {
@@ -502,7 +504,7 @@ func (v versionServiceImpl) PatchVersion(ctx context.SecurityContext, packageId 
 			}
 
 			// A release version's previous version must be a release.
-			if v.systemInfoService.PreviousVersionStatusValidationEnabled() && versionEnt.PreviousVersion != "" {
+			if v.previousVersionStatusValidationEnabled && versionEnt.PreviousVersion != "" {
 				previousVersionPackageId := versionEnt.PreviousVersionPackageId
 				if previousVersionPackageId == "" {
 					previousVersionPackageId = packageId
@@ -523,7 +525,7 @@ func (v versionServiceImpl) PatchVersion(ctx context.SecurityContext, packageId 
 		}
 
 		// Changing a release version to draft must not leave a release version that references it as its previous version.
-		if v.systemInfoService.PreviousVersionStatusValidationEnabled() && newStatus == string(view.Draft) && versionEnt.Status == string(view.Release) {
+		if v.previousVersionStatusValidationEnabled && newStatus == string(view.Draft) && versionEnt.Status == string(view.Release) {
 			if err := v.publishedService.CheckNoReleaseDependentVersions(ctx, packageId, versionEnt.Version); err != nil {
 				return nil, err
 			}
@@ -1764,7 +1766,7 @@ func (v versionServiceImpl) StartPublishFromCSV(ctx context.SecurityContext, req
 		if req.PreviousVersionPackageId == "" {
 			previousVersionPackageId = req.PackageId
 		}
-		if v.systemInfoService.PreviousVersionStatusValidationEnabled() {
+		if v.previousVersionStatusValidationEnabled {
 			previousVersionStatus, previousVersionFound, err := v.publishedService.GetVersionStatus(previousVersionPackageId, req.PreviousVersion)
 			if err != nil {
 				return "", err
@@ -1812,7 +1814,7 @@ func (v versionServiceImpl) StartPublishFromCSV(ctx context.SecurityContext, req
 	}
 
 	// Publishing this version as a draft must not leave a release version that references it as its previous version.
-	if v.systemInfoService.PreviousVersionStatusValidationEnabled() && req.Status == string(view.Draft) {
+	if v.previousVersionStatusValidationEnabled && req.Status == string(view.Draft) {
 		if err := v.publishedService.CheckNoReleaseDependentVersions(ctx, req.PackageId, req.Version); err != nil {
 			return "", err
 		}

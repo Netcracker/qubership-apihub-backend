@@ -36,25 +36,25 @@ type OperationGroupService interface {
 func NewOperationGroupService(operationRepository repository.OperationRepository, publishedRepo repository.PublishedRepository, exportRepository repository.ExportResultRepository,
 	packageVersionEnrichmentService PackageVersionEnrichmentService, activityTrackingService ActivityTrackingService, publishedService PublishedService, systemInfoService SystemInfoService) OperationGroupService {
 	return &operationGroupServiceImpl{
-		operationRepo:                   operationRepository,
-		publishedRepo:                   publishedRepo,
-		exportRepository:                exportRepository,
-		packageVersionEnrichmentService: packageVersionEnrichmentService,
-		atService:                       activityTrackingService,
-		publishedService:                publishedService,
-		systemInfoService:               systemInfoService,
+		operationRepo:                          operationRepository,
+		publishedRepo:                          publishedRepo,
+		exportRepository:                       exportRepository,
+		packageVersionEnrichmentService:        packageVersionEnrichmentService,
+		atService:                              activityTrackingService,
+		publishedService:                       publishedService,
+		previousVersionStatusValidationEnabled: systemInfoService.GetFeatureFlags().PreviousVersionStatusValidation,
 	}
 }
 
 type operationGroupServiceImpl struct {
-	operationRepo                   repository.OperationRepository
-	publishedRepo                   repository.PublishedRepository
-	exportRepository                repository.ExportResultRepository
-	packageVersionEnrichmentService PackageVersionEnrichmentService
-	atService                       ActivityTrackingService
-	publishedService                PublishedService
-	systemInfoService               SystemInfoService
-	buildService                    BuildService
+	operationRepo                          repository.OperationRepository
+	publishedRepo                          repository.PublishedRepository
+	exportRepository                       repository.ExportResultRepository
+	packageVersionEnrichmentService        PackageVersionEnrichmentService
+	atService                              ActivityTrackingService
+	publishedService                       PublishedService
+	previousVersionStatusValidationEnabled bool
+	buildService                           BuildService
 }
 
 func (o *operationGroupServiceImpl) SetBuildService(buildService BuildService) {
@@ -580,7 +580,7 @@ func (o operationGroupServiceImpl) StartOperationGroupPublish(ctx context.Securi
 			Params:  map[string]interface{}{"groupName": groupName},
 		}
 	}
-	if o.systemInfoService.PreviousVersionStatusValidationEnabled() {
+	if o.previousVersionStatusValidationEnabled {
 		if req.PreviousVersion != "" {
 			previousVersionPackageId := req.PreviousVersionPackageId
 			if previousVersionPackageId == "" {
