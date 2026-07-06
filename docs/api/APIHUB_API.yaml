@@ -12719,7 +12719,7 @@ components:
         - parentPackages
         - version
         - status
-        - tableId
+        - entityId
         - kind
       properties:
         packageId:
@@ -12741,10 +12741,10 @@ components:
           example: "2022.2@5"
         status:
           $ref: "#/components/schemas/VersionStatusEnum"
-        tableId:
+        entityId:
           description: DDL table/view logical identifier.
           type: string
-          example: "public.users"
+          example: "public-table-users"
         kind:
           $ref: "#/components/schemas/DdlContractKind"
         schemaName:

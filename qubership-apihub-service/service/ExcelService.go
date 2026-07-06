@@ -128,7 +128,7 @@ func (e excelServiceImpl) ExportOperations(packageId, version, apiType string, r
 }
 
 func (e excelServiceImpl) ExportDdlEntities(packageId, version string, req view.ExportDdlEntitiesRequestView) (*excelize.File, string, error) {
-	entities, err := e.ddlContractService.ListDdlEntities(packageId, version, req.TextFilter, 0, 0)
+	entities, err := e.ddlContractService.ListDdlEntities(packageId, version, req.RefPackageId, req.TextFilter, 0, 0)
 	if err != nil {
 		return nil, "", err
 	}
@@ -152,7 +152,7 @@ func (e excelServiceImpl) ExportDdlEntities(packageId, version string, req view.
 }
 
 func (e excelServiceImpl) ExportMcpEntities(packageId, version, kind string, req view.ExportMcpEntitiesRequestView) (*excelize.File, string, error) {
-	entities, err := e.mcpContractService.ListMcpEntities(packageId, version, kind, "", req.TextFilter, 0, 0)
+	entities, err := e.mcpContractService.ListMcpEntities(packageId, version, kind, "", req.RefPackageId, req.TextFilter, 0, 0)
 	if err != nil {
 		return nil, "", err
 	}
