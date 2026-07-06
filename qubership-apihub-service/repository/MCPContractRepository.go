@@ -121,7 +121,7 @@ func (r *mcpContractRepositoryImpl) GlobalSearchForMCP(searchQuery *entity.Globa
 	mcpSearchQuery := `
 select
     me.package_id,
-    pg.name,
+    pg.name as package_name,
     me.version,
     me.revision,
     pv.status,

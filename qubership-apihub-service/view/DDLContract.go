@@ -72,5 +72,5 @@ type DdlContractSearchResult struct {
 	EntityId       string   `json:"entityId"`
 	Kind           string   `json:"kind"`
 	SchemaName     string   `json:"schemaName,omitempty"`
-	TableName      string   `json:"tableName,omitempty"`
+	EntityName     string   `json:"entityName,omitempty"`
 }

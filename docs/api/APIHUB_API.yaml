@@ -12751,7 +12751,7 @@ components:
           description: SQL schema name.
           type: string
           example: "public"
-        tableName:
+        entityName:
           description: Unqualified table or view name.
           type: string
           example: "users"

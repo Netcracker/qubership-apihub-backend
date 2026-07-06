@@ -156,7 +156,7 @@ func (s *mcpContractServiceImpl) GlobalSearchForMCP(searchReq view.SearchQueryRe
 	if err != nil {
 		return nil, err
 	}
-	results := make([]interface{}, 0, len(entities))
+	results := make([]view.McpEntitySearchResult, 0, len(entities))
 	for _, ent := range entities {
 		results = append(results, entity.MakeGlobalMCPSearchResultView(ent))
 	}
