@@ -2,6 +2,7 @@ package utils
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -9,6 +10,12 @@ import (
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	log "github.com/sirupsen/logrus"
+)
+
+const (
+	xForwardedForHeader = "X-Forwarded-For"
+	xRealIPHeader       = "X-Real-IP"
+	unknownRequestorIP  = "unknown"
 )
 
 func DeleteCookie(w http.ResponseWriter, name string, path string, productionMode bool) {
@@ -122,4 +129,43 @@ func RespondWithJson(w http.ResponseWriter, code int, payload interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	w.Write(response)
+}
+
+func RequestorIP(r *http.Request) string {
+	if r == nil {
+		return unknownRequestorIP
+	}
+
+	if ip := firstValidIP(r.Header.Get(xForwardedForHeader)); ip != "" {
+		return ip
+	}
+	if ip := validIP(r.Header.Get(xRealIPHeader)); ip != "" {
+		return ip
+	}
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		if ip := validIP(host); ip != "" {
+			return ip
+		}
+	}
+	if ip := validIP(r.RemoteAddr); ip != "" {
+		return ip
+	}
+	return unknownRequestorIP
+}
+
+func firstValidIP(value string) string {
+	for _, part := range strings.Split(value, ",") {
+		if ip := validIP(part); ip != "" {
+			return ip
+		}
+	}
+	return ""
+}
+
+func validIP(value string) string {
+	ip := strings.TrimSpace(value)
+	if net.ParseIP(ip) == nil {
+		return ""
+	}
+	return ip
 }

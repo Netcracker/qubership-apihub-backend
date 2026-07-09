@@ -658,7 +658,12 @@ func main() {
 	for _, prefix := range knownPathPrefixes {
 		//add routing for unknown paths with known path prefixes
 		r.PathPrefix(prefix).HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			log.Warnf("Requested unknown endpoint: %v %v", r.Method, r.RequestURI)
+			log.WithFields(log.Fields{
+				"method":       r.Method,
+				"uri":          r.RequestURI,
+				"requestor_ip": utils.RequestorIP(r),
+			}).Warn("Requested unknown endpoint")
+
 			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusMisdirectedRequest,
 				Message: "Requested unknown endpoint",
