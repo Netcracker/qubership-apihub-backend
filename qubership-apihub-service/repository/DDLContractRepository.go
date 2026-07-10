@@ -113,7 +113,12 @@ func (r *ddlContractRepositoryImpl) GetDdlEntityChanges(comparisonId, ddlEntityI
 			return q, nil
 		})
 	}
-	err := query.First()
+	// DDLContractComparisonEntity declares no primary keys (mirroring OperationComparisonEntity),
+	// so use an explicit order + limit instead of First(), which requires declared PKs.
+	err := query.
+		OrderExpr("data_hash, previous_data_hash").
+		Limit(1).
+		Select()
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return nil, nil
