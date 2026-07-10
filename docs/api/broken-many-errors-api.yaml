@@ -1,0 +1,1163 @@
+asyncapi: 3.0.0
+
+info:
+  title: Broken Test API
+  version: 1.0.0
+  description: Намеренно сломанная спека для тестирования скролла длинных ошибок в диалоге
+
+servers:
+  mainServer:
+    host: kafka.example.com:9092
+    protocol: kafka
+    security:
+      - $ref: '#/components/securitySchemes/nonExistentScheme'
+      - $ref: '#/components/securitySchemes/anotherMissingScheme'
+    variables:
+      clusterEnv:
+        $ref: '#/components/serverVariables/NonExistentVariable'
+  backupServer:
+    host: kafka-backup.example.com:9092
+    protocol: kafka
+    security:
+      - $ref: '#/components/securitySchemes/missingOAuthScheme'
+    variables:
+      region:
+        $ref: '#/components/serverVariables/MissingRegionVar'
+
+channels:
+  userCreated:
+    address: users.created
+    messages:
+      userCreatedMsg:
+        $ref: '#/components/messages/UserCreated'
+      duplicateMsg:
+        $ref: '#/components/messages/UserCreated'
+    bindings:
+      kafka:
+        $ref: '#/components/channelBindings/NonExistentChannelBinding'
+
+  userUpdated:
+    address: users.updated
+    messages:
+      userUpdatedMsg:
+        $ref: '#/components/messages/UserUpdated'
+
+  userDeleted:
+    address: users.deleted
+    messages:
+      userDeletedMsg:
+        $ref: '#/components/messages/UserDeleted'
+
+  userRoleChanged:
+    address: users.role.{userId}
+    parameters:
+      userId:
+        $ref: '#/components/parameters/NonExistentUserId'
+    messages:
+      roleChangedMsg:
+        $ref: '#/components/messages/UserRoleChanged'
+
+  orderPlaced:
+    address: orders.placed
+    messages:
+      orderMsg:
+        $ref: '#/components/messages/OrderPlaced'
+
+  orderCancelled:
+    address: orders.cancelled
+    messages:
+      orderCancelledMsg:
+        $ref: '#/components/messages/OrderCancelled'
+
+  orderShipped:
+    address: orders.shipped.{orderId}
+    parameters:
+      orderId:
+        $ref: '#/components/parameters/MissingOrderIdParam'
+    messages:
+      orderShippedMsg:
+        $ref: '#/components/messages/OrderShipped'
+
+  orderDelivered:
+    address: orders.delivered
+    messages:
+      orderDeliveredMsg:
+        $ref: '#/components/messages/OrderDelivered'
+
+  paymentInitiated:
+    address: payments.initiated
+    messages:
+      paymentMsg:
+        $ref: '#/components/messages/PaymentInitiated'
+
+  paymentCompleted:
+    address: payments.completed
+    messages:
+      paymentCompletedMsg:
+        $ref: '#/components/messages/PaymentCompleted'
+
+  paymentFailed:
+    address: payments.failed
+    messages:
+      paymentFailedMsg:
+        $ref: '#/components/messages/PaymentFailed'
+
+  inventoryUpdated:
+    address: inventory.updated
+    messages:
+      inventoryMsg:
+        $ref: '#/components/messages/InventoryUpdated'
+
+  inventoryReserved:
+    address: inventory.reserved.{warehouseId}
+    parameters:
+      warehouseId:
+        $ref: '#/components/parameters/NonExistentWarehouseParam'
+    messages:
+      inventoryReservedMsg:
+        $ref: '#/components/messages/InventoryReserved'
+
+  notificationSent:
+    address: notifications.sent
+    messages:
+      notifMsg:
+        $ref: '#/components/messages/NotificationSent'
+
+  notificationFailed:
+    address: notifications.failed
+    messages:
+      notifFailedMsg:
+        $ref: '#/components/messages/NotificationFailed'
+
+  auditLogged:
+    address: audit.logged
+    messages:
+      auditMsg:
+        $ref: '#/components/messages/AuditLogged'
+
+  sessionStarted:
+    address: sessions.started
+    messages:
+      sessionMsg:
+        $ref: '#/components/messages/SessionStarted'
+
+  sessionExpired:
+    address: sessions.expired
+    messages:
+      sessionExpiredMsg:
+        $ref: '#/components/messages/SessionExpired'
+
+operations:
+  publishUserCreated:
+    action: send
+    channel:
+      $ref: '#/channels/userCreated'
+    traits:
+      - $ref: '#/components/operationTraits/MissingTrait'
+      - $ref: '#/components/operationTraits/AnotherMissingTrait'
+
+  subscribeUserUpdated:
+    action: receive
+    channel:
+      $ref: '#/channels/userUpdated'
+    traits:
+      - $ref: '#/components/operationTraits/YetAnotherMissingTrait'
+
+  publishUserDeleted:
+    action: send
+    channel:
+      $ref: '#/channels/userDeleted'
+
+  subscribeUserRoleChanged:
+    action: receive
+    channel:
+      $ref: '#/channels/userRoleChanged'
+
+  publishOrderPlaced:
+    action: send
+    channel:
+      $ref: '#/channels/orderPlaced'
+    bindings:
+      kafka:
+        $ref: '#/components/operationBindings/NonExistentBinding'
+
+  subscribeOrderCancelled:
+    action: receive
+    channel:
+      $ref: '#/channels/orderCancelled'
+
+  publishOrderShipped:
+    action: send
+    channel:
+      $ref: '#/channels/orderShipped'
+
+  subscribeOrderDelivered:
+    action: receive
+    channel:
+      $ref: '#/channels/orderDelivered'
+
+  publishPayment:
+    action: send
+    channel:
+      $ref: '#/channels/paymentInitiated'
+
+  subscribePaymentCompleted:
+    action: receive
+    channel:
+      $ref: '#/channels/paymentCompleted'
+
+  subscribePaymentFailed:
+    action: receive
+    channel:
+      $ref: '#/channels/paymentFailed'
+
+  subscribeInventory:
+    action: receive
+    channel:
+      $ref: '#/channels/inventoryUpdated'
+
+  publishInventoryReserved:
+    action: send
+    channel:
+      $ref: '#/channels/inventoryReserved'
+
+  publishNotification:
+    action: send
+    channel:
+      $ref: '#/channels/notificationSent'
+
+  subscribeNotificationFailed:
+    action: receive
+    channel:
+      $ref: '#/channels/notificationFailed'
+
+  subscribeAudit:
+    action: receive
+    channel:
+      $ref: '#/channels/auditLogged'
+    traits:
+      - $ref: '#/components/operationTraits/MissingAuditTrait'
+
+  publishSession:
+    action: send
+    channel:
+      $ref: '#/channels/sessionStarted'
+
+  subscribeSessionExpired:
+    action: receive
+    channel:
+      $ref: '#/channels/sessionExpired'
+
+components:
+  messages:
+    UserCreated:
+      name: UserCreated
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/UserPayload'
+      traits:
+        - $ref: '#/components/messageTraits/MissingMessageTrait'
+        - $ref: '#/components/messageTraits/AnotherMissingMessageTrait'
+      correlationId:
+        $ref: '#/components/correlationIds/MissingUserCorrelationId'
+
+    UserUpdated:
+      name: UserUpdated
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/UserUpdatePayload'
+      traits:
+        - $ref: '#/components/messageTraits/MissingUpdateTrait'
+
+    UserDeleted:
+      name: UserDeleted
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/UserDeletedPayload'
+      correlationId:
+        $ref: '#/components/correlationIds/MissingDeleteCorrelationId'
+
+    UserRoleChanged:
+      name: UserRoleChanged
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/UserRoleChangedPayload'
+      traits:
+        - $ref: '#/components/messageTraits/MissingRoleTrait'
+
+    OrderPlaced:
+      name: OrderPlaced
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/OrderPayload'
+      correlationId:
+        $ref: '#/components/correlationIds/MissingCorrelationId'
+      traits:
+        - $ref: '#/components/messageTraits/MissingOrderTrait'
+
+    OrderCancelled:
+      name: OrderCancelled
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/OrderCancelPayload'
+
+    OrderShipped:
+      name: OrderShipped
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/OrderShippedPayload'
+      correlationId:
+        $ref: '#/components/correlationIds/MissingShipmentCorrelation'
+
+    OrderDelivered:
+      name: OrderDelivered
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/OrderDeliveredPayload'
+
+    PaymentInitiated:
+      name: PaymentInitiated
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/PaymentPayload'
+      traits:
+        - $ref: '#/components/messageTraits/MissingPaymentTrait'
+
+    PaymentCompleted:
+      name: PaymentCompleted
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/PaymentCompletedPayload'
+      correlationId:
+        $ref: '#/components/correlationIds/MissingPaymentCorrelation'
+
+    PaymentFailed:
+      name: PaymentFailed
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/PaymentFailedPayload'
+
+    InventoryUpdated:
+      name: InventoryUpdated
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/InventoryPayload'
+
+    InventoryReserved:
+      name: InventoryReserved
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/InventoryReservedPayload'
+      traits:
+        - $ref: '#/components/messageTraits/MissingInventoryTrait'
+
+    NotificationSent:
+      name: NotificationSent
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/NotificationPayload'
+
+    NotificationFailed:
+      name: NotificationFailed
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/NotificationFailedPayload'
+      correlationId:
+        $ref: '#/components/correlationIds/MissingNotifCorrelation'
+
+    AuditLogged:
+      name: AuditLogged
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/AuditPayload'
+      traits:
+        - $ref: '#/components/messageTraits/MissingAuditMessageTrait'
+
+    SessionStarted:
+      name: SessionStarted
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/SessionStartedPayload'
+      correlationId:
+        $ref: '#/components/correlationIds/MissingSessionCorrelation'
+
+    SessionExpired:
+      name: SessionExpired
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/SessionExpiredPayload'
+
+  schemas:
+    UserPayload:
+      type: object
+      required:
+        - id
+        - email
+        - firstName
+        - lastName
+        - createdAt
+        - role
+        - status
+        - department
+        - phoneNumber
+        - address
+        - preferences
+      properties:
+        id:
+          type: invalid_type_not_in_spec
+          description: Намеренно неверный тип
+        email:
+          type: string
+          format: email
+        firstName:
+          type: string
+          minLength: invalid_value
+        lastName:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        role:
+          type: string
+          enum:
+            - ADMIN
+            - USER
+            - GUEST
+        status:
+          $ref: '#/components/schemas/NonExistentStatus'
+        department:
+          $ref: '#/components/schemas/DepartmentInfo'
+        phoneNumber:
+          type: string
+          pattern: '^[+]?[0-9]{10,15}$'
+        address:
+          $ref: '#/components/schemas/AddressSchema'
+        preferences:
+          $ref: '#/components/schemas/UserPreferences'
+        metadata:
+          $ref: '#/components/schemas/MetadataSchema'
+        audit:
+          $ref: '#/components/schemas/AuditInfo'
+        securityProfile:
+          $ref: '#/components/schemas/NonExistentSecurityProfile'
+        billingInfo:
+          $ref: '#/components/schemas/NonExistentBillingInfo'
+
+    UserUpdatePayload:
+      type: object
+      required:
+        - userId
+        - changes
+        - updatedBy
+        - updatedAt
+      properties:
+        userId:
+          type: string
+        changes:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ChangeRecord'
+        updatedBy:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+        previousSnapshot:
+          $ref: '#/components/schemas/NonExistentSnapshot'
+
+    UserDeletedPayload:
+      type: object
+      required:
+        - userId
+        - deletedBy
+        - deletedAt
+        - reason
+      properties:
+        userId:
+          type: string
+        deletedBy:
+          type: string
+        deletedAt:
+          type: string
+          format: date-time
+        reason:
+          type: string
+          enum: [GDPR_REQUEST, ADMIN_ACTION, ACCOUNT_CLOSED, DUPLICATE]
+        retentionPolicy:
+          $ref: '#/components/schemas/NonExistentRetentionPolicy'
+        cascadeDeleted:
+          type: array
+          items:
+            $ref: '#/components/schemas/NonExistentCascadeItem'
+
+    UserRoleChangedPayload:
+      type: object
+      required:
+        - userId
+        - previousRole
+        - newRole
+        - changedBy
+        - changedAt
+      properties:
+        userId:
+          type: string
+        previousRole:
+          $ref: '#/components/schemas/NonExistentRoleType'
+        newRole:
+          $ref: '#/components/schemas/NonExistentRoleType'
+        changedBy:
+          type: string
+        changedAt:
+          type: string
+          format: date-time
+        justification:
+          type: string
+          maxLength: not_a_number
+
+    OrderPayload:
+      type: object
+      required:
+        - orderId
+        - customerId
+        - items
+        - total
+        - currency
+        - shippingAddress
+        - billingAddress
+        - paymentMethod
+        - createdAt
+        - estimatedDelivery
+      properties:
+        orderId:
+          type: string
+        customerId:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+        total:
+          type: number
+          minimum: not_a_number
+        currency:
+          type: string
+          enum: [USD, EUR, GBP, RUB]
+        shippingAddress:
+          $ref: '#/components/schemas/AddressSchema'
+        billingAddress:
+          $ref: '#/components/schemas/AddressSchema'
+        paymentMethod:
+          $ref: '#/components/schemas/NonExistentPaymentMethod'
+        createdAt:
+          type: string
+          format: date-time
+        estimatedDelivery:
+          type: string
+          format: date
+        promotionCode:
+          $ref: '#/components/schemas/NonExistentPromoCode'
+        loyaltyPoints:
+          type: integer
+          minimum: not_a_number
+
+    OrderCancelPayload:
+      type: object
+      required:
+        - orderId
+        - reason
+        - cancelledBy
+        - cancelledAt
+      properties:
+        orderId:
+          type: string
+        reason:
+          type: string
+          enum:
+            - CUSTOMER_REQUEST
+            - OUT_OF_STOCK
+            - PAYMENT_FAILED
+        cancelledBy:
+          type: string
+        cancelledAt:
+          type: string
+          format: date-time
+        refund:
+          $ref: '#/components/schemas/RefundInfo'
+        compensationVoucher:
+          $ref: '#/components/schemas/NonExistentVoucher'
+
+    OrderShippedPayload:
+      type: object
+      required:
+        - orderId
+        - trackingNumber
+        - carrier
+        - shippedAt
+        - estimatedDelivery
+      properties:
+        orderId:
+          type: string
+        trackingNumber:
+          type: string
+        carrier:
+          $ref: '#/components/schemas/NonExistentCarrierInfo'
+        shippedAt:
+          type: string
+          format: date-time
+        estimatedDelivery:
+          type: string
+          format: date
+        warehouseId:
+          type: string
+        packageDimensions:
+          $ref: '#/components/schemas/NonExistentPackageDimensions'
+
+    OrderDeliveredPayload:
+      type: object
+      required:
+        - orderId
+        - deliveredAt
+        - signedBy
+      properties:
+        orderId:
+          type: string
+        deliveredAt:
+          type: string
+          format: date-time
+        signedBy:
+          type: string
+        proofOfDelivery:
+          $ref: '#/components/schemas/NonExistentProofOfDelivery'
+        deliveryAttempts:
+          type: integer
+          minimum: not_a_number
+          maximum: not_a_number
+
+    PaymentPayload:
+      type: object
+      required:
+        - paymentId
+        - orderId
+        - amount
+        - currency
+        - method
+        - initiatedAt
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+        method:
+          type: string
+          enum: [CARD, BANK_TRANSFER, WALLET]
+        initiatedAt:
+          type: string
+          format: date-time
+        gatewayRef:
+          $ref: '#/components/schemas/GatewayReference'
+        riskScore:
+          type: number
+          minimum: not_a_number
+          maximum: not_a_number
+        fraudFlags:
+          $ref: '#/components/schemas/NonExistentFraudFlags'
+
+    PaymentCompletedPayload:
+      type: object
+      required:
+        - paymentId
+        - orderId
+        - completedAt
+        - transactionId
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+        completedAt:
+          type: string
+          format: date-time
+        transactionId:
+          type: string
+        settlementDate:
+          type: string
+          format: date
+        feeBreakdown:
+          $ref: '#/components/schemas/NonExistentFeeBreakdown'
+        taxInfo:
+          $ref: '#/components/schemas/NonExistentTaxInfo'
+
+    PaymentFailedPayload:
+      type: object
+      required:
+        - paymentId
+        - orderId
+        - failedAt
+        - failureCode
+        - failureReason
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+        failedAt:
+          type: string
+          format: date-time
+        failureCode:
+          type: string
+        failureReason:
+          type: string
+        retryPolicy:
+          $ref: '#/components/schemas/NonExistentRetryPolicy'
+        nextRetryAt:
+          type: string
+          format: date-time-not-valid
+
+    InventoryPayload:
+      type: object
+      required:
+        - sku
+        - warehouseId
+        - quantity
+        - updatedAt
+      properties:
+        sku:
+          type: string
+        warehouseId:
+          type: string
+        quantity:
+          type: integer
+          minimum: 0
+        updatedAt:
+          type: string
+          format: date-time
+        location:
+          $ref: '#/components/schemas/WarehouseLocation'
+        expirationDate:
+          type: string
+          format: date
+        batchInfo:
+          $ref: '#/components/schemas/NonExistentBatchInfo'
+
+    InventoryReservedPayload:
+      type: object
+      required:
+        - reservationId
+        - sku
+        - warehouseId
+        - quantity
+        - reservedFor
+        - reservedAt
+        - expiresAt
+      properties:
+        reservationId:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        warehouseId:
+          type: string
+        quantity:
+          type: integer
+          minimum: 1
+        reservedFor:
+          type: string
+        reservedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        reservationContext:
+          $ref: '#/components/schemas/NonExistentReservationContext'
+        priorityLevel:
+          type: string
+          enum: [CRITICAL, HIGH, NORMAL, LOW, UNKNOWN_LEVEL_NOT_VALID]
+
+    NotificationPayload:
+      type: object
+      required:
+        - notificationId
+        - recipientId
+        - channel
+        - template
+        - sentAt
+      properties:
+        notificationId:
+          type: string
+          format: uuid
+        recipientId:
+          type: string
+        channel:
+          type: string
+          enum: [EMAIL, SMS, PUSH, IN_APP]
+        template:
+          type: string
+        sentAt:
+          type: string
+          format: date-time
+        content:
+          $ref: '#/components/schemas/NotificationContent'
+        deliveryReceipt:
+          $ref: '#/components/schemas/NonExistentDeliveryReceipt'
+
+    NotificationFailedPayload:
+      type: object
+      required:
+        - notificationId
+        - recipientId
+        - channel
+        - failedAt
+        - errorCode
+      properties:
+        notificationId:
+          type: string
+          format: uuid
+        recipientId:
+          type: string
+        channel:
+          type: string
+          enum: [EMAIL, SMS, PUSH, IN_APP]
+        failedAt:
+          type: string
+          format: date-time
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+        retryAttempts:
+          type: integer
+          minimum: not_a_number
+        suppressionReason:
+          $ref: '#/components/schemas/NonExistentSuppressionReason'
+
+    AuditPayload:
+      type: object
+      required:
+        - auditId
+        - action
+        - actorId
+        - resourceType
+        - resourceId
+        - timestamp
+      properties:
+        auditId:
+          type: string
+          format: uuid
+        action:
+          type: string
+          enum: [CREATE, READ, UPDATE, DELETE, LOGIN, LOGOUT]
+        actorId:
+          type: string
+        resourceType:
+          type: string
+        resourceId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        details:
+          $ref: '#/components/schemas/AuditDetails'
+        complianceTags:
+          $ref: '#/components/schemas/NonExistentComplianceTags'
+        dataClassification:
+          $ref: '#/components/schemas/NonExistentDataClassification'
+
+    SessionStartedPayload:
+      type: object
+      required:
+        - sessionId
+        - userId
+        - startedAt
+        - ipAddress
+        - userAgent
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        ipAddress:
+          type: string
+          format: ipv4
+        userAgent:
+          type: string
+        deviceFingerprint:
+          $ref: '#/components/schemas/NonExistentDeviceFingerprint'
+        geoLocation:
+          $ref: '#/components/schemas/NonExistentGeoLocationDetail'
+        mfaMethod:
+          type: string
+          enum: [TOTP, SMS, EMAIL, HARDWARE_KEY, BIOMETRIC, INVALID_MFA_METHOD]
+
+    SessionExpiredPayload:
+      type: object
+      required:
+        - sessionId
+        - userId
+        - expiredAt
+        - reason
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+        expiredAt:
+          type: string
+          format: date-time
+        reason:
+          type: string
+          enum: [TIMEOUT, LOGOUT, ADMIN_REVOKE, TOKEN_INVALIDATED]
+        sessionDuration:
+          type: integer
+          minimum: not_a_number
+        actionsPerformed:
+          type: integer
+          minimum: not_a_number
+        securityIncident:
+          $ref: '#/components/schemas/NonExistentSecurityIncident'
+
+    DepartmentInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        parentDepartment:
+          $ref: '#/components/schemas/DepartmentInfo'
+        costCenter:
+          $ref: '#/components/schemas/NonExistentCostCenter'
+
+    AddressSchema:
+      type: object
+      required:
+        - street
+        - city
+        - country
+      properties:
+        street:
+          type: string
+        city:
+          type: string
+        postalCode:
+          type: string
+        state:
+          type: string
+        country:
+          type: string
+          pattern: '^[A-Z]{2}$'
+        geoCoordinates:
+          $ref: '#/components/schemas/GeoCoordinates'
+
+    GeoCoordinates:
+      type: object
+      properties:
+        lat:
+          type: number
+          minimum: -90
+          maximum: 90
+        lng:
+          type: number
+          minimum: -180
+          maximum: 180
+
+    UserPreferences:
+      type: object
+      properties:
+        language:
+          type: string
+          enum: [en, ru, de, fr, es, zh]
+        timezone:
+          type: string
+        notifications:
+          $ref: '#/components/schemas/NotificationPreferences'
+        theme:
+          type: string
+          enum: [LIGHT, DARK, SYSTEM]
+        accessibility:
+          $ref: '#/components/schemas/AccessibilitySettings'
+        experimentalFeatures:
+          $ref: '#/components/schemas/NonExistentFeatureFlags'
+
+    NotificationPreferences:
+      type: object
+      properties:
+        email:
+          type: boolean
+        sms:
+          type: boolean
+        push:
+          type: boolean
+        inApp:
+          type: boolean
+        digest:
+          type: string
+          enum: [IMMEDIATE, DAILY, WEEKLY, NEVER]
+
+    AccessibilitySettings:
+      type: object
+      properties:
+        highContrast:
+          type: boolean
+        fontSize:
+          type: string
+          enum: [SMALL, MEDIUM, LARGE, EXTRA_LARGE]
+        screenReader:
+          type: boolean
+
+    MetadataSchema:
+      type: object
+      additionalProperties:
+        type: string
+      maxProperties: 20
+
+    AuditInfo:
+      type: object
+      properties:
+        createdAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+        lastModifiedAt:
+          type: string
+          format: date-time
+        lastModifiedBy:
+          type: string
+        version:
+          type: integer
+          minimum: 1
+
+    ChangeRecord:
+      type: object
+      properties:
+        oldValue:
+          description: Предыдущее значение
+        newValue:
+          description: Новое значение
+        changedAt:
+          type: string
+          format: date-time
+
+    OrderItem:
+      type: object
+      required:
+        - productId
+        - quantity
+        - unitPrice
+      properties:
+        productId:
+          type: string
+        quantity:
+          type: integer
+          minimum: 1
+        unitPrice:
+          type: number
+          minimum: 0
+        discount:
+          type: number
+          minimum: 0
+          maximum: 100
+        customizations:
+          $ref: '#/components/schemas/ProductCustomizations'
+        taxCategory:
+          $ref: '#/components/schemas/NonExistentTaxCategory'
+
+    ProductCustomizations:
+      type: object
+      additionalProperties:
+        type: string
+
+    RefundInfo:
+      type: object
+      properties:
+        amount:
+          type: number
+        currency:
+          type: string
+        processedAt:
+          type: string
+          format: date-time
+        transactionId:
+          type: string
+
+    GatewayReference:
+      type: object
+      properties:
+        gatewayName:
+          type: string
+        transactionId:
+          type: string
+        authCode:
+          type: string
+        responseCode:
+          type: string
+
+    WarehouseLocation:
+      type: object
+      properties:
+        zone:
+          type: string
+        aisle:
+          type: string
+        shelf:
+          type: string
+        bin:
+          type: string
+
+    NotificationContent:
+      type: object
+      properties:
+        subject:
+          type: string
+        body:
+          type: string
+        variables:
+          type: object
+          additionalProperties:
+            type: string
+
+    AuditDetails:
+      type: object
+      properties:
+        ipAddress:
+          type: string
+          format: ipv4
+        userAgent:
+          type: string
+        sessionId:
+          type: string
+        changes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChangeRecord'
+
+  parameters:
+    UserId:
+      description: User identifier
+      schema:
+        type: string
+        pattern: '^USR-[0-9]{6}$'
+
+  correlationIds:
+    DefaultCorrelation:
+      description: Default correlation ID
+      location: $message.header#/correlationId
+
+  securitySchemes:
+    apiKey:
+      type: httpApiKey
+      name: X-API-Key
+      in: header
