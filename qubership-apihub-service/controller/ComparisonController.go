@@ -2,7 +2,6 @@ package controller
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -148,17 +147,11 @@ func (c comparisonControllerImpl) CompareTwoVersions(w http.ResponseWriter, r *h
 		return
 	}
 
-	// The changelog build result carries the revision only inside the version string, so pin the
-	// resolved revisions here (as reCalculateChangelogs does). Keep the same version@revision form in
-	// the dedup search query below so an existing build is still matched.
-	versionWithRevision := fmt.Sprintf("%s@%d", compareVersionsReq.Version, revision)
-	previousVersionWithRevision := fmt.Sprintf("%s@%d", compareVersionsReq.PreviousVersion, prevVersionRevision)
-
 	buildConfig := view.BuildConfig{
 		PackageId:                compareVersionsReq.PackageId,
-		Version:                  versionWithRevision,
+		Version:                  compareVersionsReq.Version,
 		PreviousVersionPackageId: compareVersionsReq.PreviousVersionPackageId,
-		PreviousVersion:          previousVersionWithRevision,
+		PreviousVersion:          compareVersionsReq.PreviousVersion,
 		BuildType:                view.ChangelogType,
 		CreatedBy:                ctx.GetUserId(),
 
@@ -203,9 +196,9 @@ func (c comparisonControllerImpl) CompareTwoVersions(w http.ResponseWriter, r *h
 
 	searchRequest := view.ChangelogBuildSearchRequest{
 		PackageId:                compareVersionsReq.PackageId,
-		Version:                  versionWithRevision,
+		Version:                  compareVersionsReq.Version,
 		PreviousVersionPackageId: compareVersionsReq.PreviousVersionPackageId,
-		PreviousVersion:          previousVersionWithRevision,
+		PreviousVersion:          compareVersionsReq.PreviousVersion,
 		BuildType:                view.ChangelogType,
 
 		ComparisonRevision:     revision,
