@@ -1658,12 +1658,11 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 				}
 			}
 		}
-		if len(ddlContractComparisonEntities) > 0 {
+		if len(versionComparisons) != 0 {
 			start = time.Now()
-			_, err = tx.Model(&ddlContractComparisonEntities).OnConflict(
-				"(package_id, version, revision, previous_package_id, previous_version, previous_revision, ddl_entity_id, previous_ddl_entity_id) DO UPDATE").Insert()
+			err = p.saveDdlComparisonsTx(tx, ddlContractComparisonEntities, versionComparisons)
 			if err != nil {
-				return fmt.Errorf("failed to insert ddl_comparison: %w", err)
+				return err
 			}
 			utils.PerfLog(time.Since(start).Milliseconds(), 100, "CreateVersionWithData: ddl_comparison insert")
 		}
