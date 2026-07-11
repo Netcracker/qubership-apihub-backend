@@ -21,6 +21,7 @@ type BuildRepository interface {
 	GetBuildSrc(buildId string) (*entity.BuildSourceEntity, error)
 	GetExtendedBuild(buildId string) (*entity.ExtendedBuildEntity, error)
 	ListExtendedBuilds(filter ExtendedBuildFilter) ([]entity.ExtendedBuildEntity, error)
+	GetBuildDependencies(buildIds []string) ([]entity.BuildDependencyEntity, error)
 
 	FindAndTakeFreeBuild(builderId string) (*entity.BuildEntity, error)
 
@@ -142,6 +143,23 @@ func (b buildRepositoryImpl) ListExtendedBuilds(filter ExtendedBuildFilter) ([]e
 	}
 
 	err := query.OrderExpr("b.created_at DESC").Select()
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return result, nil
+}
+
+func (b buildRepositoryImpl) GetBuildDependencies(buildIds []string) ([]entity.BuildDependencyEntity, error) {
+	var result []entity.BuildDependencyEntity
+	if len(buildIds) == 0 {
+		return nil, nil
+	}
+	err := b.cp.GetConnection().Model(&result).
+		Where("build_id in (?)", pg.In(buildIds)).
+		Select()
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return nil, nil

@@ -1279,6 +1279,11 @@ components:
           description: Build metadata stored in the build table.
         config:
           $ref: "#/components/schemas/BuildConfig"
+        dependencies:
+          type: array
+          items:
+            type: string
+          description: Build IDs that this build depends on and must wait to complete before it can run.
       required:
         - buildId
         - status

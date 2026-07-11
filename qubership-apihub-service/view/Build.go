@@ -203,6 +203,7 @@ type ExtendedBuild struct {
 	Priority     int                    `json:"priority"`
 	Metadata     map[string]interface{} `json:"metadata"`
 	Config       BuildConfig            `json:"config"`
+	Dependencies []string               `json:"dependencies,omitempty"`
 }
 
 type ExtendedBuilds struct {

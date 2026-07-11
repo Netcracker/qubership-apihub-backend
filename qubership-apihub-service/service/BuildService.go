@@ -604,6 +604,14 @@ func (b *buildServiceImpl) GetExtendedBuild(buildId string) (*view.ExtendedBuild
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert build config for build %s: %w", build.BuildId, err)
 	}
+	depends, err := b.buildRepository.GetBuildDependencies([]string{buildId})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get build dependencies for build %s: %w", buildId, err)
+	}
+	result.Dependencies = make([]string, 0, len(depends))
+	for _, dep := range depends {
+		result.Dependencies = append(result.Dependencies, dep.DependId)
+	}
 	return result, nil
 }
 
@@ -618,12 +626,26 @@ func (b *buildServiceImpl) ListExtendedBuilds(filter view.ExtendedBuildFilter) (
 	if err != nil {
 		return nil, err
 	}
+	buildIds := make([]string, 0, len(builds))
+	for _, build := range builds {
+		buildIds = append(buildIds, build.BuildId)
+	}
+	depends, err := b.buildRepository.GetBuildDependencies(buildIds)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get build dependencies: %w", err)
+	}
+	dependsByBuildId := make(map[string][]string, len(buildIds))
+	for _, dep := range depends {
+		dependsByBuildId[dep.BuildId] = append(dependsByBuildId[dep.BuildId], dep.DependId)
+	}
+
 	result := make([]view.ExtendedBuild, 0, len(builds))
 	for _, build := range builds {
 		buildView, err := entity.MakeExtendedBuildView(&build)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert build config for build %s: %w", build.BuildId, err)
 		}
+		buildView.Dependencies = dependsByBuildId[build.BuildId]
 		result = append(result, *buildView)
 	}
 	return &view.ExtendedBuilds{Builds: result}, nil
