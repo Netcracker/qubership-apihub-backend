@@ -3440,6 +3440,21 @@ func (p publishedRepositoryImpl) GetVersionComparison(comparisonId string) (*ent
 	return comparison, nil
 }
 
+func (p publishedRepositoryImpl) GetVersionComparisonsByIds(comparisonIds []string) ([]entity.VersionComparisonEntity, error) {
+	if len(comparisonIds) == 0 {
+		return nil, nil
+	}
+	comparisons := make([]entity.VersionComparisonEntity, 0)
+	err := p.cp.GetConnection().
+		Model(&comparisons).
+		Where("comparison_id in (?)", pg.In(comparisonIds)).
+		Select()
+	if err != nil {
+		return nil, err
+	}
+	return comparisons, nil
+}
+
 func (p publishedRepositoryImpl) GetVersionRefsComparisons(comparisonId string) ([]entity.VersionComparisonEntity, error) {
 	comparisons := make([]entity.VersionComparisonEntity, 0)
 	err := p.cp.GetConnection().

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/archive"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/metrics"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -16,6 +17,7 @@ import (
 
 const typeAndTitleMigrationVersion = 22
 const transitionFixMigrationVersion = 31
+const dashboardComparisonRefsFixMigrationVersion = 38
 
 // SoftMigrateDb The function implements migrations that can't be made via SQL query.
 // Executes only required migrations based on current vs new versions.
@@ -41,6 +43,18 @@ func (d dbMigrationServiceImpl) SoftMigrateDb(currentVersion int, newVersion int
 				log.Errorf("Failed to fix data after transitions: %v", err)
 			} else {
 				log.Infof("Successfully fixed data after transitions")
+			}
+		})
+	}
+
+	if (currentVersion < dashboardComparisonRefsFixMigrationVersion && dashboardComparisonRefsFixMigrationVersion <= newVersion) ||
+		(migrationRequired && dashboardComparisonRefsFixMigrationVersion == currentVersion && dashboardComparisonRefsFixMigrationVersion == newVersion) {
+		utils.SafeAsync(func() {
+			err := d.fixDashboardComparisonRefs()
+			if err != nil {
+				log.Errorf("Failed to fix dashboard comparison refs: %v", err)
+			} else {
+				log.Infof("Successfully fixed dashboard comparison refs")
 			}
 		})
 	}
@@ -524,4 +538,171 @@ func bytesContainsAny(data []byte, patterns [][]byte) bool {
 		}
 	}
 	return false
+}
+
+type comparisonToRepair struct {
+	PackageId         string `pg:"package_id"`
+	Version           string `pg:"version"`
+	Revision          int    `pg:"revision"`
+	PreviousPackageId string `pg:"previous_package_id"`
+	PreviousVersion   string `pg:"previous_version"`
+	PreviousRevision  int    `pg:"previous_revision"`
+	ComparisonId      string `pg:"comparison_id"`
+}
+
+// fixDashboardComparisonRefs restores version_comparison.refs for dashboard comparisons saved with NULL refs
+func (d dbMigrationServiceImpl) fixDashboardComparisonRefs() error {
+	log.Infof("Starting dashboard comparison refs fix")
+	ctx := context.Background()
+
+	const batchSize = 500
+	lastComparisonId := ""
+	scanned := 0
+	repaired := 0
+	for {
+		var candidates []comparisonToRepair
+		_, err := d.cp.GetConnection().QueryContext(ctx, &candidates, `
+			SELECT vc.package_id, vc.version, vc.revision,
+				vc.previous_package_id, vc.previous_version, vc.previous_revision, vc.comparison_id
+			FROM version_comparison vc
+			WHERE vc.refs IS NULL
+				AND vc.comparison_id > ?
+				AND (EXISTS (SELECT 1 FROM published_version_reference r
+						WHERE r.package_id = vc.package_id AND r.version = vc.version AND r.revision = vc.revision)
+					OR EXISTS (SELECT 1 FROM published_version_reference r
+						WHERE r.package_id = vc.previous_package_id AND r.version = vc.previous_version AND r.revision = vc.previous_revision))
+			ORDER BY vc.comparison_id
+			LIMIT ?`, lastComparisonId, batchSize)
+		if err != nil {
+			return fmt.Errorf("failed to query comparisons with missing refs: %w", err)
+		}
+		if len(candidates) == 0 {
+			break
+		}
+		log.Infof("Processing dashboard comparisons with missing refs: batch of %d", len(candidates))
+		for _, candidate := range candidates {
+			updated, err := d.repairComparisonRefs(ctx, candidate)
+			if err != nil {
+				return err
+			}
+			if updated {
+				repaired++
+			}
+		}
+		scanned += len(candidates)
+		lastComparisonId = candidates[len(candidates)-1].ComparisonId
+		if len(candidates) < batchSize {
+			break
+		}
+	}
+
+	log.Infof("Dashboard comparison refs fix completed. Scanned: %d, repaired: %d", scanned, repaired)
+	return nil
+}
+
+func (d dbMigrationServiceImpl) repairComparisonRefs(ctx context.Context, comparison comparisonToRepair) (bool, error) {
+	currentSide := archive.VersionKey{PackageId: comparison.PackageId, Version: comparison.Version, Revision: comparison.Revision}
+	previousSide := archive.VersionKey{PackageId: comparison.PreviousPackageId, Version: comparison.PreviousVersion, Revision: comparison.PreviousRevision}
+
+	currentReferences, err := d.getVersionReferenceSet(ctx, currentSide)
+	if err != nil {
+		return false, err
+	}
+	previousReferences, err := d.getVersionReferenceSet(ctx, previousSide)
+	if err != nil {
+		return false, err
+	}
+
+	candidates, err := d.getNestedComparisonCandidates(ctx, currentSide, previousSide)
+	if err != nil {
+		return false, err
+	}
+
+	refs := archive.CollectNestedComparisonIds(comparison.ComparisonId, candidates, currentReferences, previousReferences)
+	if len(refs) == 0 {
+		return false, nil
+	}
+
+	result, err := d.cp.GetConnection().ExecContext(ctx,
+		`UPDATE version_comparison SET refs = ? WHERE comparison_id = ? AND refs IS NULL`,
+		pg.Array(refs), comparison.ComparisonId)
+	if err != nil {
+		return false, fmt.Errorf("failed to update refs for comparison %s: %w", comparison.ComparisonId, err)
+	}
+	return result.RowsAffected() > 0, nil
+}
+
+func (d dbMigrationServiceImpl) getVersionReferenceSet(ctx context.Context, version archive.VersionKey) (map[archive.VersionKey]struct{}, error) {
+	result := map[archive.VersionKey]struct{}{}
+	if version == (archive.VersionKey{}) {
+		return result, nil
+	}
+	type referenceRow struct {
+		PackageId string `pg:"reference_id"`
+		Version   string `pg:"reference_version"`
+		Revision  int    `pg:"reference_revision"`
+	}
+	var rows []referenceRow
+	_, err := d.cp.GetConnection().QueryContext(ctx, &rows, `
+		SELECT DISTINCT reference_id, reference_version, reference_revision
+		FROM published_version_reference
+		WHERE package_id = ? AND version = ? AND revision = ?`,
+		version.PackageId, version.Version, version.Revision)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query references of %s/%s@%d: %w", version.PackageId, version.Version, version.Revision, err)
+	}
+	for _, row := range rows {
+		result[archive.VersionKey{PackageId: row.PackageId, Version: row.Version, Revision: row.Revision}] = struct{}{}
+	}
+	return result, nil
+}
+
+func (d dbMigrationServiceImpl) getNestedComparisonCandidates(ctx context.Context, currentSide archive.VersionKey, previousSide archive.VersionKey) ([]archive.ComparisonRefCandidate, error) {
+	rows := make([]comparisonToRepair, 0)
+	if currentSide != (archive.VersionKey{}) {
+		var currentSideRows []comparisonToRepair
+		_, err := d.cp.GetConnection().QueryContext(ctx, &currentSideRows, `
+			SELECT DISTINCT vc.package_id, vc.version, vc.revision,
+				vc.previous_package_id, vc.previous_version, vc.previous_revision, vc.comparison_id
+			FROM version_comparison vc
+			JOIN published_version_reference r
+				ON vc.package_id = r.reference_id AND vc.version = r.reference_version AND vc.revision = r.reference_revision
+			WHERE r.package_id = ? AND r.version = ? AND r.revision = ?`,
+			currentSide.PackageId, currentSide.Version, currentSide.Revision)
+		if err != nil {
+			return nil, fmt.Errorf("failed to query nested comparisons of %s/%s@%d: %w", currentSide.PackageId, currentSide.Version, currentSide.Revision, err)
+		}
+		rows = append(rows, currentSideRows...)
+	}
+	if previousSide != (archive.VersionKey{}) {
+		var removedRows []comparisonToRepair
+		_, err := d.cp.GetConnection().QueryContext(ctx, &removedRows, `
+			SELECT DISTINCT vc.package_id, vc.version, vc.revision,
+				vc.previous_package_id, vc.previous_version, vc.previous_revision, vc.comparison_id
+			FROM version_comparison vc
+			JOIN published_version_reference r
+				ON vc.previous_package_id = r.reference_id AND vc.previous_version = r.reference_version AND vc.previous_revision = r.reference_revision
+			WHERE r.package_id = ? AND r.version = ? AND r.revision = ?
+				AND vc.package_id = '' AND vc.version = ''`,
+			previousSide.PackageId, previousSide.Version, previousSide.Revision)
+		if err != nil {
+			return nil, fmt.Errorf("failed to query removed nested comparisons of %s/%s@%d: %w", previousSide.PackageId, previousSide.Version, previousSide.Revision, err)
+		}
+		rows = append(rows, removedRows...)
+	}
+
+	seen := map[string]struct{}{}
+	candidates := make([]archive.ComparisonRefCandidate, 0, len(rows))
+	for _, row := range rows {
+		if _, ok := seen[row.ComparisonId]; ok {
+			continue
+		}
+		seen[row.ComparisonId] = struct{}{}
+		candidates = append(candidates, archive.ComparisonRefCandidate{
+			ComparisonId: row.ComparisonId,
+			Current:      archive.VersionKey{PackageId: row.PackageId, Version: row.Version, Revision: row.Revision},
+			Previous:     archive.VersionKey{PackageId: row.PreviousPackageId, Version: row.PreviousVersion, Revision: row.PreviousRevision},
+		})
+	}
+	return candidates, nil
 }

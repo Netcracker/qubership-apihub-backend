@@ -3,7 +3,17 @@ package entity
 import (
 	"encoding/json"
 	"reflect"
+	"slices"
 )
+
+func equalIgnoringOrder(s []string, t []string) bool {
+	if len(s) != len(t) {
+		return false
+	}
+	sSorted := slices.Sorted(slices.Values(s))
+	tSorted := slices.Sorted(slices.Values(t))
+	return slices.Equal(sSorted, tSorted)
+}
 
 func (s Metadata) GetChanges(t Metadata) map[string]interface{} {
 	changes := make(map[string]interface{}, 0)
@@ -300,8 +310,9 @@ func (s OperationSearchTextEntity) GetChanges(t OperationSearchTextEntity) map[s
 
 func (s VersionComparisonEntity) GetChanges(t VersionComparisonEntity) map[string]interface{} {
 	changes := make(map[string]interface{}, 0)
+	// refs order is not guaranteed to be stable between builds, so compare them as sets
 	if (len(s.Refs) != 0 || len(t.Refs) != 0) &&
-		!reflect.DeepEqual(s.Refs, t.Refs) {
+		!equalIgnoringOrder(s.Refs, t.Refs) {
 		changes["Refs"] = map[string]interface{}{
 			"old": s.Refs,
 			"new": t.Refs,

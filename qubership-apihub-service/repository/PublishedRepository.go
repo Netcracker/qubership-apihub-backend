@@ -74,6 +74,7 @@ type PublishedRepository interface {
 	RecalculateOperationGroups(packageId string, version string, revision int, restGroupingPrefixRegex string, userId string) error
 
 	GetVersionComparison(comparisonId string) (*entity.VersionComparisonEntity, error)
+	GetVersionComparisonsByIds(comparisonIds []string) ([]entity.VersionComparisonEntity, error)
 	GetVersionRefsComparisons(comparisonId string) ([]entity.VersionComparisonEntity, error)
 	GetVersionComparisonsCleanupCandidates(ctx context.Context, limit int, offset int) ([]entity.VersionComparisonCleanupCandidateEntity, error)
 	DeleteVersionComparison(ctx context.Context, comparisonId string) (bool, error)

@@ -329,6 +329,10 @@ func MakeVersionComparisonId(packageId string, version string, revision int, pre
 	return utils.GetEncodedChecksum([]byte(uniqueString))
 }
 
+func (k ComparisonKey) ComparisonId() string {
+	return MakeVersionComparisonId(k.PackageId, k.Version, k.Revision, k.PreviousVersionPackageId, k.PreviousVersion, k.PreviousVersionRevision)
+}
+
 type OperationType struct {
 	ApiType                    string                  `json:"apiType" validate:"required"`
 	ChangesSummary             ChangeSummary           `json:"changesSummary" validate:"required"`
