@@ -354,9 +354,11 @@ func (p publishedServiceImpl) CheckNoReleaseDependentVersions(ctx context.Securi
 		if err != nil {
 			return err
 		}
+		log.Warnf("Blocked changing version %s of package %s to 'draft' status by user %s: referenced as a previous version by release versions %s",
+			version, packageId, ctx.GetUserId(), entity.FormatVersionKeys(releaseDependents))
 		return &exception.CustomError{
 			Status:  http.StatusBadRequest,
-			Code:    exception.VersionReferencedAsPreviousByRelease,
+			Code:    exception.InvalidReleaseVersionChain,
 			Message: exception.VersionReferencedAsPreviousByReleaseMsg,
 			Params:  map[string]interface{}{"version": version, "packageId": packageId, "releaseVersions": entity.FormatVersionKeysWithHidden(accessible, hiddenCount, "'release' package version")},
 		}

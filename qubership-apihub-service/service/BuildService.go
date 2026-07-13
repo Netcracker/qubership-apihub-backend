@@ -164,12 +164,7 @@ func (b *buildServiceImpl) PublishVersion(ctx context.SecurityContext, config vi
 		// A release version's previous version must be a release; a draft version may reference a draft previous version.
 		if b.previousVersionStatusValidationEnabled &&
 			config.BuildType == view.PublishType && config.Status == string(view.Release) && previousVersionStatus == string(view.Draft) {
-			return nil, &exception.CustomError{
-				Status:  http.StatusBadRequest,
-				Code:    exception.PreviousPackageVersionNotRelease,
-				Message: exception.PreviousPackageVersionNotReleaseMsg,
-				Params:  map[string]interface{}{"version": config.PreviousVersion, "packageId": previousVersionPackageId},
-			}
+			return nil, newReleaseVersionPreviousVersionNotReleaseError(ctx, config.PackageId, config.Version, previousVersionPackageId, config.PreviousVersion)
 		}
 
 		dependencyCycleExists, err := b.publishService.CheckPreviousVersionDependencyCycle(config.PackageId, config.Version, config.PreviousVersionPackageId, config.PreviousVersion, config.ComparisonRevision)
@@ -240,6 +235,22 @@ func (b *buildServiceImpl) PublishVersion(ctx context.SecurityContext, config vi
 		return &view.PublishV2Response{PublishId: publishId, Config: &config}, nil
 	} else {
 		return &view.PublishV2Response{PublishId: publishId}, nil
+	}
+}
+
+func newReleaseVersionPreviousVersionNotReleaseError(ctx context.SecurityContext, packageId string, version string, previousVersionPackageId string, previousVersion string) *exception.CustomError {
+	log.Debugf("Blocked publishing version %s of package %s with 'release' status by user %s: previous version %s of package %s has 'draft' status",
+		version, packageId, ctx.GetUserId(), previousVersion, previousVersionPackageId)
+	return &exception.CustomError{
+		Status:  http.StatusBadRequest,
+		Code:    exception.InvalidReleaseVersionChain,
+		Message: exception.ReleaseVersionPreviousVersionNotReleaseMsg,
+		Params: map[string]interface{}{
+			"packageId":                packageId,
+			"version":                  version,
+			"previousVersionPackageId": previousVersionPackageId,
+			"previousVersion":          previousVersion,
+		},
 	}
 }
 

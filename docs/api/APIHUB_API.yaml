@@ -13261,14 +13261,16 @@ components:
         code: "APIHUB-COMMON-4001"
         message: "Incorrect input parameters"
     PreviousVersionNotRelease:
-      description: Previous version is not in the 'release' status
+      description: A release version cannot reference a draft previous version
       value:
         status: 400
-        code: "48"
-        message: "Previous version 2024.1 for package QS.group.my-package is not in the 'release' status"
+        code: "8600"
+        message: "Version 2024.2 for package QS.group.my-package cannot be published with the 'release' status because previous version 2024.1 for package QS.group.previous-package is in the 'draft' status. Change the previous version to 'release', or publish this version as a draft."
         params:
-          version: "2024.1"
+          version: "2024.2"
           packageId: "QS.group.my-package"
+          previousVersion: "2024.1"
+          previousVersionPackageId: "QS.group.previous-package"
     VersionReferencedAsPreviousByRelease:
       description: Version cannot be changed to 'draft' because a released version uses it as its previous version
       value:

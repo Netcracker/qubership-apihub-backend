@@ -600,12 +600,7 @@ func (o operationGroupServiceImpl) StartOperationGroupPublish(ctx context.Securi
 			}
 			// A release version's previous version must be a release; a draft version may reference a draft previous version.
 			if req.Status == string(view.Release) && previousVersionStatus == string(view.Draft) {
-				return "", &exception.CustomError{
-					Status:  http.StatusBadRequest,
-					Code:    exception.PreviousPackageVersionNotRelease,
-					Message: exception.PreviousPackageVersionNotReleaseMsg,
-					Params:  map[string]interface{}{"packageId": previousVersionPackageId, "version": req.PreviousVersion},
-				}
+				return "", newReleaseVersionPreviousVersionNotReleaseError(ctx, req.PackageId, req.Version, previousVersionPackageId, req.PreviousVersion)
 			}
 		}
 

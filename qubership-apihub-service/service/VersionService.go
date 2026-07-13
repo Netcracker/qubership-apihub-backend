@@ -514,12 +514,7 @@ func (v versionServiceImpl) PatchVersion(ctx context.SecurityContext, packageId 
 					return nil, err
 				}
 				if found && previousVersionStatus == string(view.Draft) {
-					return nil, &exception.CustomError{
-						Status:  http.StatusBadRequest,
-						Code:    exception.PreviousPackageVersionNotRelease,
-						Message: exception.PreviousPackageVersionNotReleaseMsg,
-						Params:  map[string]interface{}{"version": versionEnt.PreviousVersion, "packageId": previousVersionPackageId},
-					}
+					return nil, newReleaseVersionPreviousVersionNotReleaseError(ctx, packageId, versionEnt.Version, previousVersionPackageId, versionEnt.PreviousVersion)
 				}
 			}
 		}
@@ -1781,12 +1776,7 @@ func (v versionServiceImpl) StartPublishFromCSV(ctx context.SecurityContext, req
 			}
 			// A release version's previous version must be a release; a draft version may reference a draft previous version.
 			if req.Status == string(view.Release) && previousVersionStatus == string(view.Draft) {
-				return "", &exception.CustomError{
-					Status:  http.StatusBadRequest,
-					Code:    exception.PreviousPackageVersionNotRelease,
-					Message: exception.PreviousPackageVersionNotReleaseMsg,
-					Params:  map[string]interface{}{"packageId": previousVersionPackageId, "version": req.PreviousVersion},
-				}
+				return "", newReleaseVersionPreviousVersionNotReleaseError(ctx, req.PackageId, req.Version, previousVersionPackageId, req.PreviousVersion)
 			}
 		} else {
 			prevVersion, err := v.publishedRepo.GetVersion(previousVersionPackageId, req.PreviousVersion)
