@@ -89,7 +89,7 @@ func (c *mcpContractControllerImpl) ListMcpEntities(w http.ResponseWriter, r *ht
 	if r.URL.Query().Get("offset") != "" {
 		offset, _ = strconv.Atoi(r.URL.Query().Get("offset"))
 	}
-	result, svcErr := c.mcpContractService.ListMcpEntities(packageId, versionName, kind, mcpEndpoint, textFilter, limit, offset)
+	result, svcErr := c.mcpContractService.ListMcpEntities(packageId, versionName, kind, mcpEndpoint, "", textFilter, limit, offset)
 	if svcErr != nil {
 		handlePkgRedirectOrRespondWithError(w, r, c.ptHandler, packageId, "Failed to list MCP entities", svcErr)
 		return
@@ -125,22 +125,7 @@ func (c *mcpContractControllerImpl) GetMcpEntity(w http.ResponseWriter, r *http.
 		return
 	}
 
-	includeData := true
-	if r.URL.Query().Get("includeData") != "" {
-		includeData, err = strconv.ParseBool(r.URL.Query().Get("includeData"))
-		if err != nil {
-			utils.RespondWithCustomError(w, &exception.CustomError{
-				Status:  http.StatusBadRequest,
-				Code:    exception.IncorrectParamType,
-				Message: exception.IncorrectParamTypeMsg,
-				Params:  map[string]interface{}{"param": "includeData", "type": "boolean"},
-				Debug:   err.Error(),
-			})
-			return
-		}
-	}
-
-	result, svcErr := c.mcpContractService.GetMcpEntity(packageId, versionName, mcpEntityId, includeData)
+	result, svcErr := c.mcpContractService.GetMcpEntity(packageId, versionName, mcpEntityId)
 	if svcErr != nil {
 		handlePkgRedirectOrRespondWithError(w, r, c.ptHandler, packageId, "Failed to get MCP entity", svcErr)
 		return

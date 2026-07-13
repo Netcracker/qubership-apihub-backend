@@ -12,8 +12,8 @@ import (
 )
 
 type MCPContractService interface {
-	ListMcpEntities(packageId, versionName, kind, mcpEndpoint, textFilter string, limit, offset int) (*view.McpEntityListView, error)
-	GetMcpEntity(packageId, versionName, mcpEntityId string, includeData bool) (interface{}, error)
+	ListMcpEntities(packageId, versionName, kind, mcpEndpoint, refPackageId, textFilter string, limit, offset int) (*view.McpEntityListView, error)
+	GetMcpEntity(packageId, versionName, mcpEntityId string) (interface{}, error)
 	GetVersionSummary(packageId, versionName string) (map[string]view.McpEndpointSummary, error)
 	GlobalSearchForMCP(searchReq view.SearchQueryReq) (*view.SearchResult, error)
 }
@@ -44,12 +44,12 @@ func (s *mcpContractServiceImpl) resolveRevision(packageId, versionName string) 
 	return version.Version, version.Revision, nil
 }
 
-func (s *mcpContractServiceImpl) ListMcpEntities(packageId, versionName, kind, mcpEndpoint, textFilter string, limit, offset int) (*view.McpEntityListView, error) {
+func (s *mcpContractServiceImpl) ListMcpEntities(packageId, versionName, kind, mcpEndpoint, refPackageId, textFilter string, limit, offset int) (*view.McpEntityListView, error) {
 	version, revision, err := s.resolveRevision(packageId, versionName)
 	if err != nil {
 		return nil, err
 	}
-	entities, err := s.mcpRepo.ListMcpEntities(packageId, version, revision, kind, mcpEndpoint, textFilter, limit, offset)
+	entities, err := s.mcpRepo.ListMcpEntities(packageId, version, revision, kind, mcpEndpoint, refPackageId, textFilter, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -67,20 +67,20 @@ func (s *mcpContractServiceImpl) ListMcpEntities(packageId, versionName, kind, m
 	return result, nil
 }
 
-func (s *mcpContractServiceImpl) GetMcpEntity(packageId, versionName, mcpEntityId string, includeData bool) (interface{}, error) {
+func (s *mcpContractServiceImpl) GetMcpEntity(packageId, versionName, mcpEntityId string) (interface{}, error) {
 	version, revision, err := s.resolveRevision(packageId, versionName)
 	if err != nil {
 		return nil, err
 	}
-	ent, data, err := s.mcpRepo.GetMcpEntity(packageId, version, revision, mcpEntityId, includeData)
+	ent, data, err := s.mcpRepo.GetMcpEntity(packageId, version, revision, mcpEntityId)
 	if err != nil {
 		return nil, err
 	}
 	if ent == nil {
 		return nil, &exception.CustomError{
 			Status:  http.StatusNotFound,
-			Code:    exception.PublishedVersionNotFound,
-			Message: "MCP entity not found",
+			Code:    exception.McpEntityNotFound,
+			Message: exception.McpEntityNotFoundMsg,
 			Params:  map[string]interface{}{"mcpEntityId": mcpEntityId},
 		}
 	}
@@ -91,12 +91,6 @@ func (s *mcpContractServiceImpl) GetMcpEntity(packageId, versionName, mcpEntityI
 			detail.Data = parsed
 		}
 	}
-	packageVersions := map[string][]string{packageId: {view.MakeVersionRefKey(version, revision)}}
-	packagesRefs, err := s.packageVersionEnrichmentService.GetPackageVersionRefsMap(packageVersions)
-	if err != nil {
-		return nil, err
-	}
-	detail.Packages = packagesRefs
 	return detail, nil
 }
 
@@ -162,7 +156,7 @@ func (s *mcpContractServiceImpl) GlobalSearchForMCP(searchReq view.SearchQueryRe
 	if err != nil {
 		return nil, err
 	}
-	results := make([]interface{}, 0, len(entities))
+	results := make([]view.McpEntitySearchResult, 0, len(entities))
 	for _, ent := range entities {
 		results = append(results, entity.MakeGlobalMCPSearchResultView(ent))
 	}
@@ -171,13 +165,12 @@ func (s *mcpContractServiceImpl) GlobalSearchForMCP(searchReq view.SearchQueryRe
 
 func makeMcpEntityView(ent *entity.MCPContractEntity, packageId, version string, revision int) *view.McpEntityView {
 	return &view.McpEntityView{
-		McpEntityId:               ent.McpEntityId,
-		Kind:                      ent.Kind,
-		Title:                     ent.Title,
-		Description:               ent.Description,
-		McpEndpoint:               ent.McpEndpoint,
-		DocumentId:                ent.DocumentId,
-		VersionInternalDocumentId: ent.VersionInternalDocumentId,
-		PackageRef:                view.MakePackageRefKey(packageId, version, revision),
+		McpEntityId: ent.McpEntityId,
+		Kind:        ent.Kind,
+		Title:       ent.Title,
+		Description: ent.Description,
+		McpEndpoint: ent.McpEndpoint,
+		DocumentId:  ent.DocumentId,
+		PackageRef:  view.MakePackageRefKey(packageId, version, revision),
 	}
 }

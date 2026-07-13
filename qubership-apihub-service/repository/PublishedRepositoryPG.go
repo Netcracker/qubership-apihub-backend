@@ -1658,12 +1658,11 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 				}
 			}
 		}
-		if len(ddlContractComparisonEntities) > 0 {
+		if len(versionComparisons) != 0 {
 			start = time.Now()
-			_, err = tx.Model(&ddlContractComparisonEntities).OnConflict(
-				"(package_id, version, revision, previous_package_id, previous_version, previous_revision, ddl_entity_id, previous_ddl_entity_id) DO UPDATE").Insert()
+			err = p.saveDdlComparisonsTx(tx, ddlContractComparisonEntities, versionComparisons)
 			if err != nil {
-				return fmt.Errorf("failed to insert ddl_comparison: %w", err)
+				return err
 			}
 			utils.PerfLog(time.Since(start).Milliseconds(), 100, "CreateVersionWithData: ddl_comparison insert")
 		}
@@ -1968,7 +1967,7 @@ func (p publishedRepositoryImpl) validateChangelogMigrationResult(tx *pg.Tx, pac
 	return nil
 }
 
-func (p publishedRepositoryImpl) SaveVersionChanges(packageInfo view.PackageInfoFile, publishId string, operationComparisons []*entity.OperationComparisonEntity, versionComparisons []*entity.VersionComparisonEntity, versionComparisonsFromCache []string, comparisonInternalDocEntities []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocDataEntities []*entity.ComparisonInternalDocumentDataEntity) error {
+func (p publishedRepositoryImpl) SaveVersionChanges(packageInfo view.PackageInfoFile, publishId string, operationComparisons []*entity.OperationComparisonEntity, versionComparisons []*entity.VersionComparisonEntity, versionComparisonsFromCache []string, comparisonInternalDocEntities []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocDataEntities []*entity.ComparisonInternalDocumentDataEntity, ddlContractComparisons []*entity.DDLContractComparisonEntity) error {
 	ctx := context.Background()
 	return p.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
 		var ents []entity.BuildEntity
@@ -1995,6 +1994,11 @@ func (p publishedRepositoryImpl) SaveVersionChanges(packageInfo view.PackageInfo
 			utils.PerfLog(time.Since(start).Milliseconds(), 500, "SaveVersionChanges: validateChangelogMigrationResult")
 		}
 		err = p.saveVersionChangesTx(tx, operationComparisons, versionComparisons)
+		if err != nil {
+			return err
+		}
+
+		err = p.saveDdlComparisonsTx(tx, ddlContractComparisons, versionComparisons)
 		if err != nil {
 			return err
 		}
@@ -2046,6 +2050,31 @@ func (p publishedRepositoryImpl) saveVersionChangesTx(tx *pg.Tx, operationCompar
 		_, err = tx.Model(&operationComparisons).Insert()
 		if err != nil {
 			return fmt.Errorf("failed to insert operation changes %+v: %w", operationComparisons, err)
+		}
+	}
+	return nil
+}
+
+// saveDdlComparisonsTx persists the DDL changelog for the given comparisons. DDL comparisons share the
+// version_comparison rows saved by saveVersionChangesTx, so it must run after it. Stale rows are removed
+// per comparison_id before insert (mirroring the operation_comparison handling) so a recalculated
+// changelog does not leave DDL entries that no longer changed.
+func (p publishedRepositoryImpl) saveDdlComparisonsTx(tx *pg.Tx, ddlContractComparisons []*entity.DDLContractComparisonEntity, versionComparisons []*entity.VersionComparisonEntity) error {
+	deleteDdlComparisonForComparisonQuery := `
+		delete from ddl_comparison
+		where comparison_id = ?comparison_id
+		`
+	for _, comparisonEnt := range versionComparisons {
+		_, err := tx.Model(comparisonEnt).Exec(deleteDdlComparisonForComparisonQuery)
+		if err != nil {
+			return fmt.Errorf("failed to delete old ddl changes for comparison %+v: %w", *comparisonEnt, err)
+		}
+	}
+	if len(ddlContractComparisons) != 0 {
+		_, err := tx.Model(&ddlContractComparisons).OnConflict(
+			"(package_id, version, revision, previous_package_id, previous_version, previous_revision, ddl_entity_id, previous_ddl_entity_id) DO UPDATE").Insert()
+		if err != nil {
+			return fmt.Errorf("failed to insert ddl_comparison %+v: %w", ddlContractComparisons, err)
 		}
 	}
 	return nil

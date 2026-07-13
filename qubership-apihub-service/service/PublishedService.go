@@ -925,6 +925,9 @@ func (p publishedServiceImpl) PublishChanges(buildArc *archive.BuildResultArchiv
 	if err != nil {
 		return err
 	}
+	if err = buildArc.ReadPackageDdlContractComparisons(false); err != nil {
+		return err
+	}
 
 	if err = validation.ValidatePublishBuildResult(buildArc); err != nil {
 		return err
@@ -942,7 +945,7 @@ func (p publishedServiceImpl) PublishChanges(buildArc *archive.BuildResultArchiv
 	if err := p.publishedValidator.ValidateChanges(buildArc); err != nil {
 		return err
 	}
-	if len(buildArc.PackageComparisons.Comparisons) == 0 {
+	if len(buildArc.PackageComparisons.Comparisons) == 0 && len(buildArc.PackageDdlComparisons.Comparisons) == 0 {
 		return nil
 	}
 
@@ -956,12 +959,49 @@ func (p publishedServiceImpl) PublishChanges(buildArc *archive.BuildResultArchiv
 		return err
 	}
 	versionComparisonsFromCache := comparisonRefsResolver.CachedComparisonIds()
+
+	// DDL comparisons share version_comparison with REST but are read from a separate index. A changelog
+	// build compares two already published versions, so the current version's DDL data hashes come from
+	// the DB (the build result carries no version DDL entities for a changelog build). Merge the DDL
+	// version-comparison rows into the REST rows by comparison_id so a single version_comparison row
+	// carries both contract types; DDL-only pairs are appended so the ddl_comparison FK is satisfied.
+	var ddlContractComparisonEntities []*entity.DDLContractComparisonEntity
+	if len(buildArc.PackageDdlComparisons.Comparisons) > 0 {
+		currentDdlDataHashes, ddlErr := p.ddlContractRepo.GetDdlEntitiesInfo(buildArc.PackageInfo.PackageId, buildArc.PackageInfo.Version, buildArc.PackageInfo.Revision)
+		if ddlErr != nil {
+			return ddlErr
+		}
+		var ddlVersionComparisonEntities []*entity.VersionComparisonEntity
+		var ddlComparisonFileIdToKeyMap map[string]view.ComparisonKey
+		ddlVersionComparisonEntities, ddlContractComparisonEntities, ddlComparisonFileIdToKeyMap, err = buildArcEntitiesReader.ReadDdlContractComparisonsToEntities(currentDdlDataHashes, p.ddlContractRepo, comparisonRefsResolver)
+		if err != nil {
+			return err
+		}
+		versionComparisonByComparisonId := make(map[string]*entity.VersionComparisonEntity, len(versionComparisonEntities))
+		for _, vc := range versionComparisonEntities {
+			versionComparisonByComparisonId[vc.ComparisonId] = vc
+		}
+		for _, ddlVc := range ddlVersionComparisonEntities {
+			if existing, ok := versionComparisonByComparisonId[ddlVc.ComparisonId]; ok {
+				existing.ContractTypes = ddlVc.ContractTypes
+			} else {
+				versionComparisonEntities = append(versionComparisonEntities, ddlVc)
+				versionComparisonByComparisonId[ddlVc.ComparisonId] = ddlVc
+			}
+		}
+		for fileId, key := range ddlComparisonFileIdToKeyMap {
+			if _, ok := comparisonFileIdToKeyMap[fileId]; !ok {
+				comparisonFileIdToKeyMap[fileId] = key
+			}
+		}
+	}
+
 	comparisonInternalDocEntities, comparisonInternalDocDataEntities, err := buildArcEntitiesReader.ReadComparisonInternalDocumentsToEntities(comparisonFileIdToKeyMap)
 	if err != nil {
 		return err
 	}
 
-	err = p.publishedRepo.SaveVersionChanges(buildArc.PackageInfo, publishId, operationComparisonEntities, versionComparisonEntities, versionComparisonsFromCache, comparisonInternalDocEntities, comparisonInternalDocDataEntities)
+	err = p.publishedRepo.SaveVersionChanges(buildArc.PackageInfo, publishId, operationComparisonEntities, versionComparisonEntities, versionComparisonsFromCache, comparisonInternalDocEntities, comparisonInternalDocDataEntities, ddlContractComparisonEntities)
 	if err != nil {
 		return err
 	}

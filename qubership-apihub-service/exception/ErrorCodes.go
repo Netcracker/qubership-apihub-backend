@@ -829,6 +829,12 @@ const ShareabilityReportSizeExceededMsg = "Shareability report file size exceede
 const PublishNotAllowedForPackageKind = "8400"
 const PublishNotAllowedForPackageKindMsg = "Publication is allowed only for the following package kinds: $allowedKinds, but target package has kind=$kind"
 
+const DdlEntityNotFound = "8401"
+const DdlEntityNotFoundMsg = "DDL entity $ddlEntityId not found"
+
+const McpEntityNotFound = "8402"
+const McpEntityNotFoundMsg = "MCP entity $mcpEntityId not found"
+
 // AI Chat error codes (APIHUB-AI-*). Each public error has a Code constant; variant
 // messages reuse the parent Code (same pattern as InvalidParameterValue + InvalidLimitMsg).
 
