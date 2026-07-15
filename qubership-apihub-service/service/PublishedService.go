@@ -530,7 +530,6 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 	if err != nil {
 		return err
 	}
-	versionComparisonsFromCache := comparisonRefsResolver.CachedComparisonIds()
 
 	ddlContractEntities, ddlContractDataEntities, ddlContractSearchTexts, err := buildArcEntitiesReader.ReadDdlContractsToEntities()
 	if err != nil {
@@ -553,18 +552,10 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 	if err != nil {
 		return err
 	}
-	versionComparisonByComparisonId := make(map[string]*entity.VersionComparisonEntity, len(operationsComparisonEntities))
-	for _, vc := range operationsComparisonEntities {
-		versionComparisonByComparisonId[vc.ComparisonId] = vc
-	}
-	for _, ddlVc := range ddlVersionComparisonEntities {
-		if existing, ok := versionComparisonByComparisonId[ddlVc.ComparisonId]; ok {
-			existing.ContractTypes = ddlVc.ContractTypes
-		} else {
-			operationsComparisonEntities = append(operationsComparisonEntities, ddlVc)
-			versionComparisonByComparisonId[ddlVc.ComparisonId] = ddlVc
-		}
-	}
+	operationsComparisonEntities = mergeVersionComparisons(operationsComparisonEntities, ddlVersionComparisonEntities, comparisonRefsResolver)
+	skippedVersionComparisonIds := comparisonRefsResolver.SkippedVersionComparisonIds()
+	operationComparisonIdsToRebuild := comparisonRefsResolver.OperationComparisonIdsToRebuild()
+	ddlComparisonIdsToRebuild := comparisonRefsResolver.DdlComparisonIdsToRebuild()
 	for fileId, key := range ddlComparisonFileIdToKeyMap {
 		if _, ok := comparisonFileIdToKeyMap[fileId]; !ok {
 			comparisonFileIdToKeyMap[fileId] = key
@@ -578,7 +569,10 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 		return err
 	}
 
-	comparisonInternalDocEntities, comparisonInternalDocDataEntities, err := buildArcEntitiesReader.ReadComparisonInternalDocumentsToEntities(comparisonFileIdToKeyMap)
+	comparisonInternalDocEntities, comparisonInternalDocDataEntities, err := buildArcEntitiesReader.ReadComparisonInternalDocumentsToEntities(
+		comparisonFileIdToKeyMap,
+		skippedVersionComparisonIds,
+	)
 	if err != nil {
 		return err
 	}
@@ -738,7 +732,9 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 		operationsComparisonEntities,
 		newServiceName,
 		existingPackage,
-		versionComparisonsFromCache,
+		skippedVersionComparisonIds,
+		operationComparisonIdsToRebuild,
+		ddlComparisonIdsToRebuild,
 		versionInternalDocEntities,
 		versionInternalDocDataEntities,
 		comparisonInternalDocEntities,
@@ -888,6 +884,36 @@ func makePublishedReferenceUniqueKey(entity *entity.PublishedReferenceEntity) st
 	return fmt.Sprintf(`%v|@@|%v|@@|%v|@@|%v|@@|%v|@@|%v`, entity.RefPackageId, entity.RefVersion, entity.RefRevision, entity.ParentRefPackageId, entity.ParentRefVersion, entity.ParentRefRevision)
 }
 
+func mergeVersionComparisons(operationComparisons []*entity.VersionComparisonEntity, ddlComparisons []*entity.VersionComparisonEntity, resolver *archive.ComparisonRefsResolver) []*entity.VersionComparisonEntity {
+	result := make([]*entity.VersionComparisonEntity, 0, len(operationComparisons)+len(ddlComparisons))
+	ddlComparisonById := make(map[string]*entity.VersionComparisonEntity, len(ddlComparisons))
+	operationComparisonIds := make(map[string]struct{}, len(operationComparisons))
+	for _, comparison := range ddlComparisons {
+		ddlComparisonById[comparison.ComparisonId] = comparison
+	}
+
+	for _, comparison := range operationComparisons {
+		operationComparisonIds[comparison.ComparisonId] = struct{}{}
+		if ddlComparison, exists := ddlComparisonById[comparison.ComparisonId]; exists {
+			comparison.ContractTypes = ddlComparison.ContractTypes
+		} else if stored, exists := resolver.StoredComparison(comparison.ComparisonId); exists {
+			comparison.ContractTypes = stored.ContractTypes
+		}
+		result = append(result, comparison)
+	}
+
+	for _, comparison := range ddlComparisons {
+		if _, exists := operationComparisonIds[comparison.ComparisonId]; exists {
+			continue
+		}
+		if stored, exists := resolver.StoredComparison(comparison.ComparisonId); exists {
+			comparison.OperationTypes = stored.OperationTypes
+		}
+		result = append(result, comparison)
+	}
+	return result
+}
+
 func (p publishedServiceImpl) reCalculateChangelogs(packageInfo view.PackageInfoFile) error {
 	versions, err := p.publishedRepo.GetVersionsByPreviousVersion(packageInfo.PackageId, packageInfo.Version)
 	if err != nil {
@@ -958,36 +984,23 @@ func (p publishedServiceImpl) PublishChanges(buildArc *archive.BuildResultArchiv
 	if err != nil {
 		return err
 	}
-	versionComparisonsFromCache := comparisonRefsResolver.CachedComparisonIds()
 
 	// DDL comparisons share version_comparison with REST but are read from a separate index. A changelog
 	// build compares two already published versions, so the current version's DDL data hashes come from
 	// the DB (the build result carries no version DDL entities for a changelog build). Merge the DDL
 	// version-comparison rows into the REST rows by comparison_id so a single version_comparison row
 	// carries both contract types; DDL-only pairs are appended so the ddl_comparison FK is satisfied.
+	var ddlVersionComparisonEntities []*entity.VersionComparisonEntity
 	var ddlContractComparisonEntities []*entity.DDLContractComparisonEntity
 	if len(buildArc.PackageDdlComparisons.Comparisons) > 0 {
 		currentDdlDataHashes, ddlErr := p.ddlContractRepo.GetDdlEntitiesInfo(buildArc.PackageInfo.PackageId, buildArc.PackageInfo.Version, buildArc.PackageInfo.Revision)
 		if ddlErr != nil {
 			return ddlErr
 		}
-		var ddlVersionComparisonEntities []*entity.VersionComparisonEntity
 		var ddlComparisonFileIdToKeyMap map[string]view.ComparisonKey
 		ddlVersionComparisonEntities, ddlContractComparisonEntities, ddlComparisonFileIdToKeyMap, err = buildArcEntitiesReader.ReadDdlContractComparisonsToEntities(currentDdlDataHashes, p.ddlContractRepo, comparisonRefsResolver)
 		if err != nil {
 			return err
-		}
-		versionComparisonByComparisonId := make(map[string]*entity.VersionComparisonEntity, len(versionComparisonEntities))
-		for _, vc := range versionComparisonEntities {
-			versionComparisonByComparisonId[vc.ComparisonId] = vc
-		}
-		for _, ddlVc := range ddlVersionComparisonEntities {
-			if existing, ok := versionComparisonByComparisonId[ddlVc.ComparisonId]; ok {
-				existing.ContractTypes = ddlVc.ContractTypes
-			} else {
-				versionComparisonEntities = append(versionComparisonEntities, ddlVc)
-				versionComparisonByComparisonId[ddlVc.ComparisonId] = ddlVc
-			}
 		}
 		for fileId, key := range ddlComparisonFileIdToKeyMap {
 			if _, ok := comparisonFileIdToKeyMap[fileId]; !ok {
@@ -995,13 +1008,20 @@ func (p publishedServiceImpl) PublishChanges(buildArc *archive.BuildResultArchiv
 			}
 		}
 	}
+	versionComparisonEntities = mergeVersionComparisons(versionComparisonEntities, ddlVersionComparisonEntities, comparisonRefsResolver)
+	skippedVersionComparisonIds := comparisonRefsResolver.SkippedVersionComparisonIds()
+	operationComparisonIdsToRebuild := comparisonRefsResolver.OperationComparisonIdsToRebuild()
+	ddlComparisonIdsToRebuild := comparisonRefsResolver.DdlComparisonIdsToRebuild()
 
-	comparisonInternalDocEntities, comparisonInternalDocDataEntities, err := buildArcEntitiesReader.ReadComparisonInternalDocumentsToEntities(comparisonFileIdToKeyMap)
+	comparisonInternalDocEntities, comparisonInternalDocDataEntities, err := buildArcEntitiesReader.ReadComparisonInternalDocumentsToEntities(
+		comparisonFileIdToKeyMap,
+		skippedVersionComparisonIds,
+	)
 	if err != nil {
 		return err
 	}
 
-	err = p.publishedRepo.SaveVersionChanges(buildArc.PackageInfo, publishId, operationComparisonEntities, versionComparisonEntities, versionComparisonsFromCache, comparisonInternalDocEntities, comparisonInternalDocDataEntities, ddlContractComparisonEntities)
+	err = p.publishedRepo.SaveVersionChanges(buildArc.PackageInfo, publishId, operationComparisonEntities, versionComparisonEntities, skippedVersionComparisonIds, operationComparisonIdsToRebuild, ddlComparisonIdsToRebuild, comparisonInternalDocEntities, comparisonInternalDocDataEntities, ddlContractComparisonEntities)
 	if err != nil {
 		return err
 	}

@@ -448,7 +448,8 @@ func (p publishedRepositoryImpl) GetServiceOwner(workspaceId string, serviceName
 }
 
 func (p publishedRepositoryImpl) validateMigrationResult(tx *pg.Tx, packageInfo view.PackageInfoFile, publishId string, version *entity.PublishedVersionEntity, content []*entity.PublishedContentEntity, contentData []*entity.PublishedContentDataEntity,
-	refs []*entity.PublishedReferenceEntity, src *entity.PublishedSrcEntity, operations []*entity.OperationEntity, operationData []*entity.OperationDataEntity, versionComparisons []*entity.VersionComparisonEntity, operationComparisons []*entity.OperationComparisonEntity, versionComparisonsFromCache []string,
+	refs []*entity.PublishedReferenceEntity, src *entity.PublishedSrcEntity, operations []*entity.OperationEntity, operationData []*entity.OperationDataEntity, versionComparisons []*entity.VersionComparisonEntity, operationComparisons []*entity.OperationComparisonEntity, skippedVersionComparisonIds []string,
+	operationComparisonIdsToRebuild []string,
 	versionInternalDocs []*entity.VersionInternalDocumentEntity, versionInternalDocData []*entity.VersionInternalDocumentDataEntity, comparisonInternalDocs []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocData []*entity.ComparisonInternalDocumentDataEntity,
 	operationSearchTexts []*entity.OperationSearchTextEntity, maxRevision int, excludeFromSearch bool) error {
 	migrationRun := new(mEntity.MigrationRunEntity)
@@ -698,15 +699,18 @@ func (p publishedRepositoryImpl) validateMigrationResult(tx *pg.Tx, packageInfo 
 		changes["operation_data"] = operationDataChanges
 	}
 
+	var comparisonInternalDocumentScope map[view.ComparisonKey]string
 	if !packageInfo.NoChangelog && packageInfo.PreviousVersion != "" {
-		versionComparisonsChanges, versionComparisonIds, err := p.getVersionComparisonsChanges(tx, packageInfo, versionComparisons, versionComparisonsFromCache, &changesOverview)
+		versionComparisonsChanges, matchedVersionComparisonIds, internalDocumentScope, err := p.getVersionComparisonsChanges(tx, packageInfo, versionComparisons, skippedVersionComparisonIds, &changesOverview)
 		if err != nil {
 			return err
 		}
+		comparisonInternalDocumentScope = internalDocumentScope
 		if len(versionComparisonsChanges) > 0 {
 			changes["version_comparison"] = versionComparisonsChanges
 		}
-		operationComparisonsChanges, err := p.getOperationComparisonsChanges(tx, packageInfo, operationComparisons, versionComparisonIds, &changesOverview)
+		operationComparisonIdsToValidate := comparisonIdsToValidate(matchedVersionComparisonIds, operationComparisonIdsToRebuild)
+		operationComparisonsChanges, err := p.getOperationComparisonsChanges(tx, packageInfo, operationComparisons, operationComparisonIdsToValidate, &changesOverview)
 		if err != nil {
 			return err
 		}
@@ -784,7 +788,7 @@ func (p publishedRepositoryImpl) validateMigrationResult(tx *pg.Tx, packageInfo 
 	}
 
 	if !packageInfo.NoChangelog && packageInfo.PreviousVersion != "" {
-		comparisonInternalDocsChanges, err := p.getComparisonInternalDocumentsChanges(tx, packageInfo, comparisonInternalDocs, comparisonInternalDocData, &changesOverview)
+		comparisonInternalDocsChanges, err := p.getComparisonInternalDocumentsChanges(tx, comparisonInternalDocumentScope, comparisonInternalDocs, comparisonInternalDocData, &changesOverview)
 		if err != nil {
 			return err
 		}
@@ -870,7 +874,7 @@ func (p publishedRepositoryImpl) validateMigrationResult(tx *pg.Tx, packageInfo 
 	return nil
 }
 
-func (p publishedRepositoryImpl) getVersionComparisonsChanges(tx *pg.Tx, packageInfo view.PackageInfoFile, versionComparisonEntities []*entity.VersionComparisonEntity, versionComparisonsFromCache []string, changesOverview *PublishedBuildChangesOverview) (map[string]interface{}, []string, error) {
+func (p publishedRepositoryImpl) getVersionComparisonsChanges(tx *pg.Tx, packageInfo view.PackageInfoFile, versionComparisonEntities []*entity.VersionComparisonEntity, skippedVersionComparisonIds []string, changesOverview *PublishedBuildChangesOverview) (map[string]interface{}, []string, map[view.ComparisonKey]string, error) {
 	var err error
 	currentTable := "version_comparison"
 	if packageInfo.PreviousVersionPackageId == "" {
@@ -879,13 +883,13 @@ func (p publishedRepositoryImpl) getVersionComparisonsChanges(tx *pg.Tx, package
 	if strings.Contains(packageInfo.Version, `@`) {
 		packageInfo.Version, packageInfo.Revision, err = SplitVersionRevision(packageInfo.Version)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 	}
 	if strings.Contains(packageInfo.PreviousVersion, `@`) {
 		packageInfo.PreviousVersion, packageInfo.PreviousVersionRevision, err = SplitVersionRevision(packageInfo.PreviousVersion)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 	}
 	if packageInfo.PreviousVersionRevision == 0 {
@@ -894,7 +898,7 @@ func (p publishedRepositoryImpl) getVersionComparisonsChanges(tx *pg.Tx, package
 			where package_id = ?
 			and version = ?`, packageInfo.PreviousVersionPackageId, packageInfo.PreviousVersion)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to calculate previous version revision: %v", err.Error())
+			return nil, nil, nil, fmt.Errorf("failed to calculate previous version revision: %v", err.Error())
 		}
 	}
 	versionComparisonsChanges := make(map[string]interface{}, 0)
@@ -936,7 +940,7 @@ func (p publishedRepositoryImpl) getVersionComparisonsChanges(tx *pg.Tx, package
 		packageInfo.PreviousVersionRevision,
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get version comparisons from db: %v", err.Error())
+		return nil, nil, nil, fmt.Errorf("failed to get version comparisons from db: %v", err.Error())
 	}
 	matchedComparisons := make(map[string]struct{}, 0)
 	versionComparisonIds := make([]string, 0)
@@ -955,8 +959,8 @@ func (p publishedRepositoryImpl) getVersionComparisonsChanges(tx *pg.Tx, package
 		}
 		if !found {
 			fromCache := false
-			for _, versionComparisonFromCache := range versionComparisonsFromCache {
-				if versionComparisonFromCache == s.ComparisonId {
+			for _, skippedComparisonId := range skippedVersionComparisonIds {
+				if skippedComparisonId == s.ComparisonId {
 					fromCache = true
 					break
 				}
@@ -973,136 +977,154 @@ func (p publishedRepositoryImpl) getVersionComparisonsChanges(tx *pg.Tx, package
 			changesOverview.setNotFoundEntry(currentTable)
 		}
 	}
-	return versionComparisonsChanges, versionComparisonIds, nil
+	comparisonInternalDocumentScope := makeComparisonInternalDocumentValidationScope(oldVersionComparisons, versionComparisonEntities, skippedVersionComparisonIds) //TODO: make a comment why it is here
+	return versionComparisonsChanges, versionComparisonIds, comparisonInternalDocumentScope, nil
 }
 
-func (p publishedRepositoryImpl) getComparisonInternalDocumentsChanges(tx *pg.Tx, packageInfo view.PackageInfoFile, comparisonInternalDocs []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocData []*entity.ComparisonInternalDocumentDataEntity, changesOverview *PublishedBuildChangesOverview) (map[string]interface{}, error) {
-	var err error
-	allChanges := make(map[string]interface{}, 0)
+func makeComparisonInternalDocumentValidationScope(oldComparisons []entity.VersionComparisonEntity, newComparisons []*entity.VersionComparisonEntity, skippedComparisonIds []string) map[view.ComparisonKey]string {
+	skippedIds := make(map[string]struct{}, len(skippedComparisonIds))
+	for _, comparisonId := range skippedComparisonIds {
+		skippedIds[comparisonId] = struct{}{}
+	}
 
-	currentTable := "comparison_internal_document"
-	oldComparisonInternalDocs := make([]entity.ComparisonInternalDocumentEntity, 0)
-	if packageInfo.PreviousVersionPackageId == "" {
-		packageInfo.PreviousVersionPackageId = packageInfo.PackageId
-	}
-	if packageInfo.PreviousVersionRevision == 0 {
-		_, err = tx.QueryOne(pg.Scan(&packageInfo.PreviousVersionRevision), `
-		select max(revision) from published_version
-			where package_id = ?
-			and version = ?`, packageInfo.PreviousVersionPackageId, packageInfo.PreviousVersion)
-		if err != nil {
-			return nil, fmt.Errorf("failed to calculate previous version revision for comparison internal docs: %v", err.Error())
+	result := make(map[view.ComparisonKey]string, len(oldComparisons)+len(newComparisons))
+	for _, comparison := range oldComparisons {
+		if _, skipped := skippedIds[comparison.ComparisonId]; skipped {
+			continue
 		}
+		result[comparison.ComparisonKey()] = comparison.ComparisonId
 	}
-	// Fetch comparison internal documents for main comparison and refs
-	versionComparisonSnapshotTable := fmt.Sprintf(`migration."version_comparison_%s"`, packageInfo.MigrationId)
-	getComparisonInternalDocsQuery := fmt.Sprintf(`
-		with ref_comparisons as (
-			select
-				unnest(refs) as comparison_id
-			from %s
-			where package_id = ?
-				and version = ?
-				and revision = ?
-				and previous_package_id = ?
-				and previous_version = ?
-				and previous_revision = ?
-		),
-		ref_comparison_details as (
-			select
-				package_id,
-				version,
-				revision,
-				previous_package_id,
-				previous_version,
-				previous_revision
-			from %s
-			where comparison_id in (select comparison_id from ref_comparisons)
-		)
-		select * from comparison_internal_document
-		where (package_id, version, revision, previous_package_id, previous_version, previous_revision) in (
-			select ?, ?, ?, ?, ?, ?
-			union
-			select package_id, version, revision, previous_package_id, previous_version, previous_revision
-			from ref_comparison_details
-		)
-		`, versionComparisonSnapshotTable, versionComparisonSnapshotTable)
-	_, err = tx.Query(&oldComparisonInternalDocs, getComparisonInternalDocsQuery,
-		packageInfo.PackageId,
-		packageInfo.Version,
-		packageInfo.Revision,
-		packageInfo.PreviousVersionPackageId,
-		packageInfo.PreviousVersion,
-		packageInfo.PreviousVersionRevision,
-		packageInfo.PackageId,
-		packageInfo.Version,
-		packageInfo.Revision,
-		packageInfo.PreviousVersionPackageId,
-		packageInfo.PreviousVersion,
-		packageInfo.PreviousVersionRevision,
-	)
+	for _, comparison := range newComparisons {
+		if _, skipped := skippedIds[comparison.ComparisonId]; skipped {
+			continue
+		}
+		result[comparison.ComparisonKey()] = comparison.ComparisonId
+	}
+	return result
+}
+
+func (p publishedRepositoryImpl) getComparisonInternalDocumentsChanges(tx *pg.Tx, comparisonIdByKey map[view.ComparisonKey]string, comparisonInternalDocs []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocData []*entity.ComparisonInternalDocumentDataEntity, changesOverview *PublishedBuildChangesOverview) (map[string]interface{}, error) {
+	keys := make([]view.ComparisonKey, 0, len(comparisonIdByKey))
+	for key := range comparisonIdByKey {
+		keys = append(keys, key)
+	}
+
+	oldComparisonInternalDocs, err := p.getComparisonInternalDocumentsByKeysTx(tx, keys)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get comparison internal documents from db: %v", err.Error())
-	}
-	comparisonInternalDocsChanges := make(map[string]interface{}, 0)
-	matchedComparisonInternalDocs := make(map[string]struct{}, 0)
-	oldComparisonInternalDocHashes := make(map[string]struct{}, 0)
-	for _, s := range oldComparisonInternalDocs {
-		found := false
-		oldComparisonInternalDocHashes[s.Hash] = struct{}{}
-		for _, t := range comparisonInternalDocs {
-			if s.DocumentId == t.DocumentId {
-				found = true
-				matchedComparisonInternalDocs[s.DocumentId] = struct{}{}
-				if docChanges := s.GetChanges(*t); len(docChanges) > 0 {
-					comparisonInternalDocsChanges[s.DocumentId] = docChanges
-					changesOverview.setTableChanges(currentTable, docChanges)
-					continue
-				}
-			}
-		}
-		if !found {
-			comparisonInternalDocsChanges[s.DocumentId] = "comparison internal document not found in build archive"
-			changesOverview.setNotFoundEntry(currentTable)
-		}
-	}
-	for _, t := range comparisonInternalDocs {
-		if _, matched := matchedComparisonInternalDocs[t.DocumentId]; !matched {
-			comparisonInternalDocsChanges[t.DocumentId] = "unexpected comparison internal document (not found in database)"
-			changesOverview.setUnexpectedEntry(currentTable)
-		}
-	}
-	if len(comparisonInternalDocsChanges) > 0 {
-		allChanges[currentTable] = comparisonInternalDocsChanges
+		return nil, err
 	}
 
-	currentTable = "comparison_internal_document_data"
-	comparisonInternalDocDataChanges := make(map[string]interface{}, 0)
-	matchedComparisonInternalDocHashes := make(map[string]struct{}, 0)
-	for oldHash := range oldComparisonInternalDocHashes {
-		found := false
-		for _, newDocData := range comparisonInternalDocData {
-			if oldHash == newDocData.Hash {
-				found = true
-				matchedComparisonInternalDocHashes[oldHash] = struct{}{}
-			}
+	newComparisonInternalDocs := make([]*entity.ComparisonInternalDocumentEntity, 0, len(comparisonInternalDocs))
+	for _, document := range comparisonInternalDocs {
+		if _, inScope := comparisonIdByKey[document.ComparisonKey()]; inScope {
+			newComparisonInternalDocs = append(newComparisonInternalDocs, document)
 		}
-		if !found {
-			comparisonInternalDocDataChanges[oldHash] = "comparison internal document data not found in build archive"
-			changesOverview.setNotFoundEntry(currentTable)
-		}
-	}
-	for _, newDocData := range comparisonInternalDocData {
-		if _, matched := matchedComparisonInternalDocHashes[newDocData.Hash]; !matched {
-			comparisonInternalDocDataChanges[newDocData.Hash] = "unexpected comparison internal document data (not found in database)"
-			changesOverview.setUnexpectedEntry(currentTable)
-		}
-	}
-	if len(comparisonInternalDocDataChanges) > 0 {
-		allChanges[currentTable] = comparisonInternalDocDataChanges
 	}
 
-	return allChanges, nil
+	return validateComparisonInternalDocuments(oldComparisonInternalDocs, newComparisonInternalDocs, comparisonInternalDocData, comparisonIdByKey, changesOverview), nil
+}
+
+func (p publishedRepositoryImpl) getComparisonInternalDocumentsByKeysTx(tx *pg.Tx, keys []view.ComparisonKey) ([]entity.ComparisonInternalDocumentEntity, error) {
+	docs := make([]entity.ComparisonInternalDocumentEntity, 0)
+	if len(keys) == 0 {
+		return docs, nil
+	}
+	query := tx.Model(&docs)
+	for i, key := range keys {
+		if i == 0 {
+			query = query.WhereGroup(func(q *pg.Query) (*pg.Query, error) {
+				return q.Where("package_id = ?", key.PackageId).
+					Where("version = ?", key.Version).
+					Where("revision = ?", key.Revision).
+					Where("previous_package_id = ?", key.PreviousVersionPackageId).
+					Where("previous_version = ?", key.PreviousVersion).
+					Where("previous_revision = ?", key.PreviousVersionRevision), nil
+			})
+		} else {
+			query = query.WhereOrGroup(func(q *pg.Query) (*pg.Query, error) {
+				return q.Where("package_id = ?", key.PackageId).
+					Where("version = ?", key.Version).
+					Where("revision = ?", key.Revision).
+					Where("previous_package_id = ?", key.PreviousVersionPackageId).
+					Where("previous_version = ?", key.PreviousVersion).
+					Where("previous_revision = ?", key.PreviousVersionRevision), nil
+			})
+		}
+	}
+	if err := query.Select(); err != nil && err != pg.ErrNoRows {
+		return nil, fmt.Errorf("failed to get comparison internal documents from db: %w", err)
+	}
+	return docs, nil
+}
+
+func validateComparisonInternalDocuments(oldDocs []entity.ComparisonInternalDocumentEntity, newDocs []*entity.ComparisonInternalDocumentEntity, newDocData []*entity.ComparisonInternalDocumentDataEntity, comparisonIdByKey map[view.ComparisonKey]string, changesOverview *PublishedBuildChangesOverview) map[string]interface{} {
+	allChanges := make(map[string]interface{})
+
+	documentTable := "comparison_internal_document"
+	documentChanges := make(map[string]interface{})
+	newDocByChangeKey := make(map[string]*entity.ComparisonInternalDocumentEntity, len(newDocs))
+	newHashes := make(map[string]struct{}, len(newDocs))
+	for _, doc := range newDocs {
+		newDocByChangeKey[comparisonInternalDocumentChangeKey(comparisonIdByKey[doc.ComparisonKey()], doc.DocumentId)] = doc
+		newHashes[doc.Hash] = struct{}{}
+	}
+	oldHashes := make(map[string]struct{}, len(oldDocs))
+	matchedDocs := make(map[string]struct{}, len(oldDocs))
+	for i := range oldDocs {
+		oldDoc := oldDocs[i]
+		oldHashes[oldDoc.Hash] = struct{}{}
+		changeKey := comparisonInternalDocumentChangeKey(comparisonIdByKey[oldDoc.ComparisonKey()], oldDoc.DocumentId)
+		newDoc, found := newDocByChangeKey[changeKey]
+		if !found {
+			documentChanges[changeKey] = "comparison internal document not found in build archive"
+			changesOverview.setNotFoundEntry(documentTable)
+			continue
+		}
+		matchedDocs[changeKey] = struct{}{}
+		if fieldChanges := oldDoc.GetChanges(*newDoc); len(fieldChanges) > 0 {
+			documentChanges[changeKey] = fieldChanges
+			changesOverview.setTableChanges(documentTable, fieldChanges)
+		}
+	}
+	for changeKey := range newDocByChangeKey {
+		if _, matched := matchedDocs[changeKey]; !matched {
+			documentChanges[changeKey] = "unexpected comparison internal document (not found in database)"
+			changesOverview.setUnexpectedEntry(documentTable)
+		}
+	}
+	if len(documentChanges) > 0 {
+		allChanges[documentTable] = documentChanges
+	}
+
+	dataTable := "comparison_internal_document_data"
+	dataChanges := make(map[string]interface{})
+	newDataHashes := make(map[string]struct{}, len(newDocData))
+	for _, docData := range newDocData {
+		if _, inScope := newHashes[docData.Hash]; inScope {
+			newDataHashes[docData.Hash] = struct{}{}
+		}
+	}
+	for oldHash := range oldHashes {
+		if _, found := newDataHashes[oldHash]; !found {
+			dataChanges[oldHash] = "comparison internal document data not found in build archive"
+			changesOverview.setNotFoundEntry(dataTable)
+		}
+	}
+	for newHash := range newDataHashes {
+		if _, found := oldHashes[newHash]; !found {
+			dataChanges[newHash] = "unexpected comparison internal document data (not found in database)"
+			changesOverview.setUnexpectedEntry(dataTable)
+		}
+	}
+	if len(dataChanges) > 0 {
+		allChanges[dataTable] = dataChanges
+	}
+
+	return allChanges
+}
+
+func comparisonInternalDocumentChangeKey(comparisonId string, documentId string) string {
+	return fmt.Sprintf("%s:%s", comparisonId, documentId)
 }
 
 func (p publishedRepositoryImpl) getOperationComparisonsChanges(tx *pg.Tx, packageInfo view.PackageInfoFile, operationComparisonEntities []*entity.OperationComparisonEntity, versionComparisonIds []string, changesOverview *PublishedBuildChangesOverview) (map[string]interface{}, error) {
@@ -1185,7 +1207,8 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 	data []*entity.PublishedContentDataEntity, refs []*entity.PublishedReferenceEntity, src *entity.PublishedSrcEntity, srcArchive *entity.PublishedSrcArchiveEntity,
 	operations []*entity.OperationEntity, operationsData []*entity.OperationDataEntity,
 	operationComparisons []*entity.OperationComparisonEntity, builderNotifications []*entity.BuilderNotificationsEntity,
-	versionComparisons []*entity.VersionComparisonEntity, serviceName string, pkg *entity.PackageEntity, versionComparisonsFromCache []string,
+	versionComparisons []*entity.VersionComparisonEntity, serviceName string, pkg *entity.PackageEntity, skippedVersionComparisonIds []string,
+	operationComparisonIdsToRebuild []string, ddlComparisonIdsToRebuild []string,
 	versionInternalDocEntities []*entity.VersionInternalDocumentEntity, versionInternalDocDataEntities []*entity.VersionInternalDocumentDataEntity,
 	comparisonInternalDocEntities []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocDataEntities []*entity.ComparisonInternalDocumentDataEntity,
 	operationSearchTexts []*entity.OperationSearchTextEntity,
@@ -1235,7 +1258,7 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 			}
 
 			start = time.Now()
-			err := p.validateMigrationResult(tx, packageInfo, buildId, version, content, data, refs, src, operations, operationsData, versionComparisons, operationComparisons, versionComparisonsFromCache, versionInternalDocEntities, versionInternalDocDataEntities, comparisonInternalDocEntities, comparisonInternalDocDataEntities, operationSearchTexts, maxRevision, pkg.ExcludeFromSearch)
+			err := p.validateMigrationResult(tx, packageInfo, buildId, version, content, data, refs, src, operations, operationsData, versionComparisons, operationComparisons, skippedVersionComparisonIds, operationComparisonIdsToRebuild, versionInternalDocEntities, versionInternalDocDataEntities, comparisonInternalDocEntities, comparisonInternalDocDataEntities, operationSearchTexts, maxRevision, pkg.ExcludeFromSearch)
 			if err != nil {
 				return fmt.Errorf("migration result validation failed: %v", err.Error())
 			}
@@ -1458,7 +1481,7 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 
 		if len(versionComparisons) != 0 {
 			start = time.Now()
-			err = p.saveVersionChangesTx(tx, operationComparisons, versionComparisons)
+			err = p.saveVersionChangesTx(tx, operationComparisons, versionComparisons, operationComparisonIdsToRebuild)
 			if err != nil {
 				return err
 			}
@@ -1505,13 +1528,6 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 			}
 		}
 		utils.PerfLog(time.Since(start).Milliseconds(), 200, "CreateVersionWithData: version internal documents insert")
-		start = time.Now()
-		err = p.saveComparisonInternalDocumentsTx(tx, comparisonInternalDocEntities, comparisonInternalDocDataEntities, packageInfo.MigrationBuild, versionComparisons)
-		if err != nil {
-			return err
-		}
-		utils.PerfLog(time.Since(start).Milliseconds(), 200, "CreateVersionWithData: comparison internal documents insert")
-
 		if len(existingGroupedOperations) > 0 {
 			// Restore grouped operations
 			start = time.Now()
@@ -1660,12 +1676,19 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 		}
 		if len(versionComparisons) != 0 {
 			start = time.Now()
-			err = p.saveDdlComparisonsTx(tx, ddlContractComparisonEntities, versionComparisons)
+			err = p.saveDdlComparisonsTx(tx, ddlContractComparisonEntities, ddlComparisonIdsToRebuild)
 			if err != nil {
 				return err
 			}
 			utils.PerfLog(time.Since(start).Milliseconds(), 100, "CreateVersionWithData: ddl_comparison insert")
 		}
+
+		start = time.Now()
+		err = p.saveComparisonInternalDocumentsTx(tx, comparisonInternalDocEntities, comparisonInternalDocDataEntities, packageInfo.MigrationBuild, comparisonIdsToRebuild(operationComparisonIdsToRebuild, ddlComparisonIdsToRebuild))
+		if err != nil {
+			return err
+		}
+		utils.PerfLog(time.Since(start).Milliseconds(), 200, "CreateVersionWithData: comparison internal documents insert")
 
 		// MCP contract
 		if len(mcpContractDataEntities) > 0 {
@@ -1899,7 +1922,7 @@ func (p publishedRepositoryImpl) propagatePreviousOperationGroups(tx *pg.Tx, ver
 	return err
 }
 
-func (p publishedRepositoryImpl) validateChangelogMigrationResult(tx *pg.Tx, packageInfo view.PackageInfoFile, publishId string, versionComparisons []*entity.VersionComparisonEntity, operationComparisons []*entity.OperationComparisonEntity, versionComparisonsFromCache []string, comparisonInternalDocs []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocData []*entity.ComparisonInternalDocumentDataEntity) error {
+func (p publishedRepositoryImpl) validateChangelogMigrationResult(tx *pg.Tx, packageInfo view.PackageInfoFile, publishId string, versionComparisons []*entity.VersionComparisonEntity, operationComparisons []*entity.OperationComparisonEntity, skippedVersionComparisonIds []string, operationComparisonIdsToRebuild []string, comparisonInternalDocs []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocData []*entity.ComparisonInternalDocumentDataEntity) error {
 	migrationRun := new(mEntity.MigrationRunEntity)
 	err := tx.Model(migrationRun).Where("id = ?", packageInfo.MigrationId).First()
 	if err != nil {
@@ -1913,14 +1936,15 @@ func (p publishedRepositoryImpl) validateChangelogMigrationResult(tx *pg.Tx, pac
 	}
 	changes := make(map[string]interface{}, 0)
 	changesOverview := make(PublishedBuildChangesOverview)
-	versionComparisonsChanges, versionComparisonIds, err := p.getVersionComparisonsChanges(tx, packageInfo, versionComparisons, versionComparisonsFromCache, &changesOverview)
+	versionComparisonsChanges, matchedVersionComparisonIds, comparisonInternalDocumentScope, err := p.getVersionComparisonsChanges(tx, packageInfo, versionComparisons, skippedVersionComparisonIds, &changesOverview)
 	if err != nil {
 		return err
 	}
 	if len(versionComparisonsChanges) > 0 {
 		changes["version_comparison"] = versionComparisonsChanges
 	}
-	operationComparisonsChanges, err := p.getOperationComparisonsChanges(tx, packageInfo, operationComparisons, versionComparisonIds, &changesOverview)
+	operationComparisonIdsToValidate := comparisonIdsToValidate(matchedVersionComparisonIds, operationComparisonIdsToRebuild)
+	operationComparisonsChanges, err := p.getOperationComparisonsChanges(tx, packageInfo, operationComparisons, operationComparisonIdsToValidate, &changesOverview)
 	if err != nil {
 		return err
 	}
@@ -1928,7 +1952,7 @@ func (p publishedRepositoryImpl) validateChangelogMigrationResult(tx *pg.Tx, pac
 		changes["operation_comparison"] = operationComparisonsChanges
 	}
 
-	comparisonInternalDocsChanges, err := p.getComparisonInternalDocumentsChanges(tx, packageInfo, comparisonInternalDocs, comparisonInternalDocData, &changesOverview)
+	comparisonInternalDocsChanges, err := p.getComparisonInternalDocumentsChanges(tx, comparisonInternalDocumentScope, comparisonInternalDocs, comparisonInternalDocData, &changesOverview)
 	if err != nil {
 		return err
 	}
@@ -1967,7 +1991,7 @@ func (p publishedRepositoryImpl) validateChangelogMigrationResult(tx *pg.Tx, pac
 	return nil
 }
 
-func (p publishedRepositoryImpl) SaveVersionChanges(packageInfo view.PackageInfoFile, publishId string, operationComparisons []*entity.OperationComparisonEntity, versionComparisons []*entity.VersionComparisonEntity, versionComparisonsFromCache []string, comparisonInternalDocEntities []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocDataEntities []*entity.ComparisonInternalDocumentDataEntity, ddlContractComparisons []*entity.DDLContractComparisonEntity) error {
+func (p publishedRepositoryImpl) SaveVersionChanges(packageInfo view.PackageInfoFile, publishId string, operationComparisons []*entity.OperationComparisonEntity, versionComparisons []*entity.VersionComparisonEntity, skippedVersionComparisonIds []string, operationComparisonIdsToRebuild []string, ddlComparisonIdsToRebuild []string, comparisonInternalDocEntities []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocDataEntities []*entity.ComparisonInternalDocumentDataEntity, ddlContractComparisons []*entity.DDLContractComparisonEntity) error {
 	ctx := context.Background()
 	return p.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
 		var ents []entity.BuildEntity
@@ -1987,23 +2011,23 @@ func (p publishedRepositoryImpl) SaveVersionChanges(packageInfo view.PackageInfo
 		}
 		if packageInfo.MigrationBuild && !packageInfo.NoChangelog {
 			start := time.Now()
-			err := p.validateChangelogMigrationResult(tx, packageInfo, publishId, versionComparisons, operationComparisons, versionComparisonsFromCache, comparisonInternalDocEntities, comparisonInternalDocDataEntities)
+			err := p.validateChangelogMigrationResult(tx, packageInfo, publishId, versionComparisons, operationComparisons, skippedVersionComparisonIds, operationComparisonIdsToRebuild, comparisonInternalDocEntities, comparisonInternalDocDataEntities)
 			if err != nil {
 				return err
 			}
 			utils.PerfLog(time.Since(start).Milliseconds(), 500, "SaveVersionChanges: validateChangelogMigrationResult")
 		}
-		err = p.saveVersionChangesTx(tx, operationComparisons, versionComparisons)
+		err = p.saveVersionChangesTx(tx, operationComparisons, versionComparisons, operationComparisonIdsToRebuild)
 		if err != nil {
 			return err
 		}
 
-		err = p.saveDdlComparisonsTx(tx, ddlContractComparisons, versionComparisons)
+		err = p.saveDdlComparisonsTx(tx, ddlContractComparisons, ddlComparisonIdsToRebuild)
 		if err != nil {
 			return err
 		}
 
-		err = p.saveComparisonInternalDocumentsTx(tx, comparisonInternalDocEntities, comparisonInternalDocDataEntities, packageInfo.MigrationBuild, versionComparisons)
+		err = p.saveComparisonInternalDocumentsTx(tx, comparisonInternalDocEntities, comparisonInternalDocDataEntities, packageInfo.MigrationBuild, comparisonIdsToRebuild(operationComparisonIdsToRebuild, ddlComparisonIdsToRebuild))
 		if err != nil {
 			return err
 		}
@@ -2022,7 +2046,47 @@ func (p publishedRepositoryImpl) SaveVersionChanges(packageInfo view.PackageInfo
 	})
 }
 
-func (p publishedRepositoryImpl) saveVersionChangesTx(tx *pg.Tx, operationComparisons []*entity.OperationComparisonEntity, versionComparisons []*entity.VersionComparisonEntity) error {
+func comparisonIdsToRebuild(operationComparisonIds []string, ddlComparisonIds []string) []string {
+	ids := make(map[string]struct{}, len(operationComparisonIds)+len(ddlComparisonIds))
+	result := make([]string, 0, len(operationComparisonIds)+len(ddlComparisonIds))
+	for _, comparisonId := range operationComparisonIds {
+		if _, exists := ids[comparisonId]; exists {
+			continue
+		}
+		ids[comparisonId] = struct{}{}
+		result = append(result, comparisonId)
+	}
+	for _, comparisonId := range ddlComparisonIds {
+		if _, exists := ids[comparisonId]; exists {
+			continue
+		}
+		ids[comparisonId] = struct{}{}
+		result = append(result, comparisonId)
+	}
+	return result
+}
+
+// comparisonIdsToValidate selects comparisons that both matched the previous migration scope and
+// had their operation changelog rebuilt from the archive. matchedComparisonIds alone is too broad
+// because version_comparison is shared by operation and DDL changelogs. A comparison can match when
+// its DDL changelog is rebuilt even if its operation changelog is reused from cache. Cached operation
+// rows are absent from the archive, so validating them would incorrectly report the snapshot rows as
+// missing.
+func comparisonIdsToValidate(matchedComparisonIds []string, comparisonIdsToRebuild []string) []string {
+	matchedIds := make(map[string]struct{}, len(matchedComparisonIds))
+	for _, comparisonId := range matchedComparisonIds {
+		matchedIds[comparisonId] = struct{}{}
+	}
+	result := make([]string, 0, len(comparisonIdsToRebuild))
+	for _, comparisonId := range comparisonIdsToRebuild {
+		if _, matched := matchedIds[comparisonId]; matched {
+			result = append(result, comparisonId)
+		}
+	}
+	return result
+}
+
+func (p publishedRepositoryImpl) saveVersionChangesTx(tx *pg.Tx, operationComparisons []*entity.OperationComparisonEntity, versionComparisons []*entity.VersionComparisonEntity, operationComparisonIdsToRebuild []string) error {
 	_, err := tx.Model(&versionComparisons).
 		OnConflict(`(comparison_id) DO UPDATE
 		SET operation_types=EXCLUDED.operation_types,
@@ -2036,14 +2100,12 @@ func (p publishedRepositoryImpl) saveVersionChangesTx(tx *pg.Tx, operationCompar
 	if err != nil {
 		return fmt.Errorf("failed to insert version comparisons %+v: %w", versionComparisons, err)
 	}
-	deleteChangelogForComparisonQuery := `
-		delete from operation_comparison
-		where comparison_id = ?comparison_id
-		`
-	for _, comparisonEnt := range versionComparisons {
-		_, err := tx.Model(comparisonEnt).Exec(deleteChangelogForComparisonQuery)
+	if len(operationComparisonIdsToRebuild) > 0 {
+		_, err = tx.Exec(`
+			delete from operation_comparison
+			where comparison_id in (?)`, pg.In(operationComparisonIdsToRebuild))
 		if err != nil {
-			return fmt.Errorf("failed to delete old operation changes for comparison %+v: %w", *comparisonEnt, err)
+			return fmt.Errorf("failed to delete old operation changes for comparisons %v: %w", operationComparisonIdsToRebuild, err)
 		}
 	}
 	if len(operationComparisons) != 0 {
@@ -2059,15 +2121,13 @@ func (p publishedRepositoryImpl) saveVersionChangesTx(tx *pg.Tx, operationCompar
 // version_comparison rows saved by saveVersionChangesTx, so it must run after it. Stale rows are removed
 // per comparison_id before insert (mirroring the operation_comparison handling) so a recalculated
 // changelog does not leave DDL entries that no longer changed.
-func (p publishedRepositoryImpl) saveDdlComparisonsTx(tx *pg.Tx, ddlContractComparisons []*entity.DDLContractComparisonEntity, versionComparisons []*entity.VersionComparisonEntity) error {
-	deleteDdlComparisonForComparisonQuery := `
-		delete from ddl_comparison
-		where comparison_id = ?comparison_id
-		`
-	for _, comparisonEnt := range versionComparisons {
-		_, err := tx.Model(comparisonEnt).Exec(deleteDdlComparisonForComparisonQuery)
+func (p publishedRepositoryImpl) saveDdlComparisonsTx(tx *pg.Tx, ddlContractComparisons []*entity.DDLContractComparisonEntity, ddlComparisonIdsToRebuild []string) error {
+	if len(ddlComparisonIdsToRebuild) > 0 {
+		_, err := tx.Exec(`
+			delete from ddl_comparison
+			where comparison_id in (?)`, pg.In(ddlComparisonIdsToRebuild))
 		if err != nil {
-			return fmt.Errorf("failed to delete old ddl changes for comparison %+v: %w", *comparisonEnt, err)
+			return fmt.Errorf("failed to delete old ddl changes for comparisons %v: %w", ddlComparisonIdsToRebuild, err)
 		}
 	}
 	if len(ddlContractComparisons) != 0 {
@@ -2080,7 +2140,7 @@ func (p publishedRepositoryImpl) saveDdlComparisonsTx(tx *pg.Tx, ddlContractComp
 	return nil
 }
 
-func (p publishedRepositoryImpl) saveComparisonInternalDocumentsTx(tx *pg.Tx, comparisonInternalDocEntities []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocDataEntities []*entity.ComparisonInternalDocumentDataEntity, migrationBuild bool, versionComparisons []*entity.VersionComparisonEntity) error {
+func (p publishedRepositoryImpl) saveComparisonInternalDocumentsTx(tx *pg.Tx, comparisonInternalDocEntities []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocDataEntities []*entity.ComparisonInternalDocumentDataEntity, migrationBuild bool, comparisonIdsToRebuild []string) error {
 	for _, d := range comparisonInternalDocDataEntities {
 		exists, err := p.comparisonInternalDocumentDataExists(tx, d.Hash) // TODO: could be bulk select
 		if err != nil {
@@ -2094,29 +2154,29 @@ func (p publishedRepositoryImpl) saveComparisonInternalDocumentsTx(tx *pg.Tx, co
 		}
 	}
 	if migrationBuild {
-		// In case of migration, list of comparison internal documents may change
-		// so need to cleanup existing list before insert per comparison.
-		// Iterate over versionComparisons (not comparisonInternalDocEntities) to ensure
-		// that comparisons producing zero internal documents also get their stale rows deleted.
-		deletedComparisons := make(map[string]struct{})
-		for _, vc := range versionComparisons {
-			// Multiple internal documents may share the same comparison key, so dedup
-			// to avoid redundant DELETE queries for the same comparison.
-			key := fmt.Sprintf("%s|%s|%d|%s|%s|%d", vc.PackageId, vc.Version, vc.Revision, vc.PreviousPackageId, vc.PreviousVersion, vc.PreviousRevision)
-			if _, already := deletedComparisons[key]; already {
-				continue
-			}
-			deletedComparisons[key] = struct{}{}
-			_, err := tx.Model(&entity.ComparisonInternalDocumentEntity{}).
-				Where("package_id = ?", vc.PackageId).
-				Where("version = ?", vc.Version).
-				Where("revision = ?", vc.Revision).
-				Where("previous_package_id = ?", vc.PreviousPackageId).
-				Where("previous_version = ?", vc.PreviousVersion).
-				Where("previous_revision = ?", vc.PreviousRevision).
-				Delete()
+		if len(comparisonIdsToRebuild) > 0 {
+			_, err := tx.Exec(`
+				delete from comparison_internal_document as document
+				using version_comparison as comparison
+				where comparison.comparison_id in (?)
+					and document.package_id = comparison.package_id
+					and document.version = comparison.version
+					and document.revision = comparison.revision
+					and document.previous_package_id = comparison.previous_package_id
+					and document.previous_version = comparison.previous_version
+					and document.previous_revision = comparison.previous_revision
+					and not exists (
+						select 1 from operation_comparison as operation
+						where operation.comparison_id = comparison.comparison_id
+							and operation.comparison_internal_document_id = document.document_id
+					)
+					and not exists (
+						select 1 from ddl_comparison as ddl
+						where ddl.comparison_id = comparison.comparison_id
+							and ddl.comparison_internal_document_id = document.document_id
+					)`, pg.In(comparisonIdsToRebuild))
 			if err != nil {
-				return fmt.Errorf("failed to cleanup comparison internal documents for migration: %w", err)
+				return fmt.Errorf("failed to cleanup comparison internal documents for comparisons %v: %w", comparisonIdsToRebuild, err)
 			}
 		}
 	}

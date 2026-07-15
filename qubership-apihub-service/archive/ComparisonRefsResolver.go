@@ -1,6 +1,7 @@
 package archive
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
@@ -120,29 +121,43 @@ func (t *refTree) collectDescendants(node VersionKey, result map[VersionKey]stru
 	}
 }
 
-// ComparisonRefsResolver answers two questions for every comparison in the build archive:
-// which refs the comparison must be stored with, and whether it is already present in the DB
-// and therefore must not be re-inserted.
 type ComparisonRefsResolver struct {
-	refsByComparisonId map[string][]string
-	cachedIds          map[string]struct{}
+	refsByComparisonId                    map[string][]string
+	operationComparisonFromCacheById      map[string]bool
+	ddlComparisonFromCacheById            map[string]bool
+	operationComparisonIdsToRebuild       []string
+	ddlComparisonIdsToRebuild             []string
+	skippedVersionComparisonIds           []string
+	storedVersionComparisonByComparisonId map[string]entity.VersionComparisonEntity
 }
 
-func (r *ComparisonRefsResolver) IsCached(comparisonId string) bool {
-	_, cached := r.cachedIds[comparisonId]
-	return cached
+func (r *ComparisonRefsResolver) IsOperationComparisonFromCache(comparisonId string) bool {
+	return r.operationComparisonFromCacheById[comparisonId]
+}
+
+func (r *ComparisonRefsResolver) IsDdlComparisonFromCache(comparisonId string) bool {
+	return r.ddlComparisonFromCacheById[comparisonId]
 }
 
 func (r *ComparisonRefsResolver) Refs(comparisonId string) []string {
 	return r.refsByComparisonId[comparisonId]
 }
 
-func (r *ComparisonRefsResolver) CachedComparisonIds() []string {
-	cachedIds := make([]string, 0, len(r.cachedIds))
-	for id := range r.cachedIds {
-		cachedIds = append(cachedIds, id)
-	}
-	return cachedIds
+func (r *ComparisonRefsResolver) OperationComparisonIdsToRebuild() []string {
+	return r.operationComparisonIdsToRebuild
+}
+
+func (r *ComparisonRefsResolver) DdlComparisonIdsToRebuild() []string {
+	return r.ddlComparisonIdsToRebuild
+}
+
+func (r *ComparisonRefsResolver) SkippedVersionComparisonIds() []string {
+	return r.skippedVersionComparisonIds
+}
+
+func (r *ComparisonRefsResolver) StoredComparison(comparisonId string) (entity.VersionComparisonEntity, bool) {
+	comparison, exists := r.storedVersionComparisonByComparisonId[comparisonId]
+	return comparison, exists
 }
 
 func (a *BuildResultToEntitiesReader) constructComparisonKey(packageId string, version string, revision int, previousVersionPackageId string, previousVersion string, previousVersionRevision int) (view.ComparisonKey, bool) {
@@ -177,25 +192,26 @@ func (a *BuildResultToEntitiesReader) constructComparisonKey(packageId string, v
 // An empty non-nil slice means the version has no references.
 func (a *BuildResultToEntitiesReader) ResolveComparisonRefs(currentVersionRefs []*entity.PublishedReferenceEntity, publishedRepo repository.PublishedRepository) (*ComparisonRefsResolver, error) {
 	resolver := &ComparisonRefsResolver{
-		refsByComparisonId: map[string][]string{},
-		cachedIds:          map[string]struct{}{},
+		refsByComparisonId:                    map[string][]string{},
+		operationComparisonFromCacheById:      map[string]bool{},
+		ddlComparisonFromCacheById:            map[string]bool{},
+		storedVersionComparisonByComparisonId: map[string]entity.VersionComparisonEntity{},
 	}
 
 	type comparisonInfo struct {
 		ComparisonRefCandidate
-		main      bool
-		fromCache bool
+		main bool
 	}
 
 	archiveComparisonsCount := len(a.PackageComparisons.Comparisons) + len(a.PackageDdlComparisons.Comparisons)
 	comparisons := make([]*comparisonInfo, 0, archiveComparisonsCount)
+	candidates := make([]ComparisonRefCandidate, 0, archiveComparisonsCount)
 	comparisonById := map[string]*comparisonInfo{}
 	var mainComparison *comparisonInfo
 	nonMainIds := make([]string, 0, archiveComparisonsCount)
-	createComparisonInfo := func(key view.ComparisonKey, main bool, fromCache bool) {
+	createComparisonInfo := func(key view.ComparisonKey, main bool) {
 		id := key.ComparisonId()
-		if existing, ok := comparisonById[id]; ok {
-			existing.fromCache = existing.fromCache && fromCache //TODO: is it possible to have different values for one version comparison?
+		if _, ok := comparisonById[id]; ok {
 			return
 		}
 		info := &comparisonInfo{
@@ -204,11 +220,11 @@ func (a *BuildResultToEntitiesReader) ResolveComparisonRefs(currentVersionRefs [
 				Current:      VersionKey{PackageId: key.PackageId, Version: key.Version, Revision: key.Revision},
 				Previous:     VersionKey{PackageId: key.PreviousVersionPackageId, Version: key.PreviousVersion, Revision: key.PreviousVersionRevision},
 			},
-			main:      main,
-			fromCache: fromCache,
+			main: main,
 		}
 		comparisonById[id] = info
 		comparisons = append(comparisons, info)
+		candidates = append(candidates, info.ComparisonRefCandidate)
 		if main {
 			mainComparison = info
 		} else {
@@ -218,18 +234,17 @@ func (a *BuildResultToEntitiesReader) ResolveComparisonRefs(currentVersionRefs [
 	for _, comparison := range a.PackageComparisons.Comparisons {
 		key, mainVersion := a.constructComparisonKey(comparison.PackageId, comparison.Version, comparison.Revision,
 			comparison.PreviousVersionPackageId, comparison.PreviousVersion, comparison.PreviousVersionRevision)
-		createComparisonInfo(key, mainVersion, comparison.FromCache)
+		createComparisonInfo(key, mainVersion)
 	}
 	for _, comparison := range a.PackageDdlComparisons.Comparisons {
 		key, mainVersion := a.constructComparisonKey(comparison.PackageId, comparison.Version, comparison.Revision,
 			comparison.PreviousVersionPackageId, comparison.PreviousVersion, comparison.PreviousVersionRevision)
-		createComparisonInfo(key, mainVersion, comparison.FromCache)
+		createComparisonInfo(key, mainVersion)
 	}
 	if len(comparisons) == 0 {
 		return resolver, nil
 	}
 
-	// A non-main comparison already stored with the current builder version keeps its DB row: its refs are deterministic per builder version
 	if len(nonMainIds) > 0 {
 		storedComparisons, err := publishedRepo.GetVersionComparisonsByIds(nonMainIds)
 		if err != nil {
@@ -240,9 +255,42 @@ func (a *BuildResultToEntitiesReader) ResolveComparisonRefs(currentVersionRefs [
 			}
 		}
 		for _, comparison := range storedComparisons {
-			if comparison.BuilderVersion == a.PackageInfo.BuilderVersion {
-				resolver.cachedIds[comparison.ComparisonId] = struct{}{}
+			if comparison.BuilderVersion != a.PackageInfo.BuilderVersion {
+				continue
 			}
+			resolver.storedVersionComparisonByComparisonId[comparison.ComparisonId] = comparison
+		}
+	}
+
+	for _, comparison := range a.PackageComparisons.Comparisons {
+		key, mainVersion := a.constructComparisonKey(comparison.PackageId, comparison.Version, comparison.Revision,
+			comparison.PreviousVersionPackageId, comparison.PreviousVersion, comparison.PreviousVersionRevision)
+		comparisonId := key.ComparisonId()
+		stored, storedExists := resolver.storedVersionComparisonByComparisonId[comparisonId]
+		storedOperationComparisonAvailable := storedExists && stored.OperationTypes != nil
+		if !mainVersion && comparison.FromCache && !storedOperationComparisonAvailable {
+			return nil, invalidCachedComparisonError(ComparisonsFilePath, comparisonId, a.PackageInfo.BuilderVersion)
+		}
+		fromCache := !mainVersion && (comparison.FromCache || storedOperationComparisonAvailable)
+		resolver.operationComparisonFromCacheById[comparisonId] = fromCache
+		if !fromCache {
+			resolver.operationComparisonIdsToRebuild = append(resolver.operationComparisonIdsToRebuild, comparisonId)
+		}
+	}
+
+	for _, comparison := range a.PackageDdlComparisons.Comparisons {
+		key, mainVersion := a.constructComparisonKey(comparison.PackageId, comparison.Version, comparison.Revision,
+			comparison.PreviousVersionPackageId, comparison.PreviousVersion, comparison.PreviousVersionRevision)
+		comparisonId := key.ComparisonId()
+		stored, storedExists := resolver.storedVersionComparisonByComparisonId[comparisonId]
+		storedDdlComparisonAvailable := storedExists && stored.ContractTypes != nil
+		if !mainVersion && comparison.FromCache && !storedDdlComparisonAvailable {
+			return nil, invalidCachedComparisonError(ContractsDdlComparisonsFilePath, comparisonId, a.PackageInfo.BuilderVersion)
+		}
+		fromCache := !mainVersion && (comparison.FromCache || storedDdlComparisonAvailable)
+		resolver.ddlComparisonFromCacheById[comparisonId] = fromCache
+		if !fromCache {
+			resolver.ddlComparisonIdsToRebuild = append(resolver.ddlComparisonIdsToRebuild, comparisonId)
 		}
 	}
 
@@ -253,17 +301,15 @@ func (a *BuildResultToEntitiesReader) ResolveComparisonRefs(currentVersionRefs [
 
 	comparisonsToResolve := make([]*comparisonInfo, 0, len(nonMainIds))
 	for _, comparison := range comparisons {
-		if comparison.main {
+		operationFromCache, hasOperationComparison := resolver.operationComparisonFromCacheById[comparison.ComparisonId]
+		ddlFromCache, hasDdlComparison := resolver.ddlComparisonFromCacheById[comparison.ComparisonId]
+		if (!hasOperationComparison || operationFromCache) && (!hasDdlComparison || ddlFromCache) {
+			resolver.skippedVersionComparisonIds = append(resolver.skippedVersionComparisonIds, comparison.ComparisonId)
 			continue
 		}
-		if _, cached := resolver.cachedIds[comparison.ComparisonId]; cached {
-			continue
+		if !comparison.main {
+			comparisonsToResolve = append(comparisonsToResolve, comparison)
 		}
-		if comparison.fromCache {
-			resolver.cachedIds[comparison.ComparisonId] = struct{}{}
-			continue
-		}
-		comparisonsToResolve = append(comparisonsToResolve, comparison)
 	}
 	if len(comparisonsToResolve) == 0 {
 		return resolver, nil
@@ -306,10 +352,6 @@ func (a *BuildResultToEntitiesReader) ResolveComparisonRefs(currentVersionRefs [
 		}
 	}
 
-	candidates := make([]ComparisonRefCandidate, 0, len(comparisons))
-	for _, comparison := range comparisons {
-		candidates = append(candidates, comparison.ComparisonRefCandidate)
-	}
 	for _, comparison := range comparisonsToResolve {
 		currentDescendants := currentTree.descendants(comparison.Current)
 		previousDescendants := previousTree.descendants(comparison.Previous)
@@ -319,4 +361,17 @@ func (a *BuildResultToEntitiesReader) ResolveComparisonRefs(currentVersionRefs [
 		}
 	}
 	return resolver, nil
+}
+
+// TODO: create a new error code
+func invalidCachedComparisonError(filePath string, comparisonId string, builderVersion string) error {
+	return &exception.CustomError{
+		Status:  http.StatusBadRequest,
+		Code:    exception.InvalidPackagedFile,
+		Message: exception.InvalidPackagedFileMsg,
+		Params: map[string]interface{}{
+			"file":  filePath,
+			"error": fmt.Sprintf("comparison %q is marked as fromCache, but no stored comparison data exists for builder version %q", comparisonId, builderVersion),
+		},
+	}
 }

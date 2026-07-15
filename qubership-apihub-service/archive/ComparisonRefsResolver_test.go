@@ -1,12 +1,14 @@
 package archive
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
 	"testing"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/repository"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 )
@@ -201,11 +203,13 @@ func TestRefTreeDescendants(t *testing.T) {
 type fakePublishedRepo struct {
 	repository.PublishedRepository
 	storedComparisons []entity.VersionComparisonEntity
+	comparisonQueries [][]string
 	refsByVersion     map[VersionKey][]entity.PublishedReferenceEntity
 	refsQueries       []VersionKey
 }
 
 func (f *fakePublishedRepo) GetVersionComparisonsByIds(comparisonIds []string) ([]entity.VersionComparisonEntity, error) {
+	f.comparisonQueries = append(f.comparisonQueries, append([]string(nil), comparisonIds...))
 	result := make([]entity.VersionComparisonEntity, 0)
 	for _, stored := range f.storedComparisons {
 		for _, id := range comparisonIds {
@@ -276,17 +280,20 @@ func TestResolveComparisonRefs(t *testing.T) {
 		if got := resolver.Refs(packageId); got != nil {
 			t.Errorf("package refs = %v, want nil", got)
 		}
-		if resolver.IsCached(dashboard1Id) || resolver.IsCached(mainId) {
-			t.Errorf("nothing is cached, IsCached must be false")
+		if resolver.IsOperationComparisonFromCache(dashboard1Id) || resolver.IsOperationComparisonFromCache(mainId) {
+			t.Errorf("operation comparisons must be rebuilt")
 		}
-		if got := resolver.CachedComparisonIds(); len(got) != 0 {
-			t.Errorf("cached ids = %v, want none", got)
+		if got := resolver.OperationComparisonIdsToRebuild(); !reflect.DeepEqual(got, []string{mainId, dashboard1Id, packageId}) {
+			t.Errorf("operation comparison ids to rebuild = %v", got)
+		}
+		if !reflect.DeepEqual(repo.comparisonQueries, [][]string{{dashboard1Id, packageId}}) {
+			t.Errorf("stored comparison queries = %v, want non-main ids only", repo.comparisonQueries)
 		}
 	})
 
 	t.Run("comparison stored with the same builder version is skipped", func(t *testing.T) {
 		repo := &fakePublishedRepo{
-			storedComparisons: []entity.VersionComparisonEntity{{ComparisonId: dashboard1Id, BuilderVersion: "3.0.0"}},
+			storedComparisons: []entity.VersionComparisonEntity{{ComparisonId: dashboard1Id, BuilderVersion: "3.0.0", OperationTypes: []view.OperationType{}}},
 			refsByVersion: map[VersionKey][]entity.PublishedReferenceEntity{
 				versionKey("dashboard2", "v1", 1): previousVersionRefs,
 			},
@@ -295,15 +302,18 @@ func TestResolveComparisonRefs(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ResolveComparisonRefs() error = %v", err)
 		}
-		if !resolver.IsCached(dashboard1Id) {
-			t.Errorf("IsCached(dashboard1) = false, want true")
+		if !resolver.IsOperationComparisonFromCache(dashboard1Id) {
+			t.Errorf("IsOperationComparisonFromCache(dashboard1) = false, want true")
 		}
-		if got := resolver.CachedComparisonIds(); !sameElements(got, []string{dashboard1Id}) {
-			t.Errorf("cached ids = %v, want %v", got, []string{dashboard1Id})
+		if got := resolver.OperationComparisonIdsToRebuild(); !reflect.DeepEqual(got, []string{mainId, packageId}) {
+			t.Errorf("operation comparison ids to rebuild = %v, want %v", got, []string{mainId, packageId})
 		}
 		// the stored comparison stays referenced by the main one
 		if got := resolver.Refs(mainId); !sameElements(got, []string{dashboard1Id, packageId}) {
 			t.Errorf("main refs = %v, want %v", got, []string{dashboard1Id, packageId})
+		}
+		if got := resolver.SkippedVersionComparisonIds(); !reflect.DeepEqual(got, []string{dashboard1Id}) {
+			t.Errorf("skipped comparison ids = %v, want %v", got, []string{dashboard1Id})
 		}
 	})
 
@@ -318,8 +328,8 @@ func TestResolveComparisonRefs(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ResolveComparisonRefs() error = %v", err)
 		}
-		if resolver.IsCached(dashboard1Id) {
-			t.Errorf("IsCached(dashboard1) = true, want false")
+		if resolver.IsOperationComparisonFromCache(dashboard1Id) {
+			t.Errorf("IsOperationComparisonFromCache(dashboard1) = true, want false")
 		}
 		if got := resolver.Refs(dashboard1Id); !sameElements(got, []string{packageId}) {
 			t.Errorf("dashboard1 refs = %v, want %v", got, []string{packageId})
@@ -329,21 +339,154 @@ func TestResolveComparisonRefs(t *testing.T) {
 	t.Run("from cache comparison is skipped but stays in refs", func(t *testing.T) {
 		reader := dashboardChainReader()
 		reader.PackageComparisons.Comparisons[2].FromCache = true
-		repo := &fakePublishedRepo{refsByVersion: map[VersionKey][]entity.PublishedReferenceEntity{
-			versionKey("dashboard2", "v1", 1): previousVersionRefs,
-		}}
+		repo := &fakePublishedRepo{
+			storedComparisons: []entity.VersionComparisonEntity{{ComparisonId: packageId, BuilderVersion: "3.0.0", OperationTypes: []view.OperationType{}}},
+			refsByVersion: map[VersionKey][]entity.PublishedReferenceEntity{
+				versionKey("dashboard2", "v1", 1): previousVersionRefs,
+			},
+		}
 		resolver, err := reader.ResolveComparisonRefs(currentVersionRefs, repo)
 		if err != nil {
 			t.Fatalf("ResolveComparisonRefs() error = %v", err)
 		}
-		if got := resolver.CachedComparisonIds(); !sameElements(got, []string{packageId}) {
-			t.Errorf("cached ids = %v, want %v", got, []string{packageId})
+		if !resolver.IsOperationComparisonFromCache(packageId) {
+			t.Errorf("package operation comparison must be read from cache")
 		}
 		if got := resolver.Refs(dashboard1Id); !sameElements(got, []string{packageId}) {
 			t.Errorf("dashboard1 refs = %v, want %v", got, []string{packageId})
 		}
 		if got := resolver.Refs(mainId); !sameElements(got, []string{dashboard1Id, packageId}) {
 			t.Errorf("main refs = %v, want %v", got, []string{dashboard1Id, packageId})
+		}
+		if got := resolver.SkippedVersionComparisonIds(); !reflect.DeepEqual(got, []string{packageId}) {
+			t.Errorf("skipped comparison ids = %v, want %v", got, []string{packageId})
+		}
+	})
+
+	t.Run("operation cache does not suppress ddl rebuild", func(t *testing.T) {
+		reader := dashboardChainReader()
+		reader.PackageDdlComparisons.Comparisons = []view.DdlVersionComparison{
+			{PackageId: "dashboard1", Version: "v2", Revision: 1, PreviousVersionPackageId: "dashboard1", PreviousVersion: "v1", PreviousVersionRevision: 1},
+		}
+		repo := &fakePublishedRepo{
+			storedComparisons: []entity.VersionComparisonEntity{{ComparisonId: dashboard1Id, BuilderVersion: "3.0.0", OperationTypes: []view.OperationType{}}},
+			refsByVersion: map[VersionKey][]entity.PublishedReferenceEntity{
+				versionKey("dashboard2", "v1", 1): previousVersionRefs,
+			},
+		}
+		resolver, err := reader.ResolveComparisonRefs(currentVersionRefs, repo)
+		if err != nil {
+			t.Fatalf("ResolveComparisonRefs() error = %v", err)
+		}
+		if !resolver.IsOperationComparisonFromCache(dashboard1Id) {
+			t.Errorf("dashboard1 operation comparison must be cached")
+		}
+		if resolver.IsDdlComparisonFromCache(dashboard1Id) {
+			t.Errorf("dashboard1 DDL comparison must be rebuilt")
+		}
+		if got := resolver.DdlComparisonIdsToRebuild(); !reflect.DeepEqual(got, []string{dashboard1Id}) {
+			t.Errorf("DDL comparison ids to rebuild = %v, want %v", got, []string{dashboard1Id})
+		}
+		if got := resolver.Refs(dashboard1Id); !sameElements(got, []string{packageId}) {
+			t.Errorf("dashboard1 refs = %v, want %v", got, []string{packageId})
+		}
+	})
+
+	t.Run("ddl cache does not suppress operation rebuild", func(t *testing.T) {
+		reader := dashboardChainReader()
+		reader.PackageDdlComparisons.Comparisons = []view.DdlVersionComparison{
+			{PackageId: "dashboard1", Version: "v2", Revision: 1, PreviousVersionPackageId: "dashboard1", PreviousVersion: "v1", PreviousVersionRevision: 1, FromCache: true},
+		}
+		repo := &fakePublishedRepo{
+			storedComparisons: []entity.VersionComparisonEntity{{ComparisonId: dashboard1Id, BuilderVersion: "3.0.0", ContractTypes: []view.ContractType{}}},
+			refsByVersion: map[VersionKey][]entity.PublishedReferenceEntity{
+				versionKey("dashboard2", "v1", 1): previousVersionRefs,
+			},
+		}
+		resolver, err := reader.ResolveComparisonRefs(currentVersionRefs, repo)
+		if err != nil {
+			t.Fatalf("ResolveComparisonRefs() error = %v", err)
+		}
+		if resolver.IsOperationComparisonFromCache(dashboard1Id) {
+			t.Errorf("dashboard1 operation comparison must be rebuilt")
+		}
+		if !resolver.IsDdlComparisonFromCache(dashboard1Id) {
+			t.Errorf("dashboard1 DDL comparison must be cached")
+		}
+	})
+
+	t.Run("main comparison is rebuilt when builder does not mark it from cache", func(t *testing.T) {
+		repo := &fakePublishedRepo{
+			storedComparisons: []entity.VersionComparisonEntity{{ComparisonId: mainId, BuilderVersion: "3.0.0", OperationTypes: []view.OperationType{}}},
+			refsByVersion: map[VersionKey][]entity.PublishedReferenceEntity{
+				versionKey("dashboard2", "v1", 1): previousVersionRefs,
+			},
+		}
+		resolver, err := dashboardChainReader().ResolveComparisonRefs(currentVersionRefs, repo)
+		if err != nil {
+			t.Fatalf("ResolveComparisonRefs() error = %v", err)
+		}
+		if resolver.IsOperationComparisonFromCache(mainId) {
+			t.Errorf("main operation comparison must be rebuilt")
+		}
+	})
+
+	t.Run("main comparison cannot be cached", func(t *testing.T) {
+		reader := dashboardChainReader()
+		reader.PackageComparisons.Comparisons[0].FromCache = true
+		repo := &fakePublishedRepo{
+			refsByVersion: map[VersionKey][]entity.PublishedReferenceEntity{
+				versionKey("dashboard2", "v1", 1): previousVersionRefs,
+			},
+		}
+		resolver, err := reader.ResolveComparisonRefs(currentVersionRefs, repo)
+		if err != nil {
+			t.Fatalf("ResolveComparisonRefs() error = %v", err)
+		}
+		if resolver.IsOperationComparisonFromCache(mainId) {
+			t.Errorf("main operation comparison must be rebuilt")
+		}
+		versionComparisons, _, _, err := reader.ReadOperationComparisonsToEntities(nil, nil, resolver)
+		if err != nil {
+			t.Fatalf("ReadOperationComparisonsToEntities() error = %v", err)
+		}
+		foundMain := false
+		for _, comparison := range versionComparisons {
+			if comparison.ComparisonId == mainId {
+				foundMain = true
+				break
+			}
+		}
+		if !foundMain {
+			t.Errorf("main version comparison parent was not produced")
+		}
+	})
+
+	t.Run("builder cache requires compatible stored operation data", func(t *testing.T) {
+		reader := dashboardChainReader()
+		reader.PackageComparisons.Comparisons[2].FromCache = true
+		_, err := reader.ResolveComparisonRefs(currentVersionRefs, &fakePublishedRepo{})
+		if err == nil {
+			t.Fatal("ResolveComparisonRefs() error = nil, want invalid package error")
+		}
+		var customErr *exception.CustomError
+		if !errors.As(err, &customErr) || customErr.Code != exception.InvalidPackagedFile {
+			t.Errorf("ResolveComparisonRefs() error = %v, want %s", err, exception.InvalidPackagedFile)
+		}
+	})
+
+	t.Run("builder cache requires compatible stored ddl data", func(t *testing.T) {
+		reader := dashboardChainReader()
+		reader.PackageDdlComparisons.Comparisons = []view.DdlVersionComparison{
+			{PackageId: "dashboard1", Version: "v2", Revision: 1, PreviousVersionPackageId: "dashboard1", PreviousVersion: "v1", PreviousVersionRevision: 1, FromCache: true},
+		}
+		_, err := reader.ResolveComparisonRefs(currentVersionRefs, &fakePublishedRepo{})
+		if err == nil {
+			t.Fatal("ResolveComparisonRefs() error = nil, want invalid package error")
+		}
+		var customErr *exception.CustomError
+		if !errors.As(err, &customErr) || customErr.Code != exception.InvalidPackagedFile {
+			t.Errorf("ResolveComparisonRefs() error = %v, want %s", err, exception.InvalidPackagedFile)
 		}
 	})
 

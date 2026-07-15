@@ -31,7 +31,8 @@ type PublishedRepository interface {
 		data []*entity.PublishedContentDataEntity, refs []*entity.PublishedReferenceEntity, src *entity.PublishedSrcEntity, srcArchive *entity.PublishedSrcArchiveEntity,
 		operations []*entity.OperationEntity, operationsData []*entity.OperationDataEntity,
 		operationComparisons []*entity.OperationComparisonEntity, builderNotifications []*entity.BuilderNotificationsEntity,
-		versionComparisonEntities []*entity.VersionComparisonEntity, serviceName string, pkg *entity.PackageEntity, versionComparisonsFromCache []string,
+		versionComparisonEntities []*entity.VersionComparisonEntity, serviceName string, pkg *entity.PackageEntity, skippedVersionComparisonIds []string,
+		operationComparisonIdsToRebuild []string, ddlComparisonIdsToRebuild []string,
 		versionInternalDocEntities []*entity.VersionInternalDocumentEntity, versionInternalDocDataEntities []*entity.VersionInternalDocumentDataEntity,
 		comparisonInternalDocEntities []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocDataEntities []*entity.ComparisonInternalDocumentDataEntity,
 		operationSearchTexts []*entity.OperationSearchTextEntity,
@@ -78,7 +79,7 @@ type PublishedRepository interface {
 	GetVersionRefsComparisons(comparisonId string) ([]entity.VersionComparisonEntity, error)
 	GetVersionComparisonsCleanupCandidates(ctx context.Context, limit int, offset int) ([]entity.VersionComparisonCleanupCandidateEntity, error)
 	DeleteVersionComparison(ctx context.Context, comparisonId string) (bool, error)
-	SaveVersionChanges(packageInfo view.PackageInfoFile, publishId string, operationComparisons []*entity.OperationComparisonEntity, versionComparisons []*entity.VersionComparisonEntity, versionComparisonsFromCache []string, comparisonInternalDocEntities []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocDataEntities []*entity.ComparisonInternalDocumentDataEntity, ddlContractComparisons []*entity.DDLContractComparisonEntity) error
+	SaveVersionChanges(packageInfo view.PackageInfoFile, publishId string, operationComparisons []*entity.OperationComparisonEntity, versionComparisons []*entity.VersionComparisonEntity, skippedVersionComparisonIds []string, operationComparisonIdsToRebuild []string, ddlComparisonIdsToRebuild []string, comparisonInternalDocEntities []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocDataEntities []*entity.ComparisonInternalDocumentDataEntity, ddlContractComparisons []*entity.DDLContractComparisonEntity) error
 	GetLatestRevision(packageId, version string) (int, error)
 	GetDeletedPackageLatestRevision(packageId, version string) (int, error)
 

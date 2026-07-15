@@ -415,7 +415,8 @@ func (a *BuildResultToEntitiesReader) ReadOperationComparisonsToEntities(publish
 		if comparison.ComparisonFileId != "" {
 			comparisonFileIdToKeyMap[comparison.ComparisonFileId] = comparisonKey
 		}
-		if comparisonRefsResolver.IsCached(versionComparisonEnt.ComparisonId) {
+		fromCache := comparisonRefsResolver.IsOperationComparisonFromCache(versionComparisonEnt.ComparisonId)
+		if fromCache {
 			continue
 		}
 		versionComparisonEnt.Refs = comparisonRefsResolver.Refs(versionComparisonEnt.ComparisonId)
@@ -623,24 +624,20 @@ func (a *BuildResultToEntitiesReader) ReadVersionInternalDocumentsToEntities() (
 	return versionInternalDocEntities, versionInternalDocDataEntities, nil
 }
 
-func (a *BuildResultToEntitiesReader) ReadComparisonInternalDocumentsToEntities(comparisonFileIdToKeyMap map[string]view.ComparisonKey) ([]*entity.ComparisonInternalDocumentEntity, []*entity.ComparisonInternalDocumentDataEntity, error) {
+func (a *BuildResultToEntitiesReader) ReadComparisonInternalDocumentsToEntities(
+	comparisonFileIdToKeyMap map[string]view.ComparisonKey,
+	skippedVersionComparisonIds []string,
+) ([]*entity.ComparisonInternalDocumentEntity, []*entity.ComparisonInternalDocumentDataEntity, error) {
 	filesFromZipReadStart := time.Now()
 	comparisonInternalDocEntities := make([]*entity.ComparisonInternalDocumentEntity, 0)
 	comparisonInternalDocDataEntities := make([]*entity.ComparisonInternalDocumentDataEntity, 0)
+	skippedComparisonIds := make(map[string]struct{}, len(skippedVersionComparisonIds))
+	for _, comparisonId := range skippedVersionComparisonIds {
+		skippedComparisonIds[comparisonId] = struct{}{}
+	}
 
 	for _, document := range a.ComparisonInternalDocuments.Documents {
 		if fileHeader, exists := a.ComparisonInternalDocumentsHeaders[document.Filename]; exists {
-			fileData, err := ReadZipFile(fileHeader)
-			if err != nil {
-				return nil, nil, &exception.CustomError{
-					Status:  http.StatusBadRequest,
-					Code:    exception.InvalidPackageArchivedFile,
-					Message: exception.InvalidPackageArchivedFileMsg,
-					Params:  map[string]interface{}{"file": document.Filename, "error": err.Error()},
-				}
-			}
-			hash := utils.GetEncodedXXHash128(fileData, []byte(document.Filename))
-
 			comparisonKey, exists := comparisonFileIdToKeyMap[document.ComparisonFileId]
 			if !exists {
 				var previousPackageId string
@@ -658,6 +655,20 @@ func (a *BuildResultToEntitiesReader) ReadComparisonInternalDocumentsToEntities(
 					PreviousVersionRevision:  a.PackageInfo.PreviousVersionRevision,
 				}
 			}
+			if _, skipped := skippedComparisonIds[comparisonKey.ComparisonId()]; skipped {
+				continue
+			}
+
+			fileData, err := ReadZipFile(fileHeader)
+			if err != nil {
+				return nil, nil, &exception.CustomError{
+					Status:  http.StatusBadRequest,
+					Code:    exception.InvalidPackageArchivedFile,
+					Message: exception.InvalidPackageArchivedFileMsg,
+					Params:  map[string]interface{}{"file": document.Filename, "error": err.Error()},
+				}
+			}
+			hash := utils.GetEncodedXXHash128(fileData, []byte(document.Filename))
 
 			comparisonInternalDocEntities = append(comparisonInternalDocEntities, &entity.ComparisonInternalDocumentEntity{
 				PackageId:         comparisonKey.PackageId,
@@ -793,10 +804,17 @@ func (a *BuildResultToEntitiesReader) ReadDdlContractComparisonsToEntities(publi
 		if a.PackageInfo.MigrationBuild {
 			versionComparisonEnt.Metadata.SetMigrationId(a.PackageInfo.MigrationId)
 		}
+		if a.PackageInfo.PreviousVersionBuilderVersion != "" {
+			versionComparisonEnt.Metadata.SetPreviousVersionBuilderVersion(a.PackageInfo.PreviousVersionBuilderVersion)
+		}
+		if a.PackageInfo.CurrentVersionBuilderVersion != "" {
+			versionComparisonEnt.Metadata.SetCurrentVersionBuilderVersion(a.PackageInfo.CurrentVersionBuilderVersion)
+		}
 		if comparison.ComparisonFileId != "" {
 			comparisonFileIdToKeyMap[comparison.ComparisonFileId] = comparisonKey
 		}
-		if comparisonRefsResolver.IsCached(versionComparisonEnt.ComparisonId) {
+		fromCache := comparisonRefsResolver.IsDdlComparisonFromCache(versionComparisonEnt.ComparisonId)
+		if fromCache {
 			continue
 		}
 		versionComparisonEnt.Refs = comparisonRefsResolver.Refs(versionComparisonEnt.ComparisonId)

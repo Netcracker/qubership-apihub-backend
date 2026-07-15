@@ -139,6 +139,17 @@ type VersionComparisonEntity struct {
 	Metadata          Metadata             `pg:"metadata, type:jsonb"`
 }
 
+func (e VersionComparisonEntity) ComparisonKey() view.ComparisonKey {
+	return view.ComparisonKey{
+		PackageId:                e.PackageId,
+		Version:                  e.Version,
+		Revision:                 e.Revision,
+		PreviousVersionPackageId: e.PreviousPackageId,
+		PreviousVersion:          e.PreviousVersion,
+		PreviousVersionRevision:  e.PreviousRevision,
+	}
+}
+
 type VersionComparisonCleanupCandidateEntity struct {
 	ComparisonId            string    `pg:"comparison_id"`
 	PackageId               string    `pg:"package_id"`
