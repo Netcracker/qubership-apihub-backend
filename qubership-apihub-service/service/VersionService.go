@@ -514,7 +514,19 @@ func (v versionServiceImpl) PatchVersion(ctx context.SecurityContext, packageId 
 					return nil, err
 				}
 				if found && previousVersionStatus == string(view.Draft) {
-					return nil, newReleaseVersionPreviousVersionNotReleaseError(ctx, packageId, versionEnt.Version, previousVersionPackageId, versionEnt.PreviousVersion)
+					log.Debugf("Blocked changing version %s of package %s to 'release' status by user %s: previous version %s of package %s has 'draft' status",
+						versionEnt.Version, packageId, ctx.GetUserId(), versionEnt.PreviousVersion, previousVersionPackageId)
+					return nil, &exception.CustomError{
+						Status:  http.StatusBadRequest,
+						Code:    exception.InvalidReleaseVersionChain,
+						Message: exception.VersionStatusChangePreviousVersionNotReleaseMsg,
+						Params: map[string]interface{}{
+							"packageId":                packageId,
+							"version":                  versionEnt.Version,
+							"previousVersionPackageId": previousVersionPackageId,
+							"previousVersion":          versionEnt.PreviousVersion,
+						},
+					}
 				}
 			}
 		}

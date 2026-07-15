@@ -836,6 +836,7 @@ const GroupOrWorkspaceReferencedByDashboardMsg = "Cannot delete $kind $packageId
 
 const InvalidReleaseVersionChain = "8600"
 const ReleaseVersionPreviousVersionNotReleaseMsg = "Version $version for package $packageId cannot be published with the 'release' status because previous version $previousVersion for package $previousVersionPackageId is in the 'draft' status. Change the previous version to 'release', or publish this version as a draft."
+const VersionStatusChangePreviousVersionNotReleaseMsg = "Version $version for package $packageId cannot be changed to the 'release' status because previous version $previousVersion for package $previousVersionPackageId is in the 'draft' status. Change the previous version to 'release', then retry."
 const VersionReferencedAsPreviousByReleaseMsg = "Version $version for package $packageId cannot be changed to the 'draft' status because it is the previous version of: $releaseVersions"
 
 // AI Chat error codes (APIHUB-AI-*). Each public error has a Code constant; variant

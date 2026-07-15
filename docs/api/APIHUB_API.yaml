@@ -3047,8 +3047,8 @@ paths:
               examples:
                 IncorrectInputParams:
                   $ref: "#/components/examples/IncorrectInputParameters"
-                PreviousVersionNotRelease:
-                  $ref: "#/components/examples/PreviousVersionNotRelease"
+                VersionStatusChangePreviousVersionNotRelease:
+                  $ref: "#/components/examples/VersionStatusChangePreviousVersionNotRelease"
                 VersionReferencedAsPreviousByRelease:
                   $ref: "#/components/examples/VersionReferencedAsPreviousByRelease"
         "401":
@@ -13266,6 +13266,17 @@ components:
         status: 400
         code: "8600"
         message: "Version 2024.2 for package QS.group.my-package cannot be published with the 'release' status because previous version 2024.1 for package QS.group.previous-package is in the 'draft' status. Change the previous version to 'release', or publish this version as a draft."
+        params:
+          version: "2024.2"
+          packageId: "QS.group.my-package"
+          previousVersion: "2024.1"
+          previousVersionPackageId: "QS.group.previous-package"
+    VersionStatusChangePreviousVersionNotRelease:
+      description: Version status cannot be changed to 'release' when the previous version is a draft
+      value:
+        status: 400
+        code: "8600"
+        message: "Version 2024.2 for package QS.group.my-package cannot be changed to the 'release' status because previous version 2024.1 for package QS.group.previous-package is in the 'draft' status. Change the previous version to 'release', then retry."
         params:
           version: "2024.2"
           packageId: "QS.group.my-package"
