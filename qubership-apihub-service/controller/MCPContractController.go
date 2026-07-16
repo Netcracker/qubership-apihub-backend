@@ -80,6 +80,7 @@ func (c *mcpContractControllerImpl) ListMcpEntities(w http.ResponseWriter, r *ht
 	}
 	mcpEndpoint, _ := url.QueryUnescape(r.URL.Query().Get("mcpEndpoint"))
 	textFilter, _ := url.QueryUnescape(r.URL.Query().Get("textFilter"))
+	refPackageId := r.URL.Query().Get("refPackageId")
 	limit, limErr := getLimitQueryParam(r)
 	if limErr != nil {
 		utils.RespondWithCustomError(w, limErr)
@@ -89,7 +90,7 @@ func (c *mcpContractControllerImpl) ListMcpEntities(w http.ResponseWriter, r *ht
 	if r.URL.Query().Get("offset") != "" {
 		offset, _ = strconv.Atoi(r.URL.Query().Get("offset"))
 	}
-	result, svcErr := c.mcpContractService.ListMcpEntities(packageId, versionName, kind, mcpEndpoint, "", textFilter, limit, offset)
+	result, svcErr := c.mcpContractService.ListMcpEntities(packageId, versionName, kind, mcpEndpoint, refPackageId, textFilter, limit, offset)
 	if svcErr != nil {
 		handlePkgRedirectOrRespondWithError(w, r, c.ptHandler, packageId, "Failed to list MCP entities", svcErr)
 		return

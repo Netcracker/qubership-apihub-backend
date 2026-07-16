@@ -1,9 +1,12 @@
 package service
 
 import (
+	"slices"
 	"testing"
 
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/archive"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 )
 
 func pv(version string, revision int, previousVersion string) entity.PackageVersionRevisionEntity {
@@ -177,5 +180,97 @@ func TestCheckPreviousVersionDependencyCycle_graph(t *testing.T) {
 				t.Fatalf("detectPreviousVersionDependencyCycleWithCurrVersion(...) = %v, want %v for %s", got, tt.wantCycle, tt.name)
 			}
 		})
+	}
+}
+
+type fakeComparisonRefsStore struct {
+	storedComparisons []entity.VersionComparisonEntity
+}
+
+func (s *fakeComparisonRefsStore) GetVersionComparisonsByIds(comparisonIds []string) ([]entity.VersionComparisonEntity, error) {
+	result := make([]entity.VersionComparisonEntity, 0)
+	for _, stored := range s.storedComparisons {
+		if slices.Contains(comparisonIds, stored.ComparisonId) {
+			result = append(result, stored)
+		}
+	}
+	return result, nil
+}
+
+func (s *fakeComparisonRefsStore) GetVersionRefsV3(packageId string, version string, revision int) ([]entity.PublishedReferenceEntity, error) {
+	return nil, nil
+}
+
+func TestMergeVersionComparisons(t *testing.T) {
+	mainId := view.MakeVersionComparisonId("d", "v2", 1, "d", "v1", 1)
+	sharedId := view.MakeVersionComparisonId("p1", "v2", 1, "p1", "v1", 1)
+	opOnlyId := view.MakeVersionComparisonId("p2", "v2", 1, "p2", "v1", 1)
+	ddlOnlyId := view.MakeVersionComparisonId("p3", "v2", 1, "p3", "v1", 1)
+
+	// resolver with stored rows for the two one-sided comparisons: p2 has stored DDL data,
+	// p3 has stored operation data (its operation side is served from cache in this build)
+	reader := &archive.BuildResultToEntitiesReader{
+		BuildResultArchive: &archive.BuildResultArchive{
+			PackageInfo: view.PackageInfoFile{
+				PackageId: "d", Version: "v2", Revision: 1,
+				PreviousVersion: "v1", PreviousVersionRevision: 1,
+				BuilderVersion: "builder-1",
+			},
+			PackageComparisons: view.PackageComparisonsFile{
+				Comparisons: []view.VersionComparison{
+					{PackageId: "d", Version: "v2", Revision: 1, PreviousVersionPackageId: "d", PreviousVersion: "v1", PreviousVersionRevision: 1},
+					{PackageId: "p1", Version: "v2", Revision: 1, PreviousVersionPackageId: "p1", PreviousVersion: "v1", PreviousVersionRevision: 1},
+					{PackageId: "p2", Version: "v2", Revision: 1, PreviousVersionPackageId: "p2", PreviousVersion: "v1", PreviousVersionRevision: 1},
+				},
+			},
+			PackageDdlComparisons: view.PackageDdlComparisonsFile{
+				Comparisons: []view.DdlVersionComparison{
+					{PackageId: "p1", Version: "v2", Revision: 1, PreviousVersionPackageId: "p1", PreviousVersion: "v1", PreviousVersionRevision: 1},
+					{PackageId: "p3", Version: "v2", Revision: 1, PreviousVersionPackageId: "p3", PreviousVersion: "v1", PreviousVersionRevision: 1},
+				},
+			},
+		},
+	}
+	store := &fakeComparisonRefsStore{
+		storedComparisons: []entity.VersionComparisonEntity{
+			{ComparisonId: opOnlyId, BuilderVersion: "builder-1", ContractTypes: []view.ContractType{{ContractType: view.ContractTypeDdl}}},
+			{ComparisonId: ddlOnlyId, BuilderVersion: "builder-1", OperationTypes: []view.OperationType{{ApiType: "rest"}}},
+		},
+	}
+	resolver, err := reader.ResolveComparisonRefs([]*entity.PublishedReferenceEntity{}, store)
+	if err != nil {
+		t.Fatalf("ResolveComparisonRefs() error: %v", err)
+	}
+
+	operationComparisons := []*entity.VersionComparisonEntity{
+		{ComparisonId: mainId, OperationTypes: []view.OperationType{{ApiType: "rest"}}},
+		{ComparisonId: sharedId, OperationTypes: []view.OperationType{{ApiType: "rest"}}},
+		{ComparisonId: opOnlyId, OperationTypes: []view.OperationType{{ApiType: "rest"}}},
+	}
+	ddlComparisons := []*entity.VersionComparisonEntity{
+		{ComparisonId: sharedId, ContractTypes: []view.ContractType{{ContractType: view.ContractTypeDdl}}},
+		{ComparisonId: ddlOnlyId, ContractTypes: []view.ContractType{{ContractType: view.ContractTypeDdl}}},
+	}
+
+	merged := mergeVersionComparisons(operationComparisons, ddlComparisons, resolver)
+
+	byId := make(map[string]*entity.VersionComparisonEntity, len(merged))
+	for _, comparison := range merged {
+		byId[comparison.ComparisonId] = comparison
+	}
+	if len(merged) != 4 {
+		t.Fatalf("merged %d comparisons, want 4", len(merged))
+	}
+	if byId[sharedId].ContractTypes == nil {
+		t.Errorf("shared comparison must carry the rebuilt DDL contract types")
+	}
+	if byId[opOnlyId].ContractTypes == nil {
+		t.Errorf("operation-only comparison must keep the stored contract types")
+	}
+	if byId[ddlOnlyId].OperationTypes == nil {
+		t.Errorf("ddl-only comparison must keep the stored operation types")
+	}
+	if byId[mainId].ContractTypes != nil {
+		t.Errorf("main comparison has no DDL data and no stored row, contract types must stay empty")
 	}
 }

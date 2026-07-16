@@ -139,6 +139,17 @@ type VersionComparisonEntity struct {
 	Metadata          Metadata             `pg:"metadata, type:jsonb"`
 }
 
+func (e VersionComparisonEntity) ComparisonKey() view.ComparisonKey {
+	return view.ComparisonKey{
+		PackageId:                e.PackageId,
+		Version:                  e.Version,
+		Revision:                 e.Revision,
+		PreviousVersionPackageId: e.PreviousPackageId,
+		PreviousVersion:          e.PreviousVersion,
+		PreviousVersionRevision:  e.PreviousRevision,
+	}
+}
+
 type VersionComparisonCleanupCandidateEntity struct {
 	ComparisonId            string    `pg:"comparison_id"`
 	PackageId               string    `pg:"package_id"`
@@ -160,6 +171,14 @@ func MakeRefComparisonView(entity VersionComparisonEntity) *view.RefComparison {
 		NoContent:          entity.NoContent,
 		PackageRef:         view.MakePackageRefKey(entity.PackageId, entity.Version, entity.Revision),
 		PreviousPackageRef: view.MakePackageRefKey(entity.PreviousPackageId, entity.PreviousVersion, entity.PreviousRevision),
+	}
+	for _, contractType := range entity.ContractTypes {
+		if contractType.ContractType == view.ContractTypeDdl {
+			refComparisonView.Contracts = &view.ContractsSummary{DDL: &view.DDLContractsSummary{
+				ChangesSummary:           contractType.ChangesSummary,
+				NumberOfImpactedEntities: contractType.NumberOfImpactedEntities,
+			}}
+		}
 	}
 	return refComparisonView
 }

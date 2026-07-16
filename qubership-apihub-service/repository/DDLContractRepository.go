@@ -13,7 +13,7 @@ import (
 type DDLContractRepository interface {
 	ListDdlEntities(packageId, version string, revision int, refPackageId, textFilter string, limit, offset int) ([]*entity.DDLContractEntity, error)
 	GetDdlEntity(packageId, version string, revision int, ddlEntityId string) (*entity.DDLContractEntity, []byte, error)
-	GetDdlEntityChanges(comparisonId, ddlEntityId, previousVersionDdlEntityId string, severities []string) (*entity.DDLContractComparisonEntity, error)
+	GetDdlEntityChanges(comparisonId, ddlEntityId, previousVersionDdlEntityId, refPackageId string, severities []string) (*entity.DDLContractComparisonEntity, error)
 	GetDdlEntityChangesSummary(comparisonId, ddlEntityId, refPackageId string) (*view.ChangeSummary, error)
 	ListChangedDdlEntities(comparisonId, refPackageId string, severities []string, textFilter string, limit, offset int) ([]*entity.DDLContractComparisonEntity, error)
 	GetEntitiesCount(packageId, version string, revision int) ([]entity.DDLContractKindCountEntity, error)
@@ -33,20 +33,17 @@ func NewDDLContractRepository(cp db.ConnectionProvider) DDLContractRepository {
 func (r *ddlContractRepositoryImpl) ListDdlEntities(packageId, version string, revision int, refPackageId, textFilter string, limit, offset int) ([]*entity.DDLContractEntity, error) {
 	var result []*entity.DDLContractEntity
 	query := r.cp.GetConnection().Model(&result).
-		Where("package_id = ?", packageId).
-		Where("version = ?", version).
-		Where("revision = ?", revision)
-	if refPackageId != "" {
-		query = query.Where("package_id = ?", refPackageId)
-	}
+		ColumnExpr("ddl_tables.*")
+	query = joinVersionRefs(query, "ddl_tables", packageId, version, revision, refPackageId)
 	if textFilter != "" {
 		pattern := fmt.Sprintf("%%%s%%", textFilter)
 		query = query.WhereGroup(func(q *orm.Query) (*orm.Query, error) {
-			q.WhereOr("name ILIKE ?", pattern).
-				WhereOr("description ILIKE ?", pattern)
+			q.WhereOr("ddl_tables.name ILIKE ?", pattern).
+				WhereOr("ddl_tables.description ILIKE ?", pattern)
 			return q, nil
 		})
 	}
+	query = query.Order("ddl_tables.package_id", "ddl_tables.version", "ddl_tables.revision", "ddl_tables.ddl_entity_id")
 	if limit > 0 {
 		query = query.Limit(limit)
 	}
@@ -93,10 +90,16 @@ func (r *ddlContractRepositoryImpl) GetDdlEntity(packageId, version string, revi
 	return ent, data, nil
 }
 
-func (r *ddlContractRepositoryImpl) GetDdlEntityChanges(comparisonId, ddlEntityId, previousVersionDdlEntityId string, severities []string) (*entity.DDLContractComparisonEntity, error) {
+func (r *ddlContractRepositoryImpl) GetDdlEntityChanges(comparisonId, ddlEntityId, previousVersionDdlEntityId, refPackageId string, severities []string) (*entity.DDLContractComparisonEntity, error) {
 	ent := new(entity.DDLContractComparisonEntity)
 	query := r.cp.GetConnection().Model(ent).
-		Where("comparison_id = ?", comparisonId)
+		Where(comparisonIdWithRefsCondition, comparisonId, comparisonId)
+	if refPackageId != "" {
+		query.WhereGroup(func(q *orm.Query) (*orm.Query, error) {
+			return q.Where("package_id = ?", refPackageId).
+				WhereOr("previous_package_id = ?", refPackageId), nil
+		})
+	}
 	if previousVersionDdlEntityId != "" {
 		query.WhereGroup(func(q *orm.Query) (*orm.Query, error) {
 			return q.Where("ddl_entity_id = ?", ddlEntityId).
@@ -128,27 +131,33 @@ func (r *ddlContractRepositoryImpl) GetDdlEntityChanges(comparisonId, ddlEntityI
 	return ent, nil
 }
 
+// GetDdlEntityChangesSummary sums the change summaries of every matched row: with refs expanded,
+// the same ddl_entity_id may legitimately exist in several referenced packages of a dashboard;
+// refPackageId narrows the result to one of them.
 func (r *ddlContractRepositoryImpl) GetDdlEntityChangesSummary(comparisonId, ddlEntityId, refPackageId string) (*view.ChangeSummary, error) {
 	type row struct {
 		ChangesSummary view.ChangeSummary `pg:"changes_summary"`
 	}
 	var rows []row
 	_, err := r.cp.GetConnection().Query(&rows,
-		`SELECT changes_summary FROM ddl_comparison WHERE comparison_id=? AND ddl_entity_id=? AND (?='' OR package_id=? OR previous_package_id=?)`,
-		comparisonId, ddlEntityId, refPackageId, refPackageId, refPackageId)
+		`SELECT changes_summary FROM ddl_comparison
+		WHERE `+comparisonIdWithRefsCondition+`
+		AND ddl_entity_id=? AND (?='' OR package_id=? OR previous_package_id=?)`,
+		comparisonId, comparisonId, ddlEntityId, refPackageId, refPackageId, refPackageId)
 	if err != nil {
 		return nil, err
 	}
-	if len(rows) == 0 {
-		return &view.ChangeSummary{}, nil
+	total := &view.ChangeSummary{}
+	for _, r := range rows {
+		total.Add(r.ChangesSummary)
 	}
-	return &rows[0].ChangesSummary, nil
+	return total, nil
 }
 
 func (r *ddlContractRepositoryImpl) ListChangedDdlEntities(comparisonId, refPackageId string, severities []string, textFilter string, limit, offset int) ([]*entity.DDLContractComparisonEntity, error) {
 	var result []*entity.DDLContractComparisonEntity
 	query := r.cp.GetConnection().Model(&result).
-		Where("comparison_id = ?", comparisonId)
+		Where(comparisonIdWithRefsCondition, comparisonId, comparisonId)
 	if refPackageId != "" {
 		query = query.WhereGroup(func(q *orm.Query) (*orm.Query, error) {
 			return q.Where("package_id = ?", refPackageId).
@@ -180,7 +189,7 @@ func (r *ddlContractRepositoryImpl) ListChangedDdlEntities(comparisonId, refPack
 		OrderExpr("(changes_summary->'non-breaking')::int > 0 DESC").
 		OrderExpr("(changes_summary->'annotation')::int > 0 DESC").
 		OrderExpr("(changes_summary->'unclassified')::int > 0 DESC").
-		Order("ddl_entity_id")
+		Order("package_id", "previous_package_id", "ddl_entity_id")
 	if limit > 0 {
 		query = query.Limit(limit)
 	}
@@ -200,8 +209,12 @@ func (r *ddlContractRepositoryImpl) ListChangedDdlEntities(comparisonId, refPack
 func (r *ddlContractRepositoryImpl) GetEntitiesCount(packageId, version string, revision int) ([]entity.DDLContractKindCountEntity, error) {
 	var result []entity.DDLContractKindCountEntity
 	_, err := r.cp.GetConnection().Query(&result,
-		`SELECT kind, count(*) as count FROM ddl_tables WHERE package_id=? AND version=? AND revision=? GROUP BY kind`,
-		packageId, version, revision)
+		versionWithRefsCTE+`
+		select dt.kind, count(*) as count
+		from ddl_tables dt
+		inner join versions v on dt.package_id = v.package_id and dt.version = v.version and dt.revision = v.revision
+		group by dt.kind`,
+		packageId, version, revision, packageId, version, revision)
 	if err != nil {
 		return nil, err
 	}

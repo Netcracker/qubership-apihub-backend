@@ -45,6 +45,9 @@ func (s *mcpContractServiceImpl) resolveRevision(packageId, versionName string) 
 }
 
 func (s *mcpContractServiceImpl) ListMcpEntities(packageId, versionName, kind, mcpEndpoint, refPackageId, textFilter string, limit, offset int) (*view.McpEntityListView, error) {
+	if err := checkRefPackageIdSupported(s.publishedRepo, packageId, refPackageId); err != nil {
+		return nil, err
+	}
 	version, revision, err := s.resolveRevision(packageId, versionName)
 	if err != nil {
 		return nil, err
@@ -56,8 +59,8 @@ func (s *mcpContractServiceImpl) ListMcpEntities(packageId, versionName, kind, m
 	result := &view.McpEntityListView{Entities: make([]interface{}, 0, len(entities))}
 	packageVersions := make(map[string][]string)
 	for _, ent := range entities {
-		result.Entities = append(result.Entities, makeMcpEntityView(ent, packageId, version, revision))
-		packageVersions[packageId] = append(packageVersions[packageId], view.MakeVersionRefKey(version, revision))
+		result.Entities = append(result.Entities, entity.MakeMcpEntityView(ent))
+		packageVersions[ent.PackageId] = append(packageVersions[ent.PackageId], view.MakeVersionRefKey(ent.Version, ent.Revision))
 	}
 	packagesRefs, err := s.packageVersionEnrichmentService.GetPackageVersionRefsMap(packageVersions)
 	if err != nil {
@@ -84,7 +87,7 @@ func (s *mcpContractServiceImpl) GetMcpEntity(packageId, versionName, mcpEntityI
 			Params:  map[string]interface{}{"mcpEntityId": mcpEntityId},
 		}
 	}
-	detail := view.McpEntityDetailView{McpEntityView: *makeMcpEntityView(ent, packageId, version, revision)}
+	detail := view.McpEntityDetailView{McpEntityView: *entity.MakeMcpEntityView(ent)}
 	if len(data) > 0 {
 		var parsed interface{}
 		if err := json.Unmarshal(data, &parsed); err == nil {
@@ -161,16 +164,4 @@ func (s *mcpContractServiceImpl) GlobalSearchForMCP(searchReq view.SearchQueryRe
 		results = append(results, entity.MakeGlobalMCPSearchResultView(ent))
 	}
 	return &view.SearchResult{McpContracts: &results}, nil
-}
-
-func makeMcpEntityView(ent *entity.MCPContractEntity, packageId, version string, revision int) *view.McpEntityView {
-	return &view.McpEntityView{
-		McpEntityId: ent.McpEntityId,
-		Kind:        ent.Kind,
-		Title:       ent.Title,
-		Description: ent.Description,
-		McpEndpoint: ent.McpEndpoint,
-		DocumentId:  ent.DocumentId,
-		PackageRef:  view.MakePackageRefKey(packageId, version, revision),
-	}
 }

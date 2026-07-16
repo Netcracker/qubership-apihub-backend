@@ -3,7 +3,7 @@ package entity
 import "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 
 type DDLContractEntity struct {
-	tableName struct{} `pg:"ddl_tables"`
+	tableName struct{} `pg:"ddl_tables, alias:ddl_tables"`
 
 	PackageId                 string   `pg:"package_id, pk, type:varchar"`
 	Version                   string   `pg:"version, pk, type:varchar"`

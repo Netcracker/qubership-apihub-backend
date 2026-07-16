@@ -1,7 +1,9 @@
 package entity
 
+import "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
+
 type MCPContractEntity struct {
-	tableName struct{} `pg:"mcp_entities"`
+	tableName struct{} `pg:"mcp_entities, alias:mcp_entities"`
 
 	PackageId                 string   `pg:"package_id, pk, type:varchar"`
 	Version                   string   `pg:"version, pk, type:varchar"`
@@ -46,4 +48,16 @@ type MCPContractEndpointCountEntity struct {
 	McpEndpoint string `pg:"mcp_endpoint, type:varchar"`
 	Kind        string `pg:"kind, type:varchar"`
 	Count       int    `pg:"count, type:integer"`
+}
+
+func MakeMcpEntityView(ent *MCPContractEntity) *view.McpEntityView {
+	return &view.McpEntityView{
+		McpEntityId: ent.McpEntityId,
+		Kind:        ent.Kind,
+		Title:       ent.Title,
+		Description: ent.Description,
+		McpEndpoint: ent.McpEndpoint,
+		DocumentId:  ent.DocumentId,
+		PackageRef:  view.MakePackageRefKey(ent.PackageId, ent.Version, ent.Revision),
+	}
 }

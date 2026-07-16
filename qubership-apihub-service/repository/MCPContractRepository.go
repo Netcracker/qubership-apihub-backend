@@ -28,26 +28,23 @@ func NewMCPContractRepository(cp db.ConnectionProvider) MCPContractRepository {
 func (r *mcpContractRepositoryImpl) ListMcpEntities(packageId, version string, revision int, kind, mcpEndpoint, refPackageId, textFilter string, limit, offset int) ([]*entity.MCPContractEntity, error) {
 	var result []*entity.MCPContractEntity
 	query := r.cp.GetConnection().Model(&result).
-		Where("package_id = ?", packageId).
-		Where("version = ?", version).
-		Where("revision = ?", revision)
+		ColumnExpr("mcp_entities.*")
+	query = joinVersionRefs(query, "mcp_entities", packageId, version, revision, refPackageId)
 	if kind != "" {
-		query = query.Where("kind = ?", kind)
+		query = query.Where("mcp_entities.kind = ?", kind)
 	}
 	if mcpEndpoint != "" {
-		query = query.Where("mcp_endpoint = ?", mcpEndpoint)
-	}
-	if refPackageId != "" {
-		query = query.Where("package_id = ?", refPackageId)
+		query = query.Where("mcp_entities.mcp_endpoint = ?", mcpEndpoint)
 	}
 	if textFilter != "" {
 		pattern := fmt.Sprintf("%%%s%%", textFilter)
 		query = query.WhereGroup(func(q *orm.Query) (*orm.Query, error) {
-			q.WhereOr("title ILIKE ?", pattern).
-				WhereOr("description ILIKE ?", pattern)
+			q.WhereOr("mcp_entities.title ILIKE ?", pattern).
+				WhereOr("mcp_entities.description ILIKE ?", pattern)
 			return q, nil
 		})
 	}
+	query = query.Order("mcp_entities.package_id", "mcp_entities.version", "mcp_entities.revision", "mcp_entities.mcp_entity_id")
 	if limit > 0 {
 		query = query.Limit(limit)
 	}
@@ -93,8 +90,12 @@ func (r *mcpContractRepositoryImpl) GetMcpEntity(packageId, version string, revi
 func (r *mcpContractRepositoryImpl) GetEntitiesCount(packageId, version string, revision int) ([]entity.MCPContractKindCountEntity, error) {
 	var result []entity.MCPContractKindCountEntity
 	_, err := r.cp.GetConnection().Query(&result,
-		`SELECT kind, count(*) as count FROM mcp_entities WHERE package_id=? AND version=? AND revision=? GROUP BY kind`,
-		packageId, version, revision)
+		versionWithRefsCTE+`
+		select me.kind, count(*) as count
+		from mcp_entities me
+		inner join versions v on me.package_id = v.package_id and me.version = v.version and me.revision = v.revision
+		group by me.kind`,
+		packageId, version, revision, packageId, version, revision)
 	if err != nil {
 		return nil, err
 	}
@@ -104,8 +105,12 @@ func (r *mcpContractRepositoryImpl) GetEntitiesCount(packageId, version string, 
 func (r *mcpContractRepositoryImpl) GetEntitiesCountByEndpoint(packageId, version string, revision int) ([]entity.MCPContractEndpointCountEntity, error) {
 	var result []entity.MCPContractEndpointCountEntity
 	_, err := r.cp.GetConnection().Query(&result,
-		`SELECT mcp_endpoint, kind, count(*) as count FROM mcp_entities WHERE package_id=? AND version=? AND revision=? GROUP BY mcp_endpoint, kind`,
-		packageId, version, revision)
+		versionWithRefsCTE+`
+		select me.mcp_endpoint, me.kind, count(*) as count
+		from mcp_entities me
+		inner join versions v on me.package_id = v.package_id and me.version = v.version and me.revision = v.revision
+		group by me.mcp_endpoint, me.kind`,
+		packageId, version, revision, packageId, version, revision)
 	if err != nil {
 		return nil, err
 	}
