@@ -3179,6 +3179,17 @@ func (p publishedRepositoryImpl) SearchForVersions(searchQuery *entity.PackageSe
 		and pv.published_at >= ?start_date
 		and pv.published_at <= ?end_date
 		and init_rank > 0
+		and (
+			?api_type = ''
+			or exists (
+				select 1
+				from operation o
+				where o.package_id = pv.package_id
+				and o.version = pv.version
+				and o.revision = pv.revision
+				and o.type = ?api_type
+			)
+		)
 		order by rank desc, created_at desc, version
 		limit ?limit
 		offset ?offset;
