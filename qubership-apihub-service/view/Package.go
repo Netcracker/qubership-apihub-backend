@@ -213,16 +213,16 @@ type PackageDdlComparisonsFile struct {
 }
 
 type DdlVersionComparison struct {
-	ComparisonFileId         string                            `json:"comparisonFileId"`
-	PackageId                string                            `json:"packageId"`
-	Version                  string                            `json:"version"`
-	Revision                 int                               `json:"revision"`
-	PreviousVersionPackageId string                            `json:"previousVersionPackageId"`
-	PreviousVersion          string                            `json:"previousVersion"`
-	PreviousVersionRevision  int                               `json:"previousVersionRevision"`
-	FromCache                bool                              `json:"fromCache"`
+	ComparisonFileId         string `json:"comparisonFileId"`
+	PackageId                string `json:"packageId"`
+	Version                  string `json:"version"`
+	Revision                 int    `json:"revision"`
+	PreviousVersionPackageId string `json:"previousVersionPackageId"`
+	PreviousVersion          string `json:"previousVersion"`
+	PreviousVersionRevision  int    `json:"previousVersionRevision"`
+	FromCache                bool   `json:"fromCache"`
 	// ContractsChangesSummary is the builder format: a map keyed by contract type name.
-	ContractsChangesSummary  map[string]ContractTypeSummary    `json:"contractsChangesSummary"`
+	ContractsChangesSummary map[string]ContractTypeSummary `json:"contractsChangesSummary"`
 }
 
 // ContractTypeSummary is the per-type payload inside ContractsChangesSummary.
