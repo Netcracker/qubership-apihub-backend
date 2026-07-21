@@ -450,7 +450,7 @@ func (p publishedRepositoryImpl) GetServiceOwner(workspaceId string, serviceName
 func (p publishedRepositoryImpl) validateMigrationResult(tx *pg.Tx, packageInfo view.PackageInfoFile, publishId string, version *entity.PublishedVersionEntity, content []*entity.PublishedContentEntity, contentData []*entity.PublishedContentDataEntity,
 	refs []*entity.PublishedReferenceEntity, src *entity.PublishedSrcEntity, operations []*entity.OperationEntity, operationData []*entity.OperationDataEntity, versionComparisons []*entity.VersionComparisonEntity, operationComparisons []*entity.OperationComparisonEntity, versionComparisonsFromCache []string,
 	versionInternalDocs []*entity.VersionInternalDocumentEntity, versionInternalDocData []*entity.VersionInternalDocumentDataEntity, comparisonInternalDocs []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocData []*entity.ComparisonInternalDocumentDataEntity,
-	operationSearchTexts []*entity.OperationSearchTextEntity, maxRevision int) error {
+	operationSearchTexts []*entity.OperationSearchTextEntity, maxRevision int, excludeFromSearch bool) error {
 	migrationRun := new(mEntity.MigrationRunEntity)
 
 	err := tx.Model(migrationRun).Where("id = ?", packageInfo.MigrationId).First()
@@ -784,7 +784,7 @@ func (p publishedRepositoryImpl) validateMigrationResult(tx *pg.Tx, packageInfo 
 	}
 
 	if !packageInfo.NoChangelog && packageInfo.PreviousVersion != "" {
-		comparisonInternalDocsChanges, err := p.getComparisonInternalDocumentsChanges(tx, packageInfo, comparisonInternalDocs, comparisonInternalDocData, &changesOverview)
+		comparisonInternalDocsChanges, err := p.getComparisonInternalDocumentsChanges(tx, packageInfo, comparisonInternalDocs, comparisonInternalDocData, versionComparisonsFromCache, &changesOverview)
 		if err != nil {
 			return err
 		}
@@ -793,9 +793,10 @@ func (p publishedRepositoryImpl) validateMigrationResult(tx *pg.Tx, packageInfo 
 		}
 	}
 
-	// fts_operation_search_text is stored only for the latest revision of a version
-	// so validate it only for the latest revision — otherwise non-latest revisions are falsely flagged as suspicious
-	if version.Revision == maxRevision {
+	// fts_operation_search_text is not populated for packages excluded from search,
+	// and is stored only for the latest revision — skip validation in those cases to
+	// avoid false suspicious builds
+	if !excludeFromSearch && version.Revision == maxRevision {
 		currentTable = "fts_operation_search_text"
 		oldSearchTexts := make([]entity.FtsOperationSearchTextEntity, 0)
 		err = tx.Model(&oldSearchTexts).
@@ -975,9 +976,17 @@ func (p publishedRepositoryImpl) getVersionComparisonsChanges(tx *pg.Tx, package
 	return versionComparisonsChanges, versionComparisonIds, nil
 }
 
-func (p publishedRepositoryImpl) getComparisonInternalDocumentsChanges(tx *pg.Tx, packageInfo view.PackageInfoFile, comparisonInternalDocs []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocData []*entity.ComparisonInternalDocumentDataEntity, changesOverview *PublishedBuildChangesOverview) (map[string]interface{}, error) {
+func (p publishedRepositoryImpl) getComparisonInternalDocumentsChanges(tx *pg.Tx, packageInfo view.PackageInfoFile, comparisonInternalDocs []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocData []*entity.ComparisonInternalDocumentDataEntity, versionComparisonsFromCache []string, changesOverview *PublishedBuildChangesOverview) (map[string]interface{}, error) {
 	var err error
 	allChanges := make(map[string]interface{}, 0)
+
+	var fromCacheComparisonIds map[string]struct{}
+	if len(versionComparisonsFromCache) > 0 {
+		fromCacheComparisonIds = make(map[string]struct{}, len(versionComparisonsFromCache))
+		for _, comparisonId := range versionComparisonsFromCache {
+			fromCacheComparisonIds[comparisonId] = struct{}{}
+		}
+	}
 
 	currentTable := "comparison_internal_document"
 	oldComparisonInternalDocs := make([]entity.ComparisonInternalDocumentEntity, 0)
@@ -1047,6 +1056,14 @@ func (p publishedRepositoryImpl) getComparisonInternalDocumentsChanges(tx *pg.Tx
 	matchedComparisonInternalDocs := make(map[string]struct{}, 0)
 	oldComparisonInternalDocHashes := make(map[string]struct{}, 0)
 	for _, s := range oldComparisonInternalDocs {
+		if fromCacheComparisonIds != nil {
+			comparisonId := view.MakeVersionComparisonId(s.PackageId, s.Version, s.Revision, s.PreviousPackageId, s.PreviousVersion, s.PreviousRevision)
+			if _, fromCache := fromCacheComparisonIds[comparisonId]; fromCache {
+				// Cached comparisons (dashboard references) carry no internal documents in the
+				// build archive, so their documents must not be reported as missing
+				continue
+			}
+		}
 		found := false
 		oldComparisonInternalDocHashes[s.Hash] = struct{}{}
 		for _, t := range comparisonInternalDocs {
@@ -1187,7 +1204,11 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 	versionComparisons []*entity.VersionComparisonEntity, serviceName string, pkg *entity.PackageEntity, versionComparisonsFromCache []string,
 	versionInternalDocEntities []*entity.VersionInternalDocumentEntity, versionInternalDocDataEntities []*entity.VersionInternalDocumentDataEntity,
 	comparisonInternalDocEntities []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocDataEntities []*entity.ComparisonInternalDocumentDataEntity,
-	operationSearchTexts []*entity.OperationSearchTextEntity) error {
+	operationSearchTexts []*entity.OperationSearchTextEntity,
+	ddlContractEntities []*entity.DDLContractEntity, ddlContractDataEntities []*entity.DDLContractDataEntity,
+	ddlContractSearchTexts []*entity.DDLContractSearchTextEntity, ddlContractComparisonEntities []*entity.DDLContractComparisonEntity,
+	mcpContractEntities []*entity.MCPContractEntity, mcpContractDataEntities []*entity.MCPContractDataEntity,
+	mcpContractSearchTexts []*entity.MCPContractSearchTextEntity) error {
 	if len(content) == 0 && len(refs) == 0 {
 		return nil
 	}
@@ -1230,7 +1251,7 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 			}
 
 			start = time.Now()
-			err := p.validateMigrationResult(tx, packageInfo, buildId, version, content, data, refs, src, operations, operationsData, versionComparisons, operationComparisons, versionComparisonsFromCache, versionInternalDocEntities, versionInternalDocDataEntities, comparisonInternalDocEntities, comparisonInternalDocDataEntities, operationSearchTexts, maxRevision)
+			err := p.validateMigrationResult(tx, packageInfo, buildId, version, content, data, refs, src, operations, operationsData, versionComparisons, operationComparisons, versionComparisonsFromCache, versionInternalDocEntities, versionInternalDocDataEntities, comparisonInternalDocEntities, comparisonInternalDocDataEntities, operationSearchTexts, maxRevision, pkg.ExcludeFromSearch)
 			if err != nil {
 				return fmt.Errorf("migration result validation failed: %v", err.Error())
 			}
@@ -1566,6 +1587,193 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 			utils.PerfLog(time.Since(start).Milliseconds(), 50, "CreateVersionWithData: propagatePreviousOperationGroups")
 		}
 
+		// DDL contract
+		if len(ddlContractDataEntities) > 0 {
+			start = time.Now()
+			for _, d := range ddlContractDataEntities {
+				var count int
+				_, err = tx.Query(pg.Scan(&count), `SELECT count(data_hash) FROM ddl_table_data WHERE data_hash = ? LIMIT 1`, d.DataHash)
+				if err != nil {
+					return err
+				}
+				if count == 0 {
+					_, err = tx.Model(d).OnConflict("(data_hash) DO NOTHING").Insert()
+					if err != nil {
+						return fmt.Errorf("failed to insert ddl_table_data: %w", err)
+					}
+				}
+			}
+			utils.PerfLog(time.Since(start).Milliseconds(), 100, "CreateVersionWithData: ddl_table_data insert")
+		}
+		if len(ddlContractEntities) > 0 {
+			start = time.Now()
+			_, err = tx.Model(&ddlContractEntities).OnConflict("(package_id, version, revision, ddl_entity_id) DO UPDATE").Insert()
+			if err != nil {
+				return fmt.Errorf("failed to insert ddl_tables: %w", err)
+			}
+			utils.PerfLog(time.Since(start).Milliseconds(), 100, "CreateVersionWithData: ddl_tables insert")
+		}
+		if len(ddlContractSearchTexts) > 0 && !pkg.ExcludeFromSearch {
+			if !packageInfo.MigrationBuild {
+				start = time.Now()
+				if version.Revision > 1 {
+					cleanOldFtsSearchTextQuery := `delete from fts_ddl_search_text where package_id = ? and version = ? and revision = ?`
+					_, err = tx.Exec(cleanOldFtsSearchTextQuery,
+						version.PackageId, version.Version, version.Revision-1)
+					if err != nil {
+						return fmt.Errorf("failed to cleanup old revision fts_ddl_search_text: %w", err)
+					}
+				}
+				for _, st := range ddlContractSearchTexts {
+					_, err = tx.Exec(`
+						INSERT INTO fts_ddl_search_text (package_id, version, revision, ddl_entity_id, status, kind, search_data_hash, data_vector)
+						VALUES (?, ?, ?, ?, ?, ?, ?, to_tsvector(convert_from(?, 'UTF-8')))
+						ON CONFLICT (package_id, version, revision, ddl_entity_id) DO UPDATE
+							SET search_data_hash = EXCLUDED.search_data_hash,
+								data_vector = EXCLUDED.data_vector`,
+						version.PackageId, version.Version, version.Revision, st.DdlEntityId,
+						version.Status, st.Kind, st.SearchDataHash, st.SearchTextData)
+					if err != nil {
+						return fmt.Errorf("failed to insert fts_ddl_search_text for %s: %w", st.DdlEntityId, err)
+					}
+				}
+				utils.PerfLog(time.Since(start).Milliseconds(), 100, "CreateVersionWithData: fts_ddl_search_text insert")
+			} else if packageInfo.MigrationBuild {
+				// Store search texts in tmp table for selective recalculation at end of migration.
+				// Only populate for the latest revision of the version — older revisions are skipped.
+				var maxRevision int
+				_, err = tx.Query(pg.Scan(&maxRevision),
+					`SELECT COALESCE(MAX(revision), 0) FROM published_version WHERE package_id = ? AND version = ? AND deleted_at IS NULL`,
+					version.PackageId, version.Version)
+				if err != nil {
+					return fmt.Errorf("failed to get max revision for fts_ddl_search_text: %w", err)
+				}
+				if version.Revision == maxRevision {
+					for _, st := range ddlContractSearchTexts {
+						insertTmpQuery := fmt.Sprintf(`
+							INSERT INTO migration."fts_ddl_search_text_tmp_%s"
+								(package_id, version, revision, ddl_entity_id, status, kind, search_data_hash, search_text_data)
+							SELECT ?, ?, ?, ?, ?, ?, ?, ?
+							WHERE NOT EXISTS (
+								SELECT 1 FROM fts_ddl_search_text
+								WHERE package_id = ? AND version = ? AND revision = ? AND ddl_entity_id = ?
+									AND search_data_hash = ?
+							)
+							ON CONFLICT (package_id, version, revision, ddl_entity_id) DO UPDATE
+								SET search_data_hash = EXCLUDED.search_data_hash,
+									search_text_data = EXCLUDED.search_text_data`, packageInfo.MigrationId)
+						_, err = tx.Exec(insertTmpQuery,
+							version.PackageId, version.Version, version.Revision, st.DdlEntityId,
+							version.Status, st.Kind, st.SearchDataHash, st.SearchTextData,
+							version.PackageId, version.Version, version.Revision, st.DdlEntityId,
+							st.SearchDataHash)
+						if err != nil {
+							return fmt.Errorf("failed to insert into migration.fts_ddl_search_text_tmp: %w", err)
+						}
+					}
+				}
+			}
+		}
+		if len(ddlContractComparisonEntities) > 0 {
+			start = time.Now()
+			_, err = tx.Model(&ddlContractComparisonEntities).OnConflict(
+				"(package_id, version, revision, previous_package_id, previous_version, previous_revision, ddl_entity_id, previous_ddl_entity_id) DO UPDATE").Insert()
+			if err != nil {
+				return fmt.Errorf("failed to insert ddl_comparison: %w", err)
+			}
+			utils.PerfLog(time.Since(start).Milliseconds(), 100, "CreateVersionWithData: ddl_comparison insert")
+		}
+
+		// MCP contract
+		if len(mcpContractDataEntities) > 0 {
+			start = time.Now()
+			for _, d := range mcpContractDataEntities {
+				var count int
+				_, err = tx.Query(pg.Scan(&count), `SELECT count(data_hash) FROM mcp_entity_data WHERE data_hash = ? LIMIT 1`, d.DataHash)
+				if err != nil {
+					return err
+				}
+				if count == 0 {
+					_, err = tx.Model(d).OnConflict("(data_hash) DO NOTHING").Insert()
+					if err != nil {
+						return fmt.Errorf("failed to insert mcp_entity_data: %w", err)
+					}
+				}
+			}
+			utils.PerfLog(time.Since(start).Milliseconds(), 100, "CreateVersionWithData: mcp_entity_data insert")
+		}
+		if len(mcpContractEntities) > 0 {
+			start = time.Now()
+			_, err = tx.Model(&mcpContractEntities).OnConflict("(package_id, version, revision, mcp_entity_id) DO UPDATE").Insert()
+			if err != nil {
+				return fmt.Errorf("failed to insert mcp_entities: %w", err)
+			}
+			utils.PerfLog(time.Since(start).Milliseconds(), 100, "CreateVersionWithData: mcp_entities insert")
+		}
+
+		if len(mcpContractSearchTexts) > 0 && !pkg.ExcludeFromSearch {
+			if !packageInfo.MigrationBuild {
+				start = time.Now()
+				if version.Revision > 1 {
+					cleanOldFtsSearchTextQuery := `delete from fts_mcp_search_text where package_id = ? and version = ? and revision = ?`
+					_, err = tx.Exec(cleanOldFtsSearchTextQuery,
+						version.PackageId, version.Version, version.Revision-1)
+					if err != nil {
+						return fmt.Errorf("failed to cleanup old revision fts_mcp_search_text: %w", err)
+					}
+				}
+				for _, st := range mcpContractSearchTexts {
+					insertFtsSearchTextQuery := `
+						INSERT INTO fts_mcp_search_text (package_id, version, revision, mcp_entity_id, status, kind, search_data_hash, data_vector)
+						VALUES (?, ?, ?, ?, ?, ?, ?, to_tsvector(convert_from(?, 'UTF-8') || ' '))
+						ON CONFLICT (package_id, version, revision, mcp_entity_id) DO UPDATE
+							SET search_data_hash = EXCLUDED.search_data_hash,
+								data_vector = EXCLUDED.data_vector`
+					_, err = tx.Exec(insertFtsSearchTextQuery,
+						version.PackageId, version.Version, version.Revision, st.McpEntityId, version.Status, st.Kind, st.SearchDataHash, st.SearchTextData)
+					if err != nil {
+						return fmt.Errorf("failed to insert fts_mcp_search_text for entity %s: %w", st.McpEntityId, err)
+					}
+				}
+				utils.PerfLog(time.Since(start).Milliseconds(), 1000, "CreateVersionWithData: fts_mcp_search_text insert")
+			} else if packageInfo.MigrationBuild {
+				// Store search texts in tmp table for selective recalculation at end of migration.
+				// Only populate for the latest revision of the version — older revisions are skipped.
+				var maxRevision int
+				_, err = tx.Query(pg.Scan(&maxRevision),
+					`SELECT COALESCE(MAX(revision), 0) FROM published_version WHERE package_id = ? AND version = ? AND deleted_at IS NULL`,
+					version.PackageId, version.Version)
+				if err != nil {
+					return fmt.Errorf("failed to get max revision for fts_mcp_search_text: %w", err)
+				}
+				if version.Revision == maxRevision {
+					for _, st := range mcpContractSearchTexts {
+						insertTmpQuery := fmt.Sprintf(`
+							INSERT INTO migration."fts_mcp_search_text_tmp_%s"
+								(package_id, version, revision, mcp_entity_id, status, kind, search_data_hash, search_text_data)
+							SELECT ?, ?, ?, ?, ?, ?, ?, ?
+							WHERE NOT EXISTS (
+								SELECT 1 FROM fts_mcp_search_text
+								WHERE package_id = ? AND version = ? AND revision = ? AND mcp_entity_id = ?
+									AND search_data_hash = ?
+							)
+							ON CONFLICT (package_id, version, revision, mcp_entity_id) DO UPDATE
+								SET search_data_hash = EXCLUDED.search_data_hash,
+									search_text_data = EXCLUDED.search_text_data`, packageInfo.MigrationId)
+						_, err = tx.Exec(insertTmpQuery,
+							version.PackageId, version.Version, version.Revision, st.McpEntityId,
+							version.Status, st.Kind, st.SearchDataHash, st.SearchTextData,
+							version.PackageId, version.Version, version.Revision, st.McpEntityId,
+							st.SearchDataHash)
+						if err != nil {
+							return fmt.Errorf("failed to insert into migration.fts_mcp_search_text_tmp: %w", err)
+						}
+					}
+				}
+			}
+		}
+		//////////////
+
 		if serviceName != "" {
 			start = time.Now()
 			log.Infof("setting serviceName '%s' for package %s", serviceName, version.PackageId)
@@ -1737,7 +1945,7 @@ func (p publishedRepositoryImpl) validateChangelogMigrationResult(tx *pg.Tx, pac
 		changes["operation_comparison"] = operationComparisonsChanges
 	}
 
-	comparisonInternalDocsChanges, err := p.getComparisonInternalDocumentsChanges(tx, packageInfo, comparisonInternalDocs, comparisonInternalDocData, &changesOverview)
+	comparisonInternalDocsChanges, err := p.getComparisonInternalDocumentsChanges(tx, packageInfo, comparisonInternalDocs, comparisonInternalDocData, versionComparisonsFromCache, &changesOverview)
 	if err != nil {
 		return err
 	}
@@ -1830,6 +2038,7 @@ func (p publishedRepositoryImpl) saveVersionChangesTx(tx *pg.Tx, operationCompar
 	_, err := tx.Model(&versionComparisons).
 		OnConflict(`(comparison_id) DO UPDATE
 		SET operation_types=EXCLUDED.operation_types,
+			contract_types=EXCLUDED.contract_types,
 			refs =			EXCLUDED.refs,
 			last_active =	EXCLUDED.last_active,
 			no_content =	EXCLUDED.no_content,
@@ -2246,6 +2455,52 @@ func (p publishedRepositoryImpl) GetVersionRefsV3(packageId string, version stri
 		return nil, err
 	}
 
+	return result, nil
+}
+
+func (p publishedRepositoryImpl) GetVersionReferencingDashboards(packageId string, version string) ([]entity.PublishedVersionKeyEntity, error) {
+	result := make([]entity.PublishedVersionKeyEntity, 0)
+	query := `
+		SELECT DISTINCT ref.package_id, ref.version, ref.revision
+		FROM published_version_reference ref
+		INNER JOIN published_version dash
+			ON dash.package_id = ref.package_id AND dash.version = ref.version AND dash.revision = ref.revision
+		INNER JOIN package_group pkg ON pkg.id = ref.package_id
+		WHERE ref.reference_id = ? AND ref.reference_version = ?
+			AND dash.deleted_at IS NULL
+			AND pkg.deleted_at IS NULL
+		ORDER BY ref.package_id, ref.version, ref.revision`
+	_, err := p.cp.GetConnection().Query(&result, query, packageId, version)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (p publishedRepositoryImpl) GetPackageReferencingDashboards(packageId string) ([]entity.DashboardReferenceEntity, error) {
+	result := make([]entity.DashboardReferenceEntity, 0)
+	query := `
+		WITH RECURSIVE subtree AS (
+			SELECT id FROM package_group WHERE id = ? AND deleted_at IS NULL
+			UNION ALL
+			SELECT c.id FROM package_group c
+			INNER JOIN subtree s ON c.parent_id = s.id
+			WHERE c.deleted_at IS NULL
+		)
+		SELECT DISTINCT ref.reference_id AS referenced_package_id, ref.package_id, ref.version, ref.revision
+		FROM published_version_reference ref
+		INNER JOIN published_version dash
+			ON dash.package_id = ref.package_id AND dash.version = ref.version AND dash.revision = ref.revision
+		INNER JOIN package_group pkg ON pkg.id = ref.package_id
+		WHERE ref.reference_id IN (SELECT id FROM subtree)
+			AND ref.package_id NOT IN (SELECT id FROM subtree)
+			AND dash.deleted_at IS NULL
+			AND pkg.deleted_at IS NULL
+		ORDER BY ref.reference_id, ref.package_id, ref.version, ref.revision`
+	_, err := p.cp.GetConnection().Query(&result, query, packageId)
+	if err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 
@@ -2970,6 +3225,17 @@ func (p publishedRepositoryImpl) SearchForVersions(searchQuery *entity.PackageSe
 		and pv.published_at >= ?start_date
 		and pv.published_at <= ?end_date
 		and init_rank > 0
+		and (
+			?api_type = ''
+			or exists (
+				select 1
+				from operation o
+				where o.package_id = pv.package_id
+				and o.version = pv.version
+				and o.revision = pv.revision
+				and o.type = ?api_type
+			)
+		)
 		order by rank desc, created_at desc, version
 		limit ?limit
 		offset ?offset;
@@ -3067,6 +3333,18 @@ func (p publishedRepositoryImpl) SearchForDocuments(searchQuery *entity.Document
 			?version_status_archived_weight * (v.status = ?version_status_archived)::int) version_status_tf,
 		coalesce(?open_count_weight * coalesce(oc.open_count), 0) document_open_count
 		where init_rank > 0
+		and (
+			?api_type = ''
+			or exists (
+				select 1
+				from operation o
+				where o.package_id = c.package_id
+				and o.version = c.version
+				and o.revision = c.revision
+				and o.type = ?api_type
+				and o.operation_id = any(c.operation_ids)
+			)
+		)
 		order by rank desc, v.published_at desc, c.file_id, c.index asc
 		limit ?limit
 		offset ?offset;
@@ -3975,6 +4253,30 @@ func (p publishedRepositoryImpl) DeleteSoftDeletedPackagesBeforeDate(ctx context
 			return fmt.Errorf("failed to delete fts_operation_search_text: %w", err)
 		}
 
+		logger.Trace(ctx, "Deleting DDL contract data for packages")
+		_, err = tx.ExecContext(ctx, `DELETE FROM fts_ddl_search_text WHERE package_id IN (?)`, pg.In(packageIds))
+		if err != nil {
+			return fmt.Errorf("failed to delete fts_ddl_search_text: %w", err)
+		}
+		_, err = tx.ExecContext(ctx, `DELETE FROM ddl_comparison WHERE package_id IN (?)`, pg.In(packageIds))
+		if err != nil {
+			return fmt.Errorf("failed to delete ddl_comparison: %w", err)
+		}
+		_, err = tx.ExecContext(ctx, `DELETE FROM ddl_tables WHERE package_id IN (?)`, pg.In(packageIds))
+		if err != nil {
+			return fmt.Errorf("failed to delete ddl_tables: %w", err)
+		}
+
+		logger.Trace(ctx, "Deleting MCP contract data for packages")
+		_, err = tx.ExecContext(ctx, `DELETE FROM fts_mcp_search_text WHERE package_id IN (?)`, pg.In(packageIds))
+		if err != nil {
+			return fmt.Errorf("failed to delete fts_mcp_search_text: %w", err)
+		}
+		_, err = tx.ExecContext(ctx, `DELETE FROM mcp_entities WHERE package_id IN (?)`, pg.In(packageIds))
+		if err != nil {
+			return fmt.Errorf("failed to delete mcp_entities: %w", err)
+		}
+
 		logger.Tracef(ctx, "Deleting packages: %v", packageIds)
 		deletePackagesQuery := `
 			DELETE FROM package_group
@@ -4048,6 +4350,27 @@ func (p publishedRepositoryImpl) DeleteSoftDeletedPackageRevisionsBeforeDate(ctx
 		_, err = tx.ExecContext(ctx, deleteFtsSearchTextQuery, args...)
 		if err != nil {
 			return fmt.Errorf("failed to delete fts_operation_search_text: %w", err)
+		}
+
+		_, err = tx.ExecContext(ctx, `DELETE FROM fts_ddl_search_text WHERE (package_id, version, revision) IN (`+valuesClause+`)`, args...)
+		if err != nil {
+			return fmt.Errorf("failed to delete fts_ddl_search_text: %w", err)
+		}
+		_, err = tx.ExecContext(ctx, `DELETE FROM ddl_comparison WHERE (package_id, version, revision) IN (`+valuesClause+`)`, args...)
+		if err != nil {
+			return fmt.Errorf("failed to delete ddl_comparison: %w", err)
+		}
+		_, err = tx.ExecContext(ctx, `DELETE FROM ddl_tables WHERE (package_id, version, revision) IN (`+valuesClause+`)`, args...)
+		if err != nil {
+			return fmt.Errorf("failed to delete ddl_tables: %w", err)
+		}
+		_, err = tx.ExecContext(ctx, `DELETE FROM fts_mcp_search_text WHERE (package_id, version, revision) IN (`+valuesClause+`)`, args...)
+		if err != nil {
+			return fmt.Errorf("failed to delete fts_mcp_search_text: %w", err)
+		}
+		_, err = tx.ExecContext(ctx, `DELETE FROM mcp_entities WHERE (package_id, version, revision) IN (`+valuesClause+`)`, args...)
+		if err != nil {
+			return fmt.Errorf("failed to delete mcp_entities: %w", err)
 		}
 
 		logger.Tracef(ctx, "Deleting package revisions: %v", revisionKeys)
@@ -4367,18 +4690,13 @@ func (p publishedRepositoryImpl) GetVersionInternalDocuments(packageId string, v
 	return docs, nil
 }
 
-func (p publishedRepositoryImpl) GetVersionInternalDocumentData(hash string) (*entity.EnrichedVersionInternalDocumentDataEntity, error) {
-	result := new(entity.EnrichedVersionInternalDocumentDataEntity)
+func (p publishedRepositoryImpl) GetVersionInternalDocumentData(hash string) (*entity.VersionInternalDocumentDataEntity, error) {
+	result := new(entity.VersionInternalDocumentDataEntity)
 
-	err := p.cp.GetConnection().Model((*entity.VersionInternalDocumentDataEntity)(nil)).
-		TableExpr("version_internal_document_data").
-		ColumnExpr("version_internal_document_data.hash").
-		ColumnExpr("version_internal_document_data.data").
-		ColumnExpr("version_internal_document.filename").
-		Join("INNER JOIN version_internal_document ON version_internal_document.hash = version_internal_document_data.hash").
-		Where("version_internal_document_data.hash = ?", hash).
-		Limit(1).
-		Select(result)
+	err := p.cp.GetConnection().Model(result).
+		Where("hash = ?", hash).
+		Where("EXISTS (SELECT 1 FROM version_internal_document WHERE hash = ?)", hash).
+		Select()
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return nil, nil
@@ -4441,17 +4759,12 @@ func (p publishedRepositoryImpl) GetComparisonInternalDocumentsByComparisons(com
 	return docs, nil
 }
 
-func (p publishedRepositoryImpl) GetComparisonInternalDocumentData(hash string) (*entity.EnrichedComparisonInternalDocumentDataEntity, error) {
-	result := new(entity.EnrichedComparisonInternalDocumentDataEntity)
-	err := p.cp.GetConnection().Model((*entity.ComparisonInternalDocumentEntity)(nil)).
-		TableExpr("comparison_internal_document_data").
-		ColumnExpr("comparison_internal_document_data.hash").
-		ColumnExpr("comparison_internal_document_data.data").
-		ColumnExpr("comparison_internal_document.filename").
-		Join("INNER JOIN comparison_internal_document ON comparison_internal_document.hash = comparison_internal_document_data.hash").
-		Where("comparison_internal_document_data.hash = ?", hash).
-		Limit(1).
-		Select(result)
+func (p publishedRepositoryImpl) GetComparisonInternalDocumentData(hash string) (*entity.ComparisonInternalDocumentDataEntity, error) {
+	result := new(entity.ComparisonInternalDocumentDataEntity)
+	err := p.cp.GetConnection().Model(result).
+		Where("hash = ?", hash).
+		Where("EXISTS (SELECT 1 FROM comparison_internal_document WHERE hash = ?)", hash).
+		Select()
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return nil, nil

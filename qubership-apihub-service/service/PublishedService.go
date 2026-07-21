@@ -38,6 +38,8 @@ type PublishedService interface {
 	GetPublishedVersionBuildConfig(packageId string, versionName string) (*view.BuildConfig, error)
 	GetLatestContentDataBySlug(packageId string, versionName string, slug string) (*view.PublishedContent, *view.ContentData, error)
 	VersionPublished(packageId string, versionName string) (bool, error)
+	GetVersionStatus(packageId string, versionName string) (status string, found bool, err error)
+	CheckNoReleaseDependentVersions(ctx context.SecurityContext, packageId string, version string) error
 	DeleteVersion(ctx context.SecurityContext, packageId string, versionName string) error
 
 	PublishPackage(buildArc *archive.BuildResultArchive, buildSrcEnt *entity.BuildSourceEntity,
@@ -58,22 +60,26 @@ func NewPublishedService(versionRepo repository.PublishedRepository,
 	buildRepository repository.BuildRepository,
 	favoritesRepo repository.FavoritesRepository,
 	operationRepo repository.OperationRepository,
+	ddlContractRepo repository.DDLContractRepository,
 	atService ActivityTrackingService,
 	monitoringService MonitoringService,
 	minioStorageService MinioStorageService,
 	systemInfoService SystemInfoService,
-	publishNotificationService PublishNotificationService) PublishedService {
+	publishNotificationService PublishNotificationService,
+	roleService RoleService) PublishedService {
 	return &publishedServiceImpl{
 		publishedRepo:              versionRepo,
 		buildRepository:            buildRepository,
 		favoritesRepo:              favoritesRepo,
 		operationRepo:              operationRepo,
+		ddlContractRepo:            ddlContractRepo,
 		atService:                  atService,
 		monitoringService:          monitoringService,
 		minioStorageService:        minioStorageService,
 		systemInfoService:          systemInfoService,
 		publishedValidator:         validation.NewPublishedValidator(versionRepo),
 		publishNotificationService: publishNotificationService,
+		roleService:                roleService,
 	}
 }
 
@@ -82,12 +88,14 @@ type publishedServiceImpl struct {
 	buildRepository            repository.BuildRepository
 	favoritesRepo              repository.FavoritesRepository
 	operationRepo              repository.OperationRepository
+	ddlContractRepo            repository.DDLContractRepository
 	atService                  ActivityTrackingService
 	monitoringService          MonitoringService
 	minioStorageService        MinioStorageService
 	systemInfoService          SystemInfoService
 	publishedValidator         validation.PublishedValidator
 	publishNotificationService PublishNotificationService
+	roleService                RoleService
 }
 
 func (p publishedServiceImpl) GetVersionSources(packageId string, versionName string) ([]byte, error) {
@@ -313,6 +321,54 @@ func (p publishedServiceImpl) VersionPublished(packageId string, versionName str
 	return ent != nil, nil
 }
 
+func (p publishedServiceImpl) GetVersionStatus(packageId string, versionName string) (string, bool, error) {
+	version, _, err := SplitVersionRevision(versionName)
+	if err != nil {
+		return "", false, err
+	}
+
+	latestEnt, err := p.publishedRepo.GetVersion(packageId, version)
+	if err != nil {
+		return "", false, err
+	}
+	if latestEnt == nil {
+		return "", false, nil
+	}
+	return latestEnt.Status, true, nil
+}
+
+func (p publishedServiceImpl) CheckNoReleaseDependentVersions(ctx context.SecurityContext, packageId string, version string) error {
+	dependents, err := p.publishedRepo.GetVersionsByPreviousVersion(packageId, version)
+	if err != nil {
+		return err
+	}
+	releaseDependents := make([]entity.PublishedVersionKeyEntity, 0)
+	for _, dependent := range dependents {
+		if dependent.Status == string(view.Release) {
+			releaseDependents = append(releaseDependents, entity.PublishedVersionKeyEntity{
+				PackageId: dependent.PackageId,
+				Version:   dependent.Version,
+				Revision:  dependent.Revision,
+			})
+		}
+	}
+	if len(releaseDependents) > 0 {
+		accessible, hiddenCount, err := p.roleService.FilterVersionsByPackageReadAccess(ctx, releaseDependents)
+		if err != nil {
+			return err
+		}
+		log.Warnf("Blocked changing version %s of package %s to 'draft' status by user %s: referenced as a previous version by release versions %s",
+			version, packageId, ctx.GetUserId(), entity.FormatVersionKeys(releaseDependents))
+		return &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidReleaseVersionChain,
+			Message: exception.VersionReferencedAsPreviousByReleaseMsg,
+			Params:  map[string]interface{}{"version": version, "packageId": packageId, "releaseVersions": entity.FormatVersionKeysWithHidden(accessible, hiddenCount, "'release' package version")},
+		}
+	}
+	return nil
+}
+
 func readZipFile(zf *zip.File) ([]byte, error) {
 	f, err := zf.Open()
 	if err != nil {
@@ -375,6 +431,18 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 		return err
 	}
 	err = buildArc.ReadComparisonInternalDocuments(false)
+	if err != nil {
+		return err
+	}
+	err = buildArc.ReadPackageDdlContracts(false)
+	if err != nil {
+		return err
+	}
+	err = buildArc.ReadPackageDdlContractComparisons(false)
+	if err != nil {
+		return err
+	}
+	err = buildArc.ReadPackageMcpContracts(false)
 	if err != nil {
 		return err
 	}
@@ -512,6 +580,45 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 		return err
 	}
 
+	ddlContractEntities, ddlContractDataEntities, ddlContractSearchTexts, err := buildArcEntitiesReader.ReadDdlContractsToEntities()
+	if err != nil {
+		return err
+	}
+
+	// The build result's DDL comparison entries do not carry data hashes, so provide the data hashes
+	// of the version being published. ddl_comparison rows for other versions are resolved from the DB.
+	publishingDdlDataHashes := make(map[string]string, len(ddlContractEntities))
+	for _, ddlContractEntity := range ddlContractEntities {
+		if ddlContractEntity.DataHash != nil {
+			publishingDdlDataHashes[ddlContractEntity.DdlEntityId] = *ddlContractEntity.DataHash
+		}
+	}
+
+	// DDL comparisons share version_comparison with REST. Read the DDL index/per-pair files, then
+	// merge the version-comparison rows by comparison_id (REST + DDL contractTypes on the same row;
+	// DDL-only pairs are appended so the ddl_comparison FK is satisfied for pure DDL changelogs).
+	ddlVersionComparisonEntities, ddlContractComparisonEntities, ddlComparisonFileIdToKeyMap, err := buildArcEntitiesReader.ReadDdlContractComparisonsToEntities(publishingDdlDataHashes, p.ddlContractRepo)
+	if err != nil {
+		return err
+	}
+	versionComparisonByComparisonId := make(map[string]*entity.VersionComparisonEntity, len(operationsComparisonEntities))
+	for _, vc := range operationsComparisonEntities {
+		versionComparisonByComparisonId[vc.ComparisonId] = vc
+	}
+	for _, ddlVc := range ddlVersionComparisonEntities {
+		if existing, ok := versionComparisonByComparisonId[ddlVc.ComparisonId]; ok {
+			existing.ContractTypes = ddlVc.ContractTypes
+		} else {
+			operationsComparisonEntities = append(operationsComparisonEntities, ddlVc)
+			versionComparisonByComparisonId[ddlVc.ComparisonId] = ddlVc
+		}
+	}
+	for fileId, key := range ddlComparisonFileIdToKeyMap {
+		if _, ok := comparisonFileIdToKeyMap[fileId]; !ok {
+			comparisonFileIdToKeyMap[fileId] = key
+		}
+	}
+
 	builderNotificationsEntities := buildArcEntitiesReader.ReadBuilderNotificationsToEntities(buildSrcEnt.BuildId)
 
 	versionInternalDocEntities, versionInternalDocDataEntities, err := buildArcEntitiesReader.ReadVersionInternalDocumentsToEntities()
@@ -520,6 +627,11 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 	}
 
 	comparisonInternalDocEntities, comparisonInternalDocDataEntities, err := buildArcEntitiesReader.ReadComparisonInternalDocumentsToEntities(comparisonFileIdToKeyMap)
+	if err != nil {
+		return err
+	}
+
+	mcpContractEntities, mcpContractDataEntities, mcpContractSearchTexts, err := buildArcEntitiesReader.ReadMcpContractsToEntities()
 	if err != nil {
 		return err
 	}
@@ -680,6 +792,13 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 		comparisonInternalDocEntities,
 		comparisonInternalDocDataEntities,
 		operationSearchTexts,
+		ddlContractEntities,
+		ddlContractDataEntities,
+		ddlContractSearchTexts,
+		ddlContractComparisonEntities,
+		mcpContractEntities,
+		mcpContractDataEntities,
+		mcpContractSearchTexts,
 	)
 	utils.PerfLog(time.Since(start).Milliseconds(), 15000, "publishPackage: CreateVersionWithData")
 	if err != nil {
@@ -1000,9 +1119,7 @@ func (p publishedServiceImpl) GetVersionInternalDocumentData(hash string) ([]byt
 		return nil, "", err
 	}
 
-	//when the filename is empty, it means we did not find a record in the version_internal_document table using the specified hash,
-	//i.e., we are dealing with unref data, and we should not return such data
-	if docData == nil || docData.Filename == "" {
+	if docData == nil {
 		return nil, "", &exception.CustomError{
 			Status:  http.StatusNotFound,
 			Code:    exception.VersionInternalDocumentNotFound,
@@ -1011,7 +1128,9 @@ func (p publishedServiceImpl) GetVersionInternalDocumentData(hash string) ([]byt
 		}
 	}
 
-	return docData.Data, docData.Filename, nil
+	filename := fmt.Sprintf("version_internal_document_%s.json", hash)
+
+	return docData.Data, filename, nil
 }
 
 func (p publishedServiceImpl) GetComparisonInternalDocuments(packageId string, version string, previousPackageId string, previousVersion string, refPackageId string) ([]view.InternalDocument, error) {
@@ -1121,9 +1240,7 @@ func (p publishedServiceImpl) GetComparisonInternalDocumentData(hash string) ([]
 		return nil, "", err
 	}
 
-	//when the filename is empty, it means we did not find a record in the comparison_internal_document table using the specified hash,
-	//i.e., we are dealing with unref data, and we should not return such data
-	if docData == nil || docData.Filename == "" {
+	if docData == nil {
 		return nil, "", &exception.CustomError{
 			Status:  http.StatusNotFound,
 			Code:    exception.ComparisonInternalDocumentNotFound,
@@ -1132,7 +1249,9 @@ func (p publishedServiceImpl) GetComparisonInternalDocumentData(hash string) ([]
 		}
 	}
 
-	return docData.Data, docData.Filename, nil
+	filename := fmt.Sprintf("comparison_internal_document_%s.json", hash)
+
+	return docData.Data, filename, nil
 }
 
 func (p publishedServiceImpl) CheckPreviousVersionDependencyCycle(packageID string, version string, previousVersionPackageID string, prevVersion string, revision int) (bool, error) {

@@ -24,6 +24,64 @@ type OperationSearchResult struct {
 	ParentNames   []string `pg:"parent_names, type:varchar[]"`
 }
 
+type GlobalContractSearchQuery struct {
+	OriginalTextInput string    `pg:"original_text_input, type:varchar, use_zero"`
+	Kinds             []string  `pg:"kinds, type:varchar[], use_zero"`
+	Packages          []string  `pg:"packages, type:varchar[], use_zero"`
+	Versions          []string  `pg:"versions, type:varchar[], use_zero"`
+	Status            string    `pg:"status, type:varchar, use_zero"`
+	StartDate         time.Time `pg:"start_date, type:timestamp without time zone, use_zero"`
+	EndDate           time.Time `pg:"end_date, type:timestamp without time zone, use_zero"`
+	Limit             int       `pg:"limit, type:integer, use_zero"`
+	Offset            int       `pg:"offset, type:integer, use_zero"`
+}
+
+type DDLContractSearchResult struct {
+	tableName struct{} `pg:",discard_unknown_columns"`
+
+	DDLContractEntity
+	PackageName   string   `pg:"name, type:varchar"`
+	VersionStatus string   `pg:"status, type:varchar"`
+	ParentNames   []string `pg:"parent_names, type:varchar[]"`
+}
+
+type MCPContractSearchResult struct {
+	tableName struct{} `pg:",discard_unknown_columns"`
+
+	MCPContractEntity
+	PackageName   string   `pg:"name, type:varchar"`
+	VersionStatus string   `pg:"status, type:varchar"`
+	ParentNames   []string `pg:"parent_names, type:varchar[]"`
+}
+
+func MakeGlobalDDLSearchResultView(ent DDLContractSearchResult) interface{} {
+	return view.DdlContractSearchResult{
+		PackageId:      ent.PackageId,
+		PackageName:    ent.PackageName,
+		ParentPackages: ent.ParentNames,
+		VersionStatus:  ent.VersionStatus,
+		Version:        view.MakeVersionRefKey(ent.Version, ent.Revision),
+		EntityId:       ent.DdlEntityId,
+		Kind:           ent.Kind,
+		SchemaName:     ent.SchemaName,
+		TableName:      ent.Name,
+	}
+}
+
+func MakeGlobalMCPSearchResultView(ent MCPContractSearchResult) interface{} {
+	return view.McpEntitySearchResult{
+		PackageId:      ent.PackageId,
+		PackageName:    ent.PackageName,
+		ParentPackages: ent.ParentNames,
+		VersionStatus:  ent.VersionStatus,
+		Version:        view.MakeVersionRefKey(ent.Version, ent.Revision),
+		EntityId:       ent.McpEntityId,
+		Kind:           ent.Kind,
+		Name:           ent.Title,
+		McpEndpoint:    ent.McpEndpoint,
+	}
+}
+
 type GlobalOperationSearchQuery struct {
 	OriginalTextInput string    `pg:"original_text_input, type:varchar, use_zero"`
 	ApiType           string    `pg:"api_type, type:varchar, use_zero"`
@@ -80,6 +138,7 @@ type PackageSearchWeight struct {
 type PackageSearchQuery struct {
 	PackageSearchWeight
 	VersionStatusSearchWeight
+	ApiType    string    `pg:"api_type, type:varchar, use_zero"`
 	TextFilter string    `pg:"text_filter, type:varchar, use_zero"` //for varchar
 	Packages   []string  `pg:"packages, type:varchar[], use_zero"`
 	Versions   []string  `pg:"versions, type:varchar[], use_zero"`
@@ -120,6 +179,7 @@ type PackageSearchResult struct {
 
 func MakePackageSearchQueryEntity(searchQuery *view.SearchQueryReq_deprecated) (*PackageSearchQuery, error) {
 	searchQueryEntity := &PackageSearchQuery{
+		ApiType:    searchQuery.ApiType,
 		TextFilter: searchQuery.SearchString,
 		Packages:   searchQuery.PackageIds,
 		Versions:   searchQuery.Versions,
@@ -186,6 +246,7 @@ type DocumentSearchWeight struct {
 type DocumentSearchQuery struct {
 	DocumentSearchWeight
 	VersionStatusSearchWeight
+	ApiType      string    `pg:"api_type, type:varchar, use_zero"`
 	TextFilter   string    `pg:"text_filter, type:varchar, use_zero"` //for varchar
 	Packages     []string  `pg:"packages, type:varchar[], use_zero"`
 	Versions     []string  `pg:"versions, type:varchar[], use_zero"`
@@ -223,6 +284,7 @@ type DocumentSearchResult struct {
 
 func MakeDocumentSearchQueryEntity(searchQuery *view.SearchQueryReq_deprecated, unknownTypes []string) (*DocumentSearchQuery, error) {
 	searchQueryEntity := &DocumentSearchQuery{
+		ApiType:      searchQuery.ApiType,
 		TextFilter:   searchQuery.SearchString,
 		Packages:     searchQuery.PackageIds,
 		Versions:     searchQuery.Versions,

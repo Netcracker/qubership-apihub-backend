@@ -34,10 +34,16 @@ type PublishedRepository interface {
 		versionComparisonEntities []*entity.VersionComparisonEntity, serviceName string, pkg *entity.PackageEntity, versionComparisonsFromCache []string,
 		versionInternalDocEntities []*entity.VersionInternalDocumentEntity, versionInternalDocDataEntities []*entity.VersionInternalDocumentDataEntity,
 		comparisonInternalDocEntities []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocDataEntities []*entity.ComparisonInternalDocumentDataEntity,
-		operationSearchTexts []*entity.OperationSearchTextEntity) error
+		operationSearchTexts []*entity.OperationSearchTextEntity,
+		ddlContractEntities []*entity.DDLContractEntity, ddlContractDataEntities []*entity.DDLContractDataEntity,
+		ddlContractSearchTexts []*entity.DDLContractSearchTextEntity, ddlContractComparisonEntities []*entity.DDLContractComparisonEntity,
+		mcpContractEntities []*entity.MCPContractEntity, mcpContractDataEntities []*entity.MCPContractDataEntity,
+		mcpContractSearchTexts []*entity.MCPContractSearchTextEntity) error
 	GetContentData(packageId string, checksum string) (*entity.PublishedContentDataEntity, error)
 
 	GetVersionRefsV3(packageId string, version string, revision int) ([]entity.PublishedReferenceEntity, error)
+	GetVersionReferencingDashboards(packageId string, version string) ([]entity.PublishedVersionKeyEntity, error)
+	GetPackageReferencingDashboards(packageId string) ([]entity.DashboardReferenceEntity, error)
 	GetVersionsByPreviousVersion(previousPackageId string, previousVersionName string) ([]entity.PublishedVersionEntity, error)
 	GetReadonlyPackageVersionsWithLimit(searchQuery entity.PublishedVersionSearchQueryEntity, checkRevisions bool, showOnlyDeleted bool) ([]entity.PackageVersionRevisionEntity, error)
 	GetDefaultVersion(packageId string, status string) (*entity.PublishedVersionEntity, error)
@@ -94,9 +100,9 @@ type PublishedRepository interface {
 	GetCSVDashboardPublishReport(publishId string) (*entity.CSVDashboardPublishEntity, error)
 
 	GetVersionInternalDocuments(packageId string, version string, revision int) ([]entity.VersionInternalDocumentEntity, error)
-	GetVersionInternalDocumentData(hash string) (*entity.EnrichedVersionInternalDocumentDataEntity, error)
+	GetVersionInternalDocumentData(hash string) (*entity.VersionInternalDocumentDataEntity, error)
 	GetComparisonInternalDocumentsByComparisons(comparisons []entity.VersionComparisonEntity) ([]entity.ComparisonInternalDocumentEntity, error)
-	GetComparisonInternalDocumentData(hash string) (*entity.EnrichedComparisonInternalDocumentDataEntity, error)
+	GetComparisonInternalDocumentData(hash string) (*entity.ComparisonInternalDocumentDataEntity, error)
 
 	UpdateDocumentShareabilityBySlug(packageId string, version string, revision int, slug string, shareability string) error
 	BulkUpdateDocumentShareability(entities []*entity.PublishedContentEntity) error
