@@ -90,7 +90,7 @@ func (r *JobRunner) Run() {
 
 func (r *JobRunner) isMigrationRunning(ctx context.Context) bool {
 	startTime := time.Now().Round(time.Second)
-	migrations, err := r.migrationRepository.GetRunningMigrations()
+	migrations, err := r.migrationRepository.GetRunningMigrations(ctx)
 	if err != nil {
 		logger.Error(ctx, "Failed to check for running migrations")
 		return true

@@ -6,9 +6,9 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -118,7 +118,7 @@ func (a activityTrackingControllerImpl) GetActivityHistory(w http.ResponseWriter
 		Limit:        limit,
 		Page:         page,
 	}
-	result, err := a.activityTrackingService.GetActivityHistory(context.Create(r), activityHistoryReq)
+	result, err := a.activityTrackingService.GetActivityHistory(secctx.MakeUserContext(r), activityHistoryReq)
 	if err != nil {
 		log.Error("Failed to get activity events for favourite packages: ", err.Error())
 		if customError, ok := err.(*exception.CustomError); ok {
@@ -136,7 +136,7 @@ func (a activityTrackingControllerImpl) GetActivityHistory(w http.ResponseWriter
 
 func (a activityTrackingControllerImpl) GetActivityHistoryForPackage(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := a.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, a.ptHandler, packageId, "Failed to check user privileges", err)
@@ -206,7 +206,7 @@ func (a activityTrackingControllerImpl) GetActivityHistoryForPackage(w http.Resp
 		return
 	}
 
-	result, err := a.activityTrackingService.GetEventsForPackage(packageId, includeRefs, limit, page, textFilter, types)
+	result, err := a.activityTrackingService.GetEventsForPackage(ctx, packageId, includeRefs, limit, page, textFilter, types)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, a.ptHandler, packageId, fmt.Sprintf("Failed to get activity events for package %s", packageId), err)
 		return

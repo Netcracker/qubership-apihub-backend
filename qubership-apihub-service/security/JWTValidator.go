@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/shaj13/go-guardian/v2/auth"
 	"github.com/shaj13/go-guardian/v2/auth/claims"
@@ -82,7 +82,7 @@ func (j jwtValidatorImpl) parseAndValidate(token string) (claims.Standard, auth.
 	}
 
 	info.GetExtensions().Set(TokenIssuedAtExt, strconv.FormatInt(time.Time(*c.IssuedAt).Unix(), 10))
-	info.GetExtensions().Set(context.TokenExpiresAtExt, strconv.FormatInt(time.Time(*c.ExpiresAt).Unix(), 10))
+	info.GetExtensions().Set(secctx.TokenExpiresAtExt, strconv.FormatInt(time.Time(*c.ExpiresAt).Unix(), 10))
 
 	return c, info, nil
 }

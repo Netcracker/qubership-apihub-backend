@@ -76,9 +76,13 @@ type BuildCleanupJob struct {
 }
 
 func (j BuildCleanupJob) Run() {
+	// Scheduled background job: use a background context (not request-scoped) bounded by the configured
+	// safety-net timeout; the job performs VACUUM FULL on build tables, hence the generous default.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(j.systemInfoService.GetBuildsCleanupTimeout())*time.Minute)
+	defer cancel()
 	scheduledAt := time.Now().Round(time.Second)
 
-	migrations, err := j.migrationRepository.GetRunningMigrations()
+	migrations, err := j.migrationRepository.GetRunningMigrations(ctx)
 	if err != nil {
 		log.Error("Failed to check for running migrations for build cleanup job")
 		return
@@ -90,7 +94,7 @@ func (j BuildCleanupJob) Run() {
 
 	var runCleanup bool
 	var lockId int
-	lastCleanup, err := j.buildCleanupRepository.GetLastCleanup()
+	lastCleanup, err := j.buildCleanupRepository.GetLastCleanup(ctx)
 	if err != nil {
 		log.Errorf("Failed to get last cleanup: %v", err)
 		return
@@ -113,7 +117,7 @@ func (j BuildCleanupJob) Run() {
 
 	if runCleanup {
 		log.Info("Cleanup job has started")
-		err = j.buildCleanupRepository.StoreCleanup(&entity.BuildCleanupEntity{
+		err = j.buildCleanupRepository.StoreCleanup(ctx, &entity.BuildCleanupEntity{
 			RunId:       lockId,
 			ScheduledAt: scheduledAt,
 		})
@@ -122,8 +126,7 @@ func (j BuildCleanupJob) Run() {
 			return
 		}
 		if j.systemInfoService.IsMinioStorageActive() {
-			ctx := context.Background()
-			ids, err := j.buildCleanupRepository.GetRemoveCandidateOldBuildEntitiesIds()
+			ids, err := j.buildCleanupRepository.GetRemoveCandidateOldBuildEntitiesIds(ctx)
 			if err != nil {
 				log.Errorf("Failed to get up remove candidate old build ids: %v", err)
 				return
@@ -144,14 +147,14 @@ func (j BuildCleanupJob) Run() {
 				}
 			}
 		} else {
-			err = j.buildCleanupRepository.RemoveOldBuildEntities(lockId, scheduledAt)
+			err = j.buildCleanupRepository.RemoveOldBuildEntities(ctx, lockId, scheduledAt)
 			if err != nil {
 				log.Errorf("Failed to clean up old builds: %v", err)
 				return
 			}
 		}
 
-		cleanupEnt, err := j.buildCleanupRepository.GetCleanup(lockId)
+		cleanupEnt, err := j.buildCleanupRepository.GetCleanup(ctx, lockId)
 		if err != nil {
 			log.Errorf("Failed to get cleanup run entity with id %d", lockId)
 			return

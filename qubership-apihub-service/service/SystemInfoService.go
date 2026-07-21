@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"time"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/config"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
@@ -94,9 +95,11 @@ type SystemInfoService interface {
 	GetExtensions() []view.Extension
 	GetAiChatConfig() config.ChatConfig
 	GetAiMCPConfig() config.MCPConfig
+	GetBuildsCleanupTimeout() int
 	GetApiSpecDirectory() string
 	GetFeatureFlags() view.FeatureFlags
 	GetMigrationLockMaxWaitMinutes() int
+	GetRequestTimeout() time.Duration
 	GetEphemeralFileDirectory() string
 	GetEphemeralFileMaxSizeMb() int
 	GetEphemeralFileTTLMinutes() int
@@ -218,6 +221,7 @@ func (g *systemInfoServiceImpl) setDefaults() {
 	viper.SetDefault("security.legacySaml", true)
 	viper.SetDefault("security.autoLogin", false)
 	viper.SetDefault("technicalParameters.migrationLockMaxWaitMinutes", 30)
+	viper.SetDefault("technicalParameters.requestTimeoutSec", 570) // nginx generic tier is 600s; 570 leaves a ~30s margin so the app's own error response wins
 	viper.SetDefault("technicalParameters.basePath", ".")
 	viper.SetDefault("technicalParameters.listenAddress", ":8080")
 	viper.SetDefault("technicalParameters.metricsGetterSchedule", "* * * * *") // every minute
@@ -234,6 +238,7 @@ func (g *systemInfoServiceImpl) setDefaults() {
 	viper.SetDefault("olric.discoveryMode", "local")
 	viper.SetDefault("olric.replicaCount", 1)
 	viper.SetDefault("cleanup.builds.schedule", "0 1 * * 0")     // at 01:00 AM on Sunday
+	viper.SetDefault("cleanup.builds.timeoutMinutes", 360)       // 6 hours; matches the other VACUUM FULL cleanup jobs
 	viper.SetDefault("cleanup.revisions.schedule", "0 21 * * 0") // at 9:00 PM on Sunday
 	viper.SetDefault("cleanup.revisions.deleteLastRevision", false)
 	viper.SetDefault("cleanup.revisions.deleteReleaseRevisions", false)
@@ -655,6 +660,10 @@ func (g *systemInfoServiceImpl) GetAiMCPConfig() config.MCPConfig {
 	return g.config.Ai.MCP
 }
 
+func (g *systemInfoServiceImpl) GetBuildsCleanupTimeout() int {
+	return g.config.Cleanup.Builds.TimeoutMinutes
+}
+
 func (g *systemInfoServiceImpl) GetEphemeralFileDirectory() string {
 	return g.config.TechnicalParameters.EphemeralFileDirectory
 }
@@ -679,4 +688,8 @@ func (g *systemInfoServiceImpl) GetFeatureFlags() view.FeatureFlags {
 
 func (g *systemInfoServiceImpl) GetMigrationLockMaxWaitMinutes() int {
 	return g.config.TechnicalParameters.MigrationLockMaxWaitMinutes
+}
+
+func (g *systemInfoServiceImpl) GetRequestTimeout() time.Duration {
+	return time.Duration(g.config.TechnicalParameters.RequestTimeoutSec) * time.Second
 }

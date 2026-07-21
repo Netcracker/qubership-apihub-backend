@@ -2,11 +2,12 @@ package controller
 
 import (
 	"fmt"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"net/http"
 	"strconv"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
+
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
@@ -17,10 +18,9 @@ type BusinessMetricController interface {
 	GetBusinessMetrics(w http.ResponseWriter, r *http.Request)
 }
 
-func NewBusinessMetricController(businessMetricService service.BusinessMetricService, excelService service.ExcelService, isSysadm func(context.SecurityContext) bool) BusinessMetricController {
+func NewBusinessMetricController(businessMetricService service.BusinessMetricService, excelService service.ExcelService) BusinessMetricController {
 	return businessMetricControllerImpl{
 		businessMetricService: businessMetricService,
-		isSysadm:              isSysadm,
 		excelService:          excelService,
 	}
 }
@@ -28,13 +28,12 @@ func NewBusinessMetricController(businessMetricService service.BusinessMetricSer
 type businessMetricControllerImpl struct {
 	businessMetricService service.BusinessMetricService
 	excelService          service.ExcelService
-	isSysadm              func(context.SecurityContext) bool
 }
 
 func (b businessMetricControllerImpl) GetBusinessMetrics(w http.ResponseWriter, r *http.Request) {
 	var err error
-	ctx := context.Create(r)
-	sufficientPrivileges := b.isSysadm(ctx)
+	ctx := secctx.MakeUserContext(r)
+	sufficientPrivileges := secctx.IsSysadm(ctx)
 	if !sufficientPrivileges {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
@@ -63,7 +62,7 @@ func (b businessMetricControllerImpl) GetBusinessMetrics(w http.ResponseWriter, 
 	if format == "" {
 		format = view.ExportFormatJson
 	}
-	businessMetrics, err := b.businessMetricService.GetBusinessMetrics(parentPackageId, hierarchyLevel)
+	businessMetrics, err := b.businessMetricService.GetBusinessMetrics(ctx, parentPackageId, hierarchyLevel)
 	if err != nil {
 		utils.RespondWithError(w, "Failed to get business metrics", err)
 		return

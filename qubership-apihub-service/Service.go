@@ -45,6 +45,8 @@ import (
 	prefixed "github.com/x-cray/logrus-prefixed-formatter"
 )
 
+const startupOperationTimeout = 60 * time.Second
+
 func init() {
 	logFilePath := os.Getenv("LOG_FILE_PATH") //Example: /logs/apihub.log
 	var mw io.Writer
@@ -90,6 +92,7 @@ func main() {
 	r := mux.NewRouter()
 	// r.Use(midldleware.PrometheusMiddleware) todo figure out why breaks streaming
 	r.Use(midldleware.WriteDeadlineMiddleware)
+	r.Use(midldleware.RequestTimeoutMiddleware(systemInfoService.GetRequestTimeout()))
 	r.SkipClean(true)
 	r.UseEncodedPath()
 	healthController := controller.NewHealthController(readyChan)
@@ -260,7 +263,7 @@ func main() {
 	packageService := service.NewPackageService(favoritesRepository, publishedRepository, versionService, roleService, activityTrackingService, monitoringService, operationGroupService, usersRepository, ptHandler, systemInfoService)
 
 	logsService := service.NewLogsService()
-	apihubApiKeyService := service.NewApihubApiKeyService(apihubApiKeyRepository, publishedRepository, activityTrackingService, userService, roleRepository, roleService.IsSysadm, systemInfoService)
+	apihubApiKeyService := service.NewApihubApiKeyService(apihubApiKeyRepository, publishedRepository, activityTrackingService, userService, roleRepository, systemInfoService)
 
 	refResolverService := service.NewRefResolverService(publishedRepository)
 	buildProcessorService := service.NewBuildProcessorService(buildRepository, refResolverService)
@@ -336,7 +339,7 @@ func main() {
 
 	publishedController := controller.NewPublishedController(publishedService, portalService, roleService)
 
-	logsController := controller.NewLogsController(logsService, roleService)
+	logsController := controller.NewLogsController(logsService)
 	systemInfoController := controller.NewSystemInfoController(systemInfoService, dbMigrationService)
 	sysAdminController := controller.NewSysAdminController(roleService)
 	apihubApiKeyController := controller.NewApihubApiKeyController(apihubApiKeyService, roleService)
@@ -350,7 +353,7 @@ func main() {
 	exportController := controller.NewExportController(publishedService, portalService, roleService, excelService, versionService, monitoringService, exportService, packageService)
 
 	packageController := controller.NewPackageController(packageService, publishedService, portalService, roleService, monitoringService, ptHandler)
-	versionController := controller.NewVersionController(versionService, roleService, monitoringService, ptHandler, roleService.IsSysadm, excelService, systemInfoService.GetShareabilityReportSizeLimitMB())
+	versionController := controller.NewVersionController(versionService, roleService, monitoringService, ptHandler, excelService, systemInfoService.GetShareabilityReportSizeLimitMB())
 	roleController := controller.NewRoleController(roleService)
 	samlAuthController := controller.NewSamlAuthController(userService, systemInfoService, idpManager) //deprecated
 	authController := controller.NewAuthController(systemInfoService, idpManager)
@@ -360,23 +363,23 @@ func main() {
 	operationController := controller.NewOperationController(roleService, operationService, buildService, monitoringService, ptHandler)
 	operationGroupController := controller.NewOperationGroupController(roleService, operationGroupService, versionService, systemInfoService, packageService)
 	searchController := controller.NewSearchController(operationService, versionService, monitoringService, ddlContractService, mcpContractService)
-	dataMigrationController := mController.NewTempMigrationController(dbMigrationService, roleService.IsSysadm)
+	dataMigrationController := mController.NewTempMigrationController(dbMigrationService)
 	activityTrackingController := controller.NewActivityTrackingController(activityTrackingService, roleService, ptHandler)
 	comparisonController := controller.NewComparisonController(operationService, versionService, buildService, roleService, comparisonService, monitoringService, ptHandler)
-	transitionController := controller.NewTransitionController(transitionService, roleService.IsSysadm)
-	businessMetricController := controller.NewBusinessMetricController(businessMetricService, excelService, roleService.IsSysadm)
+	transitionController := controller.NewTransitionController(transitionService)
+	businessMetricController := controller.NewBusinessMetricController(businessMetricService, excelService)
 	transformationController := controller.NewTransformationController(roleService, buildService, versionService, transformationService, operationGroupService)
-	minioStorageController := controller.NewMinioStorageController(minioStorageCreds, minioStorageService, roleService)
+	minioStorageController := controller.NewMinioStorageController(minioStorageCreds, minioStorageService)
 	personalAccessTokenController := controller.NewPersonalAccessTokenController(personalAccessTokenService)
 	packageExportConfigController := controller.NewPackageExportConfigController(roleService, packageExportConfigService, ptHandler)
-	systemStatsController := controller.NewSystemStatsController(systemStatsService, roleService)
+	systemStatsController := controller.NewSystemStatsController(systemStatsService)
 	internalDocsController := controller.NewInternalDocumentController(publishedService, roleService)
 	ddlContractController := controller.NewDDLContractController(roleService, ddlContractService, ptHandler)
 	mcpContractController := controller.NewMCPContractController(roleService, mcpContractService, ptHandler)
 
 	mcpController := controller.NewMCPController(mcpService)
-	buildController := controller.NewBuildController(buildResultService, buildService, roleService.IsSysadm)
-	adminPublishedController := controller.NewAdminPublishedController(publishedService, roleService.IsSysadm, systemInfoService.GetPublishArchiveSizeLimitMB())
+	buildController := controller.NewBuildController(buildResultService, buildService)
+	adminPublishedController := controller.NewAdminPublishedController(publishedService, systemInfoService.GetPublishArchiveSizeLimitMB())
 
 	r.HandleFunc("/api/v1/system/info", security.Secure(systemInfoController.GetSystemInfo)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/system/configuration", samlAuthController.GetSystemSSOInfo_deprecated).Methods(http.MethodGet) //deprecated
@@ -621,7 +624,7 @@ func main() {
 	}
 
 	mcpHandler := mcpController.MakeMCPServer()
-	r.Handle("/api/v1/mcp/", security.SecureMCP(mcpHandler))
+	r.Handle("/api/v1/mcp/", security.SecureMCP(mcpHandler)) //TODO: MCP endpoint has request context without timeout, need to handle it
 
 	discoveryConfig := config.DiscoveryConfig{
 		ScanDirectory: systemInfoService.GetApiSpecDirectory(),
@@ -692,11 +695,15 @@ func main() {
 	srv := makeServer(systemInfoService, r)
 
 	utils.SafeAsync(func() {
-		if err := zeroDayAdminService.CreateZeroDayAdmin(); err != nil {
+		zeroDayCtx, cancel := context.WithTimeout(context.Background(), startupOperationTimeout)
+		defer cancel()
+		if err := zeroDayAdminService.CreateZeroDayAdmin(zeroDayCtx); err != nil {
 			log.Errorf("Failed to create zero day admin user: %s", err)
 		}
 
-		if err := apihubApiKeyService.CreateSystemApiKey(); err != nil {
+		apiKeyCtx, apiKeyCancel := context.WithTimeout(context.Background(), startupOperationTimeout)
+		defer apiKeyCancel()
+		if err := apihubApiKeyService.CreateSystemApiKey(apiKeyCtx); err != nil {
 			log.Errorf("Failed to create system api key: %s", err)
 		}
 	})
@@ -717,7 +724,7 @@ func main() {
 	}
 
 	utils.SafeAsync(func() {
-		exportService.StartCleanupOldResultsJob()
+		exportService.StartCleanupOldResultsJob(context.Background())
 	})
 
 	dbMigrationService.StartOpsMigrationRestoreProc(context.Background())
@@ -763,7 +770,8 @@ func makeServer(systemInfoService service.SystemInfoService, r *mux.Router) *htt
 	// Instead, we use:
 	//   - http.ResponseController.SetWriteDeadline per-request (see middleware/WriteDeadlineMiddleware.go) to set
 	//     a deadline only on the response writing phase, independent of processing time.
-	//   - Context with deadline for processing time control (planned, not yet implemented).
+	//   - A request-context deadline for processing time control (see middleware/RequestTimeoutMiddleware.go),
+	//     configured via technicalParameters.requestTimeoutSec.
 	corsHandler := handlers.CORS(corsOptions...)(r)
 	compressedHandler := handlers.CompressHandler(corsHandler)
 	handler := midldleware.NewSelectiveCompressionHandler(corsHandler, compressedHandler)

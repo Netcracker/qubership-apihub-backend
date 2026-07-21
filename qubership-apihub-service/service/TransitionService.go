@@ -1,25 +1,29 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
-	context2 "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/repository"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 )
 
+const transitionMoveTimeout = 30 * time.Minute
+
 type TransitionService interface {
-	MoveOrRenamePackage(userCtx context2.SecurityContext, fromId string, toId string, overwriteHistory bool) (string, error)
-	GetMoveStatus(id string) (*view.TransitionStatus, error)
-	ListCompletedActivities(offset int, limit int) ([]view.TransitionStatus, error)
-	ListPackageTransitions() ([]view.PackageTransition, error)
+	MoveOrRenamePackage(userCtx context.Context, fromId string, toId string, overwriteHistory bool) (string, error)
+	GetMoveStatus(ctx context.Context, id string) (*view.TransitionStatus, error)
+	ListCompletedActivities(ctx context.Context, offset int, limit int) ([]view.TransitionStatus, error)
+	ListPackageTransitions(ctx context.Context) ([]view.PackageTransition, error)
 }
 
 func NewTransitionService(transRepo repository.TransitionRepository, pubRepo repository.PublishedRepository) TransitionService {
@@ -31,12 +35,33 @@ type transitionServiceImpl struct {
 	pubRepo   repository.PublishedRepository
 }
 
-func (p transitionServiceImpl) MoveOrRenamePackage(userCtx context2.SecurityContext, fromId string, toId string, overwriteHistory bool) (string, error) {
+// runTransitionMove runs a transition move under a safety-net bound, then persists the terminal
+// status on an independent short-lived context so a timed-out move can't leave the transition
+// stuck at 'running' (see transitionMoveTimeout / statusFinalizationTimeout).
+func (p transitionServiceImpl) runTransitionMove(userCtx context.Context, id string, move func(ctx context.Context) (int, error)) {
+	bgCtx, cancel := context.WithTimeout(secctx.Detach(userCtx), transitionMoveTimeout)
+	defer cancel()
+	objAffected, err := move(bgCtx)
+
+	finCtx, finCancel := context.WithTimeout(secctx.Detach(userCtx), statusFinalizationTimeout)
+	defer finCancel()
+	if err != nil {
+		if terr := p.transRepo.TrackTransitionFailed(finCtx, id, err.Error()); terr != nil {
+			log.Errorf("failed to track transition action: %s", terr)
+		}
+		return
+	}
+	if terr := p.transRepo.TrackTransitionCompleted(finCtx, id, objAffected); terr != nil {
+		log.Errorf("failed to track transition action: %s", terr)
+	}
+}
+
+func (p transitionServiceImpl) MoveOrRenamePackage(userCtx context.Context, fromId string, toId string, overwriteHistory bool) (string, error) {
 	if fromId == toId {
 		return "", fmt.Errorf("incorrect input: from==to")
 	}
 
-	fromPackage, err := p.pubRepo.GetPackage(fromId)
+	fromPackage, err := p.pubRepo.GetPackage(userCtx, fromId)
 	if err != nil {
 		return "", err
 	}
@@ -49,7 +74,7 @@ func (p transitionServiceImpl) MoveOrRenamePackage(userCtx context2.SecurityCont
 		}
 	}
 	// mind existing, but deleted packages
-	toPackage, err := p.pubRepo.GetPackageIncludingDeleted(toId)
+	toPackage, err := p.pubRepo.GetPackageIncludingDeleted(userCtx, toId)
 	if err != nil {
 		return "", err
 	}
@@ -67,12 +92,12 @@ func (p transitionServiceImpl) MoveOrRenamePackage(userCtx context2.SecurityCont
 	}
 
 	if !overwriteHistory {
-		redirectPackageId, err := p.transRepo.GetNewPackageId(toId)
+		redirectPackageId, err := p.transRepo.GetNewPackageId(userCtx, toId)
 		if err != nil {
 			return "", err
 		}
 		if redirectPackageId != "" {
-			oldIds, err := p.transRepo.GetOldPackageIds(fromId)
+			oldIds, err := p.transRepo.GetOldPackageIds(userCtx, fromId)
 			if err != nil {
 				return "", err
 			}
@@ -125,7 +150,7 @@ func (p transitionServiceImpl) MoveOrRenamePackage(userCtx context2.SecurityCont
 
 	if isMove && !toWorkspace {
 		toParentId := strings.Join(toParts[:len(toParts)-1], ".")
-		toParentPackage, err := p.pubRepo.GetPackage(toParentId)
+		toParentPackage, err := p.pubRepo.GetPackage(userCtx, toParentId)
 		if err != nil {
 			return "", err
 		}
@@ -168,18 +193,9 @@ func (p transitionServiceImpl) MoveOrRenamePackage(userCtx context2.SecurityCont
 		}
 		// TODO: implement async job that will take non-finished transition tasks from DB instead of a direct call
 		utils.SafeAsync(func() {
-			objAffected, err := p.transRepo.MoveGroupingPackage(fromId, toId)
-			if err != nil {
-				err = p.transRepo.TrackTransitionFailed(id, err.Error())
-				if err != nil {
-					log.Errorf("failed to track transition action: %s", err)
-				}
-			} else {
-				err = p.transRepo.TrackTransitionCompleted(id, objAffected)
-				if err != nil {
-					log.Errorf("failed to track transition action: %s", err)
-				}
-			}
+			p.runTransitionMove(userCtx, id, func(ctx context.Context) (int, error) {
+				return p.transRepo.MoveGroupingPackage(ctx, fromId, toId)
+			})
 		})
 		return id, nil
 	case entity.KIND_PACKAGE:
@@ -199,18 +215,9 @@ func (p transitionServiceImpl) MoveOrRenamePackage(userCtx context2.SecurityCont
 			}
 			// TODO: implement async job that will take non-finished transition tasks from DB instead of a direct call
 			utils.SafeAsync(func() {
-				objAffected, err := p.transRepo.MovePackage(fromId, toId, overwriteHistory)
-				if err != nil {
-					err = p.transRepo.TrackTransitionFailed(id, err.Error())
-					if err != nil {
-						log.Errorf("failed to track transition action: %s", err)
-					}
-				} else {
-					err = p.transRepo.TrackTransitionCompleted(id, objAffected)
-					if err != nil {
-						log.Errorf("failed to track transition action: %s", err)
-					}
-				}
+				p.runTransitionMove(userCtx, id, func(ctx context.Context) (int, error) {
+					return p.transRepo.MovePackage(ctx, fromId, toId, overwriteHistory)
+				})
 			})
 			return id, nil
 		}
@@ -232,18 +239,9 @@ func (p transitionServiceImpl) MoveOrRenamePackage(userCtx context2.SecurityCont
 		}
 		// TODO: implement async job that will take non-finished transition tasks from DB instead of a direct call
 		utils.SafeAsync(func() {
-			objAffected, err := p.transRepo.MoveGroupingPackage(fromId, toId)
-			if err != nil {
-				err = p.transRepo.TrackTransitionFailed(id, err.Error())
-				if err != nil {
-					log.Errorf("failed to track transition action: %s", err)
-				}
-			} else {
-				err = p.transRepo.TrackTransitionCompleted(id, objAffected)
-				if err != nil {
-					log.Errorf("failed to track transition action: %s", err)
-				}
-			}
+			p.runTransitionMove(userCtx, id, func(ctx context.Context) (int, error) {
+				return p.transRepo.MoveGroupingPackage(ctx, fromId, toId)
+			})
 		})
 		return id, nil
 	case entity.KIND_DASHBOARD:
@@ -263,18 +261,9 @@ func (p transitionServiceImpl) MoveOrRenamePackage(userCtx context2.SecurityCont
 			}
 			// TODO: implement async job that will take non-finished transition tasks from DB instead of a direct call
 			utils.SafeAsync(func() {
-				objAffected, err := p.transRepo.MovePackage(fromId, toId, overwriteHistory)
-				if err != nil {
-					err = p.transRepo.TrackTransitionFailed(id, err.Error())
-					if err != nil {
-						log.Errorf("failed to track transition action: %s", err)
-					}
-				} else {
-					err = p.transRepo.TrackTransitionCompleted(id, objAffected)
-					if err != nil {
-						log.Errorf("failed to track transition action: %s", err)
-					}
-				}
+				p.runTransitionMove(userCtx, id, func(ctx context.Context) (int, error) {
+					return p.transRepo.MovePackage(ctx, fromId, toId, overwriteHistory)
+				})
 			})
 			return id, nil
 		}
@@ -283,8 +272,8 @@ func (p transitionServiceImpl) MoveOrRenamePackage(userCtx context2.SecurityCont
 	}
 }
 
-func (p transitionServiceImpl) GetMoveStatus(id string) (*view.TransitionStatus, error) {
-	ent, err := p.transRepo.GetTransitionStatus(id)
+func (p transitionServiceImpl) GetMoveStatus(ctx context.Context, id string) (*view.TransitionStatus, error) {
+	ent, err := p.transRepo.GetTransitionStatus(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -299,8 +288,8 @@ func (p transitionServiceImpl) GetMoveStatus(id string) (*view.TransitionStatus,
 	return entity.MakeTransitionStatusView(ent), nil
 }
 
-func (p transitionServiceImpl) ListCompletedActivities(completedSerialOffset int, limit int) ([]view.TransitionStatus, error) {
-	entities, err := p.transRepo.ListCompletedTransitions(completedSerialOffset, limit)
+func (p transitionServiceImpl) ListCompletedActivities(ctx context.Context, completedSerialOffset int, limit int) ([]view.TransitionStatus, error) {
+	entities, err := p.transRepo.ListCompletedTransitions(ctx, completedSerialOffset, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -311,8 +300,8 @@ func (p transitionServiceImpl) ListCompletedActivities(completedSerialOffset int
 	return result, nil
 }
 
-func (p transitionServiceImpl) ListPackageTransitions() ([]view.PackageTransition, error) {
-	entities, err := p.transRepo.ListPackageTransitions()
+func (p transitionServiceImpl) ListPackageTransitions(ctx context.Context) ([]view.PackageTransition, error) {
+	entities, err := p.transRepo.ListPackageTransitions(ctx)
 	if err != nil {
 		return nil, err
 	}

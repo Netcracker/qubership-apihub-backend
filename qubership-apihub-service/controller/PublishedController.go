@@ -3,7 +3,7 @@ package controller
 import (
 	"net/http"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 
@@ -33,7 +33,7 @@ type publishControllerImpl struct {
 }
 
 func (v publishControllerImpl) GetVersionSources(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	packageId := getStringParam(r, "packageId")
 	sufficientPrivileges, err := v.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
@@ -60,7 +60,7 @@ func (v publishControllerImpl) GetVersionSources(w http.ResponseWriter, r *http.
 		})
 		return
 	}
-	srcArchive, err := v.publishedService.GetVersionSources(packageId, versionName)
+	srcArchive, err := v.publishedService.GetVersionSources(ctx, packageId, versionName)
 	if err != nil {
 		log.Error("Failed to get package version sources: ", err.Error())
 		if customError, ok := err.(*exception.CustomError); ok {
@@ -80,7 +80,7 @@ func (v publishControllerImpl) GetVersionSources(w http.ResponseWriter, r *http.
 }
 
 func (v publishControllerImpl) GetPublishedVersionSourceDataConfig(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	packageId := getStringParam(r, "packageId")
 	sufficientPrivileges, err := v.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
@@ -107,7 +107,7 @@ func (v publishControllerImpl) GetPublishedVersionSourceDataConfig(w http.Respon
 		})
 		return
 	}
-	publishedVersionSourceDataConfig, err := v.publishedService.GetPublishedVersionSourceDataConfig(packageId, versionName)
+	publishedVersionSourceDataConfig, err := v.publishedService.GetPublishedVersionSourceDataConfig(ctx, packageId, versionName)
 	if err != nil {
 		log.Error("Failed to get package version sources: ", err.Error())
 		if customError, ok := err.(*exception.CustomError); ok {
@@ -125,7 +125,7 @@ func (v publishControllerImpl) GetPublishedVersionSourceDataConfig(w http.Respon
 }
 
 func (v publishControllerImpl) GetPublishedVersionBuildConfig(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	packageId := getStringParam(r, "packageId")
 	sufficientPrivileges, err := v.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
@@ -153,7 +153,7 @@ func (v publishControllerImpl) GetPublishedVersionBuildConfig(w http.ResponseWri
 		return
 	}
 
-	publishedVersionBuildConfig, err := v.publishedService.GetPublishedVersionBuildConfig(packageId, versionName)
+	publishedVersionBuildConfig, err := v.publishedService.GetPublishedVersionBuildConfig(ctx, packageId, versionName)
 	if err != nil {
 		log.Error("Failed to get package version build config: ", err.Error())
 		if customError, ok := err.(*exception.CustomError); ok {

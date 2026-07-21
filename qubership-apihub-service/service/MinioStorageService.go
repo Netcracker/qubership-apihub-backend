@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
@@ -48,9 +49,20 @@ type minioClient struct {
 	error  error
 }
 
+// minioMigrationTimeout bounds a single S3<->DB data-migration run, including all of its workers, as a safety net.
+const minioMigrationTimeout = 360 * time.Minute
+
 // todo add more logs for ex - [15 / 100] entities were stored to database....
 func (m minioStorageServiceImpl) DownloadFilesFromBucketToDatabase() error {
-	ctx := context.Background()
+	utils.SafeAsync(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), minioMigrationTimeout)
+		defer cancel()
+		m.migrateBucketToDatabase(ctx)
+	})
+	return nil
+}
+
+func (m minioStorageServiceImpl) migrateBucketToDatabase(ctx context.Context) {
 	buildResultFileKeys := make([]string, 0)
 	publishedSourceArchiveFileKeys := make([]string, 0)
 	foldersChan := m.minioClient.client.ListObjects(ctx, m.creds.BucketName, minio.ListObjectsOptions{})
@@ -70,8 +82,12 @@ func (m minioStorageServiceImpl) DownloadFilesFromBucketToDatabase() error {
 
 	log.Infof("MINIO. %d files were found", len(buildResultFileKeys)+len(publishedSourceArchiveFileKeys))
 
+	var workers sync.WaitGroup
+
 	if len(buildResultFileKeys) > 0 {
+		workers.Add(1)
 		utils.SafeAsync(func() {
+			defer workers.Done()
 			entitiesCount := 0
 			for _, key := range buildResultFileKeys {
 				buildId := getEntityId(fmt.Sprintf("%s/", view.BUILD_RESULT_TABLE), key)
@@ -84,7 +100,7 @@ func (m minioStorageServiceImpl) DownloadFilesFromBucketToDatabase() error {
 					log.Errorf("failed to get file from minio by key -%s. Error - %s", key, err.Error())
 					continue
 				}
-				err = m.buildRepository.StoreBuildResult(entity.BuildResultEntity{BuildId: buildId, Data: data})
+				err = m.buildRepository.StoreBuildResult(ctx, entity.BuildResultEntity{BuildId: buildId, Data: data})
 				if err != nil {
 					log.Infof("%d build_result entities were stored from minio to database", entitiesCount)
 					log.Errorf("StoreBuildResults() produce error -%s", err.Error())
@@ -97,7 +113,9 @@ func (m minioStorageServiceImpl) DownloadFilesFromBucketToDatabase() error {
 	}
 
 	if len(publishedSourceArchiveFileKeys) > 0 {
+		workers.Add(1)
 		utils.SafeAsync(func() {
+			defer workers.Done()
 			entitiesCount := 0
 			for _, key := range publishedSourceArchiveFileKeys {
 				checksum := getEntityId(fmt.Sprintf("%s/", view.PUBLISHED_SOURCES_ARCHIVES_TABLE), key)
@@ -110,7 +128,7 @@ func (m minioStorageServiceImpl) DownloadFilesFromBucketToDatabase() error {
 					log.Errorf("failed to get file from minio by key -%s. Error - %s", key, err.Error())
 					continue
 				}
-				err = m.publishRepo.SavePublishedSourcesArchive(&entity.PublishedSrcArchiveEntity{Checksum: checksum, Data: data})
+				err = m.publishRepo.SavePublishedSourcesArchive(ctx, &entity.PublishedSrcArchiveEntity{Checksum: checksum, Data: data})
 				if err != nil {
 					log.Infof("%d published_sources_archives entities were stored from minio to database", entitiesCount)
 					log.Infof("SavePublishedSourcesArchives() produce error -%s", err.Error())
@@ -122,18 +140,23 @@ func (m minioStorageServiceImpl) DownloadFilesFromBucketToDatabase() error {
 		})
 	}
 
-	return nil
+	workers.Wait()
 }
 
 func (m minioStorageServiceImpl) UploadFilesToBucket() error {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), minioMigrationTimeout)
+	defer cancel()
 	err := m.createBucketIfNotExists(ctx)
 	if err != nil {
 		return err
 	}
 
 	log.Info("Uploading files to MINIO")
+	var workers sync.WaitGroup
+
+	workers.Add(1)
 	utils.SafeAsync(func() {
+		defer workers.Done()
 		uploadedIds, err := m.uploadBuildResults(ctx)
 		if err != nil {
 			log.Errorf("uploadBuildResults produces an error - %s", err.Error())
@@ -141,7 +164,7 @@ func (m minioStorageServiceImpl) UploadFilesToBucket() error {
 		log.Info("Build results were uploaded to MINIO")
 
 		if len(uploadedIds) > 0 {
-			err = m.buildRepository.DeleteBuildResults(uploadedIds)
+			err = m.buildRepository.DeleteBuildResults(ctx, uploadedIds)
 			if err != nil {
 				log.Errorf("DeleteBuildResults produces an error - %s", err.Error())
 			}
@@ -149,7 +172,9 @@ func (m minioStorageServiceImpl) UploadFilesToBucket() error {
 		}
 	})
 	if !m.creds.IsOnlyForBuildResult {
+		workers.Add(1)
 		utils.SafeAsync(func() {
+			defer workers.Done()
 			uploadedChecksums, err := m.uploadPublishedSourcesArchives(ctx)
 			if err != nil {
 				log.Errorf("uploadPublishedSourcesArchives produces an error - %s", err.Error())
@@ -157,7 +182,7 @@ func (m minioStorageServiceImpl) UploadFilesToBucket() error {
 			log.Info("Published source archives were uploaded to MINIO")
 
 			if len(uploadedChecksums) > 0 {
-				err = m.publishRepo.DeletePublishedSourcesArchives(uploadedChecksums)
+				err = m.publishRepo.DeletePublishedSourcesArchives(ctx, uploadedChecksums)
 				if err != nil {
 					log.Errorf("DeletePublishedSourcesArchives produces an error - %s", err.Error())
 				}
@@ -166,6 +191,7 @@ func (m minioStorageServiceImpl) UploadFilesToBucket() error {
 		})
 	}
 
+	workers.Wait()
 	return nil
 }
 
@@ -245,7 +271,7 @@ func (m minioStorageServiceImpl) uploadBuildResults(ctx context.Context) ([]stri
 	var buildResult *entity.BuildResultEntity
 	var err error
 	for {
-		buildResult, err = m.buildRepository.GetBuildResultWithOffset(offset)
+		buildResult, err = m.buildRepository.GetBuildResultWithOffset(ctx, offset)
 		if err != nil {
 			log.Infof("%d build_results were ulpoaded to minio storage, until got error", offset)
 			break
@@ -270,7 +296,7 @@ func (m minioStorageServiceImpl) uploadPublishedSourcesArchives(ctx context.Cont
 	offset := 0
 	checksums := make([]string, 0)
 	for {
-		publishedSourceArchive, err := m.publishRepo.GetPublishedSourcesArchives(offset)
+		publishedSourceArchive, err := m.publishRepo.GetPublishedSourcesArchives(ctx, offset)
 		if err != nil {
 			log.Infof("%d published_sources_archives were uploaded to minio storage, before error was received", offset)
 			break

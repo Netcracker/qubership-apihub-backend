@@ -5,8 +5,8 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -41,7 +41,7 @@ type roleControllerImpl struct {
 
 func (c roleControllerImpl) GetPackageMembers(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := c.roleService.HasRequiredPermissions(ctx, packageId, view.UserAccessManagementPermission)
 	if err != nil {
 		utils.RespondWithError(w, "Failed to check user privileges", err)
@@ -55,7 +55,7 @@ func (c roleControllerImpl) GetPackageMembers(w http.ResponseWriter, r *http.Req
 		})
 		return
 	}
-	members, err := c.roleService.GetPackageMembers(packageId)
+	members, err := c.roleService.GetPackageMembers(ctx, packageId)
 	if err != nil {
 		utils.RespondWithError(w, "Failed to get package members", err)
 		return
@@ -65,7 +65,7 @@ func (c roleControllerImpl) GetPackageMembers(w http.ResponseWriter, r *http.Req
 
 func (c roleControllerImpl) DeletePackageMember(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := c.roleService.HasRequiredPermissions(ctx, packageId, view.UserAccessManagementPermission)
 	if err != nil {
 		utils.RespondWithError(w, "Failed to check user privileges", err)
@@ -105,7 +105,7 @@ func (c roleControllerImpl) DeletePackageMember(w http.ResponseWriter, r *http.R
 
 func (c roleControllerImpl) AddPackageMembers(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := c.roleService.HasRequiredPermissions(ctx, packageId, view.UserAccessManagementPermission)
 	if err != nil {
 		utils.RespondWithError(w, "Failed to check user privileges", err)
@@ -159,7 +159,7 @@ func (c roleControllerImpl) AddPackageMembers(w http.ResponseWriter, r *http.Req
 
 func (c roleControllerImpl) UpdatePackageMembers(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := c.roleService.HasRequiredPermissions(ctx, packageId, view.UserAccessManagementPermission)
 	if err != nil {
 		utils.RespondWithError(w, "Failed to check user privileges", err)
@@ -224,8 +224,8 @@ func (c roleControllerImpl) UpdatePackageMembers(w http.ResponseWriter, r *http.
 }
 
 func (c roleControllerImpl) CreateRole(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Create(r)
-	if !c.roleService.IsSysadm(ctx) {
+	ctx := secctx.MakeUserContext(r)
+	if !secctx.IsSysadm(ctx) {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
@@ -263,7 +263,7 @@ func (c roleControllerImpl) CreateRole(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	createdRole, err := c.roleService.CreateRole(createRoleReq.Role, createRoleReq.Permissions)
+	createdRole, err := c.roleService.CreateRole(ctx, createRoleReq.Role, createRoleReq.Permissions)
 	if err != nil {
 		utils.RespondWithError(w, "Failed to create new role", err)
 		return
@@ -272,8 +272,8 @@ func (c roleControllerImpl) CreateRole(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c roleControllerImpl) DeleteRole(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Create(r)
-	if !c.roleService.IsSysadm(ctx) {
+	ctx := secctx.MakeUserContext(r)
+	if !secctx.IsSysadm(ctx) {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
@@ -282,7 +282,7 @@ func (c roleControllerImpl) DeleteRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	roleId := getStringParam(r, "roleId")
-	err := c.roleService.DeleteRole(roleId)
+	err := c.roleService.DeleteRole(ctx, roleId)
 	if err != nil {
 		utils.RespondWithError(w, "Failed to delete role", err)
 		return
@@ -291,8 +291,8 @@ func (c roleControllerImpl) DeleteRole(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c roleControllerImpl) UpdateRole(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Create(r)
-	if !c.roleService.IsSysadm(ctx) {
+	ctx := secctx.MakeUserContext(r)
+	if !secctx.IsSysadm(ctx) {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
@@ -324,7 +324,7 @@ func (c roleControllerImpl) UpdateRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if updateRoleReq.Permissions != nil {
-		err = c.roleService.SetRolePermissions(roleId, *updateRoleReq.Permissions)
+		err = c.roleService.SetRolePermissions(ctx, roleId, *updateRoleReq.Permissions)
 		if err != nil {
 			utils.RespondWithError(w, "Failed to update role permissions", err)
 			return
@@ -334,7 +334,7 @@ func (c roleControllerImpl) UpdateRole(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c roleControllerImpl) GetExistingRoles(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := c.roleService.HasRequiredPermissionsAcrossAllPackages(ctx, view.UserAccessManagementPermission)
 	if err != nil {
 		utils.RespondWithError(w, "Failed to check user privileges", err)
@@ -348,7 +348,7 @@ func (c roleControllerImpl) GetExistingRoles(w http.ResponseWriter, r *http.Requ
 		})
 		return
 	}
-	roles, err := c.roleService.GetExistingRolesExcludingNone()
+	roles, err := c.roleService.GetExistingRolesExcludingNone(ctx)
 	if err != nil {
 		utils.RespondWithError(w, "Failed to get existing roles", err)
 		return
@@ -357,7 +357,7 @@ func (c roleControllerImpl) GetExistingRoles(w http.ResponseWriter, r *http.Requ
 }
 
 func (c roleControllerImpl) GetExistingPermissions(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := c.roleService.HasRequiredPermissionsAcrossAllPackages(ctx, view.UserAccessManagementPermission)
 	if err != nil {
 		utils.RespondWithError(w, "Failed to check user privileges", err)
@@ -380,7 +380,7 @@ func (c roleControllerImpl) GetExistingPermissions(w http.ResponseWriter, r *htt
 }
 
 func (c roleControllerImpl) GetAvailablePackageRoles(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	packageId := getStringParam(r, "packageId")
 	sufficientPrivileges, err := c.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
@@ -404,8 +404,8 @@ func (c roleControllerImpl) GetAvailablePackageRoles(w http.ResponseWriter, r *h
 }
 
 func (c roleControllerImpl) SetRoleOrder(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Create(r)
-	if !c.roleService.IsSysadm(ctx) {
+	ctx := secctx.MakeUserContext(r)
+	if !secctx.IsSysadm(ctx) {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
@@ -443,7 +443,7 @@ func (c roleControllerImpl) SetRoleOrder(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	err = c.roleService.SetRoleOrder(setRoleOrderReq.Roles)
+	err = c.roleService.SetRoleOrder(ctx, setRoleOrderReq.Roles)
 	if err != nil {
 		utils.RespondWithError(w, "Failed to update role permissions", err)
 		return
@@ -452,6 +452,7 @@ func (c roleControllerImpl) SetRoleOrder(w http.ResponseWriter, r *http.Request)
 }
 
 func (c roleControllerImpl) GetAvailableUserPackagePromoteStatuses(w http.ResponseWriter, r *http.Request) {
+	ctx := secctx.MakeUserContext(r)
 	userId, err := getUnescapedStringParam(r, "userId")
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
@@ -487,7 +488,7 @@ func (c roleControllerImpl) GetAvailableUserPackagePromoteStatuses(w http.Respon
 		return
 	}
 
-	availablePackagePromoteStatuses, err := c.roleService.GetUserPackagePromoteStatuses(packages.Packages, userId)
+	availablePackagePromoteStatuses, err := c.roleService.GetUserPackagePromoteStatuses(ctx, packages.Packages, userId)
 	if err != nil {
 		utils.RespondWithError(w, "Failed to get package promote statuses available for user", err)
 		return
@@ -496,6 +497,7 @@ func (c roleControllerImpl) GetAvailableUserPackagePromoteStatuses(w http.Respon
 }
 
 func (c roleControllerImpl) TestSetUserSystemRole(w http.ResponseWriter, r *http.Request) {
+	ctx := secctx.MakeUserContext(r)
 	userId, err := getUnescapedStringParam(r, "userId")
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
@@ -532,7 +534,7 @@ func (c roleControllerImpl) TestSetUserSystemRole(w http.ResponseWriter, r *http
 		return
 	}
 
-	err = c.roleService.SetUserSystemRole(userId, role)
+	err = c.roleService.SetUserSystemRole(ctx, userId, role)
 	if err != nil {
 		utils.RespondWithError(w, "Failed to set user system role", err)
 		return

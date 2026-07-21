@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/metrics"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -25,7 +25,8 @@ func NewAiChatController(chatsSvc service.AiChatsService, aiSvc service.AiChatTu
 }
 
 func (c *AiChatController) ListChats(w http.ResponseWriter, r *http.Request) {
-	uid := context.Create(r).GetUserId()
+	ctx := secctx.MakeUserContext(r)
+	uid := secctx.GetUserId(ctx)
 	limit, ce := getAiChatLimitQueryParam(r)
 	if ce != nil {
 		utils.RespondWithCustomError(w, ce)
@@ -42,7 +43,7 @@ func (c *AiChatController) ListChats(w http.ResponseWriter, r *http.Request) {
 	}
 	beforeID := r.URL.Query().Get("beforeId")
 	search := r.URL.Query().Get("search")
-	res, err := c.chatsSvc.ListChats(r.Context(), uid, search, before, beforeID, limit)
+	res, err := c.chatsSvc.ListChats(ctx, uid, search, before, beforeID, limit)
 	if err != nil {
 		utils.RespondWithError(w, "list chats", err)
 		return
@@ -51,13 +52,14 @@ func (c *AiChatController) ListChats(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *AiChatController) CreateChat(w http.ResponseWriter, r *http.Request) {
-	uid := context.Create(r).GetUserId()
+	ctx := secctx.MakeUserContext(r)
+	uid := secctx.GetUserId(ctx)
 	var body view.AiChatCreateRequest
 	if ce := decodeAiChatJSONBody(r, &body, true); ce != nil {
 		utils.RespondWithCustomError(w, ce)
 		return
 	}
-	res, err := c.chatsSvc.CreateChat(r.Context(), uid, body.Title)
+	res, err := c.chatsSvc.CreateChat(ctx, uid, body.Title)
 	if err != nil {
 		utils.RespondWithError(w, "create chat", err)
 		return
@@ -66,9 +68,10 @@ func (c *AiChatController) CreateChat(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *AiChatController) GetChat(w http.ResponseWriter, r *http.Request) {
-	uid := context.Create(r).GetUserId()
+	ctx := secctx.MakeUserContext(r)
+	uid := secctx.GetUserId(ctx)
 	chatID := getStringParam(r, "chatId")
-	res, err := c.chatsSvc.GetChat(r.Context(), uid, chatID)
+	res, err := c.chatsSvc.GetChat(ctx, uid, chatID)
 	if err != nil {
 		utils.RespondWithError(w, "get chat", err)
 		return
@@ -77,14 +80,15 @@ func (c *AiChatController) GetChat(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *AiChatController) UpdateChat(w http.ResponseWriter, r *http.Request) {
-	uid := context.Create(r).GetUserId()
+	ctx := secctx.MakeUserContext(r)
+	uid := secctx.GetUserId(ctx)
 	chatID := getStringParam(r, "chatId")
 	var body view.AiChatUpdateRequest
 	if ce := decodeAiChatJSONBody(r, &body, false); ce != nil {
 		utils.RespondWithCustomError(w, ce)
 		return
 	}
-	res, err := c.chatsSvc.UpdateChat(r.Context(), uid, chatID, &body)
+	res, err := c.chatsSvc.UpdateChat(ctx, uid, chatID, &body)
 	if err != nil {
 		utils.RespondWithError(w, "update chat", err)
 		return
@@ -93,9 +97,10 @@ func (c *AiChatController) UpdateChat(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *AiChatController) DeleteChat(w http.ResponseWriter, r *http.Request) {
-	uid := context.Create(r).GetUserId()
+	ctx := secctx.MakeUserContext(r)
+	uid := secctx.GetUserId(ctx)
 	chatID := getStringParam(r, "chatId")
-	if err := c.chatsSvc.DeleteChat(r.Context(), uid, chatID); err != nil {
+	if err := c.chatsSvc.DeleteChat(ctx, uid, chatID); err != nil {
 		utils.RespondWithError(w, "delete chat", err)
 		return
 	}
@@ -103,7 +108,8 @@ func (c *AiChatController) DeleteChat(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *AiChatController) ListMessages(w http.ResponseWriter, r *http.Request) {
-	uid := context.Create(r).GetUserId()
+	ctx := secctx.MakeUserContext(r)
+	uid := secctx.GetUserId(ctx)
 	chatID := getStringParam(r, "chatId")
 	limit, ce := getAiChatLimitQueryParam(r)
 	if ce != nil {
@@ -120,7 +126,7 @@ func (c *AiChatController) ListMessages(w http.ResponseWriter, r *http.Request) 
 		before = &t
 	}
 	beforeID := r.URL.Query().Get("beforeId")
-	res, err := c.chatsSvc.ListMessages(r.Context(), uid, chatID, before, beforeID, limit)
+	res, err := c.chatsSvc.ListMessages(ctx, uid, chatID, before, beforeID, limit)
 	if err != nil {
 		utils.RespondWithError(w, "list messages", err)
 		return
@@ -129,8 +135,8 @@ func (c *AiChatController) ListMessages(w http.ResponseWriter, r *http.Request) 
 }
 
 func (c *AiChatController) SendMessage(w http.ResponseWriter, r *http.Request) {
-	secCtx := context.Create(r)
-	uid := secCtx.GetUserId()
+	ctx := secctx.MakeUserContext(r)
+	uid := secctx.GetUserId(ctx)
 	chatID := getStringParam(r, "chatId")
 	var body view.AiChatSendMessageRequest
 	if ce := decodeAiChatJSONBody(r, &body, false); ce != nil {
@@ -143,8 +149,6 @@ func (c *AiChatController) SendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	c.monitoringSvc.IncreaseBusinessMetricCounter(uid, metrics.AIChatCalled, "chat messages")
 
-	ctx := r.Context()
-	ctx = service.SetSecCtxOnMCPCtx(ctx, secCtx)
 	ctx = service.SetMCPClientLabel(ctx, service.MCPClientLabelInternalAIChat)
 	res, err := c.aiSvc.SendMessage(ctx, uid, chatID, &body)
 	if err != nil {
@@ -155,8 +159,8 @@ func (c *AiChatController) SendMessage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *AiChatController) SendMessageStream(w http.ResponseWriter, r *http.Request) {
-	secCtx := context.Create(r)
-	uid := secCtx.GetUserId()
+	ctx := secctx.MakeUserContext(r)
+	uid := secctx.GetUserId(ctx)
 	chatID := getStringParam(r, "chatId")
 	var body view.AiChatSendMessageRequest
 	if ce := decodeAiChatJSONBody(r, &body, false); ce != nil {
@@ -180,9 +184,8 @@ func (c *AiChatController) SendMessageStream(w http.ResponseWriter, r *http.Requ
 
 	c.monitoringSvc.IncreaseBusinessMetricCounter(uid, metrics.AIChatCalled, "chat messages")
 
-	ctx := r.Context()
-	ctx = service.SetSecCtxOnMCPCtx(ctx, secCtx)
 	ctx = service.SetMCPClientLabel(ctx, service.MCPClientLabelInternalAIChat)
+	//TODO: stream endpoint has request context without timeout, need to handle it
 	ch, err := c.aiSvc.SendMessageStream(ctx, uid, chatID, &body)
 	if err != nil {
 		utils.RespondWithError(w, "stream", err)

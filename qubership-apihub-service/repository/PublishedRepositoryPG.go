@@ -41,8 +41,7 @@ func (p publishedRepositoryImpl) updateVersion(tx *pg.Tx, version *entity.Publis
 	return nil
 }
 
-func (p publishedRepositoryImpl) MarkVersionDeleted(packageId string, versionName string, userId string) (int, error) {
-	ctx := context.Background()
+func (p publishedRepositoryImpl) MarkVersionDeleted(ctx context.Context, packageId string, versionName string, userId string) (int, error) {
 
 	releasedRevisionsDeleted := 0
 	err := p.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
@@ -104,8 +103,8 @@ func (p publishedRepositoryImpl) clearPreviousVersion(tx *pg.Tx, packageId strin
 	return err
 }
 
-func (p publishedRepositoryImpl) PatchVersion(packageId string, versionName string, status *string, versionLabels *[]string) (*entity.PublishedVersionEntity, error) {
-	getPackage, errGetPackage := p.GetPackage(packageId)
+func (p publishedRepositoryImpl) PatchVersion(ctx context.Context, packageId string, versionName string, status *string, versionLabels *[]string) (*entity.PublishedVersionEntity, error) {
+	getPackage, errGetPackage := p.GetPackage(ctx, packageId)
 	if errGetPackage != nil {
 		return nil, errGetPackage
 	}
@@ -115,8 +114,8 @@ func (p publishedRepositoryImpl) PatchVersion(packageId string, versionName stri
 
 	ent := new(entity.PublishedVersionEntity)
 
-	p.cp.GetConnection().RunInTransaction(context.Background(), func(tx *pg.Tx) error {
-		err := p.cp.GetConnection().Model(ent).
+	p.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
+		err := p.cp.GetConnection().WithContext(ctx).Model(ent).
 			Where("package_id = ?", packageId).
 			Where("version = ?", versionName).
 			Where("deleted_at is ?", nil).
@@ -203,8 +202,8 @@ func (p publishedRepositoryImpl) markAllVersionsDeletedByPackageId(tx *pg.Tx, pa
 	return releasedRevisionsDeleted, nil
 }
 
-func (p publishedRepositoryImpl) GetVersion(packageId string, versionName string) (*entity.PublishedVersionEntity, error) {
-	getPackage, errGetPackage := p.GetPackage(packageId)
+func (p publishedRepositoryImpl) GetVersion(ctx context.Context, packageId string, versionName string) (*entity.PublishedVersionEntity, error) {
+	getPackage, errGetPackage := p.GetPackage(ctx, packageId)
 	if errGetPackage != nil {
 		return nil, errGetPackage
 	}
@@ -218,7 +217,7 @@ func (p publishedRepositoryImpl) GetVersion(packageId string, versionName string
 	if err != nil {
 		return nil, err
 	}
-	query := p.cp.GetConnection().Model(result).
+	query := p.cp.GetConnection().WithContext(ctx).Model(result).
 		Where("package_id = ?", packageId).
 		Where("deleted_at is ?", nil).
 		Where("version = ?", version)
@@ -240,13 +239,13 @@ func (p publishedRepositoryImpl) GetVersion(packageId string, versionName string
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetLatestRevision(packageId, versionName string) (int, error) {
+func (p publishedRepositoryImpl) GetLatestRevision(ctx context.Context, packageId, versionName string) (int, error) {
 	result := new(entity.PublishedVersionEntity)
 	version, _, err := SplitVersionRevision(versionName)
 	if err != nil {
 		return -1, err
 	}
-	query := p.cp.GetConnection().Model(result).
+	query := p.cp.GetConnection().WithContext(ctx).Model(result).
 		Where("package_id = ?", packageId).
 		Where("deleted_at is ?", nil).
 		Where("version = ?", version).
@@ -262,13 +261,13 @@ func (p publishedRepositoryImpl) GetLatestRevision(packageId, versionName string
 	return result.Revision, nil
 }
 
-func (p publishedRepositoryImpl) GetDeletedPackageLatestRevision(packageId, versionName string) (int, error) {
+func (p publishedRepositoryImpl) GetDeletedPackageLatestRevision(ctx context.Context, packageId, versionName string) (int, error) {
 	result := new(entity.PublishedVersionEntity)
 	version, _, err := SplitVersionRevision(versionName)
 	if err != nil {
 		return -1, err
 	}
-	query := p.cp.GetConnection().Model(result).
+	query := p.cp.GetConnection().WithContext(ctx).Model(result).
 		Where("package_id = ?", packageId).
 		Where("deleted_at is not ?", nil).
 		Where("version = ?", version).
@@ -284,16 +283,16 @@ func (p publishedRepositoryImpl) GetDeletedPackageLatestRevision(packageId, vers
 	return result.Revision, nil
 }
 
-func (p publishedRepositoryImpl) GetReadonlyVersion(packageId string, versionName string, showOnlyDeleted bool) (*entity.PackageVersionRevisionEntity, error) {
+func (p publishedRepositoryImpl) GetReadonlyVersion(ctx context.Context, packageId string, versionName string, showOnlyDeleted bool) (*entity.PackageVersionRevisionEntity, error) {
 	var getPackage *entity.PackageEntity
 	var errGetPackage error
 	notCondition := ""
 
 	if showOnlyDeleted {
-		getPackage, errGetPackage = p.GetPackageIncludingDeleted(packageId)
+		getPackage, errGetPackage = p.GetPackageIncludingDeleted(ctx, packageId)
 		notCondition = "not"
 	} else {
-		getPackage, errGetPackage = p.GetPackage(packageId)
+		getPackage, errGetPackage = p.GetPackage(ctx, packageId)
 	}
 
 	if errGetPackage != nil {
@@ -323,7 +322,7 @@ func (p publishedRepositoryImpl) GetReadonlyVersion(packageId string, versionNam
 		and pv.deleted_at is %s null
 	limit 1
 	`
-	_, err = p.cp.GetConnection().QueryOne(result, fmt.Sprintf(query, notCondition), packageId, version, revision, packageId, version, revision, revision)
+	_, err = p.cp.GetConnection().WithContext(ctx).QueryOne(result, fmt.Sprintf(query, notCondition), packageId, version, revision, packageId, version, revision, revision)
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return nil, nil
@@ -333,7 +332,7 @@ func (p publishedRepositoryImpl) GetReadonlyVersion(packageId string, versionNam
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetRichPackageVersion(packageId string, version string) (*entity.PackageVersionRichEntity, error) {
+func (p publishedRepositoryImpl) GetRichPackageVersion(ctx context.Context, packageId string, version string) (*entity.PackageVersionRichEntity, error) {
 	result := new(entity.PackageVersionRichEntity)
 	version, revision, err := SplitVersionRevision(version)
 	if err != nil {
@@ -350,7 +349,7 @@ where pv.package_id = ?
 	and pv.package_id = pg.id
 limit 1
 `
-	_, err = p.cp.GetConnection().QueryOne(result, query, packageId, version, revision, revision, revision)
+	_, err = p.cp.GetConnection().WithContext(ctx).QueryOne(result, query, packageId, version, revision, revision, revision)
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return nil, nil
@@ -360,7 +359,7 @@ limit 1
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetVersionRevisionsList(searchQuery entity.PackageVersionSearchQueryEntity) ([]entity.PackageVersionRevisionEntity, error) {
+func (p publishedRepositoryImpl) GetVersionRevisionsList(ctx context.Context, searchQuery entity.PackageVersionSearchQueryEntity) ([]entity.PackageVersionRevisionEntity, error) {
 	var ents []entity.PackageVersionRevisionEntity
 	if searchQuery.TextFilter != "" {
 		searchQuery.TextFilter = "%" + utils.LikeEscaped(searchQuery.TextFilter) + "%"
@@ -384,16 +383,16 @@ func (p publishedRepositoryImpl) GetVersionRevisionsList(searchQuery entity.Pack
 			limit ?limit
 			offset ?offset;
 	`
-	_, err := p.cp.GetConnection().Model(&searchQuery).Query(&ents, query)
+	_, err := p.cp.GetConnection().WithContext(ctx).Model(&searchQuery).Query(&ents, query)
 	if err != nil {
 		return nil, err
 	}
 	return ents, nil
 }
 
-func (p publishedRepositoryImpl) GetVersionByRevision(packageId string, versionName string, revision int) (*entity.PublishedVersionEntity, error) {
+func (p publishedRepositoryImpl) GetVersionByRevision(ctx context.Context, packageId string, versionName string, revision int) (*entity.PublishedVersionEntity, error) {
 	result := new(entity.PublishedVersionEntity)
-	err := p.cp.GetConnection().Model(result).
+	err := p.cp.GetConnection().WithContext(ctx).Model(result).
 		Where("package_id = ?", packageId).
 		Where("version = ?", versionName).
 		Where("revision = ?", revision).
@@ -409,13 +408,13 @@ func (p publishedRepositoryImpl) GetVersionByRevision(packageId string, versionN
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetVersionIncludingDeleted(packageId string, versionName string) (*entity.PublishedVersionEntity, error) {
+func (p publishedRepositoryImpl) GetVersionIncludingDeleted(ctx context.Context, packageId string, versionName string) (*entity.PublishedVersionEntity, error) {
 	result := new(entity.PublishedVersionEntity)
 	version, revision, err := SplitVersionRevision(versionName)
 	if err != nil {
 		return nil, err
 	}
-	query := p.cp.GetConnection().Model(result).
+	query := p.cp.GetConnection().WithContext(ctx).Model(result).
 		Where("package_id = ?", packageId).
 		Where("version = ?", version)
 
@@ -434,10 +433,10 @@ func (p publishedRepositoryImpl) GetVersionIncludingDeleted(packageId string, ve
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetServiceOwner(workspaceId string, serviceName string) (string, error) {
+func (p publishedRepositoryImpl) GetServiceOwner(ctx context.Context, workspaceId string, serviceName string) (string, error) {
 	var packageId string
 	serviceOwnerQuery := `SELECT package_id FROM package_service WHERE workspace_id = ? and service_name = ?`
-	_, err := p.cp.GetConnection().QueryOne(pg.Scan(&packageId), serviceOwnerQuery, workspaceId, serviceName)
+	_, err := p.cp.GetConnection().WithContext(ctx).QueryOne(pg.Scan(&packageId), serviceOwnerQuery, workspaceId, serviceName)
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return "", nil
@@ -1181,7 +1180,7 @@ func (p publishedRepositoryImpl) getOperationComparisonsChanges(tx *pg.Tx, packa
 	return operationComparisonsChanges, nil
 }
 
-func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageInfoFile, buildId string, version *entity.PublishedVersionEntity, content []*entity.PublishedContentEntity,
+func (p publishedRepositoryImpl) CreateVersionWithData(ctx context.Context, packageInfo view.PackageInfoFile, buildId string, version *entity.PublishedVersionEntity, content []*entity.PublishedContentEntity,
 	data []*entity.PublishedContentDataEntity, refs []*entity.PublishedReferenceEntity, src *entity.PublishedSrcEntity, srcArchive *entity.PublishedSrcArchiveEntity,
 	operations []*entity.OperationEntity, operationsData []*entity.OperationDataEntity,
 	operationComparisons []*entity.OperationComparisonEntity, builderNotifications []*entity.BuilderNotificationsEntity,
@@ -1198,7 +1197,6 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 	}
 
 	var err error
-	ctx := context.Background()
 	err = p.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
 		start := time.Now()
 		var ents []entity.BuildEntity
@@ -1968,8 +1966,7 @@ func (p publishedRepositoryImpl) validateChangelogMigrationResult(tx *pg.Tx, pac
 	return nil
 }
 
-func (p publishedRepositoryImpl) SaveVersionChanges(packageInfo view.PackageInfoFile, publishId string, operationComparisons []*entity.OperationComparisonEntity, versionComparisons []*entity.VersionComparisonEntity, versionComparisonsFromCache []string, comparisonInternalDocEntities []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocDataEntities []*entity.ComparisonInternalDocumentDataEntity) error {
-	ctx := context.Background()
+func (p publishedRepositoryImpl) SaveVersionChanges(ctx context.Context, packageInfo view.PackageInfoFile, publishId string, operationComparisons []*entity.OperationComparisonEntity, versionComparisons []*entity.VersionComparisonEntity, versionComparisonsFromCache []string, comparisonInternalDocEntities []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocDataEntities []*entity.ComparisonInternalDocumentDataEntity) error {
 	return p.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
 		var ents []entity.BuildEntity
 		_, err := tx.Query(&ents, getBuildWithLock, publishId)
@@ -2100,13 +2097,13 @@ func (p publishedRepositoryImpl) saveComparisonInternalDocumentsTx(tx *pg.Tx, co
 	return nil
 }
 
-func (p publishedRepositoryImpl) GetRevisionContent(packageId string, versionName string, revision int) ([]entity.PublishedContentEntity, error) {
+func (p publishedRepositoryImpl) GetRevisionContent(ctx context.Context, packageId string, versionName string, revision int) ([]entity.PublishedContentEntity, error) {
 	var ents []entity.PublishedContentEntity
 	version, _, err := SplitVersionRevision(versionName)
 	if err != nil {
 		return nil, err
 	}
-	err = p.cp.GetConnection().Model(&ents).
+	err = p.cp.GetConnection().WithContext(ctx).Model(&ents).
 		Where("package_id = ?", packageId).
 		Where("version = ?", version).
 		Where("revision = ?", revision).
@@ -2122,14 +2119,14 @@ func (p publishedRepositoryImpl) GetRevisionContent(packageId string, versionNam
 	return ents, err
 }
 
-func (p publishedRepositoryImpl) GetLatestContentBySlug(packageId string, versionName string, slug string) (*entity.PublishedContentEntity, error) {
+func (p publishedRepositoryImpl) GetLatestContentBySlug(ctx context.Context, packageId string, versionName string, slug string) (*entity.PublishedContentEntity, error) {
 	result := new(entity.PublishedContentEntity)
 	version, revision, err := SplitVersionRevision(versionName)
 	if err != nil {
 		return nil, err
 	}
 
-	query := p.cp.GetConnection().Model(result).
+	query := p.cp.GetConnection().WithContext(ctx).Model(result).
 		Where("package_id = ?", packageId).
 		Where("version = ?", version).
 		Where("slug = ?", slug)
@@ -2149,9 +2146,9 @@ func (p publishedRepositoryImpl) GetLatestContentBySlug(packageId string, versio
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetRevisionContentBySlug(packageId string, versionName string, slug string, revision int) (*entity.PublishedContentEntity, error) {
+func (p publishedRepositoryImpl) GetRevisionContentBySlug(ctx context.Context, packageId string, versionName string, slug string, revision int) (*entity.PublishedContentEntity, error) {
 	result := new(entity.PublishedContentEntity)
-	err := p.cp.GetConnection().Model(result).
+	err := p.cp.GetConnection().WithContext(ctx).Model(result).
 		Where("package_id = ?", packageId).
 		Where("version = ?", versionName).
 		Where("slug = ?", slug).
@@ -2167,9 +2164,9 @@ func (p publishedRepositoryImpl) GetRevisionContentBySlug(packageId string, vers
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetContentData(packageId string, checksum string) (*entity.PublishedContentDataEntity, error) {
+func (p publishedRepositoryImpl) GetContentData(ctx context.Context, packageId string, checksum string) (*entity.PublishedContentDataEntity, error) {
 	result := new(entity.PublishedContentDataEntity)
-	err := p.cp.GetConnection().Model(result).
+	err := p.cp.GetConnection().WithContext(ctx).Model(result).
 		Where("package_id = ?", packageId).
 		Where("checksum = ?", checksum).
 		First()
@@ -2182,7 +2179,7 @@ func (p publishedRepositoryImpl) GetContentData(packageId string, checksum strin
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetVersionSources(packageId string, versionName string, revision int) (*entity.PublishedSrcArchiveEntity, error) {
+func (p publishedRepositoryImpl) GetVersionSources(ctx context.Context, packageId string, versionName string, revision int) (*entity.PublishedSrcArchiveEntity, error) {
 	query := `
 		select psa.*
 		from published_sources_archives psa, published_sources ps
@@ -2193,7 +2190,7 @@ func (p publishedRepositoryImpl) GetVersionSources(packageId string, versionName
 		limit 1
 	`
 	savedSources := new(entity.PublishedSrcArchiveEntity)
-	_, err := p.cp.GetConnection().QueryOne(savedSources, query, packageId, versionName, revision)
+	_, err := p.cp.GetConnection().WithContext(ctx).QueryOne(savedSources, query, packageId, versionName, revision)
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return nil, nil
@@ -2203,7 +2200,7 @@ func (p publishedRepositoryImpl) GetVersionSources(packageId string, versionName
 	return savedSources, nil
 }
 
-func (p publishedRepositoryImpl) GetPublishedVersionSourceDataConfig(packageId string, versionName string, revision int) (*entity.PublishedSrcDataConfigEntity, error) {
+func (p publishedRepositoryImpl) GetPublishedVersionSourceDataConfig(ctx context.Context, packageId string, versionName string, revision int) (*entity.PublishedSrcDataConfigEntity, error) {
 	query := `
 		select psa.checksum as archive_checksum, psa.data, ps.config, ps.package_id
 		from published_sources_archives psa, published_sources ps
@@ -2214,7 +2211,7 @@ func (p publishedRepositoryImpl) GetPublishedVersionSourceDataConfig(packageId s
 		limit 1
 	`
 	savedSources := new(entity.PublishedSrcDataConfigEntity)
-	_, err := p.cp.GetConnection().QueryOne(savedSources, query, packageId, versionName, revision)
+	_, err := p.cp.GetConnection().WithContext(ctx).QueryOne(savedSources, query, packageId, versionName, revision)
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return nil, nil
@@ -2224,9 +2221,9 @@ func (p publishedRepositoryImpl) GetPublishedVersionSourceDataConfig(packageId s
 	return savedSources, nil
 }
 
-func (p publishedRepositoryImpl) GetPublishedSources(packageId string, versionName string, revision int) (*entity.PublishedSrcEntity, error) {
+func (p publishedRepositoryImpl) GetPublishedSources(ctx context.Context, packageId string, versionName string, revision int) (*entity.PublishedSrcEntity, error) {
 	src := new(entity.PublishedSrcEntity)
-	err := p.cp.GetConnection().Model(src).
+	err := p.cp.GetConnection().WithContext(ctx).Model(src).
 		Where("package_id = ?", packageId).
 		Where("version = ?", versionName).
 		Where("revision = ?", revision).
@@ -2256,7 +2253,7 @@ func (p publishedRepositoryImpl) contentDataExists(tx *pg.Tx, packageId string, 
 	return true, nil
 }
 
-func (p publishedRepositoryImpl) GetVersionsByPreviousVersion(previousPackageId string, previousVersionName string) ([]entity.PublishedVersionEntity, error) {
+func (p publishedRepositoryImpl) GetVersionsByPreviousVersion(ctx context.Context, previousPackageId string, previousVersionName string) ([]entity.PublishedVersionEntity, error) {
 	var ents []entity.PublishedVersionEntity
 	previousVersion, _, err := SplitVersionRevision(previousVersionName)
 	if err != nil {
@@ -2278,7 +2275,7 @@ func (p publishedRepositoryImpl) GetVersionsByPreviousVersion(previousPackageId 
 			and pv.deleted_at is null
 			order by pv.published_at desc
 	`
-	_, err = p.cp.GetConnection().Query(&ents, query, previousPackageId, previousPackageId, previousVersion)
+	_, err = p.cp.GetConnection().WithContext(ctx).Query(&ents, query, previousPackageId, previousPackageId, previousVersion)
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return nil, nil
@@ -2289,7 +2286,7 @@ func (p publishedRepositoryImpl) GetVersionsByPreviousVersion(previousPackageId 
 	return ents, err
 }
 
-func (p publishedRepositoryImpl) GetReadonlyPackageVersionsWithLimit(searchQuery entity.PublishedVersionSearchQueryEntity, checkRevisions bool, showOnlyDeleted bool) ([]entity.PackageVersionRevisionEntity, error) {
+func (p publishedRepositoryImpl) GetReadonlyPackageVersionsWithLimit(ctx context.Context, searchQuery entity.PublishedVersionSearchQueryEntity, checkRevisions bool, showOnlyDeleted bool) ([]entity.PackageVersionRevisionEntity, error) {
 	var ents []entity.PackageVersionRevisionEntity
 	if searchQuery.TextFilter != "" {
 		searchQuery.TextFilter = "%" + utils.LikeEscaped(searchQuery.TextFilter) + "%"
@@ -2325,7 +2322,7 @@ func (p publishedRepositoryImpl) GetReadonlyPackageVersionsWithLimit(searchQuery
 			and (?label = '' or ?label = any(pv.labels))
 			order by pv.published_at desc
 			`
-		_, err := p.cp.GetConnection().Model(&searchQuery).Query(&ents, query)
+		_, err := p.cp.GetConnection().WithContext(ctx).Model(&searchQuery).Query(&ents, query)
 		if err != nil {
 			if err == pg.ErrNoRows {
 				return nil, nil
@@ -2405,7 +2402,7 @@ func (p publishedRepositoryImpl) GetReadonlyPackageVersionsWithLimit(searchQuery
 			limit ?limit
 			offset ?offset
 	`
-		_, err := p.cp.GetConnection().Model(&searchQuery).
+		_, err := p.cp.GetConnection().WithContext(ctx).Model(&searchQuery).
 			Query(&ents, fmt.Sprintf(query, notCondition, searchQuery.SortBy, searchQuery.SortOrder))
 		if err != nil {
 			if err == pg.ErrNoRows {
@@ -2418,9 +2415,9 @@ func (p publishedRepositoryImpl) GetReadonlyPackageVersionsWithLimit(searchQuery
 	return ents, nil
 }
 
-func (p publishedRepositoryImpl) GetVersionRefsV3(packageId string, version string, revision int) ([]entity.PublishedReferenceEntity, error) {
+func (p publishedRepositoryImpl) GetVersionRefsV3(ctx context.Context, packageId string, version string, revision int) ([]entity.PublishedReferenceEntity, error) {
 	var result []entity.PublishedReferenceEntity
-	err := p.cp.GetConnection().Model(&result).
+	err := p.cp.GetConnection().WithContext(ctx).Model(&result).
 		ColumnExpr("published_version_reference.*").
 		Where("package_id = ?", packageId).
 		Where("version = ?", version).
@@ -2442,9 +2439,9 @@ func (p publishedRepositoryImpl) GetVersionRefsV3(packageId string, version stri
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetRevisionContentWithLimit(packageId string, versionName string, revision int, skipRefs bool, searchQuery entity.PublishedContentSearchQueryEntity) ([]entity.PublishedContentEntity, error) {
+func (p publishedRepositoryImpl) GetRevisionContentWithLimit(ctx context.Context, packageId string, versionName string, revision int, skipRefs bool, searchQuery entity.PublishedContentSearchQueryEntity) ([]entity.PublishedContentEntity, error) {
 	var ents []entity.PublishedContentEntity
-	query := p.cp.GetConnection().Model(&ents).
+	query := p.cp.GetConnection().WithContext(ctx).Model(&ents).
 		ColumnExpr("published_version_revision_content.*")
 	if !skipRefs {
 		query.Join(`inner join
@@ -2500,7 +2497,7 @@ func (p publishedRepositoryImpl) GetRevisionContentWithLimit(packageId string, v
 	return ents, err
 }
 
-func (p publishedRepositoryImpl) GetDefaultVersion(packageId string, status string) (*entity.PublishedVersionEntity, error) {
+func (p publishedRepositoryImpl) GetDefaultVersion(ctx context.Context, packageId string, status string) (*entity.PublishedVersionEntity, error) {
 	result := new(entity.PublishedVersionEntity)
 	query := `with maxrev as
 		(
@@ -2521,7 +2518,7 @@ func (p publishedRepositoryImpl) GetDefaultVersion(packageId string, status stri
 		query += ` order by pv.published_at desc`
 	}
 	query += ` limit 1;`
-	_, err := p.cp.GetConnection().QueryOne(result, query, packageId, status)
+	_, err := p.cp.GetConnection().WithContext(ctx).QueryOne(result, query, packageId, status)
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return nil, nil
@@ -2531,14 +2528,14 @@ func (p publishedRepositoryImpl) GetDefaultVersion(packageId string, status stri
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetFileSharedInfo(packageId string, slug string, versionName string) (*entity.SharedUrlInfoEntity, error) {
+func (p publishedRepositoryImpl) GetFileSharedInfo(ctx context.Context, packageId string, slug string, versionName string) (*entity.SharedUrlInfoEntity, error) {
 	result := new(entity.SharedUrlInfoEntity)
 	version, _, err := SplitVersionRevision(versionName)
 	if err != nil {
 		return nil, err
 	}
 
-	err = p.cp.GetConnection().Model(result).
+	err = p.cp.GetConnection().WithContext(ctx).Model(result).
 		Where("package_id = ?", packageId).
 		Where("version = ?", version).
 		Where("file_id = ?", slug).
@@ -2552,9 +2549,9 @@ func (p publishedRepositoryImpl) GetFileSharedInfo(packageId string, slug string
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetFileSharedInfoById(sharedId string) (*entity.SharedUrlInfoEntity, error) {
+func (p publishedRepositoryImpl) GetFileSharedInfoById(ctx context.Context, sharedId string) (*entity.SharedUrlInfoEntity, error) {
 	result := entity.SharedUrlInfoEntity{SharedId: sharedId}
-	err := p.cp.GetConnection().Model(&result).
+	err := p.cp.GetConnection().WithContext(ctx).Model(&result).
 		WherePK().
 		First()
 	if err != nil {
@@ -2566,8 +2563,8 @@ func (p publishedRepositoryImpl) GetFileSharedInfoById(sharedId string) (*entity
 	return &result, nil
 }
 
-func (p publishedRepositoryImpl) CreateFileSharedInfo(newSharedUrlInfo *entity.SharedUrlInfoEntity) error {
-	_, err := p.cp.GetConnection().Model(newSharedUrlInfo).Insert()
+func (p publishedRepositoryImpl) CreateFileSharedInfo(ctx context.Context, newSharedUrlInfo *entity.SharedUrlInfoEntity) error {
+	_, err := p.cp.GetConnection().WithContext(ctx).Model(newSharedUrlInfo).Insert()
 	if err != nil {
 		if pgErr, ok := err.(pg.Error); ok {
 			if pgErr.IntegrityViolation() {
@@ -2583,8 +2580,7 @@ func (p publishedRepositoryImpl) CreateFileSharedInfo(newSharedUrlInfo *entity.S
 	return nil
 }
 
-func (p publishedRepositoryImpl) CreatePackage(packageEntity *entity.PackageEntity) error {
-	ctx := context.Background()
+func (p publishedRepositoryImpl) CreatePackage(ctx context.Context, packageEntity *entity.PackageEntity) error {
 	err := p.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
 		_, err := tx.Model(packageEntity).OnConflict("(id) DO NOTHING").Insert()
 		if err != nil {
@@ -2608,8 +2604,7 @@ func (p publishedRepositoryImpl) CreatePackage(packageEntity *entity.PackageEnti
 	return nil
 }
 
-func (p publishedRepositoryImpl) CreatePrivatePackageForUser(packageEntity *entity.PackageEntity, userRoleEntity *entity.PackageMemberRoleEntity) error {
-	ctx := context.Background()
+func (p publishedRepositoryImpl) CreatePrivatePackageForUser(ctx context.Context, packageEntity *entity.PackageEntity, userRoleEntity *entity.PackageMemberRoleEntity) error {
 	return p.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
 		_, err := tx.Model(packageEntity).Insert()
 		if err != nil {
@@ -2623,9 +2618,9 @@ func (p publishedRepositoryImpl) CreatePrivatePackageForUser(packageEntity *enti
 	})
 }
 
-func (p publishedRepositoryImpl) GetPackage(id string) (*entity.PackageEntity, error) {
+func (p publishedRepositoryImpl) GetPackage(ctx context.Context, id string) (*entity.PackageEntity, error) {
 	result := new(entity.PackageEntity)
-	err := p.cp.GetConnection().Model(result).
+	err := p.cp.GetConnection().WithContext(ctx).Model(result).
 		Where("id = ?", id).
 		Where("deleted_at is ?", nil).
 		First()
@@ -2638,9 +2633,9 @@ func (p publishedRepositoryImpl) GetPackage(id string) (*entity.PackageEntity, e
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetDeletedPackage(id string) (*entity.PackageEntity, error) {
+func (p publishedRepositoryImpl) GetDeletedPackage(ctx context.Context, id string) (*entity.PackageEntity, error) {
 	result := new(entity.PackageEntity)
-	err := p.cp.GetConnection().Model(result).
+	err := p.cp.GetConnection().WithContext(ctx).Model(result).
 		Where("id = ?", id).
 		Where("deleted_at is not ?", nil).
 		First()
@@ -2653,9 +2648,9 @@ func (p publishedRepositoryImpl) GetDeletedPackage(id string) (*entity.PackageEn
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetPackageIncludingDeleted(id string) (*entity.PackageEntity, error) {
+func (p publishedRepositoryImpl) GetPackageIncludingDeleted(ctx context.Context, id string) (*entity.PackageEntity, error) {
 	result := new(entity.PackageEntity)
-	err := p.cp.GetConnection().Model(result).
+	err := p.cp.GetConnection().WithContext(ctx).Model(result).
 		Where("id = ?", id).
 		First()
 	if err != nil {
@@ -2667,7 +2662,7 @@ func (p publishedRepositoryImpl) GetPackageIncludingDeleted(id string) (*entity.
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetAllChildPackageIdsIncludingParent(parentId string) ([]string, error) {
+func (p publishedRepositoryImpl) GetAllChildPackageIdsIncludingParent(ctx context.Context, parentId string) ([]string, error) {
 	var result []string
 	var ents []entity.PackageIdEntity
 
@@ -2676,7 +2671,7 @@ func (p publishedRepositoryImpl) GetAllChildPackageIdsIncludingParent(parentId s
 		UNION ALL
 		select g.id from package_group g inner join children on children.id = g.parent_id)
 	select id from children`
-	_, err := p.cp.GetConnection().Query(&ents, query, parentId)
+	_, err := p.cp.GetConnection().WithContext(ctx).Query(&ents, query, parentId)
 	if err != nil {
 		return nil, err
 	}
@@ -2686,7 +2681,7 @@ func (p publishedRepositoryImpl) GetAllChildPackageIdsIncludingParent(parentId s
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetDescendantPackages(parentId string) ([]entity.PackageEntity, error) {
+func (p publishedRepositoryImpl) GetDescendantPackages(ctx context.Context, parentId string) ([]entity.PackageEntity, error) {
 	var result []entity.PackageEntity
 
 	query := `with recursive children as (
@@ -2698,7 +2693,7 @@ func (p publishedRepositoryImpl) GetDescendantPackages(parentId string) ([]entit
 	  and id != ?
 	  and kind = ?
 	  and deleted_at is null`
-	_, err := p.cp.GetConnection().Query(&result, query, parentId, parentId, entity.KIND_PACKAGE)
+	_, err := p.cp.GetConnection().WithContext(ctx).Query(&result, query, parentId, parentId, entity.KIND_PACKAGE)
 	if err != nil {
 		return nil, err
 	}
@@ -2715,7 +2710,7 @@ func (p publishedRepositoryImpl) updateExcludeFromSearchForAllChildPackages(tx *
 	return nil
 }
 
-func (p publishedRepositoryImpl) GetParentsForPackage(id string, includeDeleted bool) ([]entity.PackageEntity, error) {
+func (p publishedRepositoryImpl) GetParentsForPackage(ctx context.Context, id string, includeDeleted bool) ([]entity.PackageEntity, error) {
 	var parentIds []string
 	var result []entity.PackageEntity
 
@@ -2724,7 +2719,7 @@ func (p publishedRepositoryImpl) GetParentsForPackage(id string, includeDeleted 
 		return result, nil
 	}
 
-	query := p.cp.GetConnection().Model(&result)
+	query := p.cp.GetConnection().WithContext(ctx).Model(&result)
 	if !includeDeleted {
 		query.Where("deleted_at is ?", nil)
 	}
@@ -2741,8 +2736,7 @@ func (p publishedRepositoryImpl) GetParentsForPackage(id string, includeDeleted 
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) UpdatePackage(ent *entity.PackageEntity, excludeFromSearchChanged bool) (*entity.PackageEntity, error) {
-	ctx := context.Background()
+func (p publishedRepositoryImpl) UpdatePackage(ctx context.Context, ent *entity.PackageEntity, excludeFromSearchChanged bool) (*entity.PackageEntity, error) {
 
 	err := p.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
 		_, err := p.updatePackage(tx, ent, excludeFromSearchChanged)
@@ -2840,8 +2834,7 @@ func (p publishedRepositoryImpl) deletePackageServiceOwnership(tx *pg.Tx, packag
 	return nil
 }
 
-func (p publishedRepositoryImpl) DeletePackage(id string, userId string) (int, error) {
-	ctx := context.Background()
+func (p publishedRepositoryImpl) DeletePackage(ctx context.Context, id string, userId string) (int, error) {
 	var deletedReleaseCount int
 	err := p.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
 		count, err := p.deleteGroup(tx, id, userId)
@@ -2998,9 +2991,9 @@ func (p publishedRepositoryImpl) GetFilteredDeletedPackages(ctx context.Context,
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetVersionValidationChanges_deprecated(packageId string, versionName string, revision int) (*entity.PublishedVersionValidationEntity_deprecated, error) {
+func (p publishedRepositoryImpl) GetVersionValidationChanges_deprecated(ctx context.Context, packageId string, versionName string, revision int) (*entity.PublishedVersionValidationEntity_deprecated, error) {
 	result := new(entity.PublishedVersionValidationEntity_deprecated)
-	err := p.cp.GetConnection().Model(result).
+	err := p.cp.GetConnection().WithContext(ctx).Model(result).
 		ExcludeColumn("spectral").
 		Where("package_id = ?", packageId).
 		Where("version = ?", versionName).
@@ -3015,9 +3008,9 @@ func (p publishedRepositoryImpl) GetVersionValidationChanges_deprecated(packageI
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetVersionValidationProblems_deprecated(packageId string, versionName string, revision int) (*entity.PublishedVersionValidationEntity_deprecated, error) {
+func (p publishedRepositoryImpl) GetVersionValidationProblems_deprecated(ctx context.Context, packageId string, versionName string, revision int) (*entity.PublishedVersionValidationEntity_deprecated, error) {
 	result := new(entity.PublishedVersionValidationEntity_deprecated)
-	err := p.cp.GetConnection().Model(result).
+	err := p.cp.GetConnection().WithContext(ctx).Model(result).
 		ExcludeColumn("changelog", "bwc").
 		Where("package_id = ?", packageId).
 		Where("version = ?", versionName).
@@ -3068,7 +3061,7 @@ func SplitVersionRevision(version string) (string, int, error) {
 	return versionName, versionRevision, nil
 }
 
-func (p publishedRepositoryImpl) SearchForVersions(searchQuery *entity.PackageSearchQuery) ([]entity.PackageSearchResult, error) {
+func (p publishedRepositoryImpl) SearchForVersions(ctx context.Context, searchQuery *entity.PackageSearchQuery) ([]entity.PackageSearchResult, error) {
 	searchQuery.TextFilter = "%" + utils.LikeEscaped(searchQuery.TextFilter) + "%"
 	var result []entity.PackageSearchResult
 	versionsSearchQuery := `
@@ -3167,7 +3160,7 @@ func (p publishedRepositoryImpl) SearchForVersions(searchQuery *entity.PackageSe
 		limit ?limit
 		offset ?offset;
 	`
-	_, err := p.cp.GetConnection().Model(searchQuery).Query(&result, versionsSearchQuery)
+	_, err := p.cp.GetConnection().WithContext(ctx).Model(searchQuery).Query(&result, versionsSearchQuery)
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return nil, nil
@@ -3178,7 +3171,7 @@ func (p publishedRepositoryImpl) SearchForVersions(searchQuery *entity.PackageSe
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) SearchForDocuments(searchQuery *entity.DocumentSearchQuery) ([]entity.DocumentSearchResult, error) {
+func (p publishedRepositoryImpl) SearchForDocuments(ctx context.Context, searchQuery *entity.DocumentSearchQuery) ([]entity.DocumentSearchResult, error) {
 	searchQuery.TextFilter = "%" + utils.LikeEscaped(searchQuery.TextFilter) + "%"
 	var result []entity.DocumentSearchResult
 	documentsSearchQuery := `
@@ -3264,7 +3257,7 @@ func (p publishedRepositoryImpl) SearchForDocuments(searchQuery *entity.Document
 		limit ?limit
 		offset ?offset;
 	`
-	_, err := p.cp.GetConnection().Model(searchQuery).Query(&result, documentsSearchQuery)
+	_, err := p.cp.GetConnection().WithContext(ctx).Model(searchQuery).Query(&result, documentsSearchQuery)
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return nil, nil
@@ -3275,8 +3268,7 @@ func (p publishedRepositoryImpl) SearchForDocuments(searchQuery *entity.Document
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) RecalculatePackageOperationGroups(packageId string, restGroupingPrefixRegex string, userId string) error {
-	ctx := context.Background()
+func (p publishedRepositoryImpl) RecalculatePackageOperationGroups(ctx context.Context, packageId string, restGroupingPrefixRegex string, userId string) error {
 
 	err := p.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
 		_, err := tx.Exec(`delete from operation_group where package_id = ? and autogenerated = true`, packageId)
@@ -3295,8 +3287,7 @@ func (p publishedRepositoryImpl) RecalculatePackageOperationGroups(packageId str
 	return nil
 }
 
-func (p publishedRepositoryImpl) RecalculateOperationGroups(packageId string, version string, revision int, restGroupingPrefixRegex string, userId string) error {
-	ctx := context.Background()
+func (p publishedRepositoryImpl) RecalculateOperationGroups(ctx context.Context, packageId string, version string, revision int, restGroupingPrefixRegex string, userId string) error {
 
 	return p.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
 		return p.recalculateOperationsGroupsTx(tx, packageId, version, revision, restGroupingPrefixRegex, userId)
@@ -3425,9 +3416,9 @@ func (p publishedRepositoryImpl) recalculateOperationsGroupsTx(tx *pg.Tx, packag
 	return nil
 }
 
-func (p publishedRepositoryImpl) GetVersionComparison(comparisonId string) (*entity.VersionComparisonEntity, error) {
+func (p publishedRepositoryImpl) GetVersionComparison(ctx context.Context, comparisonId string) (*entity.VersionComparisonEntity, error) {
 	comparison := new(entity.VersionComparisonEntity)
-	err := p.cp.GetConnection().
+	err := p.cp.GetConnection().WithContext(ctx).
 		Model(comparison).
 		Where("comparison_id = ?", comparisonId).
 		First()
@@ -3440,9 +3431,9 @@ func (p publishedRepositoryImpl) GetVersionComparison(comparisonId string) (*ent
 	return comparison, nil
 }
 
-func (p publishedRepositoryImpl) GetVersionRefsComparisons(comparisonId string) ([]entity.VersionComparisonEntity, error) {
+func (p publishedRepositoryImpl) GetVersionRefsComparisons(ctx context.Context, comparisonId string) ([]entity.VersionComparisonEntity, error) {
 	comparisons := make([]entity.VersionComparisonEntity, 0)
-	err := p.cp.GetConnection().
+	err := p.cp.GetConnection().WithContext(ctx).
 		Model(&comparisons).
 		Where("comparison_id in (select unnest(refs) from version_comparison where comparison_id = ?)", comparisonId).
 		Select()
@@ -3452,9 +3443,9 @@ func (p publishedRepositoryImpl) GetVersionRefsComparisons(comparisonId string) 
 	return comparisons, nil
 }
 
-func (p publishedRepositoryImpl) GetVersionRevisionContentForDocumentsTransformation(packageId string, versionName string, revision int, searchQuery entity.ContentForDocumentsTransformationSearchQueryEntity) ([]entity.PublishedContentWithDataEntity, error) {
+func (p publishedRepositoryImpl) GetVersionRevisionContentForDocumentsTransformation(ctx context.Context, packageId string, versionName string, revision int, searchQuery entity.ContentForDocumentsTransformationSearchQueryEntity) ([]entity.PublishedContentWithDataEntity, error) {
 	var ents []entity.PublishedContentWithDataEntity
-	query := p.cp.GetConnection().Model(&ents).Distinct().
+	query := p.cp.GetConnection().WithContext(ctx).Model(&ents).Distinct().
 		ColumnExpr("published_version_revision_content.*").ColumnExpr("pd.*").ColumnExpr("published_version_revision_content.package_id as content_package_id")
 	query.Join(`inner join
 			(with refs as(
@@ -3514,9 +3505,9 @@ func (p publishedRepositoryImpl) GetVersionRevisionContentForDocumentsTransforma
 	return ents, err
 }
 
-func (p publishedRepositoryImpl) GetPublishedSourcesArchives(offset int) (*entity.PublishedSrcArchiveEntity, error) {
+func (p publishedRepositoryImpl) GetPublishedSourcesArchives(ctx context.Context, offset int) (*entity.PublishedSrcArchiveEntity, error) {
 	result := new(entity.PublishedSrcArchiveEntity)
-	err := p.cp.GetConnection().Model(result).Offset(offset).Limit(1).
+	err := p.cp.GetConnection().WithContext(ctx).Model(result).Offset(offset).Limit(1).
 		First()
 	if err != nil {
 		if err == pg.ErrNoRows {
@@ -3527,8 +3518,7 @@ func (p publishedRepositoryImpl) GetPublishedSourcesArchives(offset int) (*entit
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) DeletePublishedSourcesArchives(checksums []string) error {
-	ctx := context.Background()
+func (p publishedRepositoryImpl) DeletePublishedSourcesArchives(ctx context.Context, checksums []string) error {
 	var deletedRows int
 	err := p.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
 		query := `delete from published_sources_archives
@@ -3542,7 +3532,7 @@ func (p publishedRepositoryImpl) DeletePublishedSourcesArchives(checksums []stri
 	})
 
 	if deletedRows > 0 {
-		_, err = p.cp.GetConnection().Exec("vacuum full published_sources_archives")
+		_, err = p.cp.GetConnection().WithContext(ctx).Exec("vacuum full published_sources_archives")
 		if err != nil {
 			return errors.Wrap(err, "failed to run vacuum for table published_sources_archives")
 		}
@@ -3550,8 +3540,7 @@ func (p publishedRepositoryImpl) DeletePublishedSourcesArchives(checksums []stri
 	return nil
 }
 
-func (p publishedRepositoryImpl) SavePublishedSourcesArchive(ent *entity.PublishedSrcArchiveEntity) error {
-	ctx := context.Background()
+func (p publishedRepositoryImpl) SavePublishedSourcesArchive(ctx context.Context, ent *entity.PublishedSrcArchiveEntity) error {
 	err := p.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
 		_, err := tx.Model(ent).OnConflict("(checksum) DO NOTHING").Insert()
 		if err != nil {
@@ -3562,8 +3551,7 @@ func (p publishedRepositoryImpl) SavePublishedSourcesArchive(ent *entity.Publish
 	return err
 }
 
-func (p publishedRepositoryImpl) UpdatePublishedSourcesArchive(packageId string, version string, revision int, newChecksum string, srcArchive *entity.PublishedSrcArchiveEntity, trackingEntity *entity.SourcesUpdateTrackingEntity) error {
-	ctx := context.Background()
+func (p publishedRepositoryImpl) UpdatePublishedSourcesArchive(ctx context.Context, packageId string, version string, revision int, newChecksum string, srcArchive *entity.PublishedSrcArchiveEntity, trackingEntity *entity.SourcesUpdateTrackingEntity) error {
 	return p.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
 		_, err := tx.Model(srcArchive).OnConflict("(checksum) DO NOTHING").Insert()
 		if err != nil {
@@ -3586,8 +3574,7 @@ func (p publishedRepositoryImpl) UpdatePublishedSourcesArchive(packageId string,
 	})
 }
 
-func (p publishedRepositoryImpl) UpdatePublishedSourcesChecksum(packageId string, version string, revision int, newChecksum string, trackingEntity *entity.SourcesUpdateTrackingEntity) error {
-	ctx := context.Background()
+func (p publishedRepositoryImpl) UpdatePublishedSourcesChecksum(ctx context.Context, packageId string, version string, revision int, newChecksum string, trackingEntity *entity.SourcesUpdateTrackingEntity) error {
 	return p.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
 		_, err := tx.Model((*entity.PublishedSrcEntity)(nil)).
 			Set("archive_checksum = ?", newChecksum).
@@ -3630,10 +3617,10 @@ func (p PublishedBuildChangesOverview) getUniqueChanges() []string {
 	return keys
 }
 
-func (p publishedRepositoryImpl) GetPublishedVersionsHistory(filter view.PublishedVersionHistoryFilter) ([]entity.PackageVersionHistoryEntity, error) {
+func (p publishedRepositoryImpl) GetPublishedVersionsHistory(ctx context.Context, filter view.PublishedVersionHistoryFilter) ([]entity.PackageVersionHistoryEntity, error) {
 	result := make([]entity.PackageVersionHistoryEntity, 0)
 
-	// query := p.cp.GetConnection().Model(&result)
+	// query := p.cp.GetConnection().WithContext(ctx).Model(&result)
 	// if filter.PublishedAfter != nil {
 	// 	query.Where("published_version.published_at >= ?", *filter.PublishedAfter)
 	// }
@@ -3656,7 +3643,7 @@ func (p publishedRepositoryImpl) GetPublishedVersionsHistory(filter view.Publish
 	// 	Order("published_version.published_at asc", "published_version.package_id", "published_version.version", "published_version.revision").
 	// 	Limit(filter.Limit).
 	// 	Offset(filter.Limit * filter.Page)
-	_, err := p.cp.GetConnection().Query(&result, `
+	_, err := p.cp.GetConnection().WithContext(ctx).Query(&result, `
 			with publications as(
 				select published_version.package_id,
 						published_version.version,
@@ -3701,16 +3688,16 @@ func (p publishedRepositoryImpl) GetPublishedVersionsHistory(filter view.Publish
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) StoreOperationGroupPublishProcess(ent *entity.OperationGroupPublishEntity) error {
-	_, err := p.cp.GetConnection().Model(ent).Insert()
+func (p publishedRepositoryImpl) StoreOperationGroupPublishProcess(ctx context.Context, ent *entity.OperationGroupPublishEntity) error {
+	_, err := p.cp.GetConnection().WithContext(ctx).Model(ent).Insert()
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (p publishedRepositoryImpl) UpdateOperationGroupPublishProcess(ent *entity.OperationGroupPublishEntity) error {
-	_, err := p.cp.GetConnection().Model(ent).
+func (p publishedRepositoryImpl) UpdateOperationGroupPublishProcess(ctx context.Context, ent *entity.OperationGroupPublishEntity) error {
+	_, err := p.cp.GetConnection().WithContext(ctx).Model(ent).
 		WherePK().
 		Set("details = ?details").
 		Set("status = ?status").
@@ -3721,9 +3708,9 @@ func (p publishedRepositoryImpl) UpdateOperationGroupPublishProcess(ent *entity.
 	return nil
 }
 
-func (p publishedRepositoryImpl) GetOperationGroupPublishProcess(publishId string) (*entity.OperationGroupPublishEntity, error) {
+func (p publishedRepositoryImpl) GetOperationGroupPublishProcess(ctx context.Context, publishId string) (*entity.OperationGroupPublishEntity, error) {
 	result := new(entity.OperationGroupPublishEntity)
-	err := p.cp.GetConnection().Model(result).
+	err := p.cp.GetConnection().WithContext(ctx).Model(result).
 		Where("publish_id = ?", publishId).
 		First()
 	if err != nil {
@@ -3735,16 +3722,16 @@ func (p publishedRepositoryImpl) GetOperationGroupPublishProcess(publishId strin
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) StoreCSVDashboardPublishProcess(ent *entity.CSVDashboardPublishEntity) error {
-	_, err := p.cp.GetConnection().Model(ent).Insert()
+func (p publishedRepositoryImpl) StoreCSVDashboardPublishProcess(ctx context.Context, ent *entity.CSVDashboardPublishEntity) error {
+	_, err := p.cp.GetConnection().WithContext(ctx).Model(ent).Insert()
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (p publishedRepositoryImpl) UpdateCSVDashboardPublishProcess(ent *entity.CSVDashboardPublishEntity) error {
-	_, err := p.cp.GetConnection().Model(ent).
+func (p publishedRepositoryImpl) UpdateCSVDashboardPublishProcess(ctx context.Context, ent *entity.CSVDashboardPublishEntity) error {
+	_, err := p.cp.GetConnection().WithContext(ctx).Model(ent).
 		WherePK().
 		Set("message = ?message").
 		Set("status = ?status").
@@ -3756,9 +3743,9 @@ func (p publishedRepositoryImpl) UpdateCSVDashboardPublishProcess(ent *entity.CS
 	return nil
 }
 
-func (p publishedRepositoryImpl) GetCSVDashboardPublishProcess(publishId string) (*entity.CSVDashboardPublishEntity, error) {
+func (p publishedRepositoryImpl) GetCSVDashboardPublishProcess(ctx context.Context, publishId string) (*entity.CSVDashboardPublishEntity, error) {
 	result := new(entity.CSVDashboardPublishEntity)
-	err := p.cp.GetConnection().Model(result).
+	err := p.cp.GetConnection().WithContext(ctx).Model(result).
 		ExcludeColumn("csv_report").
 		Where("publish_id = ?", publishId).
 		First()
@@ -3771,9 +3758,9 @@ func (p publishedRepositoryImpl) GetCSVDashboardPublishProcess(publishId string)
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetCSVDashboardPublishReport(publishId string) (*entity.CSVDashboardPublishEntity, error) {
+func (p publishedRepositoryImpl) GetCSVDashboardPublishReport(ctx context.Context, publishId string) (*entity.CSVDashboardPublishEntity, error) {
 	result := new(entity.CSVDashboardPublishEntity)
-	err := p.cp.GetConnection().Model(result).
+	err := p.cp.GetConnection().WithContext(ctx).Model(result).
 		Where("publish_id = ?", publishId).
 		First()
 	if err != nil {
@@ -4589,9 +4576,9 @@ func (p publishedRepositoryImpl) countRelatedDataForPackageRevisionsTx(ctx conte
 	return nil
 }
 
-func (p publishedRepositoryImpl) GetVersionInternalDocuments(packageId string, version string, revision int) ([]entity.VersionInternalDocumentEntity, error) {
+func (p publishedRepositoryImpl) GetVersionInternalDocuments(ctx context.Context, packageId string, version string, revision int) ([]entity.VersionInternalDocumentEntity, error) {
 	var docs []entity.VersionInternalDocumentEntity
-	err := p.cp.GetConnection().Model(&docs).
+	err := p.cp.GetConnection().WithContext(ctx).Model(&docs).
 		Where("package_id = ?", packageId).
 		Where("version = ?", version).
 		Where("revision = ?", revision).
@@ -4605,10 +4592,10 @@ func (p publishedRepositoryImpl) GetVersionInternalDocuments(packageId string, v
 	return docs, nil
 }
 
-func (p publishedRepositoryImpl) GetVersionInternalDocumentData(hash string) (*entity.EnrichedVersionInternalDocumentDataEntity, error) {
+func (p publishedRepositoryImpl) GetVersionInternalDocumentData(ctx context.Context, hash string) (*entity.EnrichedVersionInternalDocumentDataEntity, error) {
 	result := new(entity.EnrichedVersionInternalDocumentDataEntity)
 
-	err := p.cp.GetConnection().Model((*entity.VersionInternalDocumentDataEntity)(nil)).
+	err := p.cp.GetConnection().WithContext(ctx).Model((*entity.VersionInternalDocumentDataEntity)(nil)).
 		TableExpr("version_internal_document_data").
 		ColumnExpr("version_internal_document_data.hash").
 		ColumnExpr("version_internal_document_data.data").
@@ -4639,13 +4626,13 @@ func (p publishedRepositoryImpl) versionInternalDocumentDataExists(tx *pg.Tx, ha
 	return true, nil
 }
 
-func (p publishedRepositoryImpl) GetComparisonInternalDocumentsByComparisons(comparisons []entity.VersionComparisonEntity) ([]entity.ComparisonInternalDocumentEntity, error) {
+func (p publishedRepositoryImpl) GetComparisonInternalDocumentsByComparisons(ctx context.Context, comparisons []entity.VersionComparisonEntity) ([]entity.ComparisonInternalDocumentEntity, error) {
 	if len(comparisons) == 0 {
 		return []entity.ComparisonInternalDocumentEntity{}, nil
 	}
 
 	var docs []entity.ComparisonInternalDocumentEntity
-	query := p.cp.GetConnection().Model(&docs)
+	query := p.cp.GetConnection().WithContext(ctx).Model(&docs)
 
 	for i, comparison := range comparisons {
 		if i == 0 {
@@ -4679,9 +4666,9 @@ func (p publishedRepositoryImpl) GetComparisonInternalDocumentsByComparisons(com
 	return docs, nil
 }
 
-func (p publishedRepositoryImpl) GetComparisonInternalDocumentData(hash string) (*entity.EnrichedComparisonInternalDocumentDataEntity, error) {
+func (p publishedRepositoryImpl) GetComparisonInternalDocumentData(ctx context.Context, hash string) (*entity.EnrichedComparisonInternalDocumentDataEntity, error) {
 	result := new(entity.EnrichedComparisonInternalDocumentDataEntity)
-	err := p.cp.GetConnection().Model((*entity.ComparisonInternalDocumentEntity)(nil)).
+	err := p.cp.GetConnection().WithContext(ctx).Model((*entity.ComparisonInternalDocumentEntity)(nil)).
 		TableExpr("comparison_internal_document_data").
 		ColumnExpr("comparison_internal_document_data.hash").
 		ColumnExpr("comparison_internal_document_data.data").
@@ -4712,8 +4699,8 @@ func (p publishedRepositoryImpl) comparisonInternalDocumentDataExists(tx *pg.Tx,
 	return true, nil
 }
 
-func (p publishedRepositoryImpl) UpdateDocumentShareabilityBySlug(packageId string, version string, revision int, slug string, shareability string) error {
-	_, err := p.cp.GetConnection().Model((*entity.PublishedContentEntity)(nil)).
+func (p publishedRepositoryImpl) UpdateDocumentShareabilityBySlug(ctx context.Context, packageId string, version string, revision int, slug string, shareability string) error {
+	_, err := p.cp.GetConnection().WithContext(ctx).Model((*entity.PublishedContentEntity)(nil)).
 		Set("shareability_status = ?", shareability).
 		Where("package_id = ?", packageId).
 		Where("version = ?", version).
@@ -4723,11 +4710,11 @@ func (p publishedRepositoryImpl) UpdateDocumentShareabilityBySlug(packageId stri
 	return err
 }
 
-func (p publishedRepositoryImpl) BulkUpdateDocumentShareability(entities []*entity.PublishedContentEntity) error {
+func (p publishedRepositoryImpl) BulkUpdateDocumentShareability(ctx context.Context, entities []*entity.PublishedContentEntity) error {
 	if len(entities) == 0 {
 		return nil
 	}
-	return p.cp.GetConnection().RunInTransaction(context.Background(), func(tx *pg.Tx) error {
+	return p.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
 		for _, e := range entities {
 			_, err := tx.Model(e).Column("shareability_status").WherePK().Update()
 			if err != nil {

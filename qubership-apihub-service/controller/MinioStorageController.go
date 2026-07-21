@@ -3,7 +3,7 @@ package controller
 import (
 	"net/http"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
@@ -16,23 +16,21 @@ type MinioStorageController interface {
 	DownloadFilesFromMinioToDatabase(w http.ResponseWriter, r *http.Request)
 }
 
-func NewMinioStorageController(minioCreds *view.MinioStorageCreds, minioStorageService service.MinioStorageService, roleService service.RoleService) MinioStorageController {
+func NewMinioStorageController(minioCreds *view.MinioStorageCreds, minioStorageService service.MinioStorageService) MinioStorageController {
 	return &minioStorageControllerImpl{
 		minioStorageService: minioStorageService,
-		roleService:         roleService,
 		minioCreds:          minioCreds,
 	}
 }
 
 type minioStorageControllerImpl struct {
 	minioStorageService service.MinioStorageService
-	roleService         service.RoleService
 	minioCreds          *view.MinioStorageCreds
 }
 
 func (m minioStorageControllerImpl) DownloadFilesFromMinioToDatabase(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Create(r)
-	sufficientPrivileges := m.roleService.IsSysadm(ctx)
+	ctx := secctx.MakeUserContext(r)
+	sufficientPrivileges := secctx.IsSysadm(ctx)
 	if !sufficientPrivileges {
 		utils.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
