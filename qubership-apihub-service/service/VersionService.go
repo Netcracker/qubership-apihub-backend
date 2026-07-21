@@ -73,7 +73,9 @@ func NewVersionService(favoritesRepo repository.FavoritesRepository,
 	versionCleanupRepository repository.VersionCleanupRepository,
 	operationGroupService OperationGroupService,
 	monitoringService MonitoringService,
-	roleService RoleService) VersionService {
+	roleService RoleService,
+	ddlContractService DDLContractService,
+	mcpContractService MCPContractService) VersionService {
 	return &versionServiceImpl{
 		favoritesRepo:                          favoritesRepo,
 		publishedRepo:                          publishedRepo,
@@ -89,6 +91,8 @@ func NewVersionService(favoritesRepo repository.FavoritesRepository,
 		operationGroupService:                  operationGroupService,
 		monitoringService:                      monitoringService,
 		roleService:                            roleService,
+		ddlContractService:                     ddlContractService,
+		mcpContractService:                     mcpContractService,
 		previousVersionStatusValidationEnabled: systemInfoService.GetFeatureFlags().PreviousVersionStatusValidation,
 	}
 }
@@ -109,6 +113,8 @@ type versionServiceImpl struct {
 	operationGroupService                  OperationGroupService
 	monitoringService                      MonitoringService
 	roleService                            RoleService
+	ddlContractService                     DDLContractService
+	mcpContractService                     MCPContractService
 	previousVersionStatusValidationEnabled bool
 }
 
@@ -294,11 +300,15 @@ func (v versionServiceImpl) GetLatestDocuments(packageId string, versionName str
 		}
 	}
 
+	documentTypesFilter := view.GetDocumentTypesForApiType(filterReq.ApiType)
+	if filterReq.ContractType != "" {
+		documentTypesFilter = view.GetDocumentTypesForContractType(filterReq.ContractType)
+	}
 	searchQuery := entity.PublishedContentSearchQueryEntity{
 		TextFilter:          filterReq.TextFilter,
 		Limit:               filterReq.Limit,
 		Offset:              filterReq.Offset,
-		DocumentTypesFilter: view.GetDocumentTypesForApiType(filterReq.ApiType),
+		DocumentTypesFilter: documentTypesFilter,
 	}
 
 	versionDocuments := make([]view.PublishedDocumentRefView, 0)
@@ -727,6 +737,23 @@ func (v versionServiceImpl) GetPackageVersionContent(packageId string, version s
 	}
 
 	versionContent.OperationTypes = versionOperationTypes
+
+	if includeSummary {
+		ddlSummary, err := v.ddlContractService.GetVersionSummary(packageId, versionEnt.Version)
+		if err != nil {
+			return nil, err
+		}
+		mcpSummary, err := v.mcpContractService.GetVersionSummary(packageId, versionEnt.Version)
+		if err != nil {
+			return nil, err
+		}
+		if ddlSummary != nil || mcpSummary != nil {
+			versionContent.ContractsSummary = &view.ContractsSummaryView{
+				DDL: ddlSummary,
+				MCP: mcpSummary,
+			}
+		}
+	}
 
 	return versionContent, nil
 }
