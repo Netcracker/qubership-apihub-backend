@@ -1,10 +1,12 @@
 package db
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	"github.com/go-pg/pg/v10"
+	log "github.com/sirupsen/logrus"
 )
 
 type ConnectionProvider interface {
@@ -30,9 +32,33 @@ func (c *connectionProviderImpl) GetConnection() *pg.DB {
 			PoolSize:   50,
 			MaxRetries: 5,
 		})
+		c.db.AddQueryHook(contextErrorHook{})
 	}
 	//c.db.AddQueryHook(&dbLogger{cpi: c})
 	return c.db
+}
+
+type contextErrorHook struct{}
+
+func (contextErrorHook) BeforeQuery(ctx context.Context, _ *pg.QueryEvent) (context.Context, error) {
+	return ctx, nil
+}
+
+// AfterQuery restores the context error when go-pg reports a query that failed because the caller's
+// context was cancelled. Depending on which of go-pg's two cancellation paths wins, the raw failure is
+// an i/o timeout or Postgres SQLSTATE 57014, neither of which errors.Is can match against the context
+// sentinels. The context is only consulted when the query actually failed, so a query that succeeded
+// just before the deadline keeps its result.
+func (contextErrorHook) AfterQuery(ctx context.Context, event *pg.QueryEvent) error {
+	if event.Err == nil {
+		return nil
+	}
+	ctxErr := ctx.Err()
+	if ctxErr == nil {
+		return nil
+	}
+	log.Warnf("Query aborted because the request context is done: %v", event.Err)
+	return fmt.Errorf("query aborted: %w", ctxErr)
 }
 
 //TODO: is this still needed ?

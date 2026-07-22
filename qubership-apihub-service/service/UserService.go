@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
@@ -33,7 +34,7 @@ type UserService interface {
 	StoreUserAvatar(ctx context.Context, id string, avatar []byte) error
 	GetUserAvatar(ctx context.Context, userId string) (*view.UserAvatar, error)
 	AuthenticateUser(ctx context.Context, email string, password string) (*view.User, error)
-	SearchUsersInLdap(ldapSearch view.LdapSearchFilterReq, withAvatars bool) (*view.LdapUsers, error)
+	SearchUsersInLdap(ctx context.Context, ldapSearch view.LdapSearchFilterReq, withAvatars bool) (*view.LdapUsers, error)
 	GetExtendedUser_deprecated(ctx context.Context) (*view.ExtendedUser_deprecated, error)
 	GetExtendedUser(ctx context.Context) (*view.ExtendedUser, error)
 }
@@ -63,7 +64,7 @@ func (u usersServiceImpl) GetUserAvatar(ctx context.Context, userId string) (*vi
 		return nil, err
 	}
 	if userAvatarEntity == nil {
-		usersFromLdap, err := u.SearchUsersInLdap(view.LdapSearchFilterReq{FilterToValue: map[string]string{view.SAMAccountName: userId}, Limit: 1}, true)
+		usersFromLdap, err := u.SearchUsersInLdap(ctx, view.LdapSearchFilterReq{FilterToValue: map[string]string{view.SAMAccountName: userId}, Limit: 1}, true)
 		if err != nil {
 			return nil, err
 		}
@@ -84,7 +85,7 @@ func (u usersServiceImpl) StoreUserAvatar(ctx context.Context, id string, avatar
 	newAvatarChecksum := sha256.Sum256(avatar)
 	avatarChanged, err := u.avatarChanged(ctx, id, newAvatarChecksum)
 	if err != nil {
-		return fmt.Errorf("failed to get user avatar: %v", err.Error())
+		return fmt.Errorf("failed to get user avatar: %w", err)
 	}
 	if avatarChanged {
 		err = u.saveUserAvatar(ctx, &view.UserAvatar{Id: id, Avatar: avatar, Checksum: newAvatarChecksum})
@@ -110,6 +111,7 @@ func (u usersServiceImpl) GetUsers(ctx context.Context, usersListReq view.UsersL
 
 	if usersListReq.Filter != "" {
 		searchResults, err := u.SearchUsersInLdap(
+			ctx,
 			view.LdapSearchFilterReq{
 				FilterToValue: map[string]string{view.DisplayName: usersListReq.Filter,
 					view.Surname: usersListReq.Filter,
@@ -149,13 +151,16 @@ func (u usersServiceImpl) GetUsers(ctx context.Context, usersListReq view.UsersL
 	return &view.Users{Users: result}, nil
 }
 
-func (u usersServiceImpl) SearchUsersInLdap(ldapSearchFilterReq view.LdapSearchFilterReq, withAvatars bool) (*view.LdapUsers, error) {
+func (u usersServiceImpl) SearchUsersInLdap(ctx context.Context, ldapSearchFilterReq view.LdapSearchFilterReq, withAvatars bool) (*view.LdapUsers, error) {
 	if len(ldapSearchFilterReq.FilterToValue) == 0 {
 		return nil, nil
 	}
 	ldapServerUrl := u.systemInfoService.GetLdapServer()
 	if ldapServerUrl == "" {
 		return nil, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, ldapDeadlineError(ldapServerUrl, err)
 	}
 	ld, err := ldap.DialURL(ldapServerUrl)
 	if err != nil {
@@ -168,6 +173,10 @@ func (u usersServiceImpl) SearchUsersInLdap(ldapSearchFilterReq view.LdapSearchF
 		}
 	}
 	defer ld.Close()
+
+	if err := setLdapOperationTimeout(ctx, ld); err != nil {
+		return nil, ldapDeadlineError(ldapServerUrl, err)
+	}
 	err = ld.Bind(
 		fmt.Sprintf("cn=%s,%s,%s",
 			u.systemInfoService.GetLdapUser(),
@@ -182,6 +191,9 @@ func (u usersServiceImpl) SearchUsersInLdap(ldapSearchFilterReq view.LdapSearchF
 			Message: exception.LdapConnectionIsNotAllowedMsg,
 			Params:  map[string]interface{}{"server": ldapServerUrl, "error": err.Error()},
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, ldapDeadlineError(ldapServerUrl, err)
 	}
 
 	var subFilter string
@@ -200,6 +212,9 @@ func (u usersServiceImpl) SearchUsersInLdap(ldapSearchFilterReq view.LdapSearchF
 		attributes,
 		controls,
 	)
+	if err := setLdapOperationTimeout(ctx, ld); err != nil {
+		return nil, ldapDeadlineError(ldapServerUrl, err)
+	}
 	result, err := ld.Search(searchReq)
 	if err != nil {
 		log.Debugf("[ld.Search() ]failed to query LDAP: %s", err.Error())
@@ -209,6 +224,9 @@ func (u usersServiceImpl) SearchUsersInLdap(ldapSearchFilterReq view.LdapSearchF
 			Message: exception.LdapSearchFailedMsg,
 			Params:  map[string]interface{}{"server": ldapServerUrl, "error": err.Error()},
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, ldapDeadlineError(ldapServerUrl, err)
 	}
 	users := make([]view.LdapUser, 0)
 	for _, entry := range result.Entries {
@@ -233,6 +251,35 @@ func (u usersServiceImpl) SearchUsersInLdap(ldapSearchFilterReq view.LdapSearchF
 	}
 
 	return &view.LdapUsers{Users: users}, nil
+}
+
+// setLdapOperationTimeout bounds a single LDAP request by what is left of the caller's deadline. It is
+// recomputed before each operation, because ldap.Conn.SetTimeout applies per request - one value set
+// once would let Bind and Search each consume the whole budget - and because SetTimeout silently
+// ignores a non-positive value.
+func setLdapOperationTimeout(ctx context.Context, ld *ldap.Conn) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return nil
+	}
+	budget := time.Until(deadline) - time.Second
+	if budget <= 0 {
+		return context.DeadlineExceeded
+	}
+	ld.SetTimeout(budget)
+	return nil
+}
+
+func ldapDeadlineError(ldapServerUrl string, err error) *exception.CustomError {
+	return &exception.CustomError{
+		Status:  http.StatusInternalServerError,
+		Code:    exception.LdapSearchFailed,
+		Message: exception.LdapSearchFailedMsg,
+		Params:  map[string]interface{}{"server": ldapServerUrl, "error": err.Error()},
+	}
 }
 
 func (u usersServiceImpl) GetUsersIdMap(ctx context.Context, userIds []string) (map[string]view.User, error) {
@@ -266,7 +313,7 @@ func (u usersServiceImpl) GetUserFromDB(ctx context.Context, userId string) (*vi
 	userEntity, err := u.repo.GetUserById(ctx, userId)
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user from DB: %v", err)
+		return nil, fmt.Errorf("failed to get user from DB: %w", err)
 	}
 	if userEntity != nil {
 		return entity.MakeUserView(userEntity), nil
@@ -533,7 +580,7 @@ func (u usersServiceImpl) GetExtendedUser_deprecated(ctx context.Context) (*view
 	userId := secctx.GetUserId(ctx)
 	userEntity, err := u.repo.GetUserById(ctx, userId)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user from DB: %v", err)
+		return nil, fmt.Errorf("failed to get user from DB: %w", err)
 	}
 	if userEntity != nil {
 		var ttlSeconds *int
@@ -550,7 +597,7 @@ func (u usersServiceImpl) GetExtendedUser(ctx context.Context) (*view.ExtendedUs
 	userId := secctx.GetUserId(ctx)
 	userEntity, err := u.repo.GetUserById(ctx, userId)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user from DB: %v", err)
+		return nil, fmt.Errorf("failed to get user from DB: %w", err)
 	}
 	if userEntity != nil {
 		var ttlSeconds *int

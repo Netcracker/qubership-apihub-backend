@@ -102,7 +102,7 @@ func (r roleServiceImpl) AddPackageMembers(ctx context.Context, packageId string
 	}
 
 	for _, nonExistentEmail := range nonExistentEmails {
-		ldapUsers, err := r.userService.SearchUsersInLdap(view.LdapSearchFilterReq{FilterToValue: map[string]string{view.Mail: nonExistentEmail}, Limit: 1}, true)
+		ldapUsers, err := r.userService.SearchUsersInLdap(ctx, view.LdapSearchFilterReq{FilterToValue: map[string]string{view.Mail: nonExistentEmail}, Limit: 1}, true)
 		if err != nil {
 			return nil, err
 		}

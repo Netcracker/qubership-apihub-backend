@@ -750,7 +750,7 @@ func (p publishedServiceImpl) PublishPackage(ctx context.Context, buildArc *arch
 		if existingPackage.ServiceName == "" {
 			serviceOwner, err := p.publishedRepo.GetServiceOwner(ctx, utils.GetPackageWorkspaceId(existingPackage.Id), buildConfig.ServiceName)
 			if err != nil {
-				return fmt.Errorf("failed to check service owner: %v", err.Error())
+				return fmt.Errorf("failed to check service owner: %w", err)
 			}
 			if serviceOwner == "" {
 				newServiceName = buildConfig.ServiceName
@@ -844,7 +844,7 @@ func (p publishedServiceImpl) PublishPackage(ctx context.Context, buildArc *arch
 			UserId:    versionEnt.CreatedBy,
 		})
 
-		err = p.publishNotificationService.SendNotification(versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
+		err = p.publishNotificationService.SendNotification(ctx, versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
 		if err != nil {
 			log.Errorf("failed to send published version notification: %v", err)
 		}

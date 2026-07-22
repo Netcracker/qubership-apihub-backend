@@ -113,20 +113,22 @@ func (p publishedRepositoryImpl) PatchVersion(ctx context.Context, packageId str
 	}
 
 	ent := new(entity.PublishedVersionEntity)
+	found := false
 
-	p.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
-		err := p.cp.GetConnection().WithContext(ctx).Model(ent).
+	err := p.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
+		err := tx.Model(ent).
 			Where("package_id = ?", packageId).
 			Where("version = ?", versionName).
 			Where("deleted_at is ?", nil).
 			Order("revision DESC").
 			First()
 		if err != nil {
-			if err == pg.ErrNoRows {
+			if errors.Is(err, pg.ErrNoRows) {
 				return nil
 			}
 			return err
 		}
+		found = true
 
 		statusChanged := false
 		if status != nil {
@@ -156,6 +158,12 @@ func (p publishedRepositoryImpl) PatchVersion(ctx context.Context, packageId str
 
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, nil
+	}
 
 	return ent, nil
 }
@@ -893,7 +901,7 @@ func (p publishedRepositoryImpl) getVersionComparisonsChanges(tx *pg.Tx, package
 			where package_id = ?
 			and version = ?`, packageInfo.PreviousVersionPackageId, packageInfo.PreviousVersion)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to calculate previous version revision: %v", err.Error())
+			return nil, nil, fmt.Errorf("failed to calculate previous version revision: %w", err)
 		}
 	}
 	versionComparisonsChanges := make(map[string]interface{}, 0)
@@ -935,7 +943,7 @@ func (p publishedRepositoryImpl) getVersionComparisonsChanges(tx *pg.Tx, package
 		packageInfo.PreviousVersionRevision,
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get version comparisons from db: %v", err.Error())
+		return nil, nil, fmt.Errorf("failed to get version comparisons from db: %w", err)
 	}
 	matchedComparisons := make(map[string]struct{}, 0)
 	versionComparisonIds := make([]string, 0)
@@ -998,7 +1006,7 @@ func (p publishedRepositoryImpl) getComparisonInternalDocumentsChanges(tx *pg.Tx
 			where package_id = ?
 			and version = ?`, packageInfo.PreviousVersionPackageId, packageInfo.PreviousVersion)
 		if err != nil {
-			return nil, fmt.Errorf("failed to calculate previous version revision for comparison internal docs: %v", err.Error())
+			return nil, fmt.Errorf("failed to calculate previous version revision for comparison internal docs: %w", err)
 		}
 	}
 	// Fetch comparison internal documents for main comparison and refs
@@ -1049,7 +1057,7 @@ func (p publishedRepositoryImpl) getComparisonInternalDocumentsChanges(tx *pg.Tx
 		packageInfo.PreviousVersionRevision,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get comparison internal documents from db: %v", err.Error())
+		return nil, fmt.Errorf("failed to get comparison internal documents from db: %w", err)
 	}
 	comparisonInternalDocsChanges := make(map[string]interface{}, 0)
 	matchedComparisonInternalDocs := make(map[string]struct{}, 0)
@@ -1147,7 +1155,7 @@ func (p publishedRepositoryImpl) getOperationComparisonsChanges(tx *pg.Tx, packa
 			where package_id = ?
 			and version = ?`, packageInfo.PreviousVersionPackageId, packageInfo.PreviousVersion)
 		if err != nil {
-			return nil, fmt.Errorf("failed to calculate previous version revision: %v", err.Error())
+			return nil, fmt.Errorf("failed to calculate previous version revision: %w", err)
 		}
 	}
 	operationComparisonsChanges := make(map[string]interface{}, 0)
@@ -1163,7 +1171,7 @@ func (p publishedRepositoryImpl) getOperationComparisonsChanges(tx *pg.Tx, packa
 			pg.In(versionComparisonIds),
 		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get operation comparisons from db: %v", err.Error())
+			return nil, fmt.Errorf("failed to get operation comparisons from db: %w", err)
 		}
 		for _, oldComp := range oldOperationComparisons {
 			key := fmt.Sprintf(`ComparisonId:%s;OperationId:%s;PreviousOperationId:%s`, oldComp.ComparisonId, oldComp.OperationId, oldComp.PreviousOperationId)
@@ -2544,7 +2552,7 @@ func (p publishedRepositoryImpl) GetDefaultVersion(ctx context.Context, packageI
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetVersionReferencingDashboards(packageId string, version string) ([]entity.PublishedVersionKeyEntity, error) {
+func (p publishedRepositoryImpl) GetVersionReferencingDashboards(ctx context.Context, packageId string, version string) ([]entity.PublishedVersionKeyEntity, error) {
 	result := make([]entity.PublishedVersionKeyEntity, 0)
 	query := `
 		SELECT DISTINCT ref.package_id, ref.version, ref.revision
@@ -2556,14 +2564,14 @@ func (p publishedRepositoryImpl) GetVersionReferencingDashboards(packageId strin
 			AND dash.deleted_at IS NULL
 			AND pkg.deleted_at IS NULL
 		ORDER BY ref.package_id, ref.version, ref.revision`
-	_, err := p.cp.GetConnection().Query(&result, query, packageId, version)
+	_, err := p.cp.GetConnection().WithContext(ctx).Query(&result, query, packageId, version)
 	if err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetPackageReferencingDashboards(packageId string) ([]entity.DashboardReferenceEntity, error) {
+func (p publishedRepositoryImpl) GetPackageReferencingDashboards(ctx context.Context, packageId string) ([]entity.DashboardReferenceEntity, error) {
 	result := make([]entity.DashboardReferenceEntity, 0)
 	query := `
 		WITH RECURSIVE subtree AS (
@@ -2583,7 +2591,7 @@ func (p publishedRepositoryImpl) GetPackageReferencingDashboards(packageId strin
 			AND dash.deleted_at IS NULL
 			AND pkg.deleted_at IS NULL
 		ORDER BY ref.reference_id, ref.package_id, ref.version, ref.revision`
-	_, err := p.cp.GetConnection().Query(&result, query, packageId)
+	_, err := p.cp.GetConnection().WithContext(ctx).Query(&result, query, packageId)
 	if err != nil {
 		return nil, err
 	}

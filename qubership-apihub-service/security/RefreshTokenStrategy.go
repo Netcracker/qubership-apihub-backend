@@ -46,14 +46,18 @@ func (r refreshTokenStrategyImpl) Authenticate(ctx goctx.Context, req *http.Requ
 			return nil, auth.NewTypeError("authentication failed:", (*auth.Info)(nil), v)
 		}
 		tokenCreationTimestamp, _ := strconv.ParseInt(info.GetExtensions().Get(TokenIssuedAtExt), 0, 64)
-		if r.jwtValidator.IsTokenRevoked(info.GetID(), tokenCreationTimestamp) {
+		revoked, err := r.jwtValidator.IsTokenRevoked(ctx, info.GetID(), tokenCreationTimestamp)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check refresh token revocation for %s: %w", info.GetID(), err)
+		}
+		if revoked {
 			return nil, fmt.Errorf("authentication failed for %s: refresh token is revoked", info.GetID())
 		}
 	}
 	if info == nil {
 		var t time.Time
 		var err error
-		info, t, err = r.jwtValidator.ValidateToken(refreshToken, RefreshTokenType)
+		info, t, err = r.jwtValidator.ValidateToken(ctx, refreshToken, RefreshTokenType)
 		if err != nil {
 			return nil, fmt.Errorf("authentication failed: %w", err)
 		}

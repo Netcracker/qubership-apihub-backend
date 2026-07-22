@@ -9,7 +9,6 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
-	log "github.com/sirupsen/logrus"
 )
 
 type MinioStorageController interface {
@@ -47,15 +46,7 @@ func (m minioStorageControllerImpl) DownloadFilesFromMinioToDatabase(w http.Resp
 	}
 	err := m.minioStorageService.DownloadFilesFromBucketToDatabase()
 	if err != nil {
-		log.Error("Failed to download data from minio: ", err.Error())
-		if customError, ok := err.(*exception.CustomError); ok {
-			utils.RespondWithCustomError(w, customError)
-		} else {
-			utils.RespondWithCustomError(w, &exception.CustomError{
-				Status:  http.StatusInternalServerError,
-				Message: "Failed to download data from minio",
-				Debug:   err.Error()})
-		}
+		utils.RespondWithError(w, "Failed to download data from minio", err)
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)

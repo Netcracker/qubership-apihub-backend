@@ -216,7 +216,34 @@ func SecureMCP(next http.Handler) http.Handler {
 	})
 }
 
+func requestTimeoutCause(err error) error {
+	if multiError, ok := err.(union.MultiError); ok {
+		for _, e := range multiError {
+			if cause := requestTimeoutCause(e); cause != nil {
+				return cause
+			}
+		}
+		return nil
+	}
+	if utils.IsRequestTimeout(err) {
+		return err
+	}
+	return nil
+}
+
 func respondWithAuthFailedError(w http.ResponseWriter, err error) {
+	// A request that ran out of its deadline while authenticating is not an authentication failure,
+	// and reporting it as 401 sends the user off to fix credentials that can be perfectly valid.
+	if cause := requestTimeoutCause(err); cause != nil {
+		log.Errorf("Authentication aborted: %v", err)
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusInternalServerError,
+			Code:    exception.RequestTimeout,
+			Message: exception.RequestTimeoutMsg,
+			Debug:   err.Error(),
+		})
+		return
+	}
 	log.Tracef("Authentication failed: %+v", err)
 	customErr := &exception.CustomError{
 		Status:  http.StatusUnauthorized,

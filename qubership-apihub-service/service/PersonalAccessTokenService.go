@@ -113,7 +113,7 @@ func calculateExpiresAt(daysUntilExpiry int) (time.Time, error) {
 func (p personalAccessTokenServiceImpl) DeletePAT(ctx context.Context, id string) error {
 	pat, err := p.repo.GetPAT(ctx, id, secctx.GetUserId(ctx))
 	if err != nil {
-		return fmt.Errorf("failed to get PAT: %s", err)
+		return fmt.Errorf("failed to get PAT: %w", err)
 	}
 	if pat == nil {
 		return exception.CustomError{
@@ -142,12 +142,12 @@ func (p personalAccessTokenServiceImpl) GetPATByToken(ctx context.Context, pat s
 
 	user, err := p.userService.GetUserFromDB(ctx, ent.UserId)
 	if err != nil {
-		return nil, nil, "", fmt.Errorf("failed to get user for pat: %s", err)
+		return nil, nil, "", fmt.Errorf("failed to get user for pat: %w", err)
 	}
 
 	systemRole, err := p.roleService.GetUserSystemRole(ctx, user.Id)
 	if err != nil {
-		return nil, nil, "", fmt.Errorf("failed to get user system role for pat: %s", err)
+		return nil, nil, "", fmt.Errorf("failed to get user system role for pat: %w", err)
 	}
 	return &result, user, systemRole, nil
 }

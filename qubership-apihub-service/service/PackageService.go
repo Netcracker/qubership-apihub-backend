@@ -629,7 +629,7 @@ func (p packageServiceImpl) DeletePackage(ctx context.Context, id string) error 
 			}
 		}
 	}
-	referencingDashboards, err := p.publishedRepo.GetPackageReferencingDashboards(id)
+	referencingDashboards, err := p.publishedRepo.GetPackageReferencingDashboards(ctx, id)
 	if err != nil {
 		return err
 	}

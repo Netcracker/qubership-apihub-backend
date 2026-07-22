@@ -839,6 +839,9 @@ const ReleaseVersionPreviousVersionNotReleaseMsg = "Version $version for package
 const VersionStatusChangePreviousVersionNotReleaseMsg = "Version $version for package $packageId cannot be changed to the 'release' status because previous version $previousVersion for package $previousVersionPackageId is in the 'draft' status. Change the previous version to 'release', then retry."
 const VersionReferencedAsPreviousByReleaseMsg = "Version $version for package $packageId cannot be changed to the 'draft' status because it is the previous version of: $releaseVersions"
 
+const RequestTimeout = "8700"
+const RequestTimeoutMsg = "The request took too long to process and was terminated. Please retry. If the problem persists, contact the system administrator."
+
 // AI Chat error codes (APIHUB-AI-*). Each public error has a Code constant; variant
 // messages reuse the parent Code (same pattern as InvalidParameterValue + InvalidLimitMsg).
 

@@ -45,8 +45,8 @@ type PublishedRepository interface {
 	GetVersionsByPreviousVersion(ctx context.Context, previousPackageId string, previousVersionName string) ([]entity.PublishedVersionEntity, error)
 	GetReadonlyPackageVersionsWithLimit(ctx context.Context, searchQuery entity.PublishedVersionSearchQueryEntity, checkRevisions bool, showOnlyDeleted bool) ([]entity.PackageVersionRevisionEntity, error)
 	GetDefaultVersion(ctx context.Context, packageId string, status string) (*entity.PublishedVersionEntity, error)
-	GetVersionReferencingDashboards(packageId string, version string) ([]entity.PublishedVersionKeyEntity, error)
-	GetPackageReferencingDashboards(packageId string) ([]entity.DashboardReferenceEntity, error)
+	GetVersionReferencingDashboards(ctx context.Context, packageId string, version string) ([]entity.PublishedVersionKeyEntity, error)
+	GetPackageReferencingDashboards(ctx context.Context, packageId string) ([]entity.DashboardReferenceEntity, error)
 	DeletePackageRevisionsBeforeDate(ctx context.Context, packageId string, beforeDate time.Time, deleteLastRevision bool, deleteReleaseRevisions bool, deletedBy string) (int, int, error)
 	DeleteSoftDeletedPackageRevisionsBeforeDate(ctx context.Context, runId string, beforeDate time.Time, batchSize int) (int, error)
 
@@ -98,7 +98,7 @@ type PublishedRepository interface {
 	UpdateCSVDashboardPublishProcess(ctx context.Context, ent *entity.CSVDashboardPublishEntity) error
 	GetCSVDashboardPublishProcess(ctx context.Context, publishId string) (*entity.CSVDashboardPublishEntity, error)
 	GetCSVDashboardPublishReport(ctx context.Context, publishId string) (*entity.CSVDashboardPublishEntity, error)
-	
+
 	GetVersionInternalDocuments(ctx context.Context, packageId string, version string, revision int) ([]entity.VersionInternalDocumentEntity, error)
 	GetVersionInternalDocumentData(ctx context.Context, hash string) (*entity.VersionInternalDocumentDataEntity, error)
 	GetComparisonInternalDocumentsByComparisons(ctx context.Context, comparisons []entity.VersionComparisonEntity) ([]entity.ComparisonInternalDocumentEntity, error)

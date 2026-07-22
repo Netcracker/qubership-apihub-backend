@@ -433,7 +433,7 @@ func (v versionServiceImpl) DeleteVersion(ctx context.Context, packageId string,
 			Message: exception.UnableToDeleteOldRevisionMsg,
 		}
 	}
-	referencingDashboards, err := v.publishedRepo.GetVersionReferencingDashboards(packageId, versionEnt.Version)
+	referencingDashboards, err := v.publishedRepo.GetVersionReferencingDashboards(ctx, packageId, versionEnt.Version)
 	if err != nil {
 		return err
 	}

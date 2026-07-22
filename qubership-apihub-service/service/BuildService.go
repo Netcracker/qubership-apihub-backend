@@ -595,7 +595,7 @@ func (b *buildServiceImpl) AwaitBuildCompletion(ctx context.Context, buildId str
 	for {
 		build, err := b.buildRepository.GetBuild(ctx, buildId)
 		if err != nil {
-			return fmt.Errorf("failed to get build status: %v", err.Error())
+			return fmt.Errorf("failed to get build status: %w", err)
 		}
 		if build.Status == string(view.StatusError) {
 			return fmt.Errorf("build failed with error: %v", build.Details)

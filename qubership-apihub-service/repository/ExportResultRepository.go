@@ -57,7 +57,7 @@ func (p exportRepositoryImpl) SaveExportResult(ctx context.Context, exportResEnt
 		}
 
 		// no "on conflict" statements since multiple exports with the same id or update cases are not expected
-		_, err = p.cp.GetConnection().WithContext(ctx).Model(&exportResEnt).Insert()
+		_, err = tx.Model(&exportResEnt).Insert()
 		if err != nil {
 			return err
 		}

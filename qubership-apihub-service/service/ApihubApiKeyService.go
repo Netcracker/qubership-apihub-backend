@@ -197,7 +197,7 @@ func (t apihubApiKeyServiceImpl) CreateApiKey(ctx context.Context, packageId, na
 			return nil, err
 		}
 		if createdForUser == nil {
-			usersFromLdap, err := t.userService.SearchUsersInLdap(view.LdapSearchFilterReq{FilterToValue: map[string]string{view.SAMAccountName: createdFor}, Limit: 1}, true)
+			usersFromLdap, err := t.userService.SearchUsersInLdap(ctx, view.LdapSearchFilterReq{FilterToValue: map[string]string{view.SAMAccountName: createdFor}, Limit: 1}, true)
 			if err != nil {
 				return nil, err
 			}

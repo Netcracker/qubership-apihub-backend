@@ -624,7 +624,10 @@ func main() {
 	}
 
 	mcpHandler := mcpController.MakeMCPServer()
-	r.Handle("/api/v1/mcp/", security.SecureMCP(mcpHandler)) //TODO: MCP endpoint has request context without timeout, need to handle it
+	// The MCP transport request is deliberately exempt from RequestTimeoutMiddleware: it is a
+	// long-lived stream that carries many tool calls. The DB work is bounded per tool call by
+	// service.MCPToolCallTimeout instead.
+	r.Handle("/api/v1/mcp/", security.SecureMCP(mcpHandler))
 
 	discoveryConfig := config.DiscoveryConfig{
 		ScanDirectory: systemInfoService.GetApiSpecDirectory(),

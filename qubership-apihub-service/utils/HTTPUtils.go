@@ -1,13 +1,16 @@
 package utils
 
 import (
+	"context"
 	"encoding/json"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
-	log "github.com/sirupsen/logrus"
+	"errors"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	log "github.com/sirupsen/logrus"
 )
 
 func DeleteCookie(w http.ResponseWriter, name string, path string, productionMode bool) {
@@ -89,16 +92,30 @@ func RedirectHandler(apihubURLStr string) http.HandlerFunc {
 	}
 }
 
+// IsRequestTimeout reports whether err was caused by the request context being cancelled or running out of its deadline
+func IsRequestTimeout(err error) bool {
+	return errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)
+}
+
 func RespondWithError(w http.ResponseWriter, msg string, err error) {
 	log.Errorf("%s: %s", msg, err.Error())
 	if customError, ok := err.(*exception.CustomError); ok {
 		RespondWithCustomError(w, customError)
-	} else {
+		return
+	}
+	if IsRequestTimeout(err) {
 		RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusInternalServerError,
-			Message: msg,
-			Debug:   err.Error()})
+			Code:    exception.RequestTimeout,
+			Message: exception.RequestTimeoutMsg,
+			Debug:   err.Error(),
+		})
+		return
 	}
+	RespondWithCustomError(w, &exception.CustomError{
+		Status:  http.StatusInternalServerError,
+		Message: msg,
+		Debug:   err.Error()})
 }
 
 func RespondWithCustomError(w http.ResponseWriter, err *exception.CustomError) {
