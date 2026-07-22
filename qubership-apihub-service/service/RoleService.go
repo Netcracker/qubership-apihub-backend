@@ -24,6 +24,7 @@ type RoleService interface {
 	GetPackageMembers(packageId string) (*view.PackageMembers, error)
 	GetPermissionsForPackage(ctx context.SecurityContext, packageId string) ([]string, error)
 	FilterVersionsByPackageReadAccess(ctx context.SecurityContext, keys []entity.PublishedVersionKeyEntity) (accessible []entity.PublishedVersionKeyEntity, hiddenCount int, err error)
+	GetWorkspacePackageVisibilityRoots(ctx context.SecurityContext, workspaceId string) (*view.PackageVisibilityRoots, error)
 	GetUserPackagePromoteStatuses(packageIds []string, userId string) (*view.AvailablePackagePromoteStatuses, error)
 	GetAvailableVersionPublishStatuses(ctx context.SecurityContext, packageId string) ([]string, error)
 	HasRequiredPermissions(ctx context.SecurityContext, packageId string, requiredPermissions ...view.RolePermission) (bool, error)
@@ -594,6 +595,89 @@ func (r roleServiceImpl) FilterVersionsByPackageReadAccess(ctx context.SecurityC
 		}
 	}
 	return accessible, hiddenCount, nil
+}
+
+func (r roleServiceImpl) GetWorkspacePackageVisibilityRoots(ctx context.SecurityContext, workspaceId string) (*view.PackageVisibilityRoots, error) {
+	if workspaceId == "" {
+		return nil, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidParameterValue,
+			Message: exception.InvalidParameterValueMsg,
+			Params:  map[string]interface{}{"param": "workspace", "value": workspaceId},
+		}
+	}
+	workspace, err := r.publishedRepo.GetPackage(workspaceId)
+	if err != nil {
+		return nil, err
+	}
+	if workspace == nil {
+		return nil, &exception.CustomError{
+			Status:  http.StatusNotFound,
+			Code:    exception.PackageNotFound,
+			Message: exception.PackageNotFoundMsg,
+			Params:  map[string]interface{}{"packageId": workspaceId},
+		}
+	}
+
+	principal, err := r.resolveVisibilityPrincipal(ctx, workspaceId)
+	if err != nil {
+		return nil, err
+	}
+
+	if principal.Kind == entity.VisibilityPrincipalSysadmin {
+		return &view.PackageVisibilityRoots{
+			WorkspaceId:    workspaceId,
+			VisibleRoots:   []string{workspaceId},
+			InvisibleRoots: []string{},
+		}, nil
+	}
+
+	accessRows, err := r.roleRepository.GetWorkspacePackageReadAccess(workspaceId, principal)
+	if err != nil {
+		return nil, err
+	}
+	allIds := make([]string, 0, len(accessRows))
+	readableIds := make([]string, 0, len(accessRows))
+	for _, row := range accessRows {
+		allIds = append(allIds, row.PackageId)
+		if row.CanRead {
+			readableIds = append(readableIds, row.PackageId)
+		}
+	}
+	return &view.PackageVisibilityRoots{
+		WorkspaceId:    workspaceId,
+		VisibleRoots:   utils.CompressVisibleRoots(readableIds),
+		InvisibleRoots: utils.CompressInvisibleRoots(allIds, readableIds),
+	}, nil
+}
+
+func (r roleServiceImpl) resolveVisibilityPrincipal(ctx context.SecurityContext, workspaceId string) (entity.VisibilityPrincipal, error) {
+	if r.IsSysadm(ctx) {
+		return entity.VisibilityPrincipal{Kind: entity.VisibilityPrincipalSysadmin}, nil
+	}
+	if apikeyPackageId := ctx.GetApikeyPackageId(); apikeyPackageId != "" {
+		inWorkspace := apikeyPackageId == "*" ||
+			apikeyPackageId == workspaceId ||
+			strings.HasPrefix(apikeyPackageId, workspaceId+".")
+		if !inWorkspace {
+			return entity.VisibilityPrincipal{}, &exception.CustomError{
+				Status:  http.StatusNotFound,
+				Code:    exception.PackageNotFound,
+				Message: exception.PackageNotFoundMsg,
+				Params:  map[string]interface{}{"packageId": workspaceId},
+				Debug:   fmt.Sprintf("Workspace %s is out of scope for the api key", workspaceId),
+			}
+		}
+		return entity.VisibilityPrincipal{
+			Kind:          entity.VisibilityPrincipalApiKey,
+			ApiKeyScopeId: apikeyPackageId,
+			ApiKeyRoleIds: ctx.GetApikeyRoles(),
+		}, nil
+	}
+	return entity.VisibilityPrincipal{
+		Kind:   entity.VisibilityPrincipalUser,
+		UserId: ctx.GetUserId(),
+	}, nil
 }
 
 func (r roleServiceImpl) HasRequiredPermissions(ctx context.SecurityContext, packageId string, requiredPermissions ...view.RolePermission) (bool, error) {

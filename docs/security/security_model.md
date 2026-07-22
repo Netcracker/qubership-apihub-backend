@@ -249,4 +249,4 @@ In UI it's managed by a "Private" checkbox:
 
 In this case any user which have no granted roles for the entity, will not be able to see/retrieve it. It's managed on the API level.
 
-The known gap related to privacy is global search: private workspaces/groups/packages/dashboards are excluded from search.
+Global search enforces the same read permission via on-demand package visibility and invisibility root lists joined into search queries against `global_search.fts_*` (workspace-partitioned indexes). Legacy `public.fts_*` tables remain dual-written and are deprecated for search reads.

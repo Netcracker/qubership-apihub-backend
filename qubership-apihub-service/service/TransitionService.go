@@ -22,13 +22,14 @@ type TransitionService interface {
 	ListPackageTransitions() ([]view.PackageTransition, error)
 }
 
-func NewTransitionService(transRepo repository.TransitionRepository, pubRepo repository.PublishedRepository) TransitionService {
-	return &transitionServiceImpl{transRepo: transRepo, pubRepo: pubRepo}
+func NewTransitionService(transRepo repository.TransitionRepository, pubRepo repository.PublishedRepository, globalSearchPartitionService GlobalSearchPartitionService) TransitionService {
+	return &transitionServiceImpl{transRepo: transRepo, pubRepo: pubRepo, globalSearchPartitionService: globalSearchPartitionService}
 }
 
 type transitionServiceImpl struct {
-	transRepo repository.TransitionRepository
-	pubRepo   repository.PublishedRepository
+	transRepo                    repository.TransitionRepository
+	pubRepo                      repository.PublishedRepository
+	globalSearchPartitionService GlobalSearchPartitionService
 }
 
 func (p transitionServiceImpl) MoveOrRenamePackage(userCtx context2.SecurityContext, fromId string, toId string, overwriteHistory bool) (string, error) {
@@ -175,6 +176,11 @@ func (p transitionServiceImpl) MoveOrRenamePackage(userCtx context2.SecurityCont
 					log.Errorf("failed to track transition action: %s", err)
 				}
 			} else {
+				if toWorkspace {
+					if renameErr := p.globalSearchPartitionService.RenameWorkspacePartitions(fromId, toId); renameErr != nil {
+						log.Errorf("failed to rename global_search partitions from %s to %s: %s", fromId, toId, renameErr)
+					}
+				}
 				err = p.transRepo.TrackTransitionCompleted(id, objAffected)
 				if err != nil {
 					log.Errorf("failed to track transition action: %s", err)

@@ -20,6 +20,8 @@ const globalSearchWorkMem = "16MB"
 // global search query. It is a SQL comment so the template stays valid SQL when no scope join is
 // applied (no packages requested).
 const globalSearchScopeJoinPlaceholder = "/*scope_join*/"
+const globalSearchPrivacyJoinPlaceholder = "/*privacy_join*/"
+const globalSearchPrivacyWherePlaceholder = "/*privacy_where*/"
 
 type OperationRepository interface {
 	GetOperationsByIds(packageId string, version string, revision int, operationIds []string) ([]entity.OperationEntity, error)
@@ -1302,7 +1304,15 @@ func (o operationRepositoryImpl) GetOperationsByModelHash(packageId string, vers
 
 func (o operationRepositoryImpl) GlobalSearchForOperations(ctx context.Context, searchQuery *entity.GlobalOperationSearchQuery) ([]entity.OperationSearchResult, error) {
 	var result []entity.OperationSearchResult
+	if len(searchQuery.VisibleRoots) == 0 {
+		return nil, nil
+	}
+	if searchQuery.InvisibleRoots == nil {
+		searchQuery.InvisibleRoots = make([]string, 0)
+	}
 
+	// Privacy-aware search against global_search.fts_operation_search_text.
+	// Deprecated: public.fts_operation_search_text is dual-written but no longer used for global search reads.
 	operationsSearchQuery := `
 select
     o.package_id,
@@ -1328,14 +1338,16 @@ from operation o
             ts.version      as version,
             ts.revision     as revision,
             pv.status       as status
-        FROM fts_operation_search_text ts
+        FROM global_search.fts_operation_search_text ts
             inner join published_version pv
                 on pv.package_id = ts.package_id
                 and pv.version = ts.version
                 and pv.revision = ts.revision
             cross join websearch_to_tsquery(?original_text_input) search_query
             /*scope_join*/
-        WHERE ts.status = ?status
+            /*privacy_join*/
+        WHERE ts.workspace_id = ?workspace_id
+            and ts.status = ?status
             and ts.api_type = ?api_type
             and (?versions = '{}' or ts.version like ANY(
                     select id from unnest(?versions::text[]) id))
@@ -1343,6 +1355,7 @@ from operation o
             and pv.published_at >= ?start_date
             and pv.published_at <= ?end_date
             and search_query @@ ts.data_vector
+            /*privacy_where*/
         ORDER BY ts_rank(ts.data_vector, search_query) DESC,
                  package_id,
                  operation_id desc,
@@ -1361,19 +1374,21 @@ limit ?limit;
 `
 	packagesSearchScopeJoin := ""
 	if len(searchQuery.Packages) != 0 {
-		//limits the search to the requested packages and their subtrees, written as a join
-		//so the planner is free to drive the fts_operation_search_text scan from the scope btree
-		//('/' is the byte right after '.', so the range covers exactly 'parent.<anything>' and excludes siblings such as 'parentX')
-		//~>=~/~<~ compare byte-wise and match the varchar_pattern_ops index (migration 35) regardless of the database locale;
-		//plain >=/< cannot be used: they compare per the database collation, where this range does not equal
-		//the 'parent.' prefix set on non-C locales, and they cannot use a varchar_pattern_ops index (different operator family);
-		//LIKE 'parent.%' cannot be used either: its prefix-to-range index rewrite requires a plan-time constant pattern,
-		//while these bounds are computed per joined row
 		packagesSearchScopeJoin = `
             inner join unnest(?packages::text[]) as scope_pkg(parent)
                 on ts.package_id = scope_pkg.parent
                 or (ts.package_id ~>=~ (scope_pkg.parent || '.') and ts.package_id ~<~ (scope_pkg.parent || '/'))`
 	}
+	privacyJoin := `
+            inner join unnest(?visible_roots::text[]) as vis(parent)
+                on ts.package_id = vis.parent
+                or (ts.package_id ~>=~ (vis.parent || '.') and ts.package_id ~<~ (vis.parent || '/'))`
+	privacyWhere := `
+            and not exists (
+                select 1 from unnest(?invisible_roots::text[]) as inv(parent)
+                where ts.package_id = inv.parent
+                   or (ts.package_id ~>=~ (inv.parent || '.') and ts.package_id ~<~ (inv.parent || '/'))
+            )`
 
 	err := o.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
 		if _, err := tx.Exec("SET LOCAL work_mem = ?", globalSearchWorkMem); err != nil {
@@ -1383,6 +1398,8 @@ limit ?limit;
 			return fmt.Errorf("invalid search string: %v", err.Error())
 		}
 		query := strings.Replace(operationsSearchQuery, globalSearchScopeJoinPlaceholder, packagesSearchScopeJoin, 1)
+		query = strings.Replace(query, globalSearchPrivacyJoinPlaceholder, privacyJoin, 1)
+		query = strings.Replace(query, globalSearchPrivacyWherePlaceholder, privacyWhere, 1)
 		if _, err := tx.Model(searchQuery).Query(&result, query); err != nil {
 			return err
 		}

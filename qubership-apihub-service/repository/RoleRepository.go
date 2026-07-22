@@ -29,6 +29,7 @@ type RoleRepository interface {
 	GetPermissionsForRoles(roles []string) ([]string, error)
 	GetUserPermissions(packageId string, userId string) ([]string, error)
 	GetAllUserPermissions(userId string) ([]string, error)
+	GetWorkspacePackageReadAccess(workspaceId string, principal entity.VisibilityPrincipal) ([]entity.PackageReadAccessEntity, error)
 	SetRoleRanks(entities []entity.RoleEntity) error
 	GetUsersBySystemRole(systemRole string) ([]entity.UserEntity, error)
 }
@@ -462,6 +463,82 @@ func (r roleRepositoryImpl) GetUsersBySystemRole(systemRole string) ([]entity.Us
 		JoinOn("sr.role = ?", systemRole).
 		Select()
 	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (r roleRepositoryImpl) GetWorkspacePackageReadAccess(workspaceId string, principal entity.VisibilityPrincipal) ([]entity.PackageReadAccessEntity, error) {
+	if workspaceId == "" {
+		return nil, nil
+	}
+	var result []entity.PackageReadAccessEntity
+	var query string
+	var err error
+	switch principal.Kind {
+	case entity.VisibilityPrincipalSysadmin:
+		query = `
+		SELECT id, parent_id, true AS can_read, exclude_from_search
+		FROM package_group
+		WHERE deleted_at IS NULL
+		  AND (id = ? OR (id ~>=~ (? || '.') AND id ~<~ (? || '/')))
+		`
+		_, err = r.cp.GetConnection().Query(&result, query, workspaceId, workspaceId, workspaceId)
+	case entity.VisibilityPrincipalApiKey:
+		query = `
+		SELECT wp.id, wp.parent_id,
+			(
+				(? = '*' OR wp.id = ? OR (wp.id ~>=~ (? || '.') AND wp.id ~<~ (? || '/')))
+				AND EXISTS (
+					SELECT 1 FROM role r
+					WHERE r.id = ANY(?::varchar[])
+					  AND 'read' = ANY(r.permissions)
+				)
+			) AS can_read,
+			wp.exclude_from_search
+		FROM package_group wp
+		WHERE wp.deleted_at IS NULL
+		  AND (wp.id = ? OR (wp.id ~>=~ (? || '.') AND wp.id ~<~ (? || '/')))
+		`
+		_, err = r.cp.GetConnection().Query(&result, query,
+			principal.ApiKeyScopeId, principal.ApiKeyScopeId, principal.ApiKeyScopeId, principal.ApiKeyScopeId,
+			pg.Array(principal.ApiKeyRoleIds),
+			workspaceId, workspaceId, workspaceId)
+	default:
+		query = `
+		SELECT wp.id, wp.parent_id,
+			EXISTS (
+				SELECT 1 FROM role r
+				WHERE 'read' = ANY(r.permissions)
+				  AND r.id IN (
+					SELECT unnest(pmr.roles)
+					FROM package_member_role pmr
+					WHERE pmr.user_id = ?
+					  AND (
+						pmr.package_id = wp.id
+						OR (wp.id ~>=~ (pmr.package_id || '.') AND wp.id ~<~ (pmr.package_id || '/'))
+					  )
+					UNION
+					SELECT pg2.default_role
+					FROM package_group pg2
+					WHERE pg2.deleted_at IS NULL
+					  AND (
+						pg2.id = wp.id
+						OR (wp.id ~>=~ (pg2.id || '.') AND wp.id ~<~ (pg2.id || '/'))
+					  )
+				  )
+			) AS can_read,
+			wp.exclude_from_search
+		FROM package_group wp
+		WHERE wp.deleted_at IS NULL
+		  AND (wp.id = ? OR (wp.id ~>=~ (? || '.') AND wp.id ~<~ (? || '/')))
+		`
+		_, err = r.cp.GetConnection().Query(&result, query, principal.UserId, workspaceId, workspaceId, workspaceId)
+	}
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return result, nil
