@@ -42,7 +42,7 @@ func (c buildControllerImpl) GetBuild(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	buildId := getStringParam(r, "buildId")
-	build, err := c.buildService.GetExtendedBuild(buildId)
+	build, err := c.buildService.GetExtendedBuild(ctx, buildId)
 	if err != nil {
 		utils.RespondWithError(w, "Failed to get build", err)
 		return
@@ -85,7 +85,7 @@ func (c buildControllerImpl) ListBuilds(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	builds, err := c.buildService.ListExtendedBuilds(view.ExtendedBuildFilter{
+	builds, err := c.buildService.ListExtendedBuilds(ctx, view.ExtendedBuildFilter{
 		PackageId: r.URL.Query().Get("packageId"),
 		Version:   r.URL.Query().Get("version"),
 		BuildIds:  buildIds,

@@ -38,8 +38,8 @@ type BuildService interface {
 	AwaitBuildCompletion(ctx context.Context, buildId string) error
 
 	GetBuild(ctx context.Context, buildId string) (*view.BuildView, error)
-	GetExtendedBuild(buildId string) (*view.ExtendedBuild, error)
-	ListExtendedBuilds(filter view.ExtendedBuildFilter) (*view.ExtendedBuilds, error)
+	GetExtendedBuild(ctx context.Context, buildId string) (*view.ExtendedBuild, error)
+	ListExtendedBuilds(ctx context.Context, filter view.ExtendedBuildFilter) (*view.ExtendedBuilds, error)
 	GetBuildSourceData(ctx context.Context, buildId string) ([]byte, error)
 }
 
@@ -624,8 +624,8 @@ func (b *buildServiceImpl) GetBuild(ctx context.Context, buildId string) (*view.
 	return result, nil
 }
 
-func (b *buildServiceImpl) GetExtendedBuild(buildId string) (*view.ExtendedBuild, error) {
-	build, err := b.buildRepository.GetExtendedBuild(buildId)
+func (b *buildServiceImpl) GetExtendedBuild(ctx context.Context, buildId string) (*view.ExtendedBuild, error) {
+	build, err := b.buildRepository.GetExtendedBuild(ctx, buildId)
 	if err != nil {
 		return nil, err
 	}
@@ -636,7 +636,7 @@ func (b *buildServiceImpl) GetExtendedBuild(buildId string) (*view.ExtendedBuild
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert build config for build %s: %w", build.BuildId, err)
 	}
-	depends, err := b.buildRepository.GetBuildDependencies([]string{buildId})
+	depends, err := b.buildRepository.GetBuildDependencies(ctx, []string{buildId})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get build dependencies for build %s: %w", buildId, err)
 	}
@@ -647,8 +647,8 @@ func (b *buildServiceImpl) GetExtendedBuild(buildId string) (*view.ExtendedBuild
 	return result, nil
 }
 
-func (b *buildServiceImpl) ListExtendedBuilds(filter view.ExtendedBuildFilter) (*view.ExtendedBuilds, error) {
-	builds, err := b.buildRepository.ListExtendedBuilds(repository.ExtendedBuildFilter{
+func (b *buildServiceImpl) ListExtendedBuilds(ctx context.Context, filter view.ExtendedBuildFilter) (*view.ExtendedBuilds, error) {
+	builds, err := b.buildRepository.ListExtendedBuilds(ctx, repository.ExtendedBuildFilter{
 		PackageId: filter.PackageId,
 		Version:   filter.Version,
 		BuildIds:  filter.BuildIds,
@@ -662,7 +662,7 @@ func (b *buildServiceImpl) ListExtendedBuilds(filter view.ExtendedBuildFilter) (
 	for _, build := range builds {
 		buildIds = append(buildIds, build.BuildId)
 	}
-	depends, err := b.buildRepository.GetBuildDependencies(buildIds)
+	depends, err := b.buildRepository.GetBuildDependencies(ctx, buildIds)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get build dependencies: %w", err)
 	}

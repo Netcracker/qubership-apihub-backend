@@ -19,9 +19,9 @@ type BuildRepository interface {
 	GetBuild(ctx context.Context, buildId string) (*entity.BuildEntity, error)
 	GetBuilds(ctx context.Context, buildIds []string) ([]entity.BuildEntity, error)
 	GetBuildSrc(ctx context.Context, buildId string) (*entity.BuildSourceEntity, error)
-	GetExtendedBuild(buildId string) (*entity.ExtendedBuildEntity, error)
-	ListExtendedBuilds(filter ExtendedBuildFilter) ([]entity.ExtendedBuildEntity, error)
-	GetBuildDependencies(buildIds []string) ([]entity.BuildDependencyEntity, error)
+	GetExtendedBuild(ctx context.Context, buildId string) (*entity.ExtendedBuildEntity, error)
+	ListExtendedBuilds(ctx context.Context, filter ExtendedBuildFilter) ([]entity.ExtendedBuildEntity, error)
+	GetBuildDependencies(ctx context.Context, buildIds []string) ([]entity.BuildDependencyEntity, error)
 
 	FindAndTakeFreeBuild(ctx context.Context, builderId string) (*entity.BuildEntity, error)
 
@@ -92,8 +92,8 @@ func (b buildRepositoryImpl) GetBuildSrc(ctx context.Context, buildId string) (*
 	return result, nil
 }
 
-func (b buildRepositoryImpl) GetExtendedBuild(buildId string) (*entity.ExtendedBuildEntity, error) {
-	builds, err := b.ListExtendedBuilds(ExtendedBuildFilter{
+func (b buildRepositoryImpl) GetExtendedBuild(ctx context.Context, buildId string) (*entity.ExtendedBuildEntity, error) {
+	builds, err := b.ListExtendedBuilds(ctx, ExtendedBuildFilter{
 		BuildIds: []string{buildId},
 		Limit:    1,
 	})
@@ -106,9 +106,9 @@ func (b buildRepositoryImpl) GetExtendedBuild(buildId string) (*entity.ExtendedB
 	return &builds[0], nil
 }
 
-func (b buildRepositoryImpl) ListExtendedBuilds(filter ExtendedBuildFilter) ([]entity.ExtendedBuildEntity, error) {
+func (b buildRepositoryImpl) ListExtendedBuilds(ctx context.Context, filter ExtendedBuildFilter) ([]entity.ExtendedBuildEntity, error) {
 	var result []entity.ExtendedBuildEntity
-	query := b.cp.GetConnection().Model(&result).
+	query := b.cp.GetConnection().WithContext(ctx).Model(&result).
 		ColumnExpr("b.build_id").
 		ColumnExpr("b.status").
 		ColumnExpr("b.details").
@@ -152,12 +152,12 @@ func (b buildRepositoryImpl) ListExtendedBuilds(filter ExtendedBuildFilter) ([]e
 	return result, nil
 }
 
-func (b buildRepositoryImpl) GetBuildDependencies(buildIds []string) ([]entity.BuildDependencyEntity, error) {
+func (b buildRepositoryImpl) GetBuildDependencies(ctx context.Context, buildIds []string) ([]entity.BuildDependencyEntity, error) {
 	var result []entity.BuildDependencyEntity
 	if len(buildIds) == 0 {
 		return nil, nil
 	}
-	err := b.cp.GetConnection().Model(&result).
+	err := b.cp.GetConnection().WithContext(ctx).Model(&result).
 		Where("build_id in (?)", pg.In(buildIds)).
 		Select()
 	if err != nil {
