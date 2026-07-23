@@ -119,7 +119,7 @@ func (a activityTrackingControllerImpl) GetActivityHistory(w http.ResponseWriter
 	}
 	result, err := a.activityTrackingService.GetActivityHistory(context.Create(r), activityHistoryReq)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get activity events for favourite packages", err)
+		utils.RespondWithError(w, "Failed to get activity events", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusOK, result)
