@@ -125,7 +125,7 @@ func (p privateUserPackageServiceImpl) CreatePrivateUserPackage(ctx context.Secu
 		ParentId:          "",
 		Alias:             userEnt.PrivatePackageId,
 		DefaultRole:       view.NoneRoleId,
-		ExcludeFromSearch: true,
+		ExcludeFromSearch: false,
 		CreatedAt:         time.Now(),
 		CreatedBy:         ctx.GetUserId(),
 	}
