@@ -6,12 +6,16 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/metrics"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	"github.com/mark3labs/mcp-go/mcp"
 	log "github.com/sirupsen/logrus"
 )
+
+// mcpListDefaultLimit is the default page size for MCP navigation tools (list_workspace_packages, list_package_versions).
+const mcpListDefaultLimit = 100
 
 func withInjectedMCPArg(req mcp.CallToolRequest, key string, value any) mcp.CallToolRequest {
 	src, _ := req.Params.Arguments.(map[string]any)
@@ -134,8 +138,21 @@ func (m mcpService) ExecuteGetSpecTool(ctx context.Context, req mcp.CallToolRequ
 	return mcp.NewToolResultStructuredOnly(payload), nil
 }
 
-// ExecuteSearchTool executes the search_api_operations tool
+// ExecuteSearchTool executes the search_api_operations tool (deprecated: uses the configured AI MCP workspace)
 func (m mcpService) ExecuteSearchTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return m.executeSearchCore(ctx, req, m.systemInfoService.GetAiMCPConfig().Workspace, metrics.MCPSearchToolCalled)
+}
+
+// ExecuteSearchToolV2 executes the search_api_operations_v2 tool with a caller-supplied workspace
+func (m mcpService) ExecuteSearchToolV2(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	workspace, err := req.RequireString("workspace")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	return m.executeSearchCore(ctx, req, workspace, metrics.MCPSearchV2ToolCalled)
+}
+
+func (m mcpService) executeSearchCore(ctx context.Context, req mcp.CallToolRequest, workspace string, metric string) (*mcp.CallToolResult, error) {
 	apiType, err := requireMCPApiType(req, view.RestApiType, view.GraphqlApiType, view.AsyncapiApiType)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -145,19 +162,17 @@ func (m mcpService) ExecuteSearchTool(ctx context.Context, req mcp.CallToolReque
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	mcpWorkspace := m.systemInfoService.GetAiMCPConfig().Workspace
-
 	limit := req.GetInt("limit", 100)
 	page := req.GetInt("page", 0)
-	group := req.GetString("group", mcpWorkspace)
+	group := req.GetString("group", workspace)
 	releaseVersion := req.GetString("release", CalculateNearestCompletedReleaseVersion())
-	if err := validateMCPGroup(group, mcpWorkspace); err != nil {
+	if err := validateMCPGroup(group, workspace); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	log.Infof("search_api_operations: apiType=%s, query=%s, limit=%d, page=%d, group=%s, releaseVersion=%s", apiType, q, limit, page, group, releaseVersion)
+	log.Infof("search_api_operations: apiType=%s, query=%s, limit=%d, page=%d, group=%s, releaseVersion=%s, workspace=%s", apiType, q, limit, page, group, releaseVersion, workspace)
 
-	m.monitoringService.IncreaseBusinessMetricCounter(UserIDFromMCPCtx(ctx), metrics.MCPSearchToolCalled, mcpMetricKey(ctx, apiType, group))
+	m.monitoringService.IncreaseBusinessMetricCounter(UserIDFromMCPCtx(ctx), metric, mcpMetricKey(ctx, apiType, group))
 
 	var packageIds []string
 	if group != "" {
@@ -168,13 +183,13 @@ func (m mcpService) ExecuteSearchTool(ctx context.Context, req mcp.CallToolReque
 		SearchString: q,
 		ApiType:      apiType,
 		PackageIds:   packageIds,
-		Workspace:    mcpWorkspace,
+		Workspace:    workspace,
 		Versions:     []string{releaseVersion},
-		Status:       "release",
+		Status:       view.Release.String(),
 		Limit:        limit,
 		Page:         page,
 	}
-	visibility, err := m.roleService.GetWorkspacePackageVisibilityRoots(GetSecCtxFromMCPCtx(ctx), mcpWorkspace)
+	visibility, err := m.roleService.GetWorkspacePackageVisibilityRoots(GetSecCtxFromMCPCtx(ctx), workspace)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to resolve package visibility: %s", err.Error())), nil
 	}
@@ -195,6 +210,89 @@ func (m mcpService) ExecuteSearchTool(ctx context.Context, req mcp.CallToolReque
 	// Log MCP tool response at debug level
 	payloadJSON, _ := json.Marshal(payload)
 	log.Debugf("MCP tool search_api_operations response: %s", string(payloadJSON))
+
+	return mcp.NewToolResultStructuredOnly(payload), nil
+}
+
+// ExecuteListWorkspacePackagesTool executes the list_workspace_packages tool
+func (m mcpService) ExecuteListWorkspacePackagesTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	workspace, err := req.RequireString("workspace")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	page := req.GetInt("page", 0)
+	limit := req.GetInt("limit", mcpListDefaultLimit)
+	textFilter := req.GetString("textFilter", "")
+
+	log.Infof("list_workspace_packages: workspace=%s, page=%d, limit=%d, textFilter=%s", workspace, page, limit, textFilter)
+
+	m.monitoringService.IncreaseBusinessMetricCounter(UserIDFromMCPCtx(ctx), metrics.MCPListWorkspacePackagesToolCalled, workspace)
+
+	packageListReq := view.PackageListReq{
+		Kind:               []string{entity.KIND_PACKAGE},
+		ShowAllDescendants: true,
+		ParentId:           workspace,
+		TextFilter:         textFilter,
+		Limit:              limit,
+		Offset:             page * limit,
+	}
+
+	packages, err := m.packageService.GetPackagesList(GetSecCtxFromMCPCtx(ctx), packageListReq, false)
+	if err != nil {
+		return nil, err
+	}
+
+	payload := map[string]any{"packages": convertPackagesToMCP(packages).Packages}
+
+	payloadJSON, _ := json.Marshal(payload)
+	log.Debugf("MCP tool list_workspace_packages response: %s", string(payloadJSON))
+
+	return mcp.NewToolResultStructuredOnly(payload), nil
+}
+
+// ExecuteListPackageVersionsTool executes the list_package_versions tool
+func (m mcpService) ExecuteListPackageVersionsTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	packageId, err := req.RequireString("packageId")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	sufficientPrivileges, err := m.roleService.HasRequiredPermissions(GetSecCtxFromMCPCtx(ctx), packageId, view.ReadPermission)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to check user privileges: %s", err.Error())), nil
+	}
+	if !sufficientPrivileges {
+		return mcp.NewToolResultError(exception.InsufficientPrivilegesMsg), nil
+	}
+
+	status := req.GetString("status", view.Release.String())
+	page := req.GetInt("page", 0)
+	limit := req.GetInt("limit", mcpListDefaultLimit)
+
+	log.Infof("list_package_versions: packageId=%s, status=%s, page=%d, limit=%d", packageId, status, page, limit)
+
+	m.monitoringService.IncreaseBusinessMetricCounter(UserIDFromMCPCtx(ctx), metrics.MCPListPackageVersionsToolCalled, packageId)
+
+	versionsReq := view.VersionListReq{
+		PackageId: packageId,
+		Status:    status,
+		Limit:     limit,
+		Page:      page,
+		SortBy:    view.VersionSortByVersion,
+		SortOrder: view.VersionSortOrderDesc,
+	}
+	versionsView, err := m.versionService.GetPackageVersionsView(versionsReq, false)
+	if err != nil {
+		return nil, err
+	}
+
+	var versions []view.PublishedVersionListMCPView
+	if versionsView != nil {
+		versions = projectPublishedVersionsForMCP(versionsView.Versions)
+	}
+	payload := map[string]any{"versions": versions}
+
+	payloadJSON, _ := json.Marshal(payload)
+	log.Debugf("MCP tool list_package_versions response: %s", string(payloadJSON))
 
 	return mcp.NewToolResultStructuredOnly(payload), nil
 }
