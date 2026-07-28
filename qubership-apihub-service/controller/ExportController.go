@@ -414,7 +414,6 @@ func (e exportControllerImpl) GenerateApiChangesExcelReport(w http.ResponseWrite
 	}
 	apiChangesReport, versionName, err := e.excelService.ExportApiChanges(ctx, packageId, version, "", []string{}, exportApiChangesRequestView)
 	if err != nil {
-		log.Errorf("Failed to export api changes error - %s", err.Error())
 		utils.RespondWithError(w, "Failed to export api changes", err)
 		return
 	}
@@ -630,7 +629,6 @@ func (e exportControllerImpl) GenerateApiChangesExcelReportV3(w http.ResponseWri
 	}
 	apiChangesReport, versionName, err := e.excelService.ExportApiChanges(ctx, packageId, version, apiType, severities, exportApiChangesRequestView)
 	if err != nil {
-		log.Errorf("Failed to export api changes error - %s", err.Error())
 		utils.RespondWithError(w, "Failed to export api changes", err)
 		return
 	}
@@ -833,7 +831,6 @@ func (e exportControllerImpl) GenerateOperationsExcelReport(w http.ResponseWrite
 	}
 	operationsReport, versionName, err := e.excelService.ExportOperations(ctx, packageId, version, apiType, exportOperationsRequestView)
 	if err != nil {
-		log.Errorf("Excel error - %s", err.Error())
 		utils.RespondWithError(w, "Failed to export operations", err)
 		return
 	}
@@ -1027,7 +1024,6 @@ func (e exportControllerImpl) GenerateDeprecatedOperationsExcelReport(w http.Res
 	}
 	deprecatedOperationsReport, versionName, err := e.excelService.ExportDeprecatedOperations(ctx, packageId, version, apiType, exportOperationsRequestView)
 	if err != nil {
-		log.Errorf("Excel error - %s", err.Error())
 		utils.RespondWithError(w, "Failed to export operations", err)
 		return
 	}
@@ -1094,7 +1090,6 @@ func (e exportControllerImpl) GenerateDdlEntitiesExcelReport(w http.ResponseWrit
 		TextFilter:   textFilter,
 	})
 	if err != nil {
-		log.Errorf("Excel error - %s", err.Error())
 		utils.RespondWithError(w, "Failed to export DDL entities", err)
 		return
 	}
@@ -1181,7 +1176,6 @@ func (e exportControllerImpl) GenerateDdlChangesExcelReport(w http.ResponseWrite
 		TextFilter:               textFilter,
 	})
 	if err != nil {
-		log.Errorf("Excel error - %s", err.Error())
 		utils.RespondWithError(w, "Failed to export DDL changes", err)
 		return
 	}
@@ -1258,7 +1252,6 @@ func (e exportControllerImpl) GenerateMcpEntitiesExcelReport(w http.ResponseWrit
 		TextFilter:   textFilter,
 	})
 	if err != nil {
-		log.Errorf("Excel error - %s", err.Error())
 		utils.RespondWithError(w, "Failed to export MCP entities", err)
 		return
 	}
