@@ -1342,6 +1342,15 @@ components:
                 buildId:
                   description: Id of the build.
                   type: string
+                hasErrors:
+                  description: |
+                    Flag showing that at least one document of the version has a critical problem, i.e. the
+                    build produced at least one notification with severity = 0 (Error). See notifications.json
+                    for the details.
+
+                    A version with hasErrors = true can only be published in `draft` status.
+                  type: boolean
+                  default: false
                 validationRulesSeverity:
                   type: object
                   description: Configuration for validation rules severity levels
@@ -1475,6 +1484,14 @@ components:
                         items:
                           type: string
                         example: ["get-quoteManagement-v5-quote"]
+                      hasErrors:
+                        description: |
+                          Flag showing that the document has a critical problem, i.e. the build produced at
+                          least one notification with severity = 0 (Error) attributed to this document.
+                          Such a document is published, but exposes no operations or contract entities.
+                          See notifications.json for the details.
+                        type: boolean
+                        default: false
                       metadata:
                         description: Meta parameters from config file.
                         type: object
@@ -1509,6 +1526,8 @@ components:
                                     type: string
                                   url:
                                     type: string
+            notifications.json:
+              $ref: "#/components/schemas/BuildResultNotifications"
             version-internal-documents.json:
               type: object
               description: List of version internal documents data. Only provided for packages of kind `package`.
@@ -1722,6 +1741,8 @@ components:
               $ref: "#/components/schemas/BuildResultDdlComparisons"
             ddl-comparisons/{comparisonFileId}:
               $ref: "#/components/schemas/BuildResultDdlComparisonsData"
+            notifications.json:
+              $ref: "#/components/schemas/BuildResultNotifications"
         - title: Build result for mergedSpecification and reducedSourceSpecifications
           description: |
             Build result for the following buildType:
@@ -2459,6 +2480,71 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/InternalDocumentMetadata"
+    BuildResultNotifications:
+      type: object
+      description: |
+        Messages produced while processing the build: parse, validation and comparison problems.
+
+        A message with severity = 0 (Error) is a critical problem. A version that has at least one such message
+        can only be published in `draft` status; publishing it in `release` status fails the build.
+      properties:
+        notifications:
+          description: List of build notifications.
+          type: array
+          items:
+            type: object
+            required:
+              - category
+              - severity
+              - message
+            properties:
+              category:
+                description: |
+                  Category of the message, used to group and filter notifications.
+                type: string
+                enum:
+                  - document-parsing
+                  - document-build
+                  - operation-build
+                  - validation
+                  - duplicate
+                  - references
+                  - changelog
+                  - resolution
+                  - mcp
+                  - packaging
+                example: document-build
+              severity:
+                description: |
+                  Severity of the message.
+                  * **0** - Error
+                  * **1** - Warning
+                  * **2** - Information
+                  * **3** - Hint
+                type: integer
+                enum:
+                  - 0
+                  - 1
+                  - 2
+                  - 3
+                example: 0
+              message:
+                description: Human readable message text.
+                type: string
+                example: "Cannot process the \"docs/events.yaml\" document. Unexpected token"
+              documentId:
+                description: |
+                  Slug of the document the message is attributed to, matching the `slug` field in
+                  documents.json.
+
+                  Messages are denormalized by document: a problem that concerns several documents at once,
+                  e.g. an operation id duplicated between two documents, is reported as several messages with
+                  the same text, one per affected document.
+
+                  Absent when the message is not attributable to any document, e.g. the previous version of
+                  the comparison could not be resolved.
+                type: string
+                example: "events-yaml"
     BuildResultComparisonData:
       type: object
       description: |
