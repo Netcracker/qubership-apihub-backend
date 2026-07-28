@@ -302,7 +302,7 @@ func (p packageControllerImpl) GetPackagesList(w http.ResponseWriter, r *http.Re
 		ShowAllDescendants:        showAllDescendants,
 	}
 
-	packages, err := p.packageService.GetPackagesList(context.Create(r), packageListReq, false)
+	packages, err := p.packageService.GetPackagesList(context.Create(r), packageListReq)
 
 	if err != nil {
 		utils.RespondWithError(w, "Failed to get packages", err)
@@ -391,7 +391,7 @@ func (p packageControllerImpl) GetDeletedPackagesList(w http.ResponseWriter, r *
 		ShowAllDescendants: showAllDescendants,
 	}
 
-	packages, err := p.packageService.GetPackagesList(context.Create(r), packageListReq, true)
+	packages, err := p.packageService.GetDeletedPackagesList(context.Create(r), packageListReq)
 
 	if err != nil {
 		utils.RespondWithError(w, "Failed to get packages", err)

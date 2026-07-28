@@ -107,7 +107,14 @@ func (a activityTrackingControllerImpl) GetActivityHistory(w http.ResponseWriter
 		return
 	}
 
-	// TODO: role check?
+	ctx := context.Create(r)
+
+	scope, err := a.roleService.GetPackageReadScope(ctx)
+	if err != nil {
+		utils.RespondWithError(w, "Failed to resolve activity read scope", err)
+		return
+	}
+
 	activityHistoryReq := view.ActivityHistoryReq{
 		OnlyFavorite: onlyFavorite,
 		TextFilter:   textFilter,
@@ -117,7 +124,7 @@ func (a activityTrackingControllerImpl) GetActivityHistory(w http.ResponseWriter
 		Limit:        limit,
 		Page:         page,
 	}
-	result, err := a.activityTrackingService.GetActivityHistory(context.Create(r), activityHistoryReq)
+	result, err := a.activityTrackingService.GetActivityHistory(ctx, activityHistoryReq, scope)
 	if err != nil {
 		utils.RespondWithError(w, "Failed to get activity events", err)
 		return
@@ -197,7 +204,13 @@ func (a activityTrackingControllerImpl) GetActivityHistoryForPackage(w http.Resp
 		return
 	}
 
-	result, err := a.activityTrackingService.GetEventsForPackage(packageId, includeRefs, limit, page, textFilter, types)
+	activityHistoryReq := view.ActivityHistoryReq{
+		TextFilter: textFilter,
+		Types:      types,
+		Limit:      limit,
+		Page:       page,
+	}
+	result, err := a.activityTrackingService.GetEventsForPackage(packageId, includeRefs, activityHistoryReq)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, a.ptHandler, packageId, fmt.Sprintf("Failed to get activity events for package %s", packageId), err)
 		return

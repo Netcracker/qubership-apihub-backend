@@ -1,7 +1,6 @@
 package service
 
 import (
-	stdctx "context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -18,8 +17,8 @@ import (
 type ActivityTrackingService interface {
 	TrackEvent(event view.ActivityTrackingEvent) // return no error due to async processing
 
-	GetActivityHistory(ctx context.SecurityContext, req view.ActivityHistoryReq) (*view.PkgActivityResponse, error)
-	GetEventsForPackage(packageId string, includeRefs bool, limit int, page int, textFilter string, types []string) (*view.PkgActivityResponse, error)
+	GetActivityHistory(ctx context.SecurityContext, req view.ActivityHistoryReq, scope view.PackageReadScope) (*view.PkgActivityResponse, error)
+	GetEventsForPackage(packageId string, includeRefs bool, req view.ActivityHistoryReq) (*view.PkgActivityResponse, error)
 }
 
 func NewActivityTrackingService(repo repository.ActivityTrackingRepository, publishedRepo repository.PublishedRepository, userService UserService) ActivityTrackingService {
@@ -38,44 +37,22 @@ func (a activityTrackingServiceImpl) TrackEvent(event view.ActivityTrackingEvent
 	})
 }
 
-func (a activityTrackingServiceImpl) GetActivityHistory(ctx context.SecurityContext, req view.ActivityHistoryReq) (*view.PkgActivityResponse, error) {
-	var ids []string
-
-	if req.OnlyFavorite || req.OnlyShared || len(req.Kind) > 0 {
-		packagesFilter := view.PackageListReq{
-			OnlyFavorite: req.OnlyFavorite,
-			OnlyShared:   req.OnlyShared,
-			Kind:         req.Kind,
-		}
-		packages, err := a.publishedRepo.GetFilteredPackagesWithOffset(stdctx.Background(), packagesFilter, ctx.GetUserId())
-		if err != nil {
-			return nil, fmt.Errorf("failed to get packages by filer : %v.Error - %w", packagesFilter, err)
-		}
-		if packages == nil || len(packages) == 0 {
-			return &view.PkgActivityResponse{Events: make([]view.PkgActivityResponseItem, 0)}, err
-		}
-
-		for _, pkg := range packages {
-			ids = append(ids, pkg.Id)
-		}
+func (a activityTrackingServiceImpl) GetActivityHistory(ctx context.SecurityContext, req view.ActivityHistoryReq, scope view.PackageReadScope) (*view.PkgActivityResponse, error) {
+	if scope.Kind == view.PackageReadScopeNone {
+		return &view.PkgActivityResponse{Events: make([]view.PkgActivityResponseItem, 0)}, nil
 	}
 
-	// TODO: security check! need to check view rights
+	req.Types = view.ConvertEventTypes(req.Types)
 
-	atTypes := view.ConvertEventTypes(req.Types)
-
-	ents, err := a.repo.GetEventsForPackages(ids, req.Limit, req.Page, req.TextFilter, atTypes)
+	ents, err := a.repo.GetEvents(scope, req, ctx.GetUserId())
 	if err != nil {
-		return nil, fmt.Errorf("failed to get events for packages: %w", err)
-	}
-	if ents == nil || len(ents) == 0 {
-		return &view.PkgActivityResponse{Events: make([]view.PkgActivityResponseItem, 0)}, err
+		return nil, fmt.Errorf("failed to get activity events: %w", err)
 	}
 
 	return a.makePkgActivityResponse(ents)
 }
 
-func (a activityTrackingServiceImpl) GetEventsForPackage(packageId string, includeRefs bool, limit int, page int, textFilter string, typeGroups []string) (*view.PkgActivityResponse, error) {
+func (a activityTrackingServiceImpl) GetEventsForPackage(packageId string, includeRefs bool, req view.ActivityHistoryReq) (*view.PkgActivityResponse, error) {
 	pkgEnt, err := a.publishedRepo.GetPackage(packageId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get package %s for events: %w", packageId, err)
@@ -100,9 +77,11 @@ func (a activityTrackingServiceImpl) GetEventsForPackage(packageId string, inclu
 		ids = append(ids, packageId)
 	}
 
-	atTypes := view.ConvertEventTypes(typeGroups)
+	req.Types = view.ConvertEventTypes(req.Types)
 
-	ents, err := a.repo.GetEventsForPackages(ids, limit, page, textFilter, atTypes)
+	// The caller already enforced read access on packageId, and ids holds that package plus, optionally, its
+	// descendants, which inherit read from it
+	ents, err := a.repo.GetEventsForPackages(view.PackageReadScope{Kind: view.PackageReadScopeAll}, req, ids)
 	if err != nil {
 		return nil, err
 	}
