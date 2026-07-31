@@ -44,7 +44,7 @@ func (c buildControllerImpl) GetBuild(w http.ResponseWriter, r *http.Request) {
 	buildId := getStringParam(r, "buildId")
 	build, err := c.buildService.GetExtendedBuild(ctx, buildId)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get build", err)
+		utils.RespondWithError(w, r, "Failed to get build", err)
 		return
 	}
 	if build == nil {
@@ -93,7 +93,7 @@ func (c buildControllerImpl) ListBuilds(w http.ResponseWriter, r *http.Request) 
 		Limit:     limit,
 	})
 	if err != nil {
-		utils.RespondWithError(w, "Failed to list builds", err)
+		utils.RespondWithError(w, r, "Failed to list builds", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusOK, builds)
@@ -112,7 +112,7 @@ func (c buildControllerImpl) GetBuildResult(w http.ResponseWriter, r *http.Reque
 	buildId := getStringParam(r, "buildId")
 	data, err := c.buildResultService.GetBuildResultData(ctx, buildId)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get build result", err)
+		utils.RespondWithError(w, r, "Failed to get build result", err)
 		return
 	}
 	if data == nil {
@@ -170,7 +170,7 @@ func (c buildControllerImpl) GetBuildSources(w http.ResponseWriter, r *http.Requ
 	buildId := getStringParam(r, "buildId")
 	data, err := c.buildService.GetBuildSourceData(ctx, buildId)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get build sources", err)
+		utils.RespondWithError(w, r, "Failed to get build sources", err)
 		return
 	}
 	if data == nil {

@@ -153,7 +153,7 @@ func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
 
 			result, err := s.operationService.GlobalSearchForOperations(ctx, searchQuery)
 			if err != nil {
-				utils.RespondWithError(w, "Failed to perform search for operations", err)
+				utils.RespondWithError(w, r, "Failed to perform search for operations", err)
 				return
 			}
 			utils.RespondWithJson(w, http.StatusOK, result)
@@ -171,7 +171,7 @@ func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
 
 			result, err := s.versionService.SearchForPackages(ctx, searchQueryReq)
 			if err != nil {
-				utils.RespondWithError(w, "Failed to perform search for packages", err)
+				utils.RespondWithError(w, r, "Failed to perform search for packages", err)
 				return
 			}
 			utils.RespondWithJson(w, http.StatusOK, result)
@@ -189,7 +189,7 @@ func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
 
 			result, err := s.versionService.SearchForDocuments(ctx, searchQueryReq)
 			if err != nil {
-				utils.RespondWithError(w, "Failed to perform search for documents", err)
+				utils.RespondWithError(w, r, "Failed to perform search for documents", err)
 				return
 			}
 			utils.RespondWithJson(w, http.StatusOK, result)
@@ -216,7 +216,7 @@ func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
 			}
 			result, err := s.ddlContractService.GlobalSearchForDDL(ctx, searchQuery)
 			if err != nil {
-				utils.RespondWithError(w, "Failed to perform search for DDL contracts", err)
+				utils.RespondWithError(w, r, "Failed to perform search for DDL contracts", err)
 				return
 			}
 			utils.RespondWithJson(w, http.StatusOK, result)
@@ -243,7 +243,7 @@ func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
 			}
 			result, err := s.mcpContractService.GlobalSearchForMCP(ctx, searchQuery)
 			if err != nil {
-				utils.RespondWithError(w, "Failed to perform search for MCP contracts", err)
+				utils.RespondWithError(w, r, "Failed to perform search for MCP contracts", err)
 				return
 			}
 			utils.RespondWithJson(w, http.StatusOK, result)
@@ -339,7 +339,7 @@ func (s searchControllerImpl) Search_deprecated(w http.ResponseWriter, r *http.R
 			searchQueryReq := view.MakeSearchQueryReq(searchQuery)
 			result, err := s.operationService.GlobalSearchForOperations(ctx, searchQueryReq)
 			if err != nil {
-				utils.RespondWithError(w, "Failed to perform search for operations", err)
+				utils.RespondWithError(w, r, "Failed to perform search for operations", err)
 				return
 			}
 			utils.RespondWithJson(w, http.StatusOK, result)
@@ -348,7 +348,7 @@ func (s searchControllerImpl) Search_deprecated(w http.ResponseWriter, r *http.R
 		{
 			result, err := s.versionService.SearchForPackages(ctx, searchQuery)
 			if err != nil {
-				utils.RespondWithError(w, "Failed to perform search for packages", err)
+				utils.RespondWithError(w, r, "Failed to perform search for packages", err)
 				return
 			}
 			utils.RespondWithJson(w, http.StatusOK, result)
@@ -357,7 +357,7 @@ func (s searchControllerImpl) Search_deprecated(w http.ResponseWriter, r *http.R
 		{
 			result, err := s.versionService.SearchForDocuments(ctx, searchQuery)
 			if err != nil {
-				utils.RespondWithError(w, "Failed to perform search for documents", err)
+				utils.RespondWithError(w, r, "Failed to perform search for documents", err)
 				return
 			}
 			utils.RespondWithJson(w, http.StatusOK, result)

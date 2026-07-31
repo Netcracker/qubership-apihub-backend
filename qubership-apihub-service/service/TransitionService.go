@@ -20,7 +20,7 @@ import (
 const transitionMoveTimeout = 30 * time.Minute
 
 type TransitionService interface {
-	MoveOrRenamePackage(userCtx context.Context, fromId string, toId string, overwriteHistory bool) (string, error)
+	MoveOrRenamePackage(ctx context.Context, fromId string, toId string, overwriteHistory bool) (string, error)
 	GetMoveStatus(ctx context.Context, id string) (*view.TransitionStatus, error)
 	ListCompletedActivities(ctx context.Context, offset int, limit int) ([]view.TransitionStatus, error)
 	ListPackageTransitions(ctx context.Context) ([]view.PackageTransition, error)
@@ -38,12 +38,12 @@ type transitionServiceImpl struct {
 // runTransitionMove runs a transition move under a safety-net bound, then persists the terminal
 // status on an independent short-lived context so a timed-out move can't leave the transition
 // stuck at 'running' (see transitionMoveTimeout / statusFinalizationTimeout).
-func (p transitionServiceImpl) runTransitionMove(userCtx context.Context, id string, move func(ctx context.Context) (int, error)) {
-	bgCtx, cancel := context.WithTimeout(secctx.Detach(userCtx), transitionMoveTimeout)
+func (p transitionServiceImpl) runTransitionMove(ctx context.Context, id string, move func(ctx context.Context) (int, error)) {
+	bgCtx, cancel := context.WithTimeout(secctx.Detach(ctx), transitionMoveTimeout)
 	defer cancel()
 	objAffected, err := move(bgCtx)
 
-	finCtx, finCancel := context.WithTimeout(secctx.Detach(userCtx), statusFinalizationTimeout)
+	finCtx, finCancel := context.WithTimeout(secctx.Detach(ctx), statusFinalizationTimeout)
 	defer finCancel()
 	if err != nil {
 		if terr := p.transRepo.TrackTransitionFailed(finCtx, id, err.Error()); terr != nil {
@@ -56,12 +56,12 @@ func (p transitionServiceImpl) runTransitionMove(userCtx context.Context, id str
 	}
 }
 
-func (p transitionServiceImpl) MoveOrRenamePackage(userCtx context.Context, fromId string, toId string, overwriteHistory bool) (string, error) {
+func (p transitionServiceImpl) MoveOrRenamePackage(ctx context.Context, fromId string, toId string, overwriteHistory bool) (string, error) {
 	if fromId == toId {
 		return "", fmt.Errorf("incorrect input: from==to")
 	}
 
-	fromPackage, err := p.pubRepo.GetPackage(userCtx, fromId)
+	fromPackage, err := p.pubRepo.GetPackage(ctx, fromId)
 	if err != nil {
 		return "", err
 	}
@@ -74,7 +74,7 @@ func (p transitionServiceImpl) MoveOrRenamePackage(userCtx context.Context, from
 		}
 	}
 	// mind existing, but deleted packages
-	toPackage, err := p.pubRepo.GetPackageIncludingDeleted(userCtx, toId)
+	toPackage, err := p.pubRepo.GetPackageIncludingDeleted(ctx, toId)
 	if err != nil {
 		return "", err
 	}
@@ -92,12 +92,12 @@ func (p transitionServiceImpl) MoveOrRenamePackage(userCtx context.Context, from
 	}
 
 	if !overwriteHistory {
-		redirectPackageId, err := p.transRepo.GetNewPackageId(userCtx, toId)
+		redirectPackageId, err := p.transRepo.GetNewPackageId(ctx, toId)
 		if err != nil {
 			return "", err
 		}
 		if redirectPackageId != "" {
-			oldIds, err := p.transRepo.GetOldPackageIds(userCtx, fromId)
+			oldIds, err := p.transRepo.GetOldPackageIds(ctx, fromId)
 			if err != nil {
 				return "", err
 			}
@@ -150,7 +150,7 @@ func (p transitionServiceImpl) MoveOrRenamePackage(userCtx context.Context, from
 
 	if isMove && !toWorkspace {
 		toParentId := strings.Join(toParts[:len(toParts)-1], ".")
-		toParentPackage, err := p.pubRepo.GetPackage(userCtx, toParentId)
+		toParentPackage, err := p.pubRepo.GetPackage(ctx, toParentId)
 		if err != nil {
 			return "", err
 		}
@@ -187,13 +187,13 @@ func (p transitionServiceImpl) MoveOrRenamePackage(userCtx context.Context, from
 		} else {
 			trType = "convert_workspace_to_group"
 		}
-		err = p.transRepo.TrackTransitionStarted(userCtx, id, trType, fromId, toId)
+		err = p.transRepo.TrackTransitionStarted(ctx, id, trType, fromId, toId)
 		if err != nil {
 			return "", fmt.Errorf("failed to track transition action: %s", err)
 		}
 		// TODO: implement async job that will take non-finished transition tasks from DB instead of a direct call
 		utils.SafeAsync(func() {
-			p.runTransitionMove(userCtx, id, func(ctx context.Context) (int, error) {
+			p.runTransitionMove(ctx, id, func(ctx context.Context) (int, error) {
 				return p.transRepo.MoveGroupingPackage(ctx, fromId, toId)
 			})
 		})
@@ -209,13 +209,13 @@ func (p transitionServiceImpl) MoveOrRenamePackage(userCtx context.Context, from
 			} else if isRename {
 				trType = "rename_package"
 			}
-			err = p.transRepo.TrackTransitionStarted(userCtx, id, trType, fromId, toId)
+			err = p.transRepo.TrackTransitionStarted(ctx, id, trType, fromId, toId)
 			if err != nil {
 				return "", fmt.Errorf("failed to track transition action: %s", err)
 			}
 			// TODO: implement async job that will take non-finished transition tasks from DB instead of a direct call
 			utils.SafeAsync(func() {
-				p.runTransitionMove(userCtx, id, func(ctx context.Context) (int, error) {
+				p.runTransitionMove(ctx, id, func(ctx context.Context) (int, error) {
 					return p.transRepo.MovePackage(ctx, fromId, toId, overwriteHistory)
 				})
 			})
@@ -233,13 +233,13 @@ func (p transitionServiceImpl) MoveOrRenamePackage(userCtx context.Context, from
 				trType = "rename_group"
 			}
 		}
-		err = p.transRepo.TrackTransitionStarted(userCtx, id, trType, fromId, toId)
+		err = p.transRepo.TrackTransitionStarted(ctx, id, trType, fromId, toId)
 		if err != nil {
 			return "", fmt.Errorf("failed to track transition action: %s", err)
 		}
 		// TODO: implement async job that will take non-finished transition tasks from DB instead of a direct call
 		utils.SafeAsync(func() {
-			p.runTransitionMove(userCtx, id, func(ctx context.Context) (int, error) {
+			p.runTransitionMove(ctx, id, func(ctx context.Context) (int, error) {
 				return p.transRepo.MoveGroupingPackage(ctx, fromId, toId)
 			})
 		})
@@ -255,13 +255,13 @@ func (p transitionServiceImpl) MoveOrRenamePackage(userCtx context.Context, from
 			} else if isRename {
 				trType = "rename_dashboard"
 			}
-			err = p.transRepo.TrackTransitionStarted(userCtx, id, trType, fromId, toId)
+			err = p.transRepo.TrackTransitionStarted(ctx, id, trType, fromId, toId)
 			if err != nil {
 				return "", fmt.Errorf("failed to track transition action: %s", err)
 			}
 			// TODO: implement async job that will take non-finished transition tasks from DB instead of a direct call
 			utils.SafeAsync(func() {
-				p.runTransitionMove(userCtx, id, func(ctx context.Context) (int, error) {
+				p.runTransitionMove(ctx, id, func(ctx context.Context) (int, error) {
 					return p.transRepo.MovePackage(ctx, fromId, toId, overwriteHistory)
 				})
 			})

@@ -178,7 +178,7 @@ func handlePkgRedirectOrRespondWithError(w http.ResponseWriter, r *http.Request,
 				customError.Code == exception.PublishedVersionNotFound) {
 			newPkg, err := ptHandler.HandleMissingPackageId(ctx, packageId)
 			if err != nil {
-				utils.RespondWithError(w, "Package not found, failed to check package move", err)
+				utils.RespondWithError(w, r, "Package not found, failed to check package move", err)
 				return
 			}
 			if newPkg != "" {
@@ -192,7 +192,7 @@ func handlePkgRedirectOrRespondWithError(w http.ResponseWriter, r *http.Request,
 			}
 		}
 	}
-	utils.RespondWithError(w, msg, err)
+	utils.RespondWithError(w, r, msg, err)
 }
 
 func getTemplatePath(r *http.Request) string {

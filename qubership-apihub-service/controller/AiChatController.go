@@ -45,7 +45,7 @@ func (c *AiChatController) ListChats(w http.ResponseWriter, r *http.Request) {
 	search := r.URL.Query().Get("search")
 	res, err := c.chatsSvc.ListChats(ctx, uid, search, before, beforeID, limit)
 	if err != nil {
-		utils.RespondWithError(w, "list chats", err)
+		utils.RespondWithError(w, r, "list chats", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusOK, res)
@@ -61,7 +61,7 @@ func (c *AiChatController) CreateChat(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := c.chatsSvc.CreateChat(ctx, uid, body.Title)
 	if err != nil {
-		utils.RespondWithError(w, "create chat", err)
+		utils.RespondWithError(w, r, "create chat", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusCreated, res)
@@ -73,7 +73,7 @@ func (c *AiChatController) GetChat(w http.ResponseWriter, r *http.Request) {
 	chatID := getStringParam(r, "chatId")
 	res, err := c.chatsSvc.GetChat(ctx, uid, chatID)
 	if err != nil {
-		utils.RespondWithError(w, "get chat", err)
+		utils.RespondWithError(w, r, "get chat", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusOK, res)
@@ -90,7 +90,7 @@ func (c *AiChatController) UpdateChat(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := c.chatsSvc.UpdateChat(ctx, uid, chatID, &body)
 	if err != nil {
-		utils.RespondWithError(w, "update chat", err)
+		utils.RespondWithError(w, r, "update chat", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusOK, res)
@@ -101,7 +101,7 @@ func (c *AiChatController) DeleteChat(w http.ResponseWriter, r *http.Request) {
 	uid := secctx.GetUserId(ctx)
 	chatID := getStringParam(r, "chatId")
 	if err := c.chatsSvc.DeleteChat(ctx, uid, chatID); err != nil {
-		utils.RespondWithError(w, "delete chat", err)
+		utils.RespondWithError(w, r, "delete chat", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -128,7 +128,7 @@ func (c *AiChatController) ListMessages(w http.ResponseWriter, r *http.Request) 
 	beforeID := r.URL.Query().Get("beforeId")
 	res, err := c.chatsSvc.ListMessages(ctx, uid, chatID, before, beforeID, limit)
 	if err != nil {
-		utils.RespondWithError(w, "list messages", err)
+		utils.RespondWithError(w, r, "list messages", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusOK, res)
@@ -152,7 +152,7 @@ func (c *AiChatController) SendMessage(w http.ResponseWriter, r *http.Request) {
 	ctx = service.SetMCPClientLabel(ctx, service.MCPClientLabelInternalAIChat)
 	res, err := c.aiSvc.SendMessage(ctx, uid, chatID, &body)
 	if err != nil {
-		utils.RespondWithError(w, "send", err)
+		utils.RespondWithError(w, r, "send", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusOK, res)
@@ -185,10 +185,9 @@ func (c *AiChatController) SendMessageStream(w http.ResponseWriter, r *http.Requ
 	c.monitoringSvc.IncreaseBusinessMetricCounter(uid, metrics.AIChatCalled, "chat messages")
 
 	ctx = service.SetMCPClientLabel(ctx, service.MCPClientLabelInternalAIChat)
-	//TODO: stream endpoint has request context without timeout, need to handle it
 	ch, err := c.aiSvc.SendMessageStream(ctx, uid, chatID, &body)
 	if err != nil {
-		utils.RespondWithError(w, "stream", err)
+		utils.RespondWithError(w, r, "stream", err)
 		return
 	}
 

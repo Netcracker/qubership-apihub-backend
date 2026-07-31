@@ -112,7 +112,7 @@ func (p packageExportConfigControllerImpl) SetConfig(w http.ResponseWriter, r *h
 
 	result, err := p.expConfSvc.GetConfig(ctx, packageId)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get package export config after update", err)
+		utils.RespondWithError(w, r, "Failed to get package export config after update", err)
 		return
 	}
 

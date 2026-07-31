@@ -36,7 +36,7 @@ func (c *internalDocumentControllerImpl) GetVersionInternalDocuments(w http.Resp
 	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := c.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -61,7 +61,7 @@ func (c *internalDocumentControllerImpl) GetVersionInternalDocuments(w http.Resp
 
 	response, err := c.publishedService.GetVersionInternalDocuments(ctx, packageId, version)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get internal documents for version", err)
+		utils.RespondWithError(w, r, "Failed to get internal documents for version", err)
 		return
 	}
 
@@ -74,7 +74,7 @@ func (c *internalDocumentControllerImpl) GetVersionInternalDocumentData(w http.R
 
 	data, filename, err := c.publishedService.GetVersionInternalDocumentData(ctx, hash)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get internal document data", err)
+		utils.RespondWithError(w, r, "Failed to get internal document data", err)
 		return
 	}
 
@@ -90,7 +90,7 @@ func (c *internalDocumentControllerImpl) GetComparisonInternalDocuments(w http.R
 	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := c.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -118,7 +118,7 @@ func (c *internalDocumentControllerImpl) GetComparisonInternalDocuments(w http.R
 
 	response, err := c.publishedService.GetComparisonInternalDocuments(ctx, packageId, version, previousVersionPackageId, previousVersion, refPackageId)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get internal documents for comparison", err)
+		utils.RespondWithError(w, r, "Failed to get internal documents for comparison", err)
 		return
 	}
 
@@ -131,7 +131,7 @@ func (c *internalDocumentControllerImpl) GetComparisonInternalDocumentData(w htt
 
 	data, filename, err := c.publishedService.GetComparisonInternalDocumentData(ctx, hash)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get internal document data", err)
+		utils.RespondWithError(w, r, "Failed to get internal document data", err)
 		return
 	}
 

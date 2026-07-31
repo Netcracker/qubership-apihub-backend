@@ -76,8 +76,6 @@ type BuildCleanupJob struct {
 }
 
 func (j BuildCleanupJob) Run() {
-	// Scheduled background job: use a background context (not request-scoped) bounded by the configured
-	// safety-net timeout; the job performs VACUUM FULL on build tables, hence the generous default.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(j.systemInfoService.GetBuildsCleanupTimeout())*time.Minute)
 	defer cancel()
 	scheduledAt := time.Now().Round(time.Second)

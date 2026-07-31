@@ -199,6 +199,9 @@ func (m mcpService) MakeLLMTools() []client.LLMTool {
 
 // GetPackagesList retrieves the list of packages from the workspace
 func (m mcpService) GetPackagesList(ctx context.Context, workspaceId string) ([]mcp.ResourceContents, error) {
+	// Resource reads do not go through the tool handlers, so they need the same per-operation bound
+	ctx, cancel := context.WithTimeout(ctx, MCPToolCallTimeout)
+	defer cancel()
 	log.Infof("Getting packages list for workspace: %s", workspaceId)
 
 	packageListReq := view.PackageListReq{

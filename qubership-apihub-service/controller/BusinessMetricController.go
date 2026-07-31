@@ -64,7 +64,7 @@ func (b businessMetricControllerImpl) GetBusinessMetrics(w http.ResponseWriter, 
 	}
 	businessMetrics, err := b.businessMetricService.GetBusinessMetrics(ctx, parentPackageId, hierarchyLevel)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get business metrics", err)
+		utils.RespondWithError(w, r, "Failed to get business metrics", err)
 		return
 	}
 	switch format {
@@ -74,7 +74,7 @@ func (b businessMetricControllerImpl) GetBusinessMetrics(w http.ResponseWriter, 
 	case view.ExportFormatXlsx:
 		report, filename, err := b.excelService.ExportBusinessMetrics(businessMetrics)
 		if err != nil {
-			utils.RespondWithError(w, "Failed to export business metrics as xlsx", err)
+			utils.RespondWithError(w, r, "Failed to export business metrics as xlsx", err)
 			return
 		}
 		w.Header().Set("Content-Type", "application/octet-stream")

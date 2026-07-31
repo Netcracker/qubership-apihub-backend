@@ -96,12 +96,29 @@ func RedirectHandler(apihubURLStr string) http.HandlerFunc {
 	}
 }
 
-// IsRequestTimeout reports whether err was caused by the request context being cancelled or running out of its deadline
+// IsRequestTimeout reports whether err was caused by the request running out of its own deadline
 func IsRequestTimeout(err error) bool {
-	return errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)
+	return errors.Is(err, context.DeadlineExceeded)
 }
 
-func RespondWithError(w http.ResponseWriter, msg string, err error) {
+func IsContextCancelled(err error) bool {
+	return errors.Is(err, context.Canceled)
+}
+
+// IsClientDisconnected reports whether the client went away before the request completed. Every cancel()
+// in the call chain produces the same context.Canceled sentinel, so the error alone cannot tell an
+// internal cancellation from a disconnect: only the client going away also ends the request context.
+func IsClientDisconnected(r *http.Request, err error) bool {
+	return IsContextCancelled(err) && r != nil && IsContextCancelled(r.Context().Err())
+}
+
+func RespondWithError(w http.ResponseWriter, r *http.Request, msg string, err error) {
+	// Nobody is left to read a response
+	if IsClientDisconnected(r, err) {
+		log.Infof("%s: client closed the request before it completed: %s", msg, err.Error())
+		return
+	}
+
 	if customError, ok := err.(*exception.CustomError); ok {
 		logCustomError(msg, customError, err)
 		RespondWithCustomError(w, customError)
@@ -114,6 +131,15 @@ func RespondWithError(w http.ResponseWriter, msg string, err error) {
 			Status:  http.StatusInternalServerError,
 			Code:    exception.RequestTimeout,
 			Message: exception.RequestTimeoutMsg,
+			Debug:   err.Error(),
+		})
+		return
+	}
+	if IsContextCancelled(err) {
+		RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusInternalServerError,
+			Code:    exception.RequestCancelled,
+			Message: exception.RequestCancelledMsg,
 			Debug:   err.Error(),
 		})
 		return

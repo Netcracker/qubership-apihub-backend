@@ -36,7 +36,7 @@ func (s systemStatsControllerImpl) GetSystemStats(w http.ResponseWriter, r *http
 	}
 	stats, err := s.statsService.GetSystemStats(ctx)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get system statistics", err)
+		utils.RespondWithError(w, r, "Failed to get system statistics", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusOK, stats)

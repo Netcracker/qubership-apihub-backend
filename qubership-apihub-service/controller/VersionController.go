@@ -100,7 +100,7 @@ func (v versionControllerImpl) SharePublishedFile(w http.ResponseWriter, r *http
 	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := v.roleService.HasRequiredPermissions(ctx, sharedFilesReq.PackageId, view.ReadPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -113,7 +113,7 @@ func (v versionControllerImpl) SharePublishedFile(w http.ResponseWriter, r *http
 	}
 	sharedUrlInfo, err := v.versionService.SharePublishedFile(ctx, sharedFilesReq.PackageId, sharedFilesReq.Version, sharedFilesReq.Slug)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to create shared URL for content", err)
+		utils.RespondWithError(w, r, "Failed to create shared URL for content", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusOK, sharedUrlInfo)
@@ -125,7 +125,7 @@ func (v versionControllerImpl) GetSharedContentFile(w http.ResponseWriter, r *ht
 
 	contentData, attachmentFileName, err := v.versionService.GetSharedFile(ctx, sharedFileId)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get published content by shared ID", err)
+		utils.RespondWithError(w, r, "Failed to get published content by shared ID", err)
 		return
 	}
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", attachmentFileName))
@@ -982,7 +982,7 @@ func (v versionControllerImpl) DeleteVersionsRecursively(w http.ResponseWriter, 
 
 	id, err := v.versionService.DeleteVersionsRecursively(ctx, packageId, req.OlderThanDate)
 	if err != nil {
-		utils.RespondWithError(w, "failed to cleanup old versions", err)
+		utils.RespondWithError(w, r, "failed to cleanup old versions", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusOK, map[string]string{"jobId": id})
@@ -1056,7 +1056,7 @@ func (v versionControllerImpl) CopyVersion(w http.ResponseWriter, r *http.Reques
 	}
 	sufficientPrivileges, err = v.roleService.HasManageVersionPermission(ctx, req.TargetPackageId, req.TargetStatus)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -1070,7 +1070,7 @@ func (v versionControllerImpl) CopyVersion(w http.ResponseWriter, r *http.Reques
 
 	publishId, err := v.versionService.CopyVersion(ctx, packageId, version, req)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to copy published version", err)
+		utils.RespondWithError(w, r, "Failed to copy published version", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusAccepted, view.CopyVersionResp{PublishId: publishId})
@@ -1145,7 +1145,7 @@ func (v versionControllerImpl) GetPublishedVersionsHistory(w http.ResponseWriter
 
 	history, err := v.versionService.GetPublishedVersionsHistory(ctx, filter)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get published versions history", err)
+		utils.RespondWithError(w, r, "Failed to get published versions history", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusOK, history)
@@ -1159,7 +1159,7 @@ func (v versionControllerImpl) PublishFromCSV_deprecated(w http.ResponseWriter, 
 
 	publishId, err := v.versionService.StartPublishFromCSV(secctx.MakeUserContext(r), *csvPublishReq)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to start dashboard publish from csv", err)
+		utils.RespondWithError(w, r, "Failed to start dashboard publish from csv", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusAccepted, view.PublishFromCSVResp{PublishId: publishId})
@@ -1271,7 +1271,7 @@ func (v versionControllerImpl) parseCSVPublishRequest(w http.ResponseWriter, r *
 	}
 	sufficientPrivileges, err = v.roleService.HasManageVersionPermission(ctx, csvPublishReq.PackageId, csvPublishReq.Status)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return nil, false
 	}
 	if !sufficientPrivileges {
@@ -1313,7 +1313,7 @@ func (v versionControllerImpl) PublishFromCSV(w http.ResponseWriter, r *http.Req
 
 	publishId, err := v.versionService.StartPublishFromCSV(secctx.MakeUserContext(r), *csvPublishReq)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to start dashboard publish from csv", err)
+		utils.RespondWithError(w, r, "Failed to start dashboard publish from csv", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusAccepted, view.PublishFromCSVResp{PublishId: publishId})
@@ -1325,7 +1325,7 @@ func (v versionControllerImpl) GetCSVDashboardPublishStatus(w http.ResponseWrite
 	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := v.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -1339,7 +1339,7 @@ func (v versionControllerImpl) GetCSVDashboardPublishStatus(w http.ResponseWrite
 
 	publishStatus, err := v.versionService.GetCSVDashboardPublishStatus(ctx, publishId)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get publish status", err)
+		utils.RespondWithError(w, r, "Failed to get publish status", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusOK, publishStatus)
@@ -1351,7 +1351,7 @@ func (v versionControllerImpl) GetCSVDashboardPublishReport(w http.ResponseWrite
 	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := v.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -1365,7 +1365,7 @@ func (v versionControllerImpl) GetCSVDashboardPublishReport(w http.ResponseWrite
 
 	publishReport, err := v.versionService.GetCSVDashboardPublishReport(ctx, publishId)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get publish report", err)
+		utils.RespondWithError(w, r, "Failed to get publish report", err)
 		return
 	}
 	w.Header().Set("Content-Type", "text/csv")
@@ -1467,12 +1467,12 @@ func (v versionControllerImpl) BulkUpdateDocumentShareability(w http.ResponseWri
 
 	rows, err := v.excelService.ParseShareabilityReport(r.Body)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to parse shareability report", err)
+		utils.RespondWithError(w, r, "Failed to parse shareability report", err)
 		return
 	}
 
 	if err := v.versionService.BulkUpdateDocumentShareability(ctx, rows); err != nil {
-		utils.RespondWithError(w, "Failed to bulk update document shareability", err)
+		utils.RespondWithError(w, r, "Failed to bulk update document shareability", err)
 		return
 	}
 

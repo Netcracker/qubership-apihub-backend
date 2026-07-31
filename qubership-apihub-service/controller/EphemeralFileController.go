@@ -28,7 +28,7 @@ func (c *EphemeralFileController) Download(w http.ResponseWriter, r *http.Reques
 
 	f, err := c.svc.GetFileByID(r.Context(), fileID)
 	if err != nil {
-		utils.RespondWithError(w, "Get file", err)
+		utils.RespondWithError(w, r, "Get file", err)
 		return
 	}
 	if f == nil || f.ExpiresAt.Before(time.Now().UTC()) {

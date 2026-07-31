@@ -35,9 +35,9 @@ func (c cleanupControllerImpl) ClearTestData(w http.ResponseWriter, r *http.Requ
 		})
 		return
 	}
-	err = c.cleanupService.ClearTestData(testId)
+	err = c.cleanupService.ClearTestData(r.Context(), testId)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to clear test data", err)
+		utils.RespondWithError(w, r, "Failed to clear test data", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

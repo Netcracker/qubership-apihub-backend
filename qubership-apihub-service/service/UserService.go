@@ -160,7 +160,7 @@ func (u usersServiceImpl) SearchUsersInLdap(ctx context.Context, ldapSearchFilte
 		return nil, nil
 	}
 	if err := ctx.Err(); err != nil {
-		return nil, ldapDeadlineError(ldapServerUrl, err)
+		return nil, ldapContextError(ldapServerUrl, err)
 	}
 	ld, err := ldap.DialURL(ldapServerUrl)
 	if err != nil {
@@ -175,7 +175,7 @@ func (u usersServiceImpl) SearchUsersInLdap(ctx context.Context, ldapSearchFilte
 	defer ld.Close()
 
 	if err := setLdapOperationTimeout(ctx, ld); err != nil {
-		return nil, ldapDeadlineError(ldapServerUrl, err)
+		return nil, ldapContextError(ldapServerUrl, err)
 	}
 	err = ld.Bind(
 		fmt.Sprintf("cn=%s,%s,%s",
@@ -193,7 +193,7 @@ func (u usersServiceImpl) SearchUsersInLdap(ctx context.Context, ldapSearchFilte
 		}
 	}
 	if err := ctx.Err(); err != nil {
-		return nil, ldapDeadlineError(ldapServerUrl, err)
+		return nil, ldapContextError(ldapServerUrl, err)
 	}
 
 	var subFilter string
@@ -213,7 +213,7 @@ func (u usersServiceImpl) SearchUsersInLdap(ctx context.Context, ldapSearchFilte
 		controls,
 	)
 	if err := setLdapOperationTimeout(ctx, ld); err != nil {
-		return nil, ldapDeadlineError(ldapServerUrl, err)
+		return nil, ldapContextError(ldapServerUrl, err)
 	}
 	result, err := ld.Search(searchReq)
 	if err != nil {
@@ -226,7 +226,7 @@ func (u usersServiceImpl) SearchUsersInLdap(ctx context.Context, ldapSearchFilte
 		}
 	}
 	if err := ctx.Err(); err != nil {
-		return nil, ldapDeadlineError(ldapServerUrl, err)
+		return nil, ldapContextError(ldapServerUrl, err)
 	}
 	users := make([]view.LdapUser, 0)
 	for _, entry := range result.Entries {
@@ -273,13 +273,9 @@ func setLdapOperationTimeout(ctx context.Context, ld *ldap.Conn) error {
 	return nil
 }
 
-func ldapDeadlineError(ldapServerUrl string, err error) *exception.CustomError {
-	return &exception.CustomError{
-		Status:  http.StatusInternalServerError,
-		Code:    exception.LdapSearchFailed,
-		Message: exception.LdapSearchFailedMsg,
-		Params:  map[string]interface{}{"server": ldapServerUrl, "error": err.Error()},
-	}
+// ldapContextError keeps the context error reachable through errors.Is
+func ldapContextError(ldapServerUrl string, err error) error {
+	return fmt.Errorf("ldap request to %s aborted: %w", ldapServerUrl, err)
 }
 
 func (u usersServiceImpl) GetUsersIdMap(ctx context.Context, userIds []string) (map[string]view.User, error) {

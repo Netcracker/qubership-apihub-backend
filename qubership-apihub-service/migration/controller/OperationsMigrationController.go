@@ -70,7 +70,7 @@ func (t operationsMigrationControllerImpl) StartOpsMigration(w http.ResponseWrit
 
 	id, err := t.migrationService.StartMigrateOperations(ctx, req)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to start operations migration", err)
+		utils.RespondWithError(w, r, "Failed to start operations migration", err)
 		return
 	}
 
@@ -145,7 +145,7 @@ func (t operationsMigrationControllerImpl) CancelRunningMigrations(w http.Respon
 	}
 	err := t.migrationService.CancelRunningMigrations(ctx)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to cancel running migrations", err)
+		utils.RespondWithError(w, r, "Failed to cancel running migrations", err)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -251,7 +251,7 @@ func (t operationsMigrationControllerImpl) GetMigrationPerfReport(w http.Respons
 
 	report, err := t.migrationService.GetMigrationPerfReport(ctx, migrationId, includeHourPackageData, stageFilter)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get migration perf report", err)
+		utils.RespondWithError(w, r, "Failed to get migration perf report", err)
 		return
 	}
 

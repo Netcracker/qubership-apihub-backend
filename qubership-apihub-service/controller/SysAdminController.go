@@ -41,7 +41,7 @@ func (a sysAdminControllerImpl) GetSystemAdministrators(w http.ResponseWriter, r
 	}
 	admins, err := a.roleService.GetSystemAdministrators(ctx)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get system administrators", err)
+		utils.RespondWithError(w, r, "Failed to get system administrators", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusOK, admins)
@@ -90,7 +90,7 @@ func (a sysAdminControllerImpl) AddSystemAdministrator(w http.ResponseWriter, r 
 
 	admins, err := a.roleService.AddSystemAdministrator(ctx, addSysadmReq.UserId)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to add system administrator", err)
+		utils.RespondWithError(w, r, "Failed to add system administrator", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusOK, admins)
@@ -110,7 +110,7 @@ func (a sysAdminControllerImpl) DeleteSystemAdministrator(w http.ResponseWriter,
 	}
 	err := a.roleService.DeleteSystemAdministrator(ctx, userId)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to delete system administrator", err)
+		utils.RespondWithError(w, r, "Failed to delete system administrator", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

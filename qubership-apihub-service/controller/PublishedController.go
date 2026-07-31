@@ -36,7 +36,7 @@ func (v publishControllerImpl) GetVersionSources(w http.ResponseWriter, r *http.
 	packageId := getStringParam(r, "packageId")
 	sufficientPrivileges, err := v.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -61,7 +61,7 @@ func (v publishControllerImpl) GetVersionSources(w http.ResponseWriter, r *http.
 	}
 	srcArchive, err := v.publishedService.GetVersionSources(ctx, packageId, versionName)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get package version sources", err)
+		utils.RespondWithError(w, r, "Failed to get package version sources", err)
 		return
 	}
 
@@ -75,7 +75,7 @@ func (v publishControllerImpl) GetPublishedVersionSourceDataConfig(w http.Respon
 	packageId := getStringParam(r, "packageId")
 	sufficientPrivileges, err := v.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -100,7 +100,7 @@ func (v publishControllerImpl) GetPublishedVersionSourceDataConfig(w http.Respon
 	}
 	publishedVersionSourceDataConfig, err := v.publishedService.GetPublishedVersionSourceDataConfig(ctx, packageId, versionName)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get package version sources", err)
+		utils.RespondWithError(w, r, "Failed to get package version sources", err)
 		return
 	}
 
@@ -112,7 +112,7 @@ func (v publishControllerImpl) GetPublishedVersionBuildConfig(w http.ResponseWri
 	packageId := getStringParam(r, "packageId")
 	sufficientPrivileges, err := v.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -138,7 +138,7 @@ func (v publishControllerImpl) GetPublishedVersionBuildConfig(w http.ResponseWri
 
 	publishedVersionBuildConfig, err := v.publishedService.GetPublishedVersionBuildConfig(ctx, packageId, versionName)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get package version build config", err)
+		utils.RespondWithError(w, r, "Failed to get package version build config", err)
 		return
 	}
 

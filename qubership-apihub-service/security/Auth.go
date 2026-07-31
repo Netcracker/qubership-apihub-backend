@@ -103,12 +103,12 @@ func CreateLocalUserToken_deprecated(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, err := authenticateUser(ctx, r)
 	if err != nil {
-		respondWithAuthFailedError(w, err)
+		respondWithAuthFailedError(w, r, err)
 		return
 	}
 	userView, err := CreateTokenForUser_deprecated(ctx, *user)
 	if err != nil {
-		respondWithAuthFailedError(w, err)
+		respondWithAuthFailedError(w, r, err)
 		return
 	}
 
@@ -132,12 +132,12 @@ func CreateLocalUserToken(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, err := authenticateUser(ctx, r)
 	if err != nil {
-		respondWithAuthFailedError(w, err)
+		respondWithAuthFailedError(w, r, err)
 		return
 	}
 
 	if err = SetAuthTokenCookies(ctx, w, user, LocalRefreshPath); err != nil {
-		respondWithAuthFailedError(w, err)
+		respondWithAuthFailedError(w, r, err)
 		return
 	}
 

@@ -20,7 +20,7 @@ type TransitionRepository interface {
 	MovePackage(ctx context.Context, fromPkg, toPkg string, overwriteHistory bool) (int, error)
 	MoveGroupingPackage(ctx context.Context, fromPkg, toPkg string) (int, error)
 
-	TrackTransitionStarted(userCtx context.Context, id, trType, fromPkg, toPkg string) error
+	TrackTransitionStarted(ctx context.Context, id, trType, fromPkg, toPkg string) error
 	TrackTransitionProgress(ctx context.Context, id, progress int) error
 	TrackTransitionFailed(ctx context.Context, id, details string) error
 	TrackTransitionCompleted(ctx context.Context, id string, affectedObjects int) error

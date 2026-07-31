@@ -114,7 +114,7 @@ func (c comparisonControllerImpl) CompareTwoVersions(w http.ResponseWriter, r *h
 		return
 	}
 	if err := utils.ValidateObject(compareVersionsReq); err != nil {
-		utils.RespondWithError(w, "", exception.CustomError{
+		utils.RespondWithError(w, r, "", exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidCompareVersionReq,
 			Message: exception.InvalidCompareVersionReqMsg,
@@ -124,7 +124,7 @@ func (c comparisonControllerImpl) CompareTwoVersions(w http.ResponseWriter, r *h
 
 	sufficientPrivileges, err := c.roleService.HasRequiredPermissions(ctx, compareVersionsReq.PackageId, view.ReadPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -138,12 +138,12 @@ func (c comparisonControllerImpl) CompareTwoVersions(w http.ResponseWriter, r *h
 
 	revision, err := c.versionService.GetLatestRevision(ctx, compareVersionsReq.PackageId, compareVersionsReq.Version)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get version", err)
+		utils.RespondWithError(w, r, "Failed to get version", err)
 		return
 	}
 	prevVersionRevision, err := c.versionService.GetLatestRevision(ctx, compareVersionsReq.PreviousVersionPackageId, compareVersionsReq.PreviousVersion)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get previous version", err)
+		utils.RespondWithError(w, r, "Failed to get previous version", err)
 		return
 	}
 
@@ -162,7 +162,7 @@ func (c comparisonControllerImpl) CompareTwoVersions(w http.ResponseWriter, r *h
 	if reCalculate {
 		buildId, buildConfig, err := c.buildService.CreateChangelogBuild(ctx, buildConfig, clientBuild, builderId)
 		if err != nil {
-			utils.RespondWithError(w, "Failed to create changelog type build", err)
+			utils.RespondWithError(w, r, "Failed to create changelog type build", err)
 			return
 		}
 		if clientBuild {
@@ -186,7 +186,7 @@ func (c comparisonControllerImpl) CompareTwoVersions(w http.ResponseWriter, r *h
 
 	compareResult, err := c.comparisonService.ValidComparisonResultExists(ctx, compareVersionsReq.PackageId, compareVersionsReq.Version, compareVersionsReq.PreviousVersionPackageId, compareVersionsReq.PreviousVersion)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get versions comparison result", err)
+		utils.RespondWithError(w, r, "Failed to get versions comparison result", err)
 		return
 	}
 	if compareResult {
@@ -211,7 +211,7 @@ func (c comparisonControllerImpl) CompareTwoVersions(w http.ResponseWriter, r *h
 			if customError.Status == http.StatusNotFound {
 				buildId, buildConfig, err := c.buildService.CreateChangelogBuild(ctx, buildConfig, clientBuild, builderId)
 				if err != nil {
-					utils.RespondWithError(w, "Failed to create changelog type build", err)
+					utils.RespondWithError(w, r, "Failed to create changelog type build", err)
 					return
 				}
 				if clientBuild {
@@ -233,7 +233,7 @@ func (c comparisonControllerImpl) CompareTwoVersions(w http.ResponseWriter, r *h
 				return
 			}
 		}
-		utils.RespondWithError(w, "Failed to get buildStatus", err)
+		utils.RespondWithError(w, r, "Failed to get buildStatus", err)
 		return
 	}
 	switch buildView.Status {
@@ -249,7 +249,7 @@ func (c comparisonControllerImpl) CompareTwoVersions(w http.ResponseWriter, r *h
 		//or if this build completed during this method execution (rebuild is not requried)
 		compareResult, err := c.comparisonService.ValidComparisonResultExists(ctx, compareVersionsReq.PackageId, compareVersionsReq.Version, compareVersionsReq.PreviousVersionPackageId, compareVersionsReq.PreviousVersion)
 		if err != nil {
-			utils.RespondWithError(w, "Failed to get versions comparison result", err)
+			utils.RespondWithError(w, r, "Failed to get versions comparison result", err)
 			return
 		}
 		if compareResult {
@@ -258,7 +258,7 @@ func (c comparisonControllerImpl) CompareTwoVersions(w http.ResponseWriter, r *h
 		}
 		buildId, buildConfig, err := c.buildService.CreateChangelogBuild(ctx, buildConfig, clientBuild, builderId)
 		if err != nil {
-			utils.RespondWithError(w, "Failed to create changelog type build", err)
+			utils.RespondWithError(w, r, "Failed to create changelog type build", err)
 			return
 		}
 		if clientBuild {

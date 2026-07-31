@@ -44,7 +44,7 @@ func (c roleControllerImpl) GetPackageMembers(w http.ResponseWriter, r *http.Req
 	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := c.roleService.HasRequiredPermissions(ctx, packageId, view.UserAccessManagementPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -57,7 +57,7 @@ func (c roleControllerImpl) GetPackageMembers(w http.ResponseWriter, r *http.Req
 	}
 	members, err := c.roleService.GetPackageMembers(ctx, packageId)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get package members", err)
+		utils.RespondWithError(w, r, "Failed to get package members", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusOK, members)
@@ -68,7 +68,7 @@ func (c roleControllerImpl) DeletePackageMember(w http.ResponseWriter, r *http.R
 	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := c.roleService.HasRequiredPermissions(ctx, packageId, view.UserAccessManagementPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -93,7 +93,7 @@ func (c roleControllerImpl) DeletePackageMember(w http.ResponseWriter, r *http.R
 
 	indirectMemberRole, err := c.roleService.DeletePackageMember(ctx, packageId, userId)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to delete package member", err)
+		utils.RespondWithError(w, r, "Failed to delete package member", err)
 		return
 	}
 	if indirectMemberRole == nil {
@@ -108,7 +108,7 @@ func (c roleControllerImpl) AddPackageMembers(w http.ResponseWriter, r *http.Req
 	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := c.roleService.HasRequiredPermissions(ctx, packageId, view.UserAccessManagementPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -151,7 +151,7 @@ func (c roleControllerImpl) AddPackageMembers(w http.ResponseWriter, r *http.Req
 
 	members, err := c.roleService.AddPackageMembers(ctx, packageId, packageMembersReq.Emails, packageMembersReq.RoleIds)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to add package members", err)
+		utils.RespondWithError(w, r, "Failed to add package members", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusCreated, members)
@@ -162,7 +162,7 @@ func (c roleControllerImpl) UpdatePackageMembers(w http.ResponseWriter, r *http.
 	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := c.roleService.HasRequiredPermissions(ctx, packageId, view.UserAccessManagementPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -217,7 +217,7 @@ func (c roleControllerImpl) UpdatePackageMembers(w http.ResponseWriter, r *http.
 
 	err = c.roleService.UpdatePackageMember(ctx, packageId, userId, packageMemberUpdatePatch.RoleId, packageMemberUpdatePatch.Action)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to update package member", err)
+		utils.RespondWithError(w, r, "Failed to update package member", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -265,7 +265,7 @@ func (c roleControllerImpl) CreateRole(w http.ResponseWriter, r *http.Request) {
 
 	createdRole, err := c.roleService.CreateRole(ctx, createRoleReq.Role, createRoleReq.Permissions)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to create new role", err)
+		utils.RespondWithError(w, r, "Failed to create new role", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusCreated, createdRole)
@@ -284,7 +284,7 @@ func (c roleControllerImpl) DeleteRole(w http.ResponseWriter, r *http.Request) {
 	roleId := getStringParam(r, "roleId")
 	err := c.roleService.DeleteRole(ctx, roleId)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to delete role", err)
+		utils.RespondWithError(w, r, "Failed to delete role", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -326,7 +326,7 @@ func (c roleControllerImpl) UpdateRole(w http.ResponseWriter, r *http.Request) {
 	if updateRoleReq.Permissions != nil {
 		err = c.roleService.SetRolePermissions(ctx, roleId, *updateRoleReq.Permissions)
 		if err != nil {
-			utils.RespondWithError(w, "Failed to update role permissions", err)
+			utils.RespondWithError(w, r, "Failed to update role permissions", err)
 			return
 		}
 	}
@@ -337,7 +337,7 @@ func (c roleControllerImpl) GetExistingRoles(w http.ResponseWriter, r *http.Requ
 	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := c.roleService.HasRequiredPermissionsAcrossAllPackages(ctx, view.UserAccessManagementPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -350,7 +350,7 @@ func (c roleControllerImpl) GetExistingRoles(w http.ResponseWriter, r *http.Requ
 	}
 	roles, err := c.roleService.GetExistingRolesExcludingNone(ctx)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get existing roles", err)
+		utils.RespondWithError(w, r, "Failed to get existing roles", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusOK, roles)
@@ -360,7 +360,7 @@ func (c roleControllerImpl) GetExistingPermissions(w http.ResponseWriter, r *htt
 	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := c.roleService.HasRequiredPermissionsAcrossAllPackages(ctx, view.UserAccessManagementPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -373,7 +373,7 @@ func (c roleControllerImpl) GetExistingPermissions(w http.ResponseWriter, r *htt
 	}
 	permissions, err := c.roleService.GetExistingPermissions()
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get permissions list", err)
+		utils.RespondWithError(w, r, "Failed to get permissions list", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusOK, permissions)
@@ -384,7 +384,7 @@ func (c roleControllerImpl) GetAvailablePackageRoles(w http.ResponseWriter, r *h
 	packageId := getStringParam(r, "packageId")
 	sufficientPrivileges, err := c.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -397,7 +397,7 @@ func (c roleControllerImpl) GetAvailablePackageRoles(w http.ResponseWriter, r *h
 	}
 	availableRoles, err := c.roleService.GetAvailablePackageRoles(ctx, packageId, true)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get available package roles", err)
+		utils.RespondWithError(w, r, "Failed to get available package roles", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusOK, availableRoles)
@@ -445,7 +445,7 @@ func (c roleControllerImpl) SetRoleOrder(w http.ResponseWriter, r *http.Request)
 
 	err = c.roleService.SetRoleOrder(ctx, setRoleOrderReq.Roles)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to update role permissions", err)
+		utils.RespondWithError(w, r, "Failed to update role permissions", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -490,7 +490,7 @@ func (c roleControllerImpl) GetAvailableUserPackagePromoteStatuses(w http.Respon
 
 	availablePackagePromoteStatuses, err := c.roleService.GetUserPackagePromoteStatuses(ctx, packages.Packages, userId)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get package promote statuses available for user", err)
+		utils.RespondWithError(w, r, "Failed to get package promote statuses available for user", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusOK, availablePackagePromoteStatuses)
@@ -536,7 +536,7 @@ func (c roleControllerImpl) TestSetUserSystemRole(w http.ResponseWriter, r *http
 
 	err = c.roleService.SetUserSystemRole(ctx, userId, role)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to set user system role", err)
+		utils.RespondWithError(w, r, "Failed to set user system role", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

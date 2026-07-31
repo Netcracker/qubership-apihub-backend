@@ -74,7 +74,7 @@ func (e exportControllerImpl) ExportOperationGroupAsOpenAPIDocuments_deprecated_
 	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -144,14 +144,14 @@ func (e exportControllerImpl) ExportOperationGroupAsOpenAPIDocuments_deprecated_
 
 	err = view.ValidateFormatForBuildType(buildType, format)
 	if err != nil {
-		utils.RespondWithError(w, "buildType format validation failed", err)
+		utils.RespondWithError(w, r, "buildType format validation failed", err)
 		return
 	}
 	e.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.ExportsCalled, packageId)
 
 	content, err := e.versionService.GetTransformedDocuments(ctx, packageId, version, apiType, groupName, buildType, format)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to export operations group", err)
+		utils.RespondWithError(w, r, "Failed to export operations group", err)
 		return
 	}
 	if content == nil {
@@ -195,7 +195,7 @@ func (e exportControllerImpl) GenerateVersionDoc(w http.ResponseWriter, r *http.
 	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -229,7 +229,7 @@ func (e exportControllerImpl) GenerateVersionDoc(w http.ResponseWriter, r *http.
 		data, filename, err = e.portalService.GenerateInteractivePageForPublishedVersion(ctx, packageId, versionName)
 
 		if err != nil {
-			utils.RespondWithError(w, fmt.Sprintf("Failed to generate interactive HTML page for version %s:%s", packageId, versionName), err)
+			utils.RespondWithError(w, r, fmt.Sprintf("Failed to generate interactive HTML page for version %s:%s", packageId, versionName), err)
 			return
 		}
 
@@ -263,7 +263,7 @@ func (e exportControllerImpl) GenerateFileDoc(w http.ResponseWriter, r *http.Req
 	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -297,7 +297,7 @@ func (e exportControllerImpl) GenerateFileDoc(w http.ResponseWriter, r *http.Req
 		var filename string
 		data, filename, err = e.portalService.GenerateInteractivePageForPublishedFile(ctx, packageId, versionName, slug)
 		if err != nil {
-			utils.RespondWithError(w, fmt.Sprintf("Failed to generate interactive HTML page for file %s:%s:%s", packageId, versionName, slug), err)
+			utils.RespondWithError(w, r, fmt.Sprintf("Failed to generate interactive HTML page for file %s:%s:%s", packageId, versionName, slug), err)
 			return
 		}
 		w.Header().Set("Content-Type", "application/octet-stream")
@@ -306,7 +306,7 @@ func (e exportControllerImpl) GenerateFileDoc(w http.ResponseWriter, r *http.Req
 	case view.DTRaw:
 		content, cd, err := e.publishedService.GetLatestContentDataBySlug(ctx, packageId, versionName, slug)
 		if err != nil {
-			utils.RespondWithError(w, "Failed to get published content as file", err)
+			utils.RespondWithError(w, r, "Failed to get published content as file", err)
 			return
 		}
 		data = cd.Data
@@ -335,7 +335,7 @@ func (e exportControllerImpl) GenerateApiChangesExcelReport(w http.ResponseWrite
 	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -414,7 +414,7 @@ func (e exportControllerImpl) GenerateApiChangesExcelReport(w http.ResponseWrite
 	}
 	apiChangesReport, versionName, err := e.excelService.ExportApiChanges(ctx, packageId, version, "", []string{}, exportApiChangesRequestView)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to export api changes", err)
+		utils.RespondWithError(w, r, "Failed to export api changes", err)
 		return
 	}
 	if apiChangesReport == nil {
@@ -438,7 +438,7 @@ func (e exportControllerImpl) GenerateApiChangesExcelReportV3(w http.ResponseWri
 	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -629,7 +629,7 @@ func (e exportControllerImpl) GenerateApiChangesExcelReportV3(w http.ResponseWri
 	}
 	apiChangesReport, versionName, err := e.excelService.ExportApiChanges(ctx, packageId, version, apiType, severities, exportApiChangesRequestView)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to export api changes", err)
+		utils.RespondWithError(w, r, "Failed to export api changes", err)
 		return
 	}
 	if apiChangesReport == nil {
@@ -653,7 +653,7 @@ func (e exportControllerImpl) GenerateOperationsExcelReport(w http.ResponseWrite
 	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -831,7 +831,7 @@ func (e exportControllerImpl) GenerateOperationsExcelReport(w http.ResponseWrite
 	}
 	operationsReport, versionName, err := e.excelService.ExportOperations(ctx, packageId, version, apiType, exportOperationsRequestView)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to export operations", err)
+		utils.RespondWithError(w, r, "Failed to export operations", err)
 		return
 	}
 	if operationsReport == nil {
@@ -855,7 +855,7 @@ func (e exportControllerImpl) GenerateDeprecatedOperationsExcelReport(w http.Res
 	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -1024,7 +1024,7 @@ func (e exportControllerImpl) GenerateDeprecatedOperationsExcelReport(w http.Res
 	}
 	deprecatedOperationsReport, versionName, err := e.excelService.ExportDeprecatedOperations(ctx, packageId, version, apiType, exportOperationsRequestView)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to export operations", err)
+		utils.RespondWithError(w, r, "Failed to export operations", err)
 		return
 	}
 	if deprecatedOperationsReport == nil {
@@ -1048,7 +1048,7 @@ func (e exportControllerImpl) GenerateDdlEntitiesExcelReport(w http.ResponseWrit
 	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -1090,7 +1090,7 @@ func (e exportControllerImpl) GenerateDdlEntitiesExcelReport(w http.ResponseWrit
 		TextFilter:   textFilter,
 	})
 	if err != nil {
-		utils.RespondWithError(w, "Failed to export DDL entities", err)
+		utils.RespondWithError(w, r, "Failed to export DDL entities", err)
 		return
 	}
 	if report == nil {
@@ -1113,7 +1113,7 @@ func (e exportControllerImpl) GenerateDdlChangesExcelReport(w http.ResponseWrite
 	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -1176,7 +1176,7 @@ func (e exportControllerImpl) GenerateDdlChangesExcelReport(w http.ResponseWrite
 		TextFilter:               textFilter,
 	})
 	if err != nil {
-		utils.RespondWithError(w, "Failed to export DDL changes", err)
+		utils.RespondWithError(w, r, "Failed to export DDL changes", err)
 		return
 	}
 	if report == nil {
@@ -1199,7 +1199,7 @@ func (e exportControllerImpl) GenerateMcpEntitiesExcelReport(w http.ResponseWrit
 	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -1252,7 +1252,7 @@ func (e exportControllerImpl) GenerateMcpEntitiesExcelReport(w http.ResponseWrit
 		TextFilter:   textFilter,
 	})
 	if err != nil {
-		utils.RespondWithError(w, "Failed to export MCP entities", err)
+		utils.RespondWithError(w, r, "Failed to export MCP entities", err)
 		return
 	}
 	if report == nil {
@@ -1341,12 +1341,12 @@ func (e exportControllerImpl) StartAsyncExport(w http.ResponseWriter, r *http.Re
 
 	err = e.validatePackageAndVersion(ctx, discriminator)
 	if err != nil {
-		utils.RespondWithError(w, "request validation failed", err)
+		utils.RespondWithError(w, r, "request validation failed", err)
 	}
 
 	sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, discriminator.PackageId, view.ReadPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -1372,7 +1372,7 @@ func (e exportControllerImpl) StartAsyncExport(w http.ResponseWriter, r *http.Re
 		exportID, err = e.exportService.StartAsyncAPIOpGroupExport(ctx, *exportRequest.(*view.ExportAsyncapiOperationsGroupReq))
 	}
 	if err != nil {
-		utils.RespondWithError(w, "Failed to start export process", err)
+		utils.RespondWithError(w, r, "Failed to start export process", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusAccepted, view.ExportResponse{
@@ -1414,7 +1414,7 @@ func (e exportControllerImpl) GetAsyncExportStatus(w http.ResponseWriter, r *htt
 
 	status, result, packageId, err := e.exportService.GetAsyncExportStatus(ctx, exportId)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get publish status", err)
+		utils.RespondWithError(w, r, "Failed to get publish status", err)
 		return
 	}
 
@@ -1436,7 +1436,7 @@ func (e exportControllerImpl) GetAsyncExportStatus(w http.ResponseWriter, r *htt
 	if packageId != "" { // do permissions check for sensitive data like export content. Export status is considered as non-sensitive.
 		sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 		if err != nil {
-			utils.RespondWithError(w, "Failed to check user privileges", err)
+			utils.RespondWithError(w, r, "Failed to check user privileges", err)
 			return
 		}
 		if !sufficientPrivileges {
@@ -1460,7 +1460,7 @@ func (e exportControllerImpl) GenerateShareabilityReport(w http.ResponseWriter, 
 	groupId := getStringParam(r, "packageId")
 	sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, groupId, view.ReadPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		utils.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -1485,7 +1485,7 @@ func (e exportControllerImpl) GenerateShareabilityReport(w http.ResponseWriter, 
 
 	report, filename, err := e.excelService.BuildShareabilityReport(ctx, groupId, version)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to build shareability report", err)
+		utils.RespondWithError(w, r, "Failed to build shareability report", err)
 		return
 	}
 	defer func() {

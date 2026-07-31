@@ -21,29 +21,7 @@ const (
 )
 
 func MakeUserContext(r *http.Request) context.Context {
-	user := auth.User(r)
-	userId := user.GetID()
-
-	systemRole := user.GetExtensions().Get(SystemRoleExt)
-	apiKeyRoles := user.GetExtensions().Values(ApikeyRoleExt)
-	apiKeyPackageId := user.GetExtensions().Get(ApikeyPackageIdExt)
-	tokenExpirationTimestamp, _ := strconv.ParseInt(user.GetExtensions().Get(TokenExpiresAtExt), 0, 64)
-
-	token := getAccessToken(r)
-	apiKey := getApihubApiKey(r)
-	pat := getPersonalAccessToken(r)
-
-	return context.WithValue(r.Context(), contextName, securityContextImpl{
-		userId:                   userId,
-		token:                    token,
-		tokenExpirationTimestamp: tokenExpirationTimestamp,
-		personalAccessToken:      pat,
-		apiKey:                   apiKey,
-		apiKeyPackageId:          apiKeyPackageId,
-		apiKeyRoles:              apiKeyRoles,
-		systemRole:               systemRole,
-		isSystem:                 false,
-	})
+	return MakeUserContextFrom(r.Context(), r)
 }
 
 func MakeUserContextFrom(ctx context.Context, r *http.Request) context.Context {

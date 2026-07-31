@@ -291,13 +291,13 @@ func (o oidcProvider) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 
 	user, err := o.userService.GetOrCreateUserForIntegration(ctx, oidcUser, view.ExternalIdpIntegration, o.config.Id)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to create user for OIDC integration", err)
+		utils.RespondWithError(w, r, "Failed to create user for OIDC integration", err)
 		return
 	}
 
 	// Add authentication cookies
 	if err = security.SetAuthTokenCookies(r.Context(), w, user, fmt.Sprintf(SSOLoginRefreshPathTemplate, o.config.Id)); err != nil {
-		utils.RespondWithError(w, "Failed to set auth cookie", err)
+		utils.RespondWithError(w, r, "Failed to set auth cookie", err)
 		return
 	}
 
@@ -306,7 +306,7 @@ func (o oidcProvider) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (o oidcProvider) ServeMetadata(w http.ResponseWriter, r *http.Request) {
-	utils.RespondWithError(w, "Not implemented", errors.New("not implemented"))
+	utils.RespondWithError(w, r, "Not implemented", errors.New("not implemented"))
 }
 
 func (o oidcProvider) generateState() (string, error) {

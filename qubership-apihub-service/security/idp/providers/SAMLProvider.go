@@ -156,13 +156,13 @@ func HandleAssertion(ctx context.Context, w http.ResponseWriter, r *http.Request
 
 	user, err := getOrCreateUser(ctx, userService, assertionAttributes, providerId)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get or create SSO user", err)
+		utils.RespondWithError(w, r, "Failed to get or create SSO user", err)
 		return
 	}
 
 	// Add Apihub auth info cookie
 	if err = setAuthCookie(ctx, w, user, fmt.Sprintf(SSOLoginRefreshPathTemplate, providerId)); err != nil {
-		utils.RespondWithError(w, "Failed to set auth cookie", err)
+		utils.RespondWithError(w, r, "Failed to set auth cookie", err)
 		return
 	}
 
@@ -198,7 +198,7 @@ func HandleAssertion(ctx context.Context, w http.ResponseWriter, r *http.Request
 				redirectURI = uri
 				log.Debugf("IDP-initiated flow: redirectURI is set from RelayState to: %s", redirectURI)
 			} else {
-				utils.RespondWithError(w, "Unable to retrieve redirect URL: failed to get tracked request", err)
+				utils.RespondWithError(w, r, "Unable to retrieve redirect URL: failed to get tracked request", err)
 				return
 			}
 		} else {

@@ -87,7 +87,7 @@ func (c adminPublishedControllerImpl) ReplaceVersionSources(w http.ResponseWrite
 
 	err = c.publishedService.ReplaceVersionSources(ctx, packageId, versionName, body)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to replace version sources", err)
+		utils.RespondWithError(w, r, "Failed to replace version sources", err)
 		return
 	}
 

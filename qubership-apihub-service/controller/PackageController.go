@@ -305,7 +305,7 @@ func (p packageControllerImpl) GetPackagesList(w http.ResponseWriter, r *http.Re
 	packages, err := p.packageService.GetPackagesList(secctx.MakeUserContext(r), packageListReq, false)
 
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get packages", err)
+		utils.RespondWithError(w, r, "Failed to get packages", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusOK, packages)
@@ -394,7 +394,7 @@ func (p packageControllerImpl) GetDeletedPackagesList(w http.ResponseWriter, r *
 	packages, err := p.packageService.GetPackagesList(ctx, packageListReq, true)
 
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get packages", err)
+		utils.RespondWithError(w, r, "Failed to get packages", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusOK, packages)
@@ -438,7 +438,7 @@ func (p packageControllerImpl) CreatePackage(w http.ResponseWriter, r *http.Requ
 	} else {
 		sufficientPrivileges, err = p.roleService.HasRequiredPermissions(ctx, packg.ParentId, view.CreateAndUpdatePackagePermission)
 		if err != nil {
-			utils.RespondWithError(w, "Failed to check user privileges", err)
+			utils.RespondWithError(w, r, "Failed to check user privileges", err)
 			return
 		}
 	}
@@ -471,7 +471,7 @@ func (p packageControllerImpl) CreatePackage(w http.ResponseWriter, r *http.Requ
 
 	newPackage, err := p.packageService.CreatePackage(ctx, packg)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to create package", err)
+		utils.RespondWithError(w, r, "Failed to create package", err)
 		return
 	}
 	if newPackage.ParentId != "" && (newPackage.Kind == entity.KIND_PACKAGE || newPackage.Kind == entity.KIND_DASHBOARD) {

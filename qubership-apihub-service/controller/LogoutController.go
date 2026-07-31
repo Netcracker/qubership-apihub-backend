@@ -37,7 +37,7 @@ func (l *logoutControllerImpl) Logout(w http.ResponseWriter, r *http.Request) {
 	ctx := secctx.MakeUserContext(r)
 	err := l.tokenRevocationService.RevokeUserTokens(ctx, secctx.GetUserId(ctx))
 	if err != nil {
-		utils.RespondWithError(w, "Failed to perform user logout", err)
+		utils.RespondWithError(w, r, "Failed to perform user logout", err)
 		return
 	}
 

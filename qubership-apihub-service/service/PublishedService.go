@@ -51,7 +51,7 @@ type PublishedService interface {
 	GetComparisonInternalDocuments(ctx context.Context, packageId string, version string, previousPackageId string, previousVersion string, refPackageId string) ([]view.InternalDocument, error)
 	GetComparisonInternalDocumentData(ctx context.Context, hash string) ([]byte, string, error)
 
-	ReplaceVersionSources(secCtx context.Context, packageId string, versionName string, zipData []byte) error
+	ReplaceVersionSources(ctx context.Context, packageId string, versionName string, zipData []byte) error
 
 	CheckPreviousVersionDependencyCycle(ctx context.Context, packageID string, version string, previousVersionPackageID string, prevVersion string, revision int) (bool, error)
 }

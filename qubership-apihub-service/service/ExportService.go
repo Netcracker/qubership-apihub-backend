@@ -16,8 +16,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const cleanupTimeout = 9 * time.Minute
-
 type ExportService interface {
 	StartVersionExport(ctx context.Context, req view.ExportVersionReq) (string, error)
 	StartOASDocExport(ctx context.Context, req view.ExportOASDocumentReq) (string, error)

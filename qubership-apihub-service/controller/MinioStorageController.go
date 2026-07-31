@@ -46,7 +46,7 @@ func (m minioStorageControllerImpl) DownloadFilesFromMinioToDatabase(w http.Resp
 	}
 	err := m.minioStorageService.DownloadFilesFromBucketToDatabase()
 	if err != nil {
-		utils.RespondWithError(w, "Failed to download data from minio", err)
+		utils.RespondWithError(w, r, "Failed to download data from minio", err)
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)

@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -57,7 +58,11 @@ func (contextErrorHook) AfterQuery(ctx context.Context, event *pg.QueryEvent) er
 	if ctxErr == nil {
 		return nil
 	}
-	log.Warnf("Query aborted because the request context is done: %v", event.Err)
+	if errors.Is(ctxErr, context.Canceled) {
+		log.Debugf("Query aborted because the client closed the request: %v", event.Err)
+	} else {
+		log.Warnf("Query aborted because the request context is done: %v", event.Err)
+	}
 	return fmt.Errorf("query aborted: %w", ctxErr)
 }
 
