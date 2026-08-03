@@ -91,6 +91,8 @@ type SystemInfoService interface {
 	GetUnreferencedDataCleanupTimeout() int
 	GetMaintenanceVacuumCleanupSchedule() string
 	GetMaintenanceVacuumCleanupTimeout() int
+	GetExpiredS3FilesCleanupSchedule() string
+	GetExpiredS3FilesCleanupTimeout() int
 	GetExtensions() []view.Extension
 	GetAiChatConfig() config.ChatConfig
 	GetAiMCPConfig() config.MCPConfig
@@ -250,6 +252,8 @@ func (g *systemInfoServiceImpl) setDefaults() {
 	viper.SetDefault("cleanup.unreferencedData.timeoutMinutes", 360)    //6 hours
 	viper.SetDefault("cleanup.maintenanceVacuum.schedule", "0 2 * * 1") //at 2 AM on Monday
 	viper.SetDefault("cleanup.maintenanceVacuum.timeoutMinutes", 300)   //5 hours
+	viper.SetDefault("cleanup.expiredS3Files.schedule", "0 3 * * 0")    //at 3:00 AM on Sunday, 2 hours after cleanup.builds.schedule
+	viper.SetDefault("cleanup.expiredS3Files.timeoutMinutes", 360)      //6 hours
 	viper.SetDefault("ai.chat.enabled", false)
 	viper.SetDefault("ai.chat.openAI.model", "gpt-4o")
 	viper.SetDefault("ai.chat.openAI.temperature", 1.0)
@@ -641,6 +645,14 @@ func (g *systemInfoServiceImpl) GetMaintenanceVacuumCleanupSchedule() string {
 
 func (g *systemInfoServiceImpl) GetMaintenanceVacuumCleanupTimeout() int {
 	return g.config.Cleanup.MaintenanceVacuum.TimeoutMinutes
+}
+
+func (g *systemInfoServiceImpl) GetExpiredS3FilesCleanupSchedule() string {
+	return g.config.Cleanup.ExpiredS3Files.Schedule
+}
+
+func (g *systemInfoServiceImpl) GetExpiredS3FilesCleanupTimeout() int {
+	return g.config.Cleanup.ExpiredS3Files.TimeoutMinutes
 }
 
 func (g *systemInfoServiceImpl) GetExtensions() []view.Extension {

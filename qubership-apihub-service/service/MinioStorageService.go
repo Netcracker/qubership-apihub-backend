@@ -25,6 +25,7 @@ type MinioStorageService interface {
 	UploadFile(ctx context.Context, tableName, entityId string, content []byte) error
 	RemoveFiles(ctx context.Context, tableName string, entityIds []string) error
 	DownloadFilesFromBucketToDatabase() error
+	RemoveObjectsOlderThan(ctx context.Context, tableName string, before time.Time) (int, error)
 }
 
 func NewMinioStorageService(buildRepository repository.BuildResultRepository, publishRepo repository.PublishedRepository, creds *view.MinioStorageCreds) MinioStorageService {
@@ -324,10 +325,42 @@ func (m minioStorageServiceImpl) getFile(ctx context.Context, fullFileName strin
 }
 
 func (m minioStorageServiceImpl) RemoveFiles(ctx context.Context, tableName string, entityIds []string) error {
-	minioObjectsChan := make(chan minio.ObjectInfo, len(entityIds))
+	keys := make([]string, 0, len(entityIds))
+	for _, id := range entityIds {
+		keys = append(keys, buildFileName(tableName, id))
+	}
+	return m.removeObjectsByKeys(ctx, keys)
+}
+
+func (m minioStorageServiceImpl) RemoveObjectsOlderThan(ctx context.Context, tableName string, before time.Time) (int, error) {
+	prefix := fmt.Sprintf("%s/", tableName)
+	objectsChan := m.minioClient.client.ListObjects(ctx, m.creds.BucketName, minio.ListObjectsOptions{Prefix: prefix, Recursive: true})
+
+	keys := make([]string, 0)
+	for object := range objectsChan {
+		if object.Err != nil {
+			return 0, object.Err
+		}
+		if object.LastModified.Before(before) {
+			keys = append(keys, object.Key)
+		}
+	}
+
+	if len(keys) == 0 {
+		return 0, nil
+	}
+
+	if err := m.removeObjectsByKeys(ctx, keys); err != nil {
+		return 0, err
+	}
+	return len(keys), nil
+}
+
+func (m minioStorageServiceImpl) removeObjectsByKeys(ctx context.Context, keys []string) error {
+	minioObjectsChan := make(chan minio.ObjectInfo, len(keys))
 	utils.SafeAsync(func() {
-		for _, id := range entityIds {
-			minioObjectsChan <- minio.ObjectInfo{Key: buildFileName(tableName, id)}
+		for _, key := range keys {
+			minioObjectsChan <- minio.ObjectInfo{Key: key}
 		}
 		defer close(minioObjectsChan)
 	})

@@ -101,10 +101,10 @@ type BusinessParameters struct {
 	ExternalLinks                 []string
 	DefaultWorkspaceId            string
 	ReleaseVersionPattern         string
-	PublishArchiveSizeLimitMb     int `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
-	PublishFileSizeLimitMb        int `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
-	TemplateSizeLimitMb           int `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
-	ShareabilityReportSizeLimitMb int `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
+	PublishArchiveSizeLimitMb     int    `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
+	PublishFileSizeLimitMb        int    `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
+	TemplateSizeLimitMb           int    `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
+	ShareabilityReportSizeLimitMb int    `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
 	SystemNotification            string //TODO: replace with db impl
 	FailBuildOnBrokenRefs         bool
 	EphemeralFileMaxSizeMb        int `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
@@ -144,6 +144,7 @@ type CleanupConfig struct {
 	MaintenanceVacuum MaintenanceVacuumCleanupConfig
 	Builds            BuildsCleanupConfig
 	EphemeralFiles    EphemeralFilesCleanupConfig
+	ExpiredS3Files    ExpiredS3FilesCleanupConfig
 }
 
 type EphemeralFilesCleanupConfig struct {
@@ -209,6 +210,11 @@ type BuildsCleanupConfig struct {
 }
 
 type MaintenanceVacuumCleanupConfig struct {
+	Schedule       string
+	TimeoutMinutes int
+}
+
+type ExpiredS3FilesCleanupConfig struct {
 	Schedule       string
 	TimeoutMinutes int
 }

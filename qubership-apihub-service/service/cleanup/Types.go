@@ -14,6 +14,7 @@ const (
 	deletedDataCleanup      jobType = "soft deleted data cleanup"
 	unreferencedDataCleanup jobType = "unreferenced data cleanup"
 	maintenanceVacuum       jobType = "maintenance vacuum"
+	expiredS3FilesCleanup   jobType = "expired s3 files cleanup"
 
 	statusRunning  jobStatus = "running"
 	statusComplete jobStatus = "complete"
