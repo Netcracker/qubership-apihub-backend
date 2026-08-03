@@ -42,23 +42,28 @@ func (p *expiredS3FilesCleanupJobProcessor) Initialize(ctx context.Context, jobI
 }
 
 func (p *expiredS3FilesCleanupJobProcessor) Process(ctx context.Context, jobId string, deleteBefore time.Time, deletedItems *int) ([]string, error) {
-	logger.Infof(ctx, "Starting cleanup of %s objects in S3 older than %s", view.BUILD_RESULT_TABLE, deleteBefore)
+	logger.Infof(ctx, "Starting cleanup of %s objects in S3 older than %s", view.BUILD_RESULT_TABLE, deleteBefore.Format(time.RFC3339))
 	deletedCount, err := p.minioStorageService.RemoveObjectsOlderThan(ctx, view.BUILD_RESULT_TABLE, deleteBefore)
 	*deletedItems += deletedCount
 	if err != nil {
+		if ctx.Err() != nil {
+			errorMessage := getContextCancellationMessage(ctx)
+			logger.Warnf(ctx, "job interrupted during expired S3 files cleanup - %s", errorMessage)
+			return nil, fmt.Errorf("job interrupted - %s", errorMessage)
+		}
 		logger.Warnf(ctx, "Failed to remove old S3 objects: %v", err)
-		return []string{fmt.Sprintf("failed to remove old S3 objects: %s", err.Error())}, err
+		return nil, fmt.Errorf("failed to remove old S3 objects: %w", err)
 	}
 
 	logger.Infof(ctx, "Deleted %d expired S3 objects", deletedCount)
 	return nil, nil
 }
+
 func (p *expiredS3FilesCleanupJobProcessor) UpdateProgress(ctx context.Context, jobId string, status jobStatus, errorMessage string, deletedItems int, finishedAt *time.Time) error {
 	updateCtx, cancel := createContextForUpdate(ctx)
 	defer cancel()
 
 	err := p.expiredS3FilesCleanupRepo.UpdateCleanupRun(updateCtx, jobId, string(status), errorMessage, deletedItems, finishedAt)
-
 	if err != nil {
 		logger.Errorf(ctx, "failed to set '%s' status for cleanup job id %s: %s", status, jobId, err.Error())
 		return err
@@ -69,6 +74,7 @@ func (p *expiredS3FilesCleanupJobProcessor) UpdateProgress(ctx context.Context, 
 func (p *expiredS3FilesCleanupJobProcessor) GetVacuumTimeout() time.Duration {
 	return 0
 }
+
 func (p *expiredS3FilesCleanupJobProcessor) PerformVacuum(ctx context.Context, jobId string) error {
 	return nil
 }

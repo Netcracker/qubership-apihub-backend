@@ -18,7 +18,7 @@ const (
 	cleanupJobTimeoutBuffer  = 1 * time.Hour
 	maxRevisionsJobTimeout   = 4 * time.Hour
 
-	expiredS3FilesCleanupTTLDays = 30
+	expiredS3FilesCleanupTTLDays = 45
 )
 
 type CleanupService interface {
@@ -307,6 +307,7 @@ func (c cleanupServiceImpl) CreateExpiredS3FilesCleanupJob(minioStorageService s
 	}
 	return c.addCleanupJob(runner, schedule, expiredS3FilesCleanup)
 }
+
 func (c cleanupServiceImpl) addCleanupJob(job cron.Job, schedule string, jobType jobType) error {
 	if len(c.cron.Entries()) == 0 {
 		location, err := time.LoadLocation("")

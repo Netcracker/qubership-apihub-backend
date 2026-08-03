@@ -9,7 +9,7 @@ import (
 )
 
 type ExpiredS3FilesCleanupRepository interface {
-	StoreCleanupRun(ctx context.Context, entity entity.ExpiredS3FilesCleanupEntity) error
+	StoreCleanupRun(ctx context.Context, ent entity.ExpiredS3FilesCleanupEntity) error
 	UpdateCleanupRun(ctx context.Context, runId string, status string, details string, deletedItems int, finishedAt *time.Time) error
 }
 
@@ -43,5 +43,4 @@ func (s expiredS3FilesCleanupRepositoryImpl) UpdateCleanupRun(ctx context.Contex
 
 	_, err := query.Where("run_id=?", runId).Update()
 	return err
-
 }

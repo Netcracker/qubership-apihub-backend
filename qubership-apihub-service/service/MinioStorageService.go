@@ -19,6 +19,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const removeObjectsBatchSize = 1000
+
 type MinioStorageService interface {
 	UploadFilesToBucket() error
 	GetFile(ctx context.Context, tableName, entityId string) ([]byte, error)
@@ -336,24 +338,37 @@ func (m minioStorageServiceImpl) RemoveObjectsOlderThan(ctx context.Context, tab
 	prefix := fmt.Sprintf("%s/", tableName)
 	objectsChan := m.minioClient.client.ListObjects(ctx, m.creds.BucketName, minio.ListObjectsOptions{Prefix: prefix, Recursive: true})
 
-	keys := make([]string, 0)
+	deletedCount := 0
+	batch := make([]string, 0, removeObjectsBatchSize)
 	for object := range objectsChan {
 		if object.Err != nil {
-			return 0, object.Err
+			return deletedCount, object.Err
 		}
-		if object.LastModified.Before(before) {
-			keys = append(keys, object.Key)
+		if err := ctx.Err(); err != nil {
+			return deletedCount, err
 		}
+		if !object.LastModified.Before(before) {
+			continue
+		}
+
+		batch = append(batch, object.Key)
+		if len(batch) < removeObjectsBatchSize {
+			continue
+		}
+		if err := m.removeObjectsByKeys(ctx, batch); err != nil {
+			return deletedCount, err
+		}
+		deletedCount += len(batch)
+		batch = make([]string, 0, removeObjectsBatchSize)
 	}
 
-	if len(keys) == 0 {
-		return 0, nil
+	if len(batch) > 0 {
+		if err := m.removeObjectsByKeys(ctx, batch); err != nil {
+			return deletedCount, err
+		}
+		deletedCount += len(batch)
 	}
-
-	if err := m.removeObjectsByKeys(ctx, keys); err != nil {
-		return 0, err
-	}
-	return len(keys), nil
+	return deletedCount, nil
 }
 
 func (m minioStorageServiceImpl) removeObjectsByKeys(ctx context.Context, keys []string) error {
