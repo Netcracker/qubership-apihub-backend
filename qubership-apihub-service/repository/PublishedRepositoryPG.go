@@ -3025,18 +3025,18 @@ func (p publishedRepositoryImpl) deleteGroup(tx *pg.Tx, packageId string, userId
 	return totalDeletedReleaseCount, err
 }
 
-// GetPackagesUnrestricted lists packages with no read authorization at all. It is for the background jobs
+// GetPackages lists packages with no read authorization at all. It is for the background jobs
 // that have to walk the whole catalogue; serve authenticated callers from GetReadablePackages.
-func (p publishedRepositoryImpl) GetPackagesUnrestricted(ctx context.Context, searchReq view.PackageListReq, userId string) ([]entity.PackageEntity, error) {
-	return p.getPackages(ctx, searchReq, userId, false)
+func (p publishedRepositoryImpl) GetPackages(ctx context.Context, searchReq view.PackageListReq, userId string) ([]entity.PackageEntity, error) {
+	return p.selectPackages(ctx, searchReq, userId, false)
 }
 
 // GetDeletedPackages lists deleted packages with no read authorization at all.
 func (p publishedRepositoryImpl) GetDeletedPackages(ctx context.Context, searchReq view.PackageListReq, userId string) ([]entity.PackageEntity, error) {
-	return p.getPackages(ctx, searchReq, userId, true)
+	return p.selectPackages(ctx, searchReq, userId, true)
 }
 
-func (p publishedRepositoryImpl) getPackages(ctx context.Context, searchReq view.PackageListReq, userId string, deleted bool) ([]entity.PackageEntity, error) {
+func (p publishedRepositoryImpl) selectPackages(ctx context.Context, searchReq view.PackageListReq, userId string, deleted bool) ([]entity.PackageEntity, error) {
 	var result []entity.PackageEntity
 	var conditions []string
 	if deleted {
@@ -3045,8 +3045,13 @@ func (p publishedRepositoryImpl) getPackages(ctx context.Context, searchReq view
 		conditions = append(conditions, "deleted_at is null")
 	}
 	conditions = append(conditions, packageFilters(searchReq)...)
-	query := fmt.Sprintf("\n\tselect %s\n\tfrom package_group pkg\n\twhere %s\n\torder by pkg.name asc, pkg.id asc%s",
-		"pkg.*", strings.Join(conditions, "\n\t  and "), utils.PagingClause(searchReq.Limit))
+	query := fmt.Sprintf(`
+	select pkg.*
+	from package_group pkg
+	%s
+	order by pkg.name asc, pkg.id asc
+	%s`,
+		utils.WhereClause(conditions), utils.PagingClause(searchReq.Limit))
 	params := packagesQueryParams(searchReq, view.PackageReadScope{}, userId)
 	if _, err := p.cp.GetConnection().ModelContext(ctx, &params).Query(&result, query); err != nil {
 		return nil, err
@@ -3070,12 +3075,10 @@ func (p publishedRepositoryImpl) GetReadablePackages(ctx context.Context, search
 	return result, nil
 }
 
-// readablePackagesSQL cuts the page first and only then computes the columns that cost something: the
-// favourite flag, and the effective permissions, whose lateral join walks each package's ancestors. A lateral
-// sits in the join tree and would otherwise run for every row the read filter looked at, which on a selective
-// filter such as onlyShared is the whole catalogue.
+// readablePackagesSQL forms a page on package_group alone so that the permissions lateral, which walks each
+// package's ancestors, runs for the page rows rather than for every row that passes the filters.
 func readablePackagesSQL(searchReq view.PackageListReq, scope view.PackageReadScope, userId string) (string, error) {
-	ctes, condition, err := renderReadScope(scope, userId, "pkg.id", "pkg")
+	ctes, condition, err := convertPackageReadScopeToSQL(scope, userId, "pkg.id", "pkg")
 	if err != nil {
 		return "", err
 	}
@@ -3085,25 +3088,19 @@ func readablePackagesSQL(searchReq view.PackageListReq, scope view.PackageReadSc
 	if condition != "" {
 		conditions = append(conditions, condition)
 	}
-	query := fmt.Sprintf("\n\tselect %s\n\tfrom package_group pkg\n\twhere %s\n\torder by pkg.name asc, pkg.id asc%s",
-		"pkg.id", strings.Join(conditions, "\n\t  and "), utils.PagingClause(searchReq.Limit))
-	page := fmt.Sprintf("page as (%s\n\t)", query)
+	page := fmt.Sprintf(`page as (
+	select pkg.id
+	from package_group pkg
+	%s
+	order by pkg.name asc, pkg.id asc
+	%s
+	)`, utils.WhereClause(conditions), utils.PagingClause(searchReq.Limit))
 
-	var sb strings.Builder
-	sb.WriteString(utils.WithClause(append(ctes, page)))
-	sb.WriteString("\n\tselect pkg.*,\n\t\t")
-	favoritePackageCondition := `exists (
-			select 1 from favorite_packages fav
-			where fav.user_id = ?user_id and fav.package_id = pkg.id
-		)`
-	sb.WriteString(favoritePackageCondition)
-	sb.WriteString(" as is_favorite")
+	permissionsColumn := ""
+	userPermissionsLateral := ""
 	if scope.Kind == view.PackageReadScopeUser {
-		sb.WriteString(",\n\t\tperms.permissions as permissions")
-	}
-	sb.WriteString("\n\tfrom page\n\tjoin package_group pkg on pkg.id = page.id")
-	if scope.Kind == view.PackageReadScopeUser {
-		sb.WriteString("\n\t")
+		permissionsColumn = `,
+		perms.permissions as permissions`
 		rolesAtAncestor := `
 		select unnest(m.roles) as role_id
 		from package_member_role m
@@ -3112,7 +3109,7 @@ func readablePackagesSQL(searchReq view.PackageListReq, scope view.PackageReadSc
 		select g.default_role as role_id
 		from package_group g
 		where g.id = anc.id`
-		userPermissionsLateral := fmt.Sprintf(`cross join lateral (
+		userPermissionsLateral = fmt.Sprintf(`cross join lateral (
 		select coalesce(array_agg(distinct perm), array[]::character varying[]) as permissions
 		from unnest(package_ancestor_ids(%s)) as anc(id)
 		join lateral (%s
@@ -3120,11 +3117,20 @@ func readablePackagesSQL(searchReq view.PackageListReq, scope view.PackageReadSc
 		join role r on r.id = rl.role_id
 		cross join lateral unnest(r.permissions) as perm
 	) perms`, "pkg.id", rolesAtAncestor)
-		sb.WriteString(userPermissionsLateral)
 	}
-	packagesOrder := "\n\torder by pkg.name asc, pkg.id asc"
-	sb.WriteString(packagesOrder)
-	return sb.String(), nil
+
+	return fmt.Sprintf(`
+	%s
+	select pkg.*,
+		exists (
+			select 1 from favorite_packages fav
+			where fav.user_id = ?user_id and fav.package_id = pkg.id
+		) as is_favorite%s
+	from page
+	join package_group pkg on pkg.id = page.id
+	%s
+	order by pkg.name asc, pkg.id asc`,
+		utils.WithClause(append(ctes, page)), permissionsColumn, userPermissionsLateral), nil
 }
 
 // packageFilters renders the conditions every package listing shares
@@ -3166,8 +3172,8 @@ func packageFilters(searchReq view.PackageListReq) []string {
 	return conditions
 }
 
-func packagesQueryParams(searchReq view.PackageListReq, scope view.PackageReadScope, userId string) entity.PackagesQuery {
-	params := entity.PackagesQuery{
+func packagesQueryParams(searchReq view.PackageListReq, scope view.PackageReadScope, userId string) entity.PackagesQueryParams {
+	params := entity.PackagesQueryParams{
 		UserId:      userId,
 		SubtreeRoot: scope.SubtreeRoot,
 		ParentId:    searchReq.ParentId,

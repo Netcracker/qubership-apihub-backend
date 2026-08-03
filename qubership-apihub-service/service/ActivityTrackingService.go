@@ -53,7 +53,7 @@ func (a activityTrackingServiceImpl) GetActivityHistory(ctx context.SecurityCont
 }
 
 func (a activityTrackingServiceImpl) GetEventsForPackage(packageId string, includeRefs bool, req view.ActivityHistoryReq) (*view.PkgActivityResponse, error) {
-	pkgEnt, err := a.publishedRepo.GetPackage(packageId)
+	pkgEnt, err := a.publishedRepo.GetPackageIncludingDeleted(packageId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get package %s for events: %w", packageId, err)
 	}

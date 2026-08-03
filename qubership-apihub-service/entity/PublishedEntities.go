@@ -44,7 +44,7 @@ type ReadablePackageEntity struct {
 	Permissions []string `pg:"permissions, type:varchar[], use_zero"`
 }
 
-type PackagesQuery struct {
+type PackagesQueryParams struct {
 	UserId      string   `pg:"user_id, type:varchar, use_zero"`
 	SubtreeRoot string   `pg:"subtree_root, type:varchar, use_zero"`
 	ParentId    string   `pg:"parent_id, type:varchar, use_zero"`

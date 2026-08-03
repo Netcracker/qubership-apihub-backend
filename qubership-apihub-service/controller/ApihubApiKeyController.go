@@ -36,7 +36,7 @@ func (a ApihubApiKeyControllerImpl) CreateApiKey(w http.ResponseWriter, r *http.
 	packageId := getStringParam(r, "packageId")
 	ctx := context.Create(r)
 
-	if packageId == "*" {
+	if packageId == view.AllPackagesApikeyScope {
 		if !a.roleService.IsSysadm(ctx) {
 			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusForbidden,
@@ -106,7 +106,7 @@ func (a ApihubApiKeyControllerImpl) RevokeApiKey(w http.ResponseWriter, r *http.
 	packageId := getStringParam(r, "packageId")
 	ctx := context.Create(r)
 
-	if packageId == "*" {
+	if packageId == view.AllPackagesApikeyScope {
 		if !a.roleService.IsSysadm(ctx) {
 			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusForbidden,
@@ -143,7 +143,7 @@ func (a ApihubApiKeyControllerImpl) RevokeApiKey(w http.ResponseWriter, r *http.
 func (a ApihubApiKeyControllerImpl) GetApiKeys(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
 	ctx := context.Create(r)
-	if packageId == "*" {
+	if packageId == view.AllPackagesApikeyScope {
 		if !a.roleService.IsSysadm(ctx) {
 			utils.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusForbidden,

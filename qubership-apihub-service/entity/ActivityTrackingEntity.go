@@ -28,7 +28,7 @@ type EnrichedActivityTrackingEntity struct {
 	NotLatestRevision bool   `pg:"not_latest_revision, type:bool"`
 }
 
-type ActivityEventsQuery struct {
+type ActivityEventsQueryParams struct {
 	UserId      string   `pg:"user_id, type:varchar, use_zero"`
 	SubtreeRoot string   `pg:"subtree_root, type:varchar, use_zero"`
 	PackageIds  []string `pg:"package_ids, type:varchar[], use_zero"`

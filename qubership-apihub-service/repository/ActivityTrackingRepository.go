@@ -2,7 +2,6 @@ package repository
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/db"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
@@ -63,8 +62,8 @@ func (a activityTrackingRepositoryImpl) GetEventsForPackages(scope view.PackageR
 	return result, nil
 }
 
-func buildActivityEventsQuery(scope view.PackageReadScope, req view.ActivityHistoryReq, userId string, packageIds []string) (string, entity.ActivityEventsQuery, error) {
-	params := entity.ActivityEventsQuery{
+func buildActivityEventsQuery(scope view.PackageReadScope, req view.ActivityHistoryReq, userId string, packageIds []string) (string, entity.ActivityEventsQueryParams, error) {
+	params := entity.ActivityEventsQueryParams{
 		UserId:      userId,
 		SubtreeRoot: scope.SubtreeRoot,
 		PackageIds:  packageIds,
@@ -75,7 +74,7 @@ func buildActivityEventsQuery(scope view.PackageReadScope, req view.ActivityHist
 	}
 
 	// The feed only needs to know whether the caller may read, not which permissions it holds.
-	ctes, condition, err := renderReadScope(scope, userId, "at.package_id", "pkg")
+	ctes, condition, err := convertPackageReadScopeToSQL(scope, userId, "at.package_id", "pkg")
 	if err != nil {
 		return "", params, err
 	}
@@ -112,9 +111,9 @@ func buildActivityEventsQuery(scope view.PackageReadScope, req view.ActivityHist
 		conditions = append(conditions, "(pkg.name ilike ?text_filter or usr.name ilike ?text_filter)")
 	}
 
-	var sb strings.Builder
-	sb.WriteString(utils.WithClause(ctes))
-	eventsSelect := `
+	//at.id breaks ties on equal dates so that paging cannot repeat or skip an event
+	query := fmt.Sprintf(`
+	%s
 	select at.*,
 		get_latest_revision(at.package_id, at.data #>> '{version}') != (at.data #>> '{revision}')::int as not_latest_revision,
 		pkg.name as pkg_name, pkg.kind as pkg_kind,
@@ -124,61 +123,11 @@ func buildActivityEventsQuery(scope view.PackageReadScope, req view.ActivityHist
 	from activity_tracking as at
 	inner join package_group as pkg on at.package_id = pkg.id
 	left join user_data as usr on at.user_id = usr.user_id
-	left join apihub_api_keys as apikey on at.user_id = apikey.id`
-	sb.WriteString(eventsSelect)
-	if len(conditions) > 0 {
-		sb.WriteString("\n\twhere ")
-		sb.WriteString(strings.Join(conditions, "\n\t  and "))
-	}
-	//at.id breaks ties on equal dates so that paging cannot repeat or skip an event
-	sb.WriteString("\n\torder by at.date desc, at.id desc")
-	sb.WriteString(utils.PagingClause(params.Limit))
+	left join apihub_api_keys as apikey on at.user_id = apikey.id
+	%s
+	order by at.date desc, at.id desc
+	%s`,
+		utils.WithClause(ctes), utils.WhereClause(conditions), utils.PagingClause(params.Limit))
 
-	return sb.String(), params, nil
-}
-
-// renderReadScope renders scope as a WHERE condition over row. The result references the named parameters
-// ?user_id and ?subtree_root, so the query's parameter struct has to declare both.
-func renderReadScope(scope view.PackageReadScope, userId string, idColumn string, alias string) ([]string, string, error) {
-	switch scope.Kind {
-	case view.PackageReadScopeAll:
-		return nil, "", nil
-	case view.PackageReadScopeSubtree:
-		if scope.SubtreeRoot == "" {
-			return nil, "", fmt.Errorf("package read scope of kind %v has no subtree root", scope.Kind)
-		}
-		return nil, utils.SubtreeCondition(idColumn, "?subtree_root"), nil
-	case view.PackageReadScopeUser:
-		if userId == "" {
-			return nil, "", fmt.Errorf("package read scope of kind %v has no user id", scope.Kind)
-		}
-		if alias == "" {
-			return nil, "", fmt.Errorf("package read scope of kind %v has no package row to read default_role from", scope.Kind)
-		}
-		readGrantingRolesCTE := `read_granting_roles as materialized (
-			select coalesce(array_agg(id), array[]::character varying[]) as ids
-			from role
-			where coalesce('read' = any(permissions), false)
-		)`
-		userCondition := fmt.Sprintf(`case
-			when %[1]s.default_role = any((select ids from read_granting_roles)::character varying[]) then true
-			else exists (
-				select 1
-				from package_group anc
-				where anc.id = any(package_ancestor_ids(%[1]s.id))
-				  and anc.id <> %[1]s.id
-				  and anc.default_role = any((select ids from read_granting_roles)::character varying[])
-			)
-			or exists (
-				select 1
-				from package_member_role m
-				where m.package_id = any(package_ancestor_ids(%[1]s.id))
-				  and m.user_id = ?user_id
-				  and m.roles && (select ids from read_granting_roles)::character varying[]
-			)
-		end`, alias)
-		return []string{readGrantingRolesCTE}, userCondition, nil
-	default:
-		return nil, "", fmt.Errorf("unsupported package read scope kind %v", scope.Kind)
-	}
+	return query, params, nil
 }

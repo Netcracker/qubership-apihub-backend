@@ -66,7 +66,7 @@ type PublishedRepository interface {
 	UpdatePackage(ent *entity.PackageEntity, excludeFromSearchChanged bool) (*entity.PackageEntity, error)
 	DeletePackage(id string, userId string) (int, error)
 	DeleteSoftDeletedPackagesBeforeDate(ctx context.Context, runId string, beforeDate time.Time, batchSize int) (int, error)
-	GetPackagesUnrestricted(ctx context.Context, searchReq view.PackageListReq, userId string) ([]entity.PackageEntity, error)
+	GetPackages(ctx context.Context, searchReq view.PackageListReq, userId string) ([]entity.PackageEntity, error)
 	GetDeletedPackages(ctx context.Context, searchReq view.PackageListReq, userId string) ([]entity.PackageEntity, error)
 	GetReadablePackages(ctx context.Context, searchReq view.PackageListReq, scope view.PackageReadScope, userId string) ([]entity.ReadablePackageEntity, error)
 	GetVersionValidationChanges_deprecated(packageId string, versionName string, revision int) (*entity.PublishedVersionValidationEntity_deprecated, error)

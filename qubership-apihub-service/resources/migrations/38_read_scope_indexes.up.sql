@@ -22,8 +22,8 @@ CREATE INDEX IF NOT EXISTS activity_tracking_date_idx ON activity_tracking (date
 -- subtree through a ~>=~ / ~<~ range, and those operators belong to the pattern operator family, which no
 -- default opclass index can serve (same reason as migration 35). Without this index that caller has no
 -- usable index at all and sequentially scans the largest table in the schema.
-CREATE INDEX IF NOT EXISTS activity_tracking_package_id_date_idx
-    ON activity_tracking (package_id varchar_pattern_ops, date DESC, id DESC);
+CREATE INDEX IF NOT EXISTS activity_tracking_package_id_date_idx ON activity_tracking (package_id varchar_pattern_ops, date DESC, id DESC);
+CREATE INDEX IF NOT EXISTS package_group_id_pattern_idx ON package_group (id varchar_pattern_ops);
 
 -- favorite_packages needs no equivalent: its primary key is already (user_id, package_id), so onlyFavorite
 -- has the user side plan available where onlyShared does not. This index closes that asymmetry.

@@ -1414,9 +1414,12 @@ paths:
       description: |
         Get activity history for specific package. Return the last N events in descending date order.
 
-        The package named by `packageId` must not be deleted; a deleted package returns 404. Deleting a
-        referenced package does not remove its events, so with `includeRefs=true` the response still
-        includes events from referenced packages that have been deleted.
+        Deleting a package does not remove its events. A deleted package still returns its history through
+        this endpoint, including the `delete_package` event itself, until the package is purged. `packageId`
+        returns 404 only when no such package exists.
+
+        With `includeRefs=true` the response also includes events from referenced packages that have been
+        deleted.
       operationId: getPackageIdActivityV4
       parameters:
         - name: packageId
