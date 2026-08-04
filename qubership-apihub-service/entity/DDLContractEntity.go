@@ -66,6 +66,13 @@ type DDLContractSearchTextEntity struct {
 	SearchTextData []byte
 }
 
+type FtsDdlSearchTextEntity struct {
+	tableName struct{} `pg:"fts_ddl_search_text"`
+
+	DdlEntityId    string `pg:"ddl_entity_id, type:varchar"`
+	SearchDataHash string `pg:"search_data_hash, type:varchar"`
+}
+
 type DDLContractKindCountEntity struct {
 	Kind  string `pg:"kind, type:varchar"`
 	Count int    `pg:"count, type:integer"`

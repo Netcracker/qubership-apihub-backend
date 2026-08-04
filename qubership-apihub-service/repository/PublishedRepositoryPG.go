@@ -451,7 +451,11 @@ func (p publishedRepositoryImpl) validateMigrationResult(tx *pg.Tx, packageInfo 
 	refs []*entity.PublishedReferenceEntity, src *entity.PublishedSrcEntity, operations []*entity.OperationEntity, operationData []*entity.OperationDataEntity, versionComparisons []*entity.VersionComparisonEntity, operationComparisons []*entity.OperationComparisonEntity, skippedVersionComparisonIds []string,
 	operationComparisonIdsToRebuild []string,
 	versionInternalDocs []*entity.VersionInternalDocumentEntity, versionInternalDocData []*entity.VersionInternalDocumentDataEntity, comparisonInternalDocs []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocData []*entity.ComparisonInternalDocumentDataEntity,
-	operationSearchTexts []*entity.OperationSearchTextEntity, maxRevision int, excludeFromSearch bool) error {
+	operationSearchTexts []*entity.OperationSearchTextEntity, maxRevision int, excludeFromSearch bool,
+	ddlContractEntities []*entity.DDLContractEntity, ddlContractDataEntities []*entity.DDLContractDataEntity,
+	ddlContractSearchTexts []*entity.DDLContractSearchTextEntity, ddlContractComparisonEntities []*entity.DDLContractComparisonEntity, ddlComparisonIdsToRebuild []string,
+	mcpContractEntities []*entity.MCPContractEntity, mcpContractDataEntities []*entity.MCPContractDataEntity,
+	mcpContractSearchTexts []*entity.MCPContractSearchTextEntity) error {
 	migrationRun := new(mEntity.MigrationRunEntity)
 
 	err := tx.Model(migrationRun).Where("id = ?", packageInfo.MigrationId).First()
@@ -699,6 +703,162 @@ func (p publishedRepositoryImpl) validateMigrationResult(tx *pg.Tx, packageInfo 
 		changes["operation_data"] = operationDataChanges
 	}
 
+	currentTable = "ddl_tables"
+	oldDdlEntities := make([]entity.DDLContractEntity, 0)
+	err = tx.Model(&oldDdlEntities).
+		Where("package_id = ?", version.PackageId).
+		Where("version = ?", version.Version).
+		Where("revision = ?", version.Revision).
+		Select()
+	if err != nil {
+		return err
+	}
+	ddlEntitiesChanges := make(map[string]interface{}, 0)
+	matchedDdlEntities := make(map[string]struct{}, 0)
+	for _, s := range oldDdlEntities {
+		found := false
+		for _, t := range ddlContractEntities {
+			if s.DdlEntityId == t.DdlEntityId {
+				found = true
+				matchedDdlEntities[s.DdlEntityId] = struct{}{}
+				if ddlEntityChanges := s.GetChanges(*t); len(ddlEntityChanges) > 0 {
+					ddlEntitiesChanges[s.DdlEntityId] = ddlEntityChanges
+					changesOverview.setTableChanges(currentTable, ddlEntityChanges)
+					continue
+				}
+			}
+		}
+		if !found {
+			ddlEntitiesChanges[s.DdlEntityId] = "ddl entity not found in build archive"
+			changesOverview.setNotFoundEntry(currentTable)
+		}
+	}
+	for _, t := range ddlContractEntities {
+		if _, matched := matchedDdlEntities[t.DdlEntityId]; !matched {
+			ddlEntitiesChanges[t.DdlEntityId] = "unexpected ddl entity (not found in database)"
+			changesOverview.setUnexpectedEntry(currentTable)
+		}
+	}
+	if len(ddlEntitiesChanges) > 0 {
+		changes[currentTable] = ddlEntitiesChanges
+	}
+
+	currentTable = "ddl_table_data"
+	oldDdlEntityData := make([]entity.DDLContractDataEntity, 0)
+	err = tx.Model(&oldDdlEntityData).
+		ColumnExpr("ddl_table_data.data_hash").
+		Join("inner join ddl_tables d").
+		JoinOn("d.data_hash = ddl_table_data.data_hash").
+		JoinOn("d.package_id = ?", version.PackageId).
+		JoinOn("d.version = ?", version.Version).
+		JoinOn("d.revision = ?", version.Revision).
+		Select()
+	if err != nil {
+		return err
+	}
+	ddlEntityDataChanges := make(map[string]interface{}, 0)
+	matchedDdlEntityData := make(map[string]struct{}, 0)
+	for _, s := range oldDdlEntityData {
+		found := false
+		for _, t := range ddlContractDataEntities {
+			if s.DataHash == t.DataHash {
+				found = true
+				matchedDdlEntityData[s.DataHash] = struct{}{}
+			}
+		}
+		if !found {
+			ddlEntityDataChanges[s.DataHash] = "ddl entity data not found in build archive"
+			changesOverview.setNotFoundEntry(currentTable)
+		}
+	}
+	for _, t := range ddlContractDataEntities {
+		if _, matched := matchedDdlEntityData[t.DataHash]; !matched {
+			ddlEntityDataChanges[t.DataHash] = "unexpected ddl entity data (not found in database)"
+			changesOverview.setUnexpectedEntry(currentTable)
+		}
+	}
+	if len(ddlEntityDataChanges) > 0 {
+		changes[currentTable] = ddlEntityDataChanges
+	}
+
+	currentTable = "mcp_entities"
+	oldMcpEntities := make([]entity.MCPContractEntity, 0)
+	err = tx.Model(&oldMcpEntities).
+		Where("package_id = ?", version.PackageId).
+		Where("version = ?", version.Version).
+		Where("revision = ?", version.Revision).
+		Select()
+	if err != nil {
+		return err
+	}
+	mcpEntitiesChanges := make(map[string]interface{}, 0)
+	matchedMcpEntities := make(map[string]struct{}, 0)
+	for _, s := range oldMcpEntities {
+		found := false
+		for _, t := range mcpContractEntities {
+			if s.McpEntityId == t.McpEntityId {
+				found = true
+				matchedMcpEntities[s.McpEntityId] = struct{}{}
+				if mcpEntityChanges := s.GetChanges(*t); len(mcpEntityChanges) > 0 {
+					mcpEntitiesChanges[s.McpEntityId] = mcpEntityChanges
+					changesOverview.setTableChanges(currentTable, mcpEntityChanges)
+					continue
+				}
+			}
+		}
+		if !found {
+			mcpEntitiesChanges[s.McpEntityId] = "mcp entity not found in build archive"
+			changesOverview.setNotFoundEntry(currentTable)
+		}
+	}
+	for _, t := range mcpContractEntities {
+		if _, matched := matchedMcpEntities[t.McpEntityId]; !matched {
+			mcpEntitiesChanges[t.McpEntityId] = "unexpected mcp entity (not found in database)"
+			changesOverview.setUnexpectedEntry(currentTable)
+		}
+	}
+	if len(mcpEntitiesChanges) > 0 {
+		changes[currentTable] = mcpEntitiesChanges
+	}
+
+	currentTable = "mcp_entity_data"
+	oldMcpEntityData := make([]entity.MCPContractDataEntity, 0)
+	err = tx.Model(&oldMcpEntityData).
+		ColumnExpr("mcp_entity_data.data_hash").
+		Join("inner join mcp_entities m").
+		JoinOn("m.data_hash = mcp_entity_data.data_hash").
+		JoinOn("m.package_id = ?", version.PackageId).
+		JoinOn("m.version = ?", version.Version).
+		JoinOn("m.revision = ?", version.Revision).
+		Select()
+	if err != nil {
+		return err
+	}
+	mcpEntityDataChanges := make(map[string]interface{}, 0)
+	matchedMcpEntityData := make(map[string]struct{}, 0)
+	for _, s := range oldMcpEntityData {
+		found := false
+		for _, t := range mcpContractDataEntities {
+			if s.DataHash == t.DataHash {
+				found = true
+				matchedMcpEntityData[s.DataHash] = struct{}{}
+			}
+		}
+		if !found {
+			mcpEntityDataChanges[s.DataHash] = "mcp entity data not found in build archive"
+			changesOverview.setNotFoundEntry(currentTable)
+		}
+	}
+	for _, t := range mcpContractDataEntities {
+		if _, matched := matchedMcpEntityData[t.DataHash]; !matched {
+			mcpEntityDataChanges[t.DataHash] = "unexpected mcp entity data (not found in database)"
+			changesOverview.setUnexpectedEntry(currentTable)
+		}
+	}
+	if len(mcpEntityDataChanges) > 0 {
+		changes[currentTable] = mcpEntityDataChanges
+	}
+
 	if !packageInfo.NoChangelog && packageInfo.PreviousVersion != "" {
 		versionComparisonsChanges, versionComparisonIds, err := p.getVersionComparisonsChanges(tx, packageInfo, versionComparisons, skippedVersionComparisonIds, &changesOverview)
 		if err != nil {
@@ -713,6 +873,13 @@ func (p publishedRepositoryImpl) validateMigrationResult(tx *pg.Tx, packageInfo 
 		}
 		if len(operationComparisonsChanges) > 0 {
 			changes["operation_comparison"] = operationComparisonsChanges
+		}
+		ddlComparisonsChanges, err := p.getDdlComparisonsChanges(tx, packageInfo, ddlContractComparisonEntities, intersectComparisonIds(versionComparisonIds, ddlComparisonIdsToRebuild), &changesOverview)
+		if err != nil {
+			return err
+		}
+		if len(ddlComparisonsChanges) > 0 {
+			changes["ddl_comparison"] = ddlComparisonsChanges
 		}
 	}
 
@@ -837,6 +1004,92 @@ func (p publishedRepositoryImpl) validateMigrationResult(tx *pg.Tx, packageInfo 
 		}
 		if len(searchTextChanges) > 0 {
 			changes[currentTable] = searchTextChanges
+		}
+	}
+
+	// fts_ddl_search_text and fts_mcp_search_text share the same search-exclusion and
+	// latest-revision-only constraints as fts_operation_search_text above.
+	if !excludeFromSearch && version.Revision == maxRevision {
+		currentTable = "fts_ddl_search_text"
+		oldDdlSearchTexts := make([]entity.FtsDdlSearchTextEntity, 0)
+		err = tx.Model(&oldDdlSearchTexts).
+			Where("package_id = ?", version.PackageId).
+			Where("version = ?", version.Version).
+			Where("revision = ?", version.Revision).
+			Select()
+		if err != nil {
+			return err
+		}
+		ddlSearchTextChanges := make(map[string]interface{}, 0)
+		matchedDdlSearchTexts := make(map[string]struct{}, 0)
+		for _, s := range oldDdlSearchTexts {
+			found := false
+			for _, t := range ddlContractSearchTexts {
+				if s.DdlEntityId == t.DdlEntityId {
+					found = true
+					matchedDdlSearchTexts[s.DdlEntityId] = struct{}{}
+					oldSt := entity.DDLContractSearchTextEntity{SearchDataHash: s.SearchDataHash}
+					if stChanges := oldSt.GetChanges(entity.DDLContractSearchTextEntity{SearchDataHash: t.SearchDataHash}); len(stChanges) > 0 {
+						ddlSearchTextChanges[s.DdlEntityId] = stChanges
+						changesOverview.setTableChanges(currentTable, stChanges)
+						continue
+					}
+				}
+			}
+			if !found {
+				ddlSearchTextChanges[s.DdlEntityId] = "search text not found in build archive"
+				changesOverview.setNotFoundEntry(currentTable)
+			}
+		}
+		for _, t := range ddlContractSearchTexts {
+			if _, matched := matchedDdlSearchTexts[t.DdlEntityId]; !matched {
+				ddlSearchTextChanges[t.DdlEntityId] = "unexpected search text (not found in database)"
+				changesOverview.setUnexpectedEntry(currentTable)
+			}
+		}
+		if len(ddlSearchTextChanges) > 0 {
+			changes[currentTable] = ddlSearchTextChanges
+		}
+
+		currentTable = "fts_mcp_search_text"
+		oldMcpSearchTexts := make([]entity.FtsMcpSearchTextEntity, 0)
+		err = tx.Model(&oldMcpSearchTexts).
+			Where("package_id = ?", version.PackageId).
+			Where("version = ?", version.Version).
+			Where("revision = ?", version.Revision).
+			Select()
+		if err != nil {
+			return err
+		}
+		mcpSearchTextChanges := make(map[string]interface{}, 0)
+		matchedMcpSearchTexts := make(map[string]struct{}, 0)
+		for _, s := range oldMcpSearchTexts {
+			found := false
+			for _, t := range mcpContractSearchTexts {
+				if s.McpEntityId == t.McpEntityId {
+					found = true
+					matchedMcpSearchTexts[s.McpEntityId] = struct{}{}
+					oldSt := entity.MCPContractSearchTextEntity{SearchDataHash: s.SearchDataHash}
+					if stChanges := oldSt.GetChanges(entity.MCPContractSearchTextEntity{SearchDataHash: t.SearchDataHash}); len(stChanges) > 0 {
+						mcpSearchTextChanges[s.McpEntityId] = stChanges
+						changesOverview.setTableChanges(currentTable, stChanges)
+						continue
+					}
+				}
+			}
+			if !found {
+				mcpSearchTextChanges[s.McpEntityId] = "search text not found in build archive"
+				changesOverview.setNotFoundEntry(currentTable)
+			}
+		}
+		for _, t := range mcpContractSearchTexts {
+			if _, matched := matchedMcpSearchTexts[t.McpEntityId]; !matched {
+				mcpSearchTextChanges[t.McpEntityId] = "unexpected search text (not found in database)"
+				changesOverview.setUnexpectedEntry(currentTable)
+			}
+		}
+		if len(mcpSearchTextChanges) > 0 {
+			changes[currentTable] = mcpSearchTextChanges
 		}
 	}
 
@@ -1197,6 +1450,87 @@ func (p publishedRepositoryImpl) getOperationComparisonsChanges(tx *pg.Tx, packa
 	return operationComparisonsChanges, nil
 }
 
+// getDdlComparisonsChanges mirrors getOperationComparisonsChanges: it diffs the freshly generated
+// ddl_comparison rows against a point-in-time snapshot (migration."ddl_comparison_{migrationId}",
+// created in migration/stages/Starting.go) rather than the live table, because ddl_comparison rows
+// can be shared across builds via package refs and the live table may already reflect a later
+// build's migrated state by the time an earlier-queued build's ref is validated.
+func (p publishedRepositoryImpl) getDdlComparisonsChanges(tx *pg.Tx, packageInfo view.PackageInfoFile, ddlContractComparisonEntities []*entity.DDLContractComparisonEntity, versionComparisonIds []string, changesOverview *PublishedBuildChangesOverview) (map[string]interface{}, error) {
+	var err error
+	currentTable := "ddl_comparison"
+	if len(versionComparisonIds) == 0 && len(ddlContractComparisonEntities) == 0 {
+		return nil, nil
+	}
+	if packageInfo.PreviousVersionPackageId == "" {
+		packageInfo.PreviousVersionPackageId = packageInfo.PackageId
+	}
+	if strings.Contains(packageInfo.Version, `@`) {
+		packageInfo.Version, packageInfo.Revision, err = SplitVersionRevision(packageInfo.Version)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if strings.Contains(packageInfo.PreviousVersion, `@`) {
+		packageInfo.PreviousVersion, packageInfo.PreviousVersionRevision, err = SplitVersionRevision(packageInfo.PreviousVersion)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if packageInfo.PreviousVersionRevision == 0 {
+		_, err = tx.QueryOne(pg.Scan(&packageInfo.PreviousVersionRevision), `
+		select max(revision) from published_version
+			where package_id = ?
+			and version = ?`, packageInfo.PreviousVersionPackageId, packageInfo.PreviousVersion)
+		if err != nil {
+			return nil, fmt.Errorf("failed to calculate previous version revision: %v", err.Error())
+		}
+	}
+	ddlComparisonsChanges := make(map[string]interface{}, 0)
+	oldDdlComparisons := make([]entity.DDLContractComparisonEntity, 0)
+	matchedDdlComparisons := make(map[string]struct{}, 0)
+	if len(versionComparisonIds) > 0 {
+		ddlComparisonSnapshotTable := fmt.Sprintf(`migration."ddl_comparison_%s"`, packageInfo.MigrationId)
+		getDdlComparisonsQuery := fmt.Sprintf(`
+			select * from %s
+				where comparison_id in (?)
+			`, ddlComparisonSnapshotTable)
+		_, err = tx.Query(&oldDdlComparisons, getDdlComparisonsQuery,
+			pg.In(versionComparisonIds),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get ddl comparisons from db: %v", err.Error())
+		}
+		for _, oldComp := range oldDdlComparisons {
+			key := fmt.Sprintf(`ComparisonId:%s;DdlEntityId:%s;PreviousDdlEntityId:%s`, oldComp.ComparisonId, oldComp.DdlEntityId, oldComp.PreviousDdlEntityId)
+			found := false
+			for _, newComp := range ddlContractComparisonEntities {
+				if oldComp.ComparisonId == newComp.ComparisonId &&
+					oldComp.DdlEntityId == newComp.DdlEntityId &&
+					oldComp.PreviousDdlEntityId == newComp.PreviousDdlEntityId {
+					found = true
+					matchedDdlComparisons[key] = struct{}{}
+					if ddlComparisonChanges := oldComp.GetChanges(*newComp); len(ddlComparisonChanges) > 0 {
+						ddlComparisonsChanges[key] = ddlComparisonChanges
+						changesOverview.setTableChanges(currentTable, ddlComparisonChanges)
+					}
+				}
+			}
+			if !found {
+				ddlComparisonsChanges[key] = "ddl comparison not found in build archive"
+				changesOverview.setNotFoundEntry(currentTable)
+			}
+		}
+	}
+	for _, newComp := range ddlContractComparisonEntities {
+		key := fmt.Sprintf(`ComparisonId:%s;DdlEntityId:%s;PreviousDdlEntityId:%s`, newComp.ComparisonId, newComp.DdlEntityId, newComp.PreviousDdlEntityId)
+		if _, matched := matchedDdlComparisons[key]; !matched {
+			ddlComparisonsChanges[key] = "unexpected ddl comparison (not found in database)"
+			changesOverview.setUnexpectedEntry(currentTable)
+		}
+	}
+	return ddlComparisonsChanges, nil
+}
+
 func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageInfoFile, buildId string, version *entity.PublishedVersionEntity, content []*entity.PublishedContentEntity,
 	data []*entity.PublishedContentDataEntity, refs []*entity.PublishedReferenceEntity, src *entity.PublishedSrcEntity, srcArchive *entity.PublishedSrcArchiveEntity,
 	operations []*entity.OperationEntity, operationsData []*entity.OperationDataEntity,
@@ -1252,7 +1586,9 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 			}
 
 			start = time.Now()
-			err := p.validateMigrationResult(tx, packageInfo, buildId, version, content, data, refs, src, operations, operationsData, versionComparisons, operationComparisons, skippedVersionComparisonIds, operationComparisonIdsToRebuild, versionInternalDocEntities, versionInternalDocDataEntities, comparisonInternalDocEntities, comparisonInternalDocDataEntities, operationSearchTexts, maxRevision, pkg.ExcludeFromSearch)
+			err := p.validateMigrationResult(tx, packageInfo, buildId, version, content, data, refs, src, operations, operationsData, versionComparisons, operationComparisons, skippedVersionComparisonIds, operationComparisonIdsToRebuild, versionInternalDocEntities, versionInternalDocDataEntities, comparisonInternalDocEntities, comparisonInternalDocDataEntities, operationSearchTexts, maxRevision, pkg.ExcludeFromSearch,
+				ddlContractEntities, ddlContractDataEntities, ddlContractSearchTexts, ddlContractComparisonEntities, ddlComparisonIdsToRebuild,
+				mcpContractEntities, mcpContractDataEntities, mcpContractSearchTexts)
 			if err != nil {
 				return fmt.Errorf("migration result validation failed: %v", err.Error())
 			}
@@ -1916,7 +2252,7 @@ func (p publishedRepositoryImpl) propagatePreviousOperationGroups(tx *pg.Tx, ver
 	return err
 }
 
-func (p publishedRepositoryImpl) validateChangelogMigrationResult(tx *pg.Tx, packageInfo view.PackageInfoFile, publishId string, versionComparisons []*entity.VersionComparisonEntity, operationComparisons []*entity.OperationComparisonEntity, skippedVersionComparisonIds []string, operationComparisonIdsToRebuild []string, comparisonInternalDocs []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocData []*entity.ComparisonInternalDocumentDataEntity) error {
+func (p publishedRepositoryImpl) validateChangelogMigrationResult(tx *pg.Tx, packageInfo view.PackageInfoFile, publishId string, versionComparisons []*entity.VersionComparisonEntity, operationComparisons []*entity.OperationComparisonEntity, skippedVersionComparisonIds []string, operationComparisonIdsToRebuild []string, comparisonInternalDocs []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocData []*entity.ComparisonInternalDocumentDataEntity, ddlContractComparisons []*entity.DDLContractComparisonEntity, ddlComparisonIdsToRebuild []string) error {
 	migrationRun := new(mEntity.MigrationRunEntity)
 	err := tx.Model(migrationRun).Where("id = ?", packageInfo.MigrationId).First()
 	if err != nil {
@@ -1943,6 +2279,13 @@ func (p publishedRepositoryImpl) validateChangelogMigrationResult(tx *pg.Tx, pac
 	}
 	if len(operationComparisonsChanges) > 0 {
 		changes["operation_comparison"] = operationComparisonsChanges
+	}
+	ddlComparisonsChanges, err := p.getDdlComparisonsChanges(tx, packageInfo, ddlContractComparisons, intersectComparisonIds(versionComparisonIds, ddlComparisonIdsToRebuild), &changesOverview)
+	if err != nil {
+		return err
+	}
+	if len(ddlComparisonsChanges) > 0 {
+		changes["ddl_comparison"] = ddlComparisonsChanges
 	}
 
 	comparisonInternalDocsChanges, err := p.getComparisonInternalDocumentsChanges(tx, packageInfo, comparisonInternalDocs, comparisonInternalDocData, &changesOverview)
@@ -2004,7 +2347,7 @@ func (p publishedRepositoryImpl) SaveVersionChanges(packageInfo view.PackageInfo
 		}
 		if packageInfo.MigrationBuild && !packageInfo.NoChangelog {
 			start := time.Now()
-			err := p.validateChangelogMigrationResult(tx, packageInfo, publishId, versionComparisons, operationComparisons, skippedVersionComparisonIds, operationComparisonIdsToRebuild, comparisonInternalDocEntities, comparisonInternalDocDataEntities)
+			err := p.validateChangelogMigrationResult(tx, packageInfo, publishId, versionComparisons, operationComparisons, skippedVersionComparisonIds, operationComparisonIdsToRebuild, comparisonInternalDocEntities, comparisonInternalDocDataEntities, ddlContractComparisons, ddlComparisonIdsToRebuild)
 			if err != nil {
 				return err
 			}

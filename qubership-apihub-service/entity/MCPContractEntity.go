@@ -39,6 +39,13 @@ type MCPContractSearchTextEntity struct {
 	SearchTextData []byte
 }
 
+type FtsMcpSearchTextEntity struct {
+	tableName struct{} `pg:"fts_mcp_search_text"`
+
+	McpEntityId    string `pg:"mcp_entity_id, type:varchar"`
+	SearchDataHash string `pg:"search_data_hash, type:varchar"`
+}
+
 type MCPContractKindCountEntity struct {
 	Kind  string `pg:"kind, type:varchar"`
 	Count int    `pg:"count, type:integer"`
