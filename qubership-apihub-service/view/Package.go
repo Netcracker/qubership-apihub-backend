@@ -324,10 +324,6 @@ type ComparisonKey struct {
 	PreviousVersionRevision  int
 }
 
-func (k ComparisonKey) ComparisonId() string {
-	return MakeVersionComparisonId(k.PackageId, k.Version, k.Revision, k.PreviousVersionPackageId, k.PreviousVersion, k.PreviousVersionRevision)
-}
-
 func MakeVersionComparisonId(packageId string, version string, revision int, previousVersionPackageId string, previousVersion string, previousVersionRevision int) string {
 	uniqueString := fmt.Sprintf("%v@%v@%v@%v@%v@%v", packageId, version, revision, previousVersionPackageId, previousVersion, previousVersionRevision)
 	return utils.GetEncodedChecksum([]byte(uniqueString))

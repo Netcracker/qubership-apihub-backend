@@ -785,7 +785,7 @@ func (p publishedRepositoryImpl) validateMigrationResult(tx *pg.Tx, packageInfo 
 	}
 
 	if !packageInfo.NoChangelog && packageInfo.PreviousVersion != "" {
-		comparisonInternalDocsChanges, err := p.getComparisonInternalDocumentsChanges(tx, packageInfo, comparisonInternalDocs, comparisonInternalDocData, skippedVersionComparisonIds, &changesOverview)
+		comparisonInternalDocsChanges, err := p.getComparisonInternalDocumentsChanges(tx, packageInfo, comparisonInternalDocs, comparisonInternalDocData, &changesOverview)
 		if err != nil {
 			return err
 		}
@@ -992,13 +992,9 @@ func (p publishedRepositoryImpl) getVersionComparisonsChanges(tx *pg.Tx, package
 	return versionComparisonsChanges, versionComparisonIds, nil
 }
 
-func (p publishedRepositoryImpl) getComparisonInternalDocumentsChanges(tx *pg.Tx, packageInfo view.PackageInfoFile, comparisonInternalDocs []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocData []*entity.ComparisonInternalDocumentDataEntity, skippedVersionComparisonIds []string, changesOverview *PublishedBuildChangesOverview) (map[string]interface{}, error) {
+func (p publishedRepositoryImpl) getComparisonInternalDocumentsChanges(tx *pg.Tx, packageInfo view.PackageInfoFile, comparisonInternalDocs []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocData []*entity.ComparisonInternalDocumentDataEntity, changesOverview *PublishedBuildChangesOverview) (map[string]interface{}, error) {
 	var err error
 	allChanges := make(map[string]interface{}, 0)
-	skippedComparisonIds := make(map[string]struct{}, len(skippedVersionComparisonIds))
-	for _, comparisonId := range skippedVersionComparisonIds {
-		skippedComparisonIds[comparisonId] = struct{}{}
-	}
 
 	currentTable := "comparison_internal_document"
 	oldComparisonInternalDocs := make([]entity.ComparisonInternalDocumentEntity, 0)
@@ -1068,10 +1064,6 @@ func (p publishedRepositoryImpl) getComparisonInternalDocumentsChanges(tx *pg.Tx
 	matchedComparisonInternalDocs := make(map[string]struct{}, 0)
 	oldComparisonInternalDocHashes := make(map[string]struct{}, 0)
 	for _, s := range oldComparisonInternalDocs {
-		// documents of comparisons fully served from cache are not present in the build archive
-		if _, skipped := skippedComparisonIds[s.ComparisonKey().ComparisonId()]; skipped {
-			continue
-		}
 		found := false
 		oldComparisonInternalDocHashes[s.Hash] = struct{}{}
 		for _, t := range comparisonInternalDocs {
@@ -1685,7 +1677,7 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 		}
 		if len(versionComparisons) != 0 {
 			start = time.Now()
-			err = p.saveDdlComparisonsTx(tx, ddlContractComparisonEntities, ddlComparisonIdsToRebuild)
+			err = p.saveDdlComparisonsTx(tx, ddlContractComparisonEntities, versionComparisons, ddlComparisonIdsToRebuild)
 			if err != nil {
 				return err
 			}
@@ -1953,7 +1945,7 @@ func (p publishedRepositoryImpl) validateChangelogMigrationResult(tx *pg.Tx, pac
 		changes["operation_comparison"] = operationComparisonsChanges
 	}
 
-	comparisonInternalDocsChanges, err := p.getComparisonInternalDocumentsChanges(tx, packageInfo, comparisonInternalDocs, comparisonInternalDocData, skippedVersionComparisonIds, &changesOverview)
+	comparisonInternalDocsChanges, err := p.getComparisonInternalDocumentsChanges(tx, packageInfo, comparisonInternalDocs, comparisonInternalDocData, &changesOverview)
 	if err != nil {
 		return err
 	}
@@ -2023,7 +2015,7 @@ func (p publishedRepositoryImpl) SaveVersionChanges(packageInfo view.PackageInfo
 			return err
 		}
 
-		err = p.saveDdlComparisonsTx(tx, ddlContractComparisons, ddlComparisonIdsToRebuild)
+		err = p.saveDdlComparisonsTx(tx, ddlContractComparisons, versionComparisons, ddlComparisonIdsToRebuild)
 		if err != nil {
 			return err
 		}
@@ -2048,15 +2040,16 @@ func (p publishedRepositoryImpl) SaveVersionChanges(packageInfo view.PackageInfo
 }
 
 // saveVersionChangesTx upserts the merged version_comparison rows and replaces the operation
-// changelog. Stale operation_comparison rows are deleted only for comparisons whose operation side
-// was rebuilt in this publish: a row saved because only its DDL side changed keeps the cached
-// operation changelog.
+// changelog. operation_types and contract_types are refreshed by separate, independently-scoped
+// writes (this function's operation_types update, saveDdlComparisonsTx's contract_types update) so
+// that a row saved because only one side changed does not overwrite the other side's stored value
+// with an absent one. Stale operation_comparison rows are deleted only for comparisons whose
+// operation side was rebuilt in this publish: a row saved because only its DDL side changed keeps
+// the cached operation changelog.
 func (p publishedRepositoryImpl) saveVersionChangesTx(tx *pg.Tx, operationComparisons []*entity.OperationComparisonEntity, versionComparisons []*entity.VersionComparisonEntity, operationComparisonIdsToRebuild []string) error {
 	_, err := tx.Model(&versionComparisons).
 		OnConflict(`(comparison_id) DO UPDATE
-		SET operation_types=EXCLUDED.operation_types,
-			contract_types=EXCLUDED.contract_types,
-			refs =			EXCLUDED.refs,
+		SET refs =			EXCLUDED.refs,
 			last_active =	EXCLUDED.last_active,
 			no_content =	EXCLUDED.no_content,
 			open_count =	version_comparison.open_count+1,
@@ -2065,6 +2058,16 @@ func (p publishedRepositoryImpl) saveVersionChangesTx(tx *pg.Tx, operationCompar
 	if err != nil {
 		return fmt.Errorf("failed to insert version comparisons %+v: %w", versionComparisons, err)
 	}
+
+	rebuiltOperationComparisons := filterVersionComparisonsByComparisonId(versionComparisons, operationComparisonIdsToRebuild)
+	if len(rebuiltOperationComparisons) != 0 {
+		_, err = tx.Model(&rebuiltOperationComparisons).
+			OnConflict(`(comparison_id) DO UPDATE SET operation_types=EXCLUDED.operation_types`).Insert()
+		if err != nil {
+			return fmt.Errorf("failed to update operation types for version comparisons %+v: %w", rebuiltOperationComparisons, err)
+		}
+	}
+
 	for _, comparisonId := range operationComparisonIdsToRebuild {
 		_, err := tx.Exec(`delete from operation_comparison where comparison_id = ?`, comparisonId)
 		if err != nil {
@@ -2080,12 +2083,41 @@ func (p publishedRepositoryImpl) saveVersionChangesTx(tx *pg.Tx, operationCompar
 	return nil
 }
 
+// filterVersionComparisonsByComparisonId returns the entries of versionComparisons whose
+// ComparisonId is in ids.
+func filterVersionComparisonsByComparisonId(versionComparisons []*entity.VersionComparisonEntity, ids []string) []*entity.VersionComparisonEntity {
+	if len(ids) == 0 {
+		return nil
+	}
+	idSet := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		idSet[id] = struct{}{}
+	}
+	filtered := make([]*entity.VersionComparisonEntity, 0, len(ids))
+	for _, comparison := range versionComparisons {
+		if _, ok := idSet[comparison.ComparisonId]; ok {
+			filtered = append(filtered, comparison)
+		}
+	}
+	return filtered
+}
+
 // saveDdlComparisonsTx persists the DDL changelog for the given comparisons. DDL comparisons share the
-// version_comparison rows saved by saveVersionChangesTx, so it must run after it. Stale rows are removed
-// before insert only for comparisons whose DDL side was rebuilt in this publish (mirroring the
-// operation_comparison handling), so a comparison saved for its operation side keeps the cached DDL
-// changelog.
-func (p publishedRepositoryImpl) saveDdlComparisonsTx(tx *pg.Tx, ddlContractComparisons []*entity.DDLContractComparisonEntity, ddlComparisonIdsToRebuild []string) error {
+// version_comparison rows saved by saveVersionChangesTx, so it must run after it. contract_types is
+// refreshed only for comparisons whose DDL side was rebuilt in this publish, so a row saved because
+// only its operation side changed keeps its stored contract_types. Stale rows are removed before
+// insert only for the same rebuilt set (mirroring the operation_comparison handling), so a comparison
+// saved for its operation side keeps the cached DDL changelog.
+func (p publishedRepositoryImpl) saveDdlComparisonsTx(tx *pg.Tx, ddlContractComparisons []*entity.DDLContractComparisonEntity, versionComparisons []*entity.VersionComparisonEntity, ddlComparisonIdsToRebuild []string) error {
+	rebuiltDdlComparisons := filterVersionComparisonsByComparisonId(versionComparisons, ddlComparisonIdsToRebuild)
+	if len(rebuiltDdlComparisons) != 0 {
+		_, err := tx.Model(&rebuiltDdlComparisons).
+			OnConflict(`(comparison_id) DO UPDATE SET contract_types=EXCLUDED.contract_types`).Insert()
+		if err != nil {
+			return fmt.Errorf("failed to update contract types for version comparisons %+v: %w", rebuiltDdlComparisons, err)
+		}
+	}
+
 	for _, comparisonId := range ddlComparisonIdsToRebuild {
 		_, err := tx.Exec(`delete from ddl_comparison where comparison_id = ?`, comparisonId)
 		if err != nil {
@@ -3489,21 +3521,6 @@ func (p publishedRepositoryImpl) GetVersionComparison(comparisonId string) (*ent
 		return nil, err
 	}
 	return comparison, nil
-}
-
-func (p publishedRepositoryImpl) GetVersionComparisonsByIds(comparisonIds []string) ([]entity.VersionComparisonEntity, error) {
-	comparisons := make([]entity.VersionComparisonEntity, 0)
-	if len(comparisonIds) == 0 {
-		return comparisons, nil
-	}
-	err := p.cp.GetConnection().
-		Model(&comparisons).
-		Where("comparison_id in (?)", pg.In(comparisonIds)).
-		Select()
-	if err != nil {
-		return nil, err
-	}
-	return comparisons, nil
 }
 
 func (p publishedRepositoryImpl) GetVersionRefsComparisons(comparisonId string) ([]entity.VersionComparisonEntity, error) {

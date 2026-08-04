@@ -41,17 +41,6 @@ type ComparisonInternalDocumentEntity struct {
 	Hash              string `pg:"hash, type:varchar"`
 }
 
-func (e ComparisonInternalDocumentEntity) ComparisonKey() view.ComparisonKey {
-	return view.ComparisonKey{
-		PackageId:                e.PackageId,
-		Version:                  e.Version,
-		Revision:                 e.Revision,
-		PreviousVersionPackageId: e.PreviousPackageId,
-		PreviousVersion:          e.PreviousVersion,
-		PreviousVersionRevision:  e.PreviousRevision,
-	}
-}
-
 type ComparisonInternalDocumentDataEntity struct {
 	tableName struct{} `pg:"comparison_internal_document_data"`
 
