@@ -46,6 +46,14 @@ func (p publishedValidatorImpl) ValidatePackage(buildArc *archive.BuildResultArc
 		return err
 	}
 
+	if err := p.validatePackageDdlContracts(buildArc, buildConfig); err != nil {
+		return err
+	}
+
+	if err := p.validatePackageMcpContracts(buildArc, buildConfig); err != nil {
+		return err
+	}
+
 	if err := p.validatePackageBuilderNotifications(buildArc, buildConfig); err != nil {
 		return err
 	}
@@ -810,6 +818,82 @@ func (p publishedValidatorImpl) validatePackageComparisons(buildArc *archive.Bui
 		// 	}
 		// }
 	}
+	return nil
+}
+
+func (p publishedValidatorImpl) validatePackageDdlContracts(buildArc *archive.BuildResultArchive, buildConfig *view.BuildConfig) error {
+	if err := utils.ValidateObject(buildArc.PackageDdlContracts); err != nil {
+		return &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidPackagedFile,
+			Message: exception.InvalidPackagedFileMsg,
+			Params:  map[string]interface{}{"file": "ddl", "error": err.Error()},
+		}
+	}
+	if err := utils.ValidateObject(buildArc.PackageDdlComparisons); err != nil {
+		return &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidPackagedFile,
+			Message: exception.InvalidPackagedFileMsg,
+			Params:  map[string]interface{}{"file": "ddl-comparisons", "error": err.Error()},
+		}
+	}
+
+	for _, table := range buildArc.PackageDdlContracts.Tables {
+		if table.Kind != view.DdlEntityKindTable {
+			return &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.InvalidPackagedFile,
+				Message: exception.InvalidPackagedFileMsg,
+				Params: map[string]interface{}{
+					"file":  "ddl",
+					"error": fmt.Sprintf("object with ddlEntityId = %v is incorrect: unsupported kind %v", table.DdlEntityId, table.Kind),
+				},
+			}
+		}
+	}
+
+	return nil
+}
+
+func (p publishedValidatorImpl) validatePackageMcpContracts(buildArc *archive.BuildResultArchive, buildConfig *view.BuildConfig) error {
+	if err := utils.ValidateObject(buildArc.PackageMcpContracts); err != nil {
+		return &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidPackagedFile,
+			Message: exception.InvalidPackagedFileMsg,
+			Params:  map[string]interface{}{"file": "mcp", "error": err.Error()},
+		}
+	}
+
+	validMcpKinds := map[string]struct{}{
+		view.McpEntityKindInit:     {},
+		view.McpEntityKindTool:     {},
+		view.McpEntityKindPrompt:   {},
+		view.McpEntityKindResource: {},
+	}
+
+	mcp := buildArc.PackageMcpContracts
+	allContracts := make([]view.PackageMcpContract, 0, len(mcp.Inits)+len(mcp.Tools)+len(mcp.Resources)+len(mcp.Prompts))
+	allContracts = append(allContracts, mcp.Inits...)
+	allContracts = append(allContracts, mcp.Tools...)
+	allContracts = append(allContracts, mcp.Resources...)
+	allContracts = append(allContracts, mcp.Prompts...)
+
+	for _, contract := range allContracts {
+		if _, valid := validMcpKinds[contract.Kind]; !valid {
+			return &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.InvalidPackagedFile,
+				Message: exception.InvalidPackagedFileMsg,
+				Params: map[string]interface{}{
+					"file":  "mcp",
+					"error": fmt.Sprintf("object with mcpEntityId = %v is incorrect: unsupported kind %v", contract.McpEntityId, contract.Kind),
+				},
+			}
+		}
+	}
+
 	return nil
 }
 
