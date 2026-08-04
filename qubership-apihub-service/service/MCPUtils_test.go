@@ -61,6 +61,54 @@ func TestRequireMCPApiType(t *testing.T) {
 	}
 }
 
+func TestRequireMCPTypeParam(t *testing.T) {
+	tests := []struct {
+		name        string
+		arguments   map[string]any
+		allowed     []string
+		expected    string
+		expectedErr string
+	}{
+		{
+			name:      "accepts ddl contract type",
+			arguments: map[string]any{"apiType": "ddl"},
+			allowed:   []string{string(view.RestApiType), view.ContractTypeDdl, view.ContractTypeMcp},
+			expected:  "ddl",
+		},
+		{
+			name:      "accepts mcp contract type",
+			arguments: map[string]any{"apiType": "mcp"},
+			allowed:   []string{string(view.RestApiType), view.ContractTypeDdl, view.ContractTypeMcp},
+			expected:  "mcp",
+		},
+		{
+			name:        "rejects unsupported type",
+			arguments:   map[string]any{"apiType": "protobuf"},
+			allowed:     []string{string(view.RestApiType), view.ContractTypeDdl, view.ContractTypeMcp},
+			expectedErr: "apiType must be one of: [rest ddl mcp]",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := mcp.CallToolRequest{
+				Params: mcp.CallToolParams{
+					Arguments: tt.arguments,
+				},
+			}
+
+			actual, err := requireMCPTypeParam(req, tt.allowed...)
+			if tt.expectedErr != "" {
+				require.EqualError(t, err, tt.expectedErr)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tt.expected, actual)
+		})
+	}
+}
+
 func TestTransformOperations(t *testing.T) {
 	operations := []interface{}{
 		view.RestOperationSearchResult{
@@ -171,6 +219,57 @@ func TestIsDocumentTypeAllowedForAPIType(t *testing.T) {
 	require.True(t, isDocumentTypeAllowedForAPIType(view.Asyncapi30Type, string(view.AsyncapiApiType)))
 	require.False(t, isDocumentTypeAllowedForAPIType(view.GraphQLSchemaType, string(view.RestApiType)))
 	require.False(t, isDocumentTypeAllowedForAPIType(view.Protobuf3Type, string(view.AsyncapiApiType)))
+	require.True(t, isDocumentTypeAllowedForAPIType(view.DDLType, view.ContractTypeDdl))
+	require.True(t, isDocumentTypeAllowedForAPIType(view.MCPToolsType, view.ContractTypeMcp))
+	require.False(t, isDocumentTypeAllowedForAPIType(view.DDLType, string(view.RestApiType)))
+}
+
+func TestTransformContractSearchResults(t *testing.T) {
+	items := []interface{}{
+		view.DdlContractSearchResult{
+			PackageId:   "pkg.ddl",
+			PackageName: "DDL Package",
+			Version:     "2026.1",
+			EntityId:    "ddl-entity",
+			Kind:        view.DdlKindTable,
+			SchemaName:  "public",
+			TableName:   "customers",
+		},
+		view.McpEntitySearchResult{
+			PackageId:   "pkg.mcp",
+			PackageName: "MCP Package",
+			Version:     "2026.1",
+			EntityId:    "mcp-entity",
+			Kind:        view.McpKindTool,
+			Name:        "create_customer",
+			McpEndpoint: "/mcp",
+		},
+		view.CommonOperationSearchResult{PackageId: "pkg.unrelated"},
+	}
+
+	actual := transformContractSearchResults(items)
+
+	require.Len(t, actual, 2)
+	require.Equal(t, view.TransformedContractEntity{
+		EntityId:     "ddl-entity",
+		ContractType: view.ContractTypeDdl,
+		Kind:         view.DdlKindTable,
+		PackageId:    "pkg.ddl",
+		PackageName:  "DDL Package",
+		Version:      "2026.1",
+		SchemaName:   "public",
+		TableName:    "customers",
+	}, actual[0])
+	require.Equal(t, view.TransformedContractEntity{
+		EntityId:     "mcp-entity",
+		ContractType: view.ContractTypeMcp,
+		Kind:         view.McpKindTool,
+		PackageId:    "pkg.mcp",
+		PackageName:  "MCP Package",
+		Version:      "2026.1",
+		EntityName:   "create_customer",
+		McpEndpoint:  "/mcp",
+	}, actual[1])
 }
 
 func TestMakeMCPDocumentPayloadReturnsDocumentData(t *testing.T) {
@@ -242,6 +341,11 @@ func TestGetToolMetadataUsesGenericToolNames(t *testing.T) {
 		ToolNameGetOperationSpec,
 		ToolNameGetOperationDiff,
 		ToolNameGetDocument,
+		ToolNameListDdlEntities,
+		ToolNameGetDdlEntity,
+		ToolNameGetDdlEntityDiff,
+		ToolNameListMcpContractEntities,
+		ToolNameGetMcpContractEntity,
 	}, names)
 }
 

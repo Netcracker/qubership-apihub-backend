@@ -14,7 +14,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// mcpListDefaultLimit is the default page size for MCP navigation tools (list_workspace_packages, list_package_versions).
+// mcpListDefaultLimit is the default page size for MCP navigation and contract-listing tools
+// (list_workspace_packages, list_package_versions, list_ddl_entities, list_mcp_contract_entities).
 const mcpListDefaultLimit = 100
 
 func withInjectedMCPArg(req mcp.CallToolRequest, key string, value any) mcp.CallToolRequest {
@@ -153,7 +154,7 @@ func (m mcpService) ExecuteSearchToolV2(ctx context.Context, req mcp.CallToolReq
 }
 
 func (m mcpService) executeSearchCore(ctx context.Context, req mcp.CallToolRequest, workspace string, metric string) (*mcp.CallToolResult, error) {
-	apiType, err := requireMCPApiType(req, view.RestApiType, view.GraphqlApiType, view.AsyncapiApiType)
+	apiType, err := requireMCPTypeParam(req, string(view.RestApiType), string(view.GraphqlApiType), string(view.AsyncapiApiType), view.ContractTypeDdl, view.ContractTypeMcp)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -196,16 +197,39 @@ func (m mcpService) executeSearchCore(ctx context.Context, req mcp.CallToolReque
 	searchReq.VisiblePackageRoots = visibility.VisibleRoots
 	searchReq.InvisiblePackageRoots = visibility.InvisibleRoots
 
-	searchResult, err := m.operationService.GlobalSearchForOperations(ctx, searchReq)
-	if err != nil {
-		return nil, err
+	var payload map[string]any
+	switch apiType {
+	case view.ContractTypeDdl:
+		searchResult, err := m.ddlContractService.GlobalSearchForDDL(searchReq)
+		if err != nil {
+			return nil, err
+		}
+		items := []interface{}{}
+		if searchResult != nil && searchResult.DdlContracts != nil {
+			items = *searchResult.DdlContracts
+		}
+		payload = map[string]any{"items": transformContractSearchResults(items)}
+	case view.ContractTypeMcp:
+		searchResult, err := m.mcpContractService.GlobalSearchForMCP(searchReq)
+		if err != nil {
+			return nil, err
+		}
+		items := []interface{}{}
+		if searchResult != nil && searchResult.McpContracts != nil {
+			items = *searchResult.McpContracts
+		}
+		payload = map[string]any{"items": transformContractSearchResults(items)}
+	default:
+		searchResult, err := m.operationService.GlobalSearchForOperations(ctx, searchReq)
+		if err != nil {
+			return nil, err
+		}
+		operations := []interface{}{}
+		if searchResult != nil && searchResult.Operations != nil {
+			operations = *searchResult.Operations
+		}
+		payload = map[string]any{"items": transformOperations(operations)}
 	}
-
-	operations := []interface{}{}
-	if searchResult != nil && searchResult.Operations != nil {
-		operations = *searchResult.Operations
-	}
-	payload := map[string]any{"items": transformOperations(operations)}
 
 	// Log MCP tool response at debug level
 	payloadJSON, _ := json.Marshal(payload)
@@ -359,7 +383,7 @@ func (m mcpService) ExecuteGetDocumentTool(ctx context.Context, req mcp.CallTool
 	if !sufficientPrivileges {
 		return mcp.NewToolResultError(exception.InsufficientPrivilegesMsg), nil
 	}
-	apiType, err := requireMCPApiType(req, view.RestApiType, view.GraphqlApiType, view.AsyncapiApiType)
+	apiType, err := requireMCPTypeParam(req, string(view.RestApiType), string(view.GraphqlApiType), string(view.AsyncapiApiType), view.ContractTypeDdl, view.ContractTypeMcp)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -386,6 +410,212 @@ func (m mcpService) ExecuteGetDocumentTool(ctx context.Context, req mcp.CallTool
 	}
 
 	log.Debugf("MCP tool get_document response: packageId=%s, version=%s, slug=%s, dataBytes=%d", packageId, version, slug, len(documentData.Data))
+
+	return mcp.NewToolResultStructuredOnly(payload), nil
+}
+
+// ExecuteListDdlEntitiesTool executes the list_ddl_entities tool
+func (m mcpService) ExecuteListDdlEntitiesTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	packageId, err := req.RequireString("packageId")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	sufficientPrivileges, err := m.roleService.HasRequiredPermissions(GetSecCtxFromMCPCtx(ctx), packageId, view.ReadPermission)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to check user privileges: %s", err.Error())), nil
+	}
+	if !sufficientPrivileges {
+		return mcp.NewToolResultError(exception.InsufficientPrivilegesMsg), nil
+	}
+	version, err := req.RequireString("version")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	textFilter := req.GetString("textFilter", "")
+	limit := req.GetInt("limit", mcpListDefaultLimit)
+	page := req.GetInt("page", 0)
+
+	m.monitoringService.IncreaseBusinessMetricCounter(UserIDFromMCPCtx(ctx), metrics.MCPListDdlEntitiesToolCalled, mcpMetricKey(ctx, view.ContractTypeDdl, packageId))
+
+	log.Infof("list_ddl_entities: packageId=%s, version=%s, textFilter=%s, limit=%d, page=%d", packageId, version, textFilter, limit, page)
+
+	result, err := m.ddlContractService.ListDdlEntities(packageId, version, textFilter, limit, page*limit)
+	if err != nil {
+		return nil, err
+	}
+
+	payload := map[string]any{"entities": result.Entities, "packages": result.Packages}
+
+	payloadJSON, _ := json.Marshal(payload)
+	log.Debugf("MCP tool list_ddl_entities response: %s", string(payloadJSON))
+
+	return mcp.NewToolResultStructuredOnly(payload), nil
+}
+
+// ExecuteGetDdlEntityTool executes the get_ddl_entity tool
+func (m mcpService) ExecuteGetDdlEntityTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	packageId, err := req.RequireString("packageId")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	sufficientPrivileges, err := m.roleService.HasRequiredPermissions(GetSecCtxFromMCPCtx(ctx), packageId, view.ReadPermission)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to check user privileges: %s", err.Error())), nil
+	}
+	if !sufficientPrivileges {
+		return mcp.NewToolResultError(exception.InsufficientPrivilegesMsg), nil
+	}
+	version, err := req.RequireString("version")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	ddlEntityId, err := req.RequireString("ddlEntityId")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	includeData := req.GetBool("includeData", true)
+
+	m.monitoringService.IncreaseBusinessMetricCounter(UserIDFromMCPCtx(ctx), metrics.MCPGetDdlEntityToolCalled, mcpMetricKey(ctx, view.ContractTypeDdl, packageId))
+
+	log.Infof("get_ddl_entity: packageId=%s, version=%s, ddlEntityId=%s, includeData=%t", packageId, version, ddlEntityId, includeData)
+
+	result, err := m.ddlContractService.GetDdlEntity(packageId, version, ddlEntityId, includeData)
+	if err != nil {
+		return nil, err
+	}
+
+	payload := map[string]any{"entity": result}
+
+	payloadJSON, _ := json.Marshal(payload)
+	log.Debugf("MCP tool get_ddl_entity response: %s", string(payloadJSON))
+
+	return mcp.NewToolResultStructuredOnly(payload), nil
+}
+
+// ExecuteGetDdlEntityDiffTool executes the get_ddl_entity_diff tool
+func (m mcpService) ExecuteGetDdlEntityDiffTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	packageId, err := req.RequireString("packageId")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	sufficientPrivileges, err := m.roleService.HasRequiredPermissions(GetSecCtxFromMCPCtx(ctx), packageId, view.ReadPermission)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to check user privileges: %s", err.Error())), nil
+	}
+	if !sufficientPrivileges {
+		return mcp.NewToolResultError(exception.InsufficientPrivilegesMsg), nil
+	}
+	version, err := req.RequireString("version")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	ddlEntityId, err := req.RequireString("ddlEntityId")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	previousVersion := req.GetString("previousVersion", "")
+	previousVersionPackageId := req.GetString("previousVersionPackageId", "")
+	severities := req.GetStringSlice("severity", nil)
+	validSeverities := []string{string(view.Annotation), string(view.Breaking), string(view.SemiBreaking), string(view.Deprecated), string(view.NonBreaking), string(view.Unclassified)}
+	for _, severity := range severities {
+		if !view.ValidSeverity(severity) {
+			return mcp.NewToolResultError(fmt.Sprintf("severity must be one of: %v", validSeverities)), nil
+		}
+	}
+
+	m.monitoringService.IncreaseBusinessMetricCounter(UserIDFromMCPCtx(ctx), metrics.MCPGetDdlEntityDiffToolCalled, mcpMetricKey(ctx, view.ContractTypeDdl, packageId))
+
+	log.Infof("get_ddl_entity_diff: packageId=%s, version=%s, ddlEntityId=%s, previousVersion=%s, previousVersionPackageId=%s", packageId, version, ddlEntityId, previousVersion, previousVersionPackageId)
+
+	result, err := m.ddlContractService.GetDdlEntityChanges(packageId, version, ddlEntityId, previousVersion, previousVersionPackageId, severities)
+	if err != nil {
+		return nil, err
+	}
+
+	payload := map[string]any{"changes": result.Changes}
+
+	payloadJSON, _ := json.Marshal(payload)
+	log.Debugf("MCP tool get_ddl_entity_diff response: %s", string(payloadJSON))
+
+	return mcp.NewToolResultStructuredOnly(payload), nil
+}
+
+// ExecuteListMcpContractEntitiesTool executes the list_mcp_contract_entities tool
+func (m mcpService) ExecuteListMcpContractEntitiesTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	packageId, err := req.RequireString("packageId")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	sufficientPrivileges, err := m.roleService.HasRequiredPermissions(GetSecCtxFromMCPCtx(ctx), packageId, view.ReadPermission)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to check user privileges: %s", err.Error())), nil
+	}
+	if !sufficientPrivileges {
+		return mcp.NewToolResultError(exception.InsufficientPrivilegesMsg), nil
+	}
+	version, err := req.RequireString("version")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	kind := req.GetString("kind", "")
+	mcpEndpoint := req.GetString("mcpEndpoint", "")
+	textFilter := req.GetString("textFilter", "")
+	limit := req.GetInt("limit", mcpListDefaultLimit)
+	page := req.GetInt("page", 0)
+
+	m.monitoringService.IncreaseBusinessMetricCounter(UserIDFromMCPCtx(ctx), metrics.MCPListMcpContractEntitiesToolCalled, mcpMetricKey(ctx, view.ContractTypeMcp, packageId))
+
+	log.Infof("list_mcp_contract_entities: packageId=%s, version=%s, kind=%s, mcpEndpoint=%s, textFilter=%s, limit=%d, page=%d", packageId, version, kind, mcpEndpoint, textFilter, limit, page)
+
+	result, err := m.mcpContractService.ListMcpEntities(packageId, version, kind, mcpEndpoint, textFilter, limit, page*limit)
+	if err != nil {
+		return nil, err
+	}
+
+	payload := map[string]any{"entities": result.Entities, "packages": result.Packages}
+
+	payloadJSON, _ := json.Marshal(payload)
+	log.Debugf("MCP tool list_mcp_contract_entities response: %s", string(payloadJSON))
+
+	return mcp.NewToolResultStructuredOnly(payload), nil
+}
+
+// ExecuteGetMcpContractEntityTool executes the get_mcp_contract_entity tool
+func (m mcpService) ExecuteGetMcpContractEntityTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	packageId, err := req.RequireString("packageId")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	sufficientPrivileges, err := m.roleService.HasRequiredPermissions(GetSecCtxFromMCPCtx(ctx), packageId, view.ReadPermission)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to check user privileges: %s", err.Error())), nil
+	}
+	if !sufficientPrivileges {
+		return mcp.NewToolResultError(exception.InsufficientPrivilegesMsg), nil
+	}
+	version, err := req.RequireString("version")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	mcpEntityId, err := req.RequireString("mcpEntityId")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	includeData := req.GetBool("includeData", true)
+
+	m.monitoringService.IncreaseBusinessMetricCounter(UserIDFromMCPCtx(ctx), metrics.MCPGetMcpContractEntityToolCalled, mcpMetricKey(ctx, view.ContractTypeMcp, packageId))
+
+	log.Infof("get_mcp_contract_entity: packageId=%s, version=%s, mcpEntityId=%s, includeData=%t", packageId, version, mcpEntityId, includeData)
+
+	result, err := m.mcpContractService.GetMcpEntity(packageId, version, mcpEntityId, includeData)
+	if err != nil {
+		return nil, err
+	}
+
+	payload := map[string]any{"entity": result}
+
+	payloadJSON, _ := json.Marshal(payload)
+	log.Debugf("MCP tool get_mcp_contract_entity response: %s", string(payloadJSON))
 
 	return mcp.NewToolResultStructuredOnly(payload), nil
 }

@@ -253,7 +253,7 @@ func (r *ddlContractRepositoryImpl) GlobalSearchForDDL(searchQuery *entity.Globa
 	ddlSearchQuery := `
 select
     dt.package_id,
-    pg.name,
+    pg.name as package_display_name,
     dt.version,
     dt.revision,
     pv.status,

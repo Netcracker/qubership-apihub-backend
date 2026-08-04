@@ -43,7 +43,11 @@ type DDLContractSearchResult struct {
 	tableName struct{} `pg:",discard_unknown_columns"`
 
 	DDLContractEntity
-	PackageName   string   `pg:"name, type:varchar"`
+	// PackageName is tagged package_display_name, not name: DDLContractEntity already has a
+	// "name" column (the DDL entity's own name), and go-pg silently drops one of two fields
+	// mapped to the same column name instead of erroring, so a shared "name" tag here would
+	// make this field come back empty and the ddl entity's own name overwritten by the package's.
+	PackageName   string   `pg:"package_display_name, type:varchar"`
 	VersionStatus string   `pg:"status, type:varchar"`
 	ParentNames   []string `pg:"parent_names, type:varchar[]"`
 }

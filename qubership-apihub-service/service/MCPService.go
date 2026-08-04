@@ -25,31 +25,40 @@ type MCPService interface {
 	ExecuteGetDocumentTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error)
 	ExecuteListWorkspacePackagesTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error)
 	ExecuteListPackageVersionsTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error)
+	ExecuteListDdlEntitiesTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error)
+	ExecuteGetDdlEntityTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error)
+	ExecuteGetDdlEntityDiffTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error)
+	ExecuteListMcpContractEntitiesTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error)
+	ExecuteGetMcpContractEntityTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error)
 	GetPackagesList(ctx context.Context, workspaceId string) ([]mcp.ResourceContents, error)
 	GetWorkspacesList(ctx context.Context) ([]mcp.ResourceContents, error)
 	IDSAssetsAvailable() bool
 	IDSAuthoringKit(userInput string) (string, error)
 }
 
-func NewMCPService(systemInfoService SystemInfoService, operationService OperationService, packageService PackageService, versionService VersionService, monitoringService MonitoringService, roleService RoleService) MCPService {
+func NewMCPService(systemInfoService SystemInfoService, operationService OperationService, packageService PackageService, versionService VersionService, monitoringService MonitoringService, roleService RoleService, ddlContractService DDLContractService, mcpContractService MCPContractService) MCPService {
 	return &mcpService{
-		systemInfoService: systemInfoService,
-		operationService:  operationService,
-		packageService:    packageService,
-		versionService:    versionService,
-		monitoringService: monitoringService,
-		roleService:       roleService,
-		assets:            loadMCPAssets(mcpAssetsRootDir),
+		systemInfoService:  systemInfoService,
+		operationService:   operationService,
+		packageService:     packageService,
+		versionService:     versionService,
+		monitoringService:  monitoringService,
+		roleService:        roleService,
+		ddlContractService: ddlContractService,
+		mcpContractService: mcpContractService,
+		assets:             loadMCPAssets(mcpAssetsRootDir),
 	}
 }
 
 type mcpService struct {
-	systemInfoService SystemInfoService
-	operationService  OperationService
-	packageService    PackageService
-	versionService    VersionService
-	monitoringService MonitoringService
-	roleService       RoleService
+	systemInfoService  SystemInfoService
+	operationService   OperationService
+	packageService     PackageService
+	versionService     VersionService
+	monitoringService  MonitoringService
+	roleService        RoleService
+	ddlContractService DDLContractService
+	mcpContractService MCPContractService
 
 	assets *mcpAssets
 }
@@ -90,6 +99,11 @@ func (m mcpService) MakeMCPServer() *mcpserver.MCPServer {
 		ToolNameGetDocument:                m.ExecuteGetDocumentTool,
 		ToolNameListWorkspacePackages:      m.ExecuteListWorkspacePackagesTool,
 		ToolNameListPackageVersions:        m.ExecuteListPackageVersionsTool,
+		ToolNameListDdlEntities:            m.ExecuteListDdlEntitiesTool,
+		ToolNameGetDdlEntity:               m.ExecuteGetDdlEntityTool,
+		ToolNameGetDdlEntityDiff:           m.ExecuteGetDdlEntityDiffTool,
+		ToolNameListMcpContractEntities:    m.ExecuteListMcpContractEntitiesTool,
+		ToolNameGetMcpContractEntity:       m.ExecuteGetMcpContractEntityTool,
 		LegacyToolNameSearchRestOperations: m.ExecuteLegacyRestSearchTool,
 		LegacyToolNameGetRestOperationSpec: m.ExecuteLegacyRestGetSpecTool,
 		LegacyToolNameGetRestOperationDiff: m.ExecuteLegacyRestGetOperationDiffTool,
@@ -362,20 +376,21 @@ func createMCPClientLabel(impl mcp.Implementation) string {
 	return impl.Name
 }
 
-const mcpInstructions = `The apihub-mcp MCP server provides information about REST, GraphQL, and AsyncAPI specifications.
+const mcpInstructions = `The apihub-mcp MCP server provides information about REST, GraphQL, and AsyncAPI specifications, as well as DDL database contracts and MCP server contracts.
 
 DATA STRUCTURE:
 - An instance holds multiple workspaces; the caller's credentials determine which workspaces and packages are readable
 - API specifications are organized into packages within a workspace
 - Package ID can serve as a hint to which domain the API belongs
 - Each package contains versioned API specifications and API operations extracted from those specifications
+- A package version can also carry a DDL database contract (tables/views) and/or an MCP server contract (init handshake, tools, prompts, resources) describing a system that is not itself an API operation set
 - Each package can have multiple release versions (often YYYY.Q such as 2024.3, but also semver or other schemes)
 
 WORKSPACE-FIRST FLOW (use this for new integrations):
 1. Read the api-workspaces-list resource to discover the workspaces you can access
 2. Use list_workspace_packages with a chosen workspaceId to browse its packages (metadata only; no versions)
 3. Use list_package_versions with a packageId to see that package's available release versions
-4. Use search_api_operations_v2 with the chosen workspace to search for operations
+4. Use search_api_operations_v2 with the chosen workspace to search for operations, or list_ddl_entities/list_mcp_contract_entities to browse a version's DDL or MCP contract entities directly
 
 WHEN TO USE THIS SERVER:
 Use apihub-mcp when the user asks about:
@@ -383,14 +398,20 @@ Use apihub-mcp when the user asks about:
 - Available API specifications, packages, or workspaces
 - How APIs expose behavior, including REST resource operations, GraphQL queries/mutations/subscriptions, and AsyncAPI message publishing, sending, receiving, or consuming
 - Detailed information about specific API operations
+- DDL database contracts (tables/views) or MCP server contracts (tools/prompts/resources) published in a package version
 
 AVAILABLE TOOLS:
-1. search_api_operations_v2 - search for REST, GraphQL, or AsyncAPI operations within a given workspace (see tool description for details)
+1. search_api_operations_v2 - search for REST, GraphQL, or AsyncAPI operations, or DDL/MCP contract entities, within a given workspace (see tool description for details)
 2. list_workspace_packages - list packages within a workspace (metadata only; use list_package_versions for versions)
 3. list_package_versions - list release versions available for a specific package
 4. get_api_operation_specification - get operation-level specification data extracted from an OpenAPI or AsyncAPI specification (use only when user explicitly requests details)
 5. get_api_operation_diff - get list of changes of the specific operation from OpenAPI or AsyncAPI specification from the specific package and version to the previous version (use then user asks for changes of the specific operation)
-6. get_document - get a source API specification by slug for REST, GraphQL, or AsyncAPI (use this tool when the user needs the source API specification or a document-level diff built by comparing two fetched versions)
+6. get_document - get a source API specification or contract document by slug for REST, GraphQL, AsyncAPI, DDL, or MCP (use this tool when the user needs the source document or a document-level diff built by comparing two fetched versions)
+7. list_ddl_entities - list DDL database contract entities (tables/views) in a specific package version
+8. get_ddl_entity - get full details, including the DDL SQL definition, of a single DDL database contract entity
+9. get_ddl_entity_diff - get list of changes for a single DDL database contract entity between two versions
+10. list_mcp_contract_entities - list entities (init/tools/prompts/resources) of a published MCP server contract in a specific package version
+11. get_mcp_contract_entity - get full details of a single entity from a published MCP server contract
 
 DEPRECATED (kept for backward compatibility; do not use in new integrations):
 - search_api_operations - predecessor of search_api_operations_v2, scoped to a single preconfigured workspace instead of a caller-supplied one
@@ -412,6 +433,7 @@ RESPONSES:
 - First show a list of operations to choose from, even if only one operation is found
 - Use get_api_operation_specification only when user explicitly requests details about a REST or AsyncAPI operation
 - Do not ask the user for a specification slug after search; use the selected result's documentId as get_document.slug
+- For DDL/MCP contract search results, use the result's entityId with get_ddl_entity/get_ddl_entity_diff or get_mcp_contract_entity for details, and its documentId with get_document to fetch the full source document
 
 ACCESS CONTROL AND AUTHORIZATION ERRORS:
 - Access to workspaces, packages, and operations depends on the credentials used for this connection; some may be restricted for the current user
@@ -431,6 +453,12 @@ const (
 	ToolNameListWorkspacePackages = "list_workspace_packages"
 	ToolNameListPackageVersions   = "list_package_versions"
 
+	ToolNameListDdlEntities         = "list_ddl_entities"
+	ToolNameGetDdlEntity            = "get_ddl_entity"
+	ToolNameGetDdlEntityDiff        = "get_ddl_entity_diff"
+	ToolNameListMcpContractEntities = "list_mcp_contract_entities"
+	ToolNameGetMcpContractEntity    = "get_mcp_contract_entity"
+
 	LegacyToolNameSearchRestOperations = "search_rest_api_operations"
 	LegacyToolNameGetRestOperationSpec = "get_rest_api_operations_specification"
 	LegacyToolNameGetRestOperationDiff = "get_rest_api_operation_diff"
@@ -449,12 +477,13 @@ const mcpWorkspacesListLimit = 10000
 const (
 	ToolDescriptionSearchOperationsMCP = `Deprecated: use search_api_operations_v2 instead. This tool searches only the preconfigured legacy workspace and does not accept a workspace parameter.
 
-Search for API operations by text query.
+Search for API operations, or DDL/MCP contract entities, by text query.
 
-Supported apiType values: rest, graphql, asyncapi.
+Supported apiType values: rest, graphql, asyncapi, ddl, mcp.
 
 IMPORTANT: Search is lexical full-text search, not semantic, fuzzy, or substring search. Plain words are treated as required terms, so try shorter and longer query variations.
 IMPORTANT: Search matches only terms included in the operation search index. If a query returns too few or irrelevant results, retry with alternative terms such as operation names, titles, REST path segments, AsyncAPI channel/message names, GraphQL input/output type names, or domain keywords.
+IMPORTANT: apiType=ddl searches DDL database contract entities (tables/views) and apiType=mcp searches MCP server contract entities (tools/prompts/resources) instead of API operations; results carry entityId/kind/schemaName/tableName or entityName/mcpEndpoint instead of operation-specific fields. Use entityId with get_ddl_entity/get_ddl_entity_diff or get_mcp_contract_entity for details.
 
 LLM INSTRUCTIONS:
 - Always pass apiType
@@ -479,12 +508,13 @@ LLM INSTRUCTIONS:
 - VERSION — IMPORTANT: when 'release' is omitted, the tool uses the nearest completed calendar quarter (e.g., 2026.2), NOT the latest version actually published in the system. Many packages do not have that calendar version yet; some use semver or other schemes. If the user mentions any version number, ALWAYS pass it explicitly as 'release'. When search without 'release' returns no results even after query/synonym retries, consult api-packages-list for the package's real versions and repeat search with 'release' set explicitly
 - If user requests results from a specific package - use 'group' parameter with packageId (not packageName)`
 
-	ToolDescriptionSearchOperationsV2MCP = `Search for API operations by text query within a given workspace.
+	ToolDescriptionSearchOperationsV2MCP = `Search for API operations, or DDL/MCP contract entities, by text query within a given workspace.
 
-Supported apiType values: rest, graphql, asyncapi.
+Supported apiType values: rest, graphql, asyncapi, ddl, mcp.
 
 IMPORTANT: Search is lexical full-text search, not semantic, fuzzy, or substring search. Plain words are treated as required terms, so try shorter and longer query variations.
 IMPORTANT: Search matches only terms included in the operation search index. If a query returns too few or irrelevant results, retry with alternative terms such as operation names, titles, REST path segments, AsyncAPI channel/message names, GraphQL input/output type names, or domain keywords.
+IMPORTANT: apiType=ddl searches DDL database contract entities (tables/views) and apiType=mcp searches MCP server contract entities (tools/prompts/resources) instead of API operations; results carry entityId/kind/schemaName/tableName or entityName/mcpEndpoint instead of operation-specific fields. Use entityId with get_ddl_entity/get_ddl_entity_diff or get_mcp_contract_entity for details.
 
 LLM INSTRUCTIONS:
 - Always pass apiType and workspace. Read the api-workspaces-list resource first to discover a valid workspaceId
@@ -538,17 +568,17 @@ LLM INSTRUCTIONS:
 - If users ask for changes for many operations - call this tool for each operation
 - If the result reports an authorization problem (a message starting with "Failed to check user privileges" or stating you lack "privileges"/access), STOP. Do not retry, call other tools, or search other packages or versions to work around it. Tell the user they do not have access to this package and may need to request it`
 
-	ToolDescriptionGetDocumentMCP = `Get a source API specification by slug.
+	ToolDescriptionGetDocumentMCP = `Get a source API specification or contract document by slug.
 
-Supported apiType values: rest, graphql, asyncapi.
+Supported apiType values: rest, graphql, asyncapi, ddl, mcp.
 
-Use this tool when the user needs the source API specification or a document-level diff built by comparing two fetched versions.
+Use this tool when the user needs the source API specification, the source DDL or MCP contract document, or a document-level diff built by comparing two fetched versions.
 The response contains documentType, format, and documentData with the full source specification. JSON specifications are returned as structured JSON; non-JSON specifications are returned as text.
 
 LLM INSTRUCTIONS:
 - Always pass apiType
 - Do not invent slug values
-- Use documentId from a selected search_api_operations result as this tool's slug parameter
+- Use documentId from a selected search_api_operations, list_ddl_entities, get_ddl_entity, list_mcp_contract_entities, or get_mcp_contract_entity result as this tool's slug parameter
 - Return the full documentData from the response; use documentType to interpret specification semantics and format to render text payloads
 - Put large JSON or YAML documentData in fenced markdown code blocks, not as inline plain text
 - If the result reports an authorization problem (a message starting with "Failed to check user privileges" or stating you lack "privileges"/access), STOP. Do not retry, call other tools, or search other packages or versions to work around it. Tell the user they do not have access to this package and may need to request it`
@@ -571,6 +601,61 @@ LLM INSTRUCTIONS:
 - Version strings are package-specific (YYYY.Q such as 2024.3, semver such as 0.1.0, v1, etc.) — do not assume a calendar default exists for every package
 - If the result reports an authorization problem (a message starting with "Failed to check user privileges" or stating you lack "privileges"/access), STOP. Do not retry, call other tools, or search other packages or versions to work around it. Tell the user they do not have access to this package and may need to request it`
 
+	ToolDescriptionListDdlEntitiesMCP = `List DDL database contract entities (tables and views) published in a specific package version.
+
+Use this tool to browse the tables/views defined by a package's DDL contract before fetching entity details or diffs.
+
+LLM INSTRUCTIONS:
+- Always pass packageId and version
+- Use textFilter to narrow results by schema, table, or view name
+- Use page/limit for pagination when a version has many entities
+- Each entity's entityId can be used with get_ddl_entity and get_ddl_entity_diff; its documentId can be used with get_document (apiType=ddl)
+- If the result reports an authorization problem (a message starting with "Failed to check user privileges" or stating you lack "privileges"/access), STOP. Do not retry, call other tools, or search other packages or versions to work around it. Tell the user they do not have access to this package and may need to request it`
+
+	ToolDescriptionGetDdlEntityMCP = `Get full details of a single DDL database contract entity (table or view), including its DDL SQL definition.
+
+Use this tool when the user needs the schema/table/view structure or its SQL definition.
+
+LLM INSTRUCTIONS:
+- Always pass packageId, version, and ddlEntityId from a list_ddl_entities or search result
+- includeData defaults to true and returns the full DDL SQL in the "data" field; pass includeData=false to fetch only metadata when the SQL body is not needed, since DDL payloads can be large
+- The response's documentId can be used with get_document (apiType=ddl) to fetch the full source document instead of a single entity
+- If the result reports an authorization problem (a message starting with "Failed to check user privileges" or stating you lack "privileges"/access), STOP. Do not retry, call other tools, or search other packages or versions to work around it. Tell the user they do not have access to this package and may need to request it`
+
+	ToolDescriptionGetDdlEntityDiffMCP = `Get the list of changes for a single DDL database contract entity (table or view) between the specified version and a previous version.
+
+Use this tool ONLY when the user explicitly requests changes to a specific DDL entity.
+
+LLM INSTRUCTIONS:
+- Always pass packageId, version, and ddlEntityId from a list_ddl_entities or search result
+- previousVersion and previousVersionPackageId are optional; when omitted, the tool compares against the version's own recorded previous version. If the version has no recorded previous version, the tool returns a not-found error -- pass previousVersion explicitly in that case
+- Use severity to filter changes to specific severities (breaking, semi-breaking, deprecated, non-breaking, annotation, unclassified); omit to return all
+- If users ask for changes for many entities, call this tool once per entity
+- If the result reports an authorization problem (a message starting with "Failed to check user privileges" or stating you lack "privileges"/access), STOP. Do not retry, call other tools, or search other packages or versions to work around it. Tell the user they do not have access to this package and may need to request it`
+
+	ToolDescriptionListMcpContractEntitiesMCP = `List entities of a published MCP server contract (init handshake, tools, prompts, resources) recorded in a specific package version.
+
+This tool describes MCP server contracts stored in APIHub packages -- servers that other systems expose and that APIHub documents -- NOT this apihub-mcp server's own tools.
+
+LLM INSTRUCTIONS:
+- Always pass packageId and version
+- Use kind to filter to a single entity kind (init, tool, prompt, resource); omit to return all kinds
+- Use mcpEndpoint to filter to a single MCP endpoint when a package documents more than one
+- Use textFilter to narrow results by entity name
+- Use page/limit for pagination when a version has many entities
+- Each entity's mcpEntityId can be used with get_mcp_contract_entity; its documentId can be used with get_document (apiType=mcp)
+- If the result reports an authorization problem (a message starting with "Failed to check user privileges" or stating you lack "privileges"/access), STOP. Do not retry, call other tools, or search other packages or versions to work around it. Tell the user they do not have access to this package and may need to request it`
+
+	ToolDescriptionGetMcpContractEntityMCP = `Get full details of a single entity (tool, prompt, resource, or init handshake) from a published MCP server contract.
+
+This tool describes a published MCP server contract entity stored in an APIHub package -- NOT one of this apihub-mcp server's own tools.
+
+LLM INSTRUCTIONS:
+- Always pass packageId, version, and mcpEntityId from a list_mcp_contract_entities or search result
+- includeData defaults to true and returns the entity's full input/output schema or payload in the "data" field; pass includeData=false when only metadata is needed
+- The response's documentId can be used with get_document (apiType=mcp) to fetch the full source document instead of a single entity
+- If the result reports an authorization problem (a message starting with "Failed to check user privileges" or stating you lack "privileges"/access), STOP. Do not retry, call other tools, or search other packages or versions to work around it. Tell the user they do not have access to this package and may need to request it`
+
 	LegacyToolDescriptionSearchOperationsMCP = `Deprecated compatibility alias for search_api_operations.
 
 This tool preserves the old REST-only contract for legacy clients.
@@ -589,12 +674,13 @@ It behaves like get_api_operation_diff with apiType=rest and should not be used 
 
 // Tool descriptions for OpenAI
 const (
-	ToolDescriptionSearchOperationsOpenAI = `Search for API operations by text query.
+	ToolDescriptionSearchOperationsOpenAI = `Search for API operations, or DDL/MCP contract entities, by text query.
 
-Supported apiType values: rest, graphql, asyncapi.
+Supported apiType values: rest, graphql, asyncapi, ddl, mcp.
 
 IMPORTANT: Search is lexical full-text search, not semantic, fuzzy, or substring search. Plain words are treated as required terms, so try shorter and longer query variations.
 IMPORTANT: Search matches only terms included in the operation search index. If a query returns too few or irrelevant results, retry with alternative terms such as operation names, titles, REST path segments, AsyncAPI channel/message names, GraphQL input/output type names, or domain keywords.
+IMPORTANT: apiType=ddl searches DDL database contract entities (tables/views) and apiType=mcp searches MCP server contract entities (tools/prompts/resources) instead of API operations; results carry entityId/kind/schemaName/tableName or entityName/mcpEndpoint instead of operation-specific fields. Use entityId with get_ddl_entity/get_ddl_entity_diff or get_mcp_contract_entity for details.
 
 LLM INSTRUCTIONS:
 - Always pass apiType
@@ -654,20 +740,77 @@ LLM INSTRUCTIONS:
 - If users ask for changes for many operations - call this tool for each operation
 - Format responses in markdown with well-readable markup (headings, lists, tables)`
 
-	ToolDescriptionGetDocumentOpenAI = `Get a source API specification by slug.
+	ToolDescriptionGetDocumentOpenAI = `Get a source API specification or contract document by slug.
 
-Supported apiType values: rest, graphql, asyncapi.
+Supported apiType values: rest, graphql, asyncapi, ddl, mcp.
 
-Use this tool when the user needs the source API specification, and especially for GraphQL details where operation-level specification and diff tools are not supported.
+Use this tool when the user needs the source API specification, the source DDL or MCP contract document, and especially for GraphQL details where operation-level specification and diff tools are not supported.
 The response contains documentType, format, and documentData with the full source specification. JSON specifications are returned as structured JSON; non-JSON specifications are returned as text.
 
 LLM INSTRUCTIONS:
 - Always pass apiType
 - Do not invent slug values
-- Use documentId from a selected search_api_operations result as this tool's slug parameter
+- Use documentId from a selected search_api_operations, list_ddl_entities, get_ddl_entity, list_mcp_contract_entities, or get_mcp_contract_entity result as this tool's slug parameter
 - Return the full documentData from the response; use documentType to interpret specification semantics and format to render text payloads
 - Put large JSON or YAML documentData in fenced markdown code blocks with the appropriate language tag, not as inline plain text
 - Format responses in markdown with well-readable markup (headings, lists, tables, code blocks)`
+
+	ToolDescriptionListDdlEntitiesOpenAI = `List DDL database contract entities (tables and views) published in a specific package version.
+
+Use this tool to browse the tables/views defined by a package's DDL contract before fetching entity details or diffs.
+
+LLM INSTRUCTIONS:
+- Always pass packageId and version
+- Use textFilter to narrow results by schema, table, or view name
+- Use page/limit for pagination when a version has many entities
+- Each entity's entityId can be used with get_ddl_entity and get_ddl_entity_diff; its documentId can be used with get_document (apiType=ddl)
+- Format the entity list as a markdown table (schema, name, kind)
+- Convert packageId to a markdown link: [packageId](/portal/packages/<packageId>)`
+
+	ToolDescriptionGetDdlEntityOpenAI = `Get full details of a single DDL database contract entity (table or view), including its DDL SQL definition.
+
+Use this tool when the user needs the schema/table/view structure or its SQL definition.
+
+LLM INSTRUCTIONS:
+- Always pass packageId, version, and ddlEntityId from a list_ddl_entities or search result
+- includeData defaults to true and returns the full DDL SQL in the "data" field; pass includeData=false to fetch only metadata when the SQL body is not needed, since DDL payloads can be large
+- Put the DDL SQL inside a fenced markdown code block with the sql language tag, not inline prose
+- Convert packageId to a markdown link: [packageId](/portal/packages/<packageId>)`
+
+	ToolDescriptionGetDdlEntityDiffOpenAI = `Get the list of changes for a single DDL database contract entity (table or view) between the specified version and a previous version.
+
+Use this tool ONLY when the user explicitly requests changes to a specific DDL entity.
+
+LLM INSTRUCTIONS:
+- Always pass packageId, version, and ddlEntityId from a list_ddl_entities or search result
+- previousVersion and previousVersionPackageId are optional; when omitted, the tool compares against the version's own recorded previous version. If the version has no recorded previous version, the tool returns a not-found error -- pass previousVersion explicitly in that case
+- Use severity to filter changes to specific severities (breaking, semi-breaking, deprecated, non-breaking, annotation, unclassified); omit to return all
+- If users ask for changes for many entities, call this tool once per entity
+- Format responses in markdown with well-readable markup (headings, lists, tables)`
+
+	ToolDescriptionListMcpContractEntitiesOpenAI = `List entities of a published MCP server contract (init handshake, tools, prompts, resources) recorded in a specific package version.
+
+This tool describes MCP server contracts stored in APIHub packages -- servers that other systems expose and that APIHub documents -- NOT this assistant's own tools.
+
+LLM INSTRUCTIONS:
+- Always pass packageId and version
+- Use kind to filter to a single entity kind (init, tool, prompt, resource); omit to return all kinds
+- Use mcpEndpoint to filter to a single MCP endpoint when a package documents more than one
+- Use textFilter to narrow results by entity name
+- Use page/limit for pagination when a version has many entities
+- Each entity's mcpEntityId can be used with get_mcp_contract_entity; its documentId can be used with get_document (apiType=mcp)
+- Format the entity list as a markdown table (kind, name, endpoint)
+- Convert packageId to a markdown link: [packageId](/portal/packages/<packageId>)`
+
+	ToolDescriptionGetMcpContractEntityOpenAI = `Get full details of a single entity (tool, prompt, resource, or init handshake) from a published MCP server contract.
+
+This tool describes a published MCP server contract entity stored in an APIHub package -- NOT one of this assistant's own tools.
+
+LLM INSTRUCTIONS:
+- Always pass packageId, version, and mcpEntityId from a list_mcp_contract_entities or search result
+- includeData defaults to true and returns the entity's full input/output schema or payload in the "data" field; pass includeData=false when only metadata is needed
+- Put large JSON data in a fenced markdown code block with the json language tag, not as inline plain text
+- Convert packageId to a markdown link: [packageId](/portal/packages/<packageId>)`
 )
 
 // Tool input schemas (shared between MCP and OpenAI)
@@ -677,7 +820,7 @@ var (
 		"properties": {
 			"apiType": {
 				"type": "string",
-				"enum": ["rest", "graphql", "asyncapi"]
+				"enum": ["rest", "graphql", "asyncapi", "ddl", "mcp"]
 			},
 			"query": {
 				"type": "string"
@@ -749,7 +892,7 @@ var (
 		"properties": {
 			"apiType": {
 				"type": "string",
-				"enum": ["rest", "graphql", "asyncapi"]
+				"enum": ["rest", "graphql", "asyncapi", "ddl", "mcp"]
 			},
 			"packageId": {
 				"type": "string"
@@ -764,12 +907,136 @@ var (
 		"required": ["apiType","packageId","version","slug"]
 	}`)
 
+	listDdlEntitiesSchema = json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"packageId": {
+				"type": "string"
+			},
+			"version": {
+				"type": "string"
+			},
+			"textFilter": {
+				"type": "string"
+			},
+			"limit": {
+				"type": "integer",
+				"minimum": 1,
+				"maximum": 100
+			},
+			"page": {
+				"type": "integer",
+				"minimum": 0
+			}
+		},
+		"required": ["packageId","version"]
+	}`)
+
+	getDdlEntitySchema = json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"packageId": {
+				"type": "string"
+			},
+			"version": {
+				"type": "string"
+			},
+			"ddlEntityId": {
+				"type": "string"
+			},
+			"includeData": {
+				"type": "boolean"
+			}
+		},
+		"required": ["packageId","version","ddlEntityId"]
+	}`)
+
+	getDdlEntityDiffSchema = json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"packageId": {
+				"type": "string"
+			},
+			"version": {
+				"type": "string"
+			},
+			"ddlEntityId": {
+				"type": "string"
+			},
+			"previousVersion": {
+				"type": "string"
+			},
+			"previousVersionPackageId": {
+				"type": "string"
+			},
+			"severity": {
+				"type": "array",
+				"items": {
+					"type": "string",
+					"enum": ["breaking", "semi-breaking", "deprecated", "non-breaking", "annotation", "unclassified"]
+				}
+			}
+		},
+		"required": ["packageId","version","ddlEntityId"]
+	}`)
+
+	listMcpContractEntitiesSchema = json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"packageId": {
+				"type": "string"
+			},
+			"version": {
+				"type": "string"
+			},
+			"kind": {
+				"type": "string",
+				"enum": ["init", "tool", "prompt", "resource"]
+			},
+			"mcpEndpoint": {
+				"type": "string"
+			},
+			"textFilter": {
+				"type": "string"
+			},
+			"limit": {
+				"type": "integer",
+				"minimum": 1,
+				"maximum": 100
+			},
+			"page": {
+				"type": "integer",
+				"minimum": 0
+			}
+		},
+		"required": ["packageId","version"]
+	}`)
+
+	getMcpContractEntitySchema = json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"packageId": {
+				"type": "string"
+			},
+			"version": {
+				"type": "string"
+			},
+			"mcpEntityId": {
+				"type": "string"
+			},
+			"includeData": {
+				"type": "boolean"
+			}
+		},
+		"required": ["packageId","version","mcpEntityId"]
+	}`)
+
 	searchOperationsV2Schema = json.RawMessage(`{
 		"type": "object",
 		"properties": {
 			"apiType": {
 				"type": "string",
-				"enum": ["rest", "graphql", "asyncapi"]
+				"enum": ["rest", "graphql", "asyncapi", "ddl", "mcp"]
 			},
 			"query": {
 				"type": "string"
@@ -929,6 +1196,36 @@ func getToolMetadata() []view.ToolMetadata {
 			DescriptionMCP:    ToolDescriptionGetDocumentMCP,
 			DescriptionOpenAI: ToolDescriptionGetDocumentOpenAI,
 		},
+		{
+			Name:              ToolNameListDdlEntities,
+			Schema:            listDdlEntitiesSchema,
+			DescriptionMCP:    ToolDescriptionListDdlEntitiesMCP,
+			DescriptionOpenAI: ToolDescriptionListDdlEntitiesOpenAI,
+		},
+		{
+			Name:              ToolNameGetDdlEntity,
+			Schema:            getDdlEntitySchema,
+			DescriptionMCP:    ToolDescriptionGetDdlEntityMCP,
+			DescriptionOpenAI: ToolDescriptionGetDdlEntityOpenAI,
+		},
+		{
+			Name:              ToolNameGetDdlEntityDiff,
+			Schema:            getDdlEntityDiffSchema,
+			DescriptionMCP:    ToolDescriptionGetDdlEntityDiffMCP,
+			DescriptionOpenAI: ToolDescriptionGetDdlEntityDiffOpenAI,
+		},
+		{
+			Name:              ToolNameListMcpContractEntities,
+			Schema:            listMcpContractEntitiesSchema,
+			DescriptionMCP:    ToolDescriptionListMcpContractEntitiesMCP,
+			DescriptionOpenAI: ToolDescriptionListMcpContractEntitiesOpenAI,
+		},
+		{
+			Name:              ToolNameGetMcpContractEntity,
+			Schema:            getMcpContractEntitySchema,
+			DescriptionMCP:    ToolDescriptionGetMcpContractEntityMCP,
+			DescriptionOpenAI: ToolDescriptionGetMcpContractEntityOpenAI,
+		},
 	}
 }
 
@@ -1003,7 +1300,7 @@ func GetToolsForOpenAI() []map[string]interface{} {
 func getParameterDescription(toolName, paramName string) string {
 	descriptions := map[string]map[string]string{
 		ToolNameSearchOperations: {
-			"apiType": "API type to search. Allowed values: rest, graphql, asyncapi",
+			"apiType": "API type to search. Allowed values: rest, graphql, asyncapi, ddl, mcp. ddl and mcp search DDL database contract and MCP server contract entities instead of API operations",
 			"query":   "Text search query for finding API operations. Important: search is lexical and index-bound, so try different query variations (simplified, with keywords)",
 			"limit":   "Maximum number of results to return (10-100). For the first search, it's recommended to use 100",
 			"page":    "Page number for pagination (starts from 0). Use to get additional results",
@@ -1024,10 +1321,46 @@ func getParameterDescription(toolName, paramName string) string {
 			"previousVersion": "Package version in YYYY.Q format (e.g., 2024.2) where the operation was located",
 		},
 		ToolNameGetDocument: {
-			"apiType":   "API type for the specification. Allowed values: rest, graphql, asyncapi",
+			"apiType":   "API type for the specification. Allowed values: rest, graphql, asyncapi, ddl, mcp",
 			"packageId": "Package ID (packageId) where the specification is located. Use packageId from search results or api-packages-list resource",
 			"version":   "Package version in YYYY.Q format (e.g., 2024.3) where the specification is located",
 			"slug":      "Specification slug. Use documentId returned by search_api_operations; do not invent this value",
+		},
+		ToolNameListDdlEntities: {
+			"packageId":  "Package ID (packageId) whose DDL contract entities to list",
+			"version":    "Package version in which to list DDL contract entities",
+			"textFilter": "Optional text filter matching schema, table, or view name",
+			"limit":      "Maximum number of results to return (1-100)",
+			"page":       "Page number for pagination (starts from 0)",
+		},
+		ToolNameGetDdlEntity: {
+			"packageId":   "Package ID (packageId) where the DDL entity is located",
+			"version":     "Package version where the DDL entity is located",
+			"ddlEntityId": "Unique DDL entity identifier (entityId/ddlEntityId) from list_ddl_entities or search results",
+			"includeData": "Whether to include the full DDL SQL definition in the response. Defaults to true; pass false to fetch only metadata since DDL payloads can be large",
+		},
+		ToolNameGetDdlEntityDiff: {
+			"packageId":                "Package ID (packageId) where the DDL entity is located",
+			"version":                  "Package version where the DDL entity is located",
+			"ddlEntityId":              "Unique DDL entity identifier (entityId/ddlEntityId) from list_ddl_entities or search results",
+			"previousVersion":          "Package version to compare against. Defaults to the version's own recorded previous version when omitted",
+			"previousVersionPackageId": "Package ID of the previous version, when it differs from packageId. Defaults to packageId when omitted",
+			"severity":                 "Optional list of change severities to include (breaking, semi-breaking, deprecated, non-breaking, annotation, unclassified). Omit to return all",
+		},
+		ToolNameListMcpContractEntities: {
+			"packageId":   "Package ID (packageId) whose MCP server contract entities to list",
+			"version":     "Package version in which to list MCP server contract entities",
+			"kind":        "Optional entity kind filter. Allowed values: init, tool, prompt, resource. Omit to return all kinds",
+			"mcpEndpoint": "Optional MCP endpoint filter, when a package documents more than one MCP endpoint",
+			"textFilter":  "Optional text filter matching entity name",
+			"limit":       "Maximum number of results to return (1-100)",
+			"page":        "Page number for pagination (starts from 0)",
+		},
+		ToolNameGetMcpContractEntity: {
+			"packageId":   "Package ID (packageId) where the MCP entity is located",
+			"version":     "Package version where the MCP entity is located",
+			"mcpEntityId": "Unique MCP entity identifier (entityId/mcpEntityId) from list_mcp_contract_entities or search results",
+			"includeData": "Whether to include the entity's full input/output schema or payload in the response. Defaults to true; pass false when only metadata is needed",
 		},
 	}
 

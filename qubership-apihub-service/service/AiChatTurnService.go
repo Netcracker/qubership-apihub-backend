@@ -615,6 +615,16 @@ func (s *aiChatTurnServiceImpl) executeToolCalls(ctx context.Context, toolCalls 
 			result, err = s.mcpService.ExecuteGetOperationDiffTool(ctx, mcpReq)
 		case ToolNameGetDocument:
 			result, err = s.mcpService.ExecuteGetDocumentTool(ctx, mcpReq)
+		case ToolNameListDdlEntities:
+			result, err = s.mcpService.ExecuteListDdlEntitiesTool(ctx, mcpReq)
+		case ToolNameGetDdlEntity:
+			result, err = s.mcpService.ExecuteGetDdlEntityTool(ctx, mcpReq)
+		case ToolNameGetDdlEntityDiff:
+			result, err = s.mcpService.ExecuteGetDdlEntityDiffTool(ctx, mcpReq)
+		case ToolNameListMcpContractEntities:
+			result, err = s.mcpService.ExecuteListMcpContractEntitiesTool(ctx, mcpReq)
+		case ToolNameGetMcpContractEntity:
+			result, err = s.mcpService.ExecuteGetMcpContractEntityTool(ctx, mcpReq)
 		case toolNameStartIDSGeneration:
 			result, err = s.executeStartIDSGeneration(ctx, args)
 		case toolNameSaveGeneratedFile:
