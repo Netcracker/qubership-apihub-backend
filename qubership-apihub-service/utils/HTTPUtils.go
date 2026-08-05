@@ -15,6 +15,12 @@ const (
 	xForwardedForHeader = "X-Forwarded-For"
 )
 
+var showDebugInResponse bool
+
+func SetShowDebugInResponse(show bool) {
+	showDebugInResponse = show
+}
+
 func DeleteCookie(w http.ResponseWriter, name string, path string, productionMode bool) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     name,
@@ -118,6 +124,12 @@ func logCustomError(msg string, customError *exception.CustomError, err error) {
 
 func RespondWithCustomError(w http.ResponseWriter, err *exception.CustomError) {
 	log.Debugf("Request failed. Code = %d. Message = %s. Params: %v. Debug: %s", err.Status, err.Message, err.Params, err.Debug)
+	if !showDebugInResponse && err.Debug != "" {
+		errWithoutDebug := *err
+		errWithoutDebug.Debug = ""
+		RespondWithJson(w, errWithoutDebug.Status, errWithoutDebug)
+		return
+	}
 	RespondWithJson(w, err.Status, err)
 }
 

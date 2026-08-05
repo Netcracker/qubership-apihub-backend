@@ -32,6 +32,7 @@ type SystemInfoService interface {
 	GetBasePath() string
 	GetJwtPrivateKey() []byte
 	IsProductionMode() bool
+	ShowDebugInResponse() bool
 	GetBackendVersion() string
 	GetListenAddress() string
 	GetAllowedOrigins() []string
@@ -210,6 +211,7 @@ func (g *systemInfoServiceImpl) setDefaults() {
 	viper.SetDefault("database.username", "apihub")
 	viper.SetDefault("database.password", "apihub")
 	viper.SetDefault("security.productionMode", true)
+	viper.SetDefault("security.showDebugInResponse", false)
 	viper.SetDefault("security.jwt.accessTokenDurationSec", 1800)
 	viper.SetDefault("security.jwt.refreshTokenDurationSec", 43200)
 	viper.SetDefault("security.insecureProxy", false)
@@ -332,6 +334,10 @@ func (g *systemInfoServiceImpl) GetJwtPrivateKey() []byte {
 
 func (g *systemInfoServiceImpl) IsProductionMode() bool {
 	return g.config.Security.ProductionMode
+}
+
+func (g *systemInfoServiceImpl) ShowDebugInResponse() bool {
+	return g.config.Security.ShowDebugInResponse
 }
 
 func (g *systemInfoServiceImpl) GetBackendVersion() string {
