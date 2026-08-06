@@ -34,3 +34,19 @@ func ParseVersionStatus(s string) (VersionStatus, error) {
 	}
 	return "", fmt.Errorf("unknown version status: %v", s)
 }
+
+// ParseVersionStatuses validates each comma-separated status value from a query parameter list.
+// An empty list means no status filter (all statuses).
+func ParseVersionStatuses(parts []string) ([]string, error) {
+	if len(parts) == 0 {
+		return nil, nil
+	}
+	statuses := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if _, err := ParseVersionStatus(part); err != nil {
+			return nil, err
+		}
+		statuses = append(statuses, part)
+	}
+	return statuses, nil
+}
