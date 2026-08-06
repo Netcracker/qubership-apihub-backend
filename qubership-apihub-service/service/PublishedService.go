@@ -38,6 +38,8 @@ type PublishedService interface {
 	GetPublishedVersionBuildConfig(packageId string, versionName string) (*view.BuildConfig, error)
 	GetLatestContentDataBySlug(packageId string, versionName string, slug string) (*view.PublishedContent, *view.ContentData, error)
 	VersionPublished(packageId string, versionName string) (bool, error)
+	GetVersionStatus(packageId string, versionName string) (status string, found bool, err error)
+	CheckNoReleaseDependentVersions(ctx context.SecurityContext, packageId string, version string) error
 	DeleteVersion(ctx context.SecurityContext, packageId string, versionName string) error
 
 	PublishPackage(buildArc *archive.BuildResultArchive, buildSrcEnt *entity.BuildSourceEntity,
@@ -63,7 +65,8 @@ func NewPublishedService(versionRepo repository.PublishedRepository,
 	monitoringService MonitoringService,
 	minioStorageService MinioStorageService,
 	systemInfoService SystemInfoService,
-	publishNotificationService PublishNotificationService) PublishedService {
+	publishNotificationService PublishNotificationService,
+	roleService RoleService) PublishedService {
 	return &publishedServiceImpl{
 		publishedRepo:              versionRepo,
 		buildRepository:            buildRepository,
@@ -76,6 +79,7 @@ func NewPublishedService(versionRepo repository.PublishedRepository,
 		systemInfoService:          systemInfoService,
 		publishedValidator:         validation.NewPublishedValidator(versionRepo),
 		publishNotificationService: publishNotificationService,
+		roleService:                roleService,
 	}
 }
 
@@ -91,6 +95,7 @@ type publishedServiceImpl struct {
 	systemInfoService          SystemInfoService
 	publishedValidator         validation.PublishedValidator
 	publishNotificationService PublishNotificationService
+	roleService                RoleService
 }
 
 func (p publishedServiceImpl) GetVersionSources(packageId string, versionName string) ([]byte, error) {
@@ -316,6 +321,54 @@ func (p publishedServiceImpl) VersionPublished(packageId string, versionName str
 	return ent != nil, nil
 }
 
+func (p publishedServiceImpl) GetVersionStatus(packageId string, versionName string) (string, bool, error) {
+	version, _, err := SplitVersionRevision(versionName)
+	if err != nil {
+		return "", false, err
+	}
+
+	latestEnt, err := p.publishedRepo.GetVersion(packageId, version)
+	if err != nil {
+		return "", false, err
+	}
+	if latestEnt == nil {
+		return "", false, nil
+	}
+	return latestEnt.Status, true, nil
+}
+
+func (p publishedServiceImpl) CheckNoReleaseDependentVersions(ctx context.SecurityContext, packageId string, version string) error {
+	dependents, err := p.publishedRepo.GetVersionsByPreviousVersion(packageId, version)
+	if err != nil {
+		return err
+	}
+	releaseDependents := make([]entity.PublishedVersionKeyEntity, 0)
+	for _, dependent := range dependents {
+		if dependent.Status == string(view.Release) {
+			releaseDependents = append(releaseDependents, entity.PublishedVersionKeyEntity{
+				PackageId: dependent.PackageId,
+				Version:   dependent.Version,
+				Revision:  dependent.Revision,
+			})
+		}
+	}
+	if len(releaseDependents) > 0 {
+		accessible, hiddenCount, err := p.roleService.FilterVersionsByPackageReadAccess(ctx, releaseDependents)
+		if err != nil {
+			return err
+		}
+		log.Warnf("Blocked changing version %s of package %s to 'draft' status by user %s: referenced as a previous version by release versions %s",
+			version, packageId, ctx.GetUserId(), entity.FormatVersionKeys(releaseDependents))
+		return &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidReleaseVersionChain,
+			Message: exception.VersionReferencedAsPreviousByReleaseMsg,
+			Params:  map[string]interface{}{"version": version, "packageId": packageId, "releaseVersions": entity.FormatVersionKeysWithHidden(accessible, hiddenCount, "'release' package version")},
+		}
+	}
+	return nil
+}
+
 func readZipFile(zf *zip.File) ([]byte, error) {
 	f, err := zf.Open()
 	if err != nil {
@@ -522,7 +575,7 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 		return err
 	}
 
-	operationsComparisonEntities, changedOperationEntities, skippedVersionComparisonIds, comparisonFileIdToKeyMap, err := buildArcEntitiesReader.ReadOperationComparisonsToEntities(operationsInfo, p.operationRepo)
+	operationsComparisonEntities, changedOperationEntities, versionComparisonsFromCache, comparisonFileIdToKeyMap, err := buildArcEntitiesReader.ReadOperationComparisonsToEntities(operationsInfo, p.operationRepo)
 	if err != nil {
 		return err
 	}
@@ -727,7 +780,7 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 		operationsComparisonEntities,
 		newServiceName,
 		existingPackage,
-		skippedVersionComparisonIds,
+		versionComparisonsFromCache,
 		operationComparisonIdsToRebuild,
 		ddlComparisonIdsToRebuild,
 		versionInternalDocEntities,
@@ -971,7 +1024,7 @@ func (p publishedServiceImpl) PublishChanges(buildArc *archive.BuildResultArchiv
 	}
 
 	buildArcEntitiesReader := archive.NewBuildResultToEntitiesReader(buildArc)
-	versionComparisonEntities, operationComparisonEntities, skippedVersionComparisonIds, comparisonFileIdToKeyMap, err := buildArcEntitiesReader.ReadOperationComparisonsToEntities(nil, p.operationRepo)
+	versionComparisonEntities, operationComparisonEntities, versionComparisonsFromCache, comparisonFileIdToKeyMap, err := buildArcEntitiesReader.ReadOperationComparisonsToEntities(nil, p.operationRepo)
 	if err != nil {
 		return err
 	}
@@ -1008,7 +1061,7 @@ func (p publishedServiceImpl) PublishChanges(buildArc *archive.BuildResultArchiv
 		return err
 	}
 
-	err = p.publishedRepo.SaveVersionChanges(buildArc.PackageInfo, publishId, operationComparisonEntities, versionComparisonEntities, skippedVersionComparisonIds, operationComparisonIdsToRebuild, ddlComparisonIdsToRebuild, comparisonInternalDocEntities, comparisonInternalDocDataEntities, ddlContractComparisonEntities)
+	err = p.publishedRepo.SaveVersionChanges(buildArc.PackageInfo, publishId, operationComparisonEntities, versionComparisonEntities, versionComparisonsFromCache, operationComparisonIdsToRebuild, ddlComparisonIdsToRebuild, comparisonInternalDocEntities, comparisonInternalDocDataEntities, ddlContractComparisonEntities)
 	if err != nil {
 		return err
 	}
@@ -1123,9 +1176,7 @@ func (p publishedServiceImpl) GetVersionInternalDocumentData(hash string) ([]byt
 		return nil, "", err
 	}
 
-	//when the filename is empty, it means we did not find a record in the version_internal_document table using the specified hash,
-	//i.e., we are dealing with unref data, and we should not return such data
-	if docData == nil || docData.Filename == "" {
+	if docData == nil {
 		return nil, "", &exception.CustomError{
 			Status:  http.StatusNotFound,
 			Code:    exception.VersionInternalDocumentNotFound,
@@ -1134,7 +1185,9 @@ func (p publishedServiceImpl) GetVersionInternalDocumentData(hash string) ([]byt
 		}
 	}
 
-	return docData.Data, docData.Filename, nil
+	filename := fmt.Sprintf("version_internal_document_%s.json", hash)
+
+	return docData.Data, filename, nil
 }
 
 func (p publishedServiceImpl) GetComparisonInternalDocuments(packageId string, version string, previousPackageId string, previousVersion string, refPackageId string) ([]view.InternalDocument, error) {
@@ -1244,9 +1297,7 @@ func (p publishedServiceImpl) GetComparisonInternalDocumentData(hash string) ([]
 		return nil, "", err
 	}
 
-	//when the filename is empty, it means we did not find a record in the comparison_internal_document table using the specified hash,
-	//i.e., we are dealing with unref data, and we should not return such data
-	if docData == nil || docData.Filename == "" {
+	if docData == nil {
 		return nil, "", &exception.CustomError{
 			Status:  http.StatusNotFound,
 			Code:    exception.ComparisonInternalDocumentNotFound,
@@ -1255,7 +1306,9 @@ func (p publishedServiceImpl) GetComparisonInternalDocumentData(hash string) ([]
 		}
 	}
 
-	return docData.Data, docData.Filename, nil
+	filename := fmt.Sprintf("comparison_internal_document_%s.json", hash)
+
+	return docData.Data, filename, nil
 }
 
 func (p publishedServiceImpl) CheckPreviousVersionDependencyCycle(packageID string, version string, previousVersionPackageID string, prevVersion string, revision int) (bool, error) {

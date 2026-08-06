@@ -835,6 +835,16 @@ const DdlEntityNotFoundMsg = "DDL entity $ddlEntityId not found"
 const McpEntityNotFound = "8402"
 const McpEntityNotFoundMsg = "MCP entity $mcpEntityId not found"
 
+const ReferencedByDashboard = "8500"
+const VersionReferencedByDashboardMsg = "Cannot delete version $version of package $packageId: it is referenced by these dashboard versions: $dashboards. Remove the references or delete the dashboards, then retry."
+const PackageReferencedByDashboardMsg = "Cannot delete package $packageId: it is referenced by these dashboard versions: $dashboards. Remove the references or delete the dashboards, then retry."
+const GroupOrWorkspaceReferencedByDashboardMsg = "Cannot delete $kind $packageId: it contains packages that are referenced by dashboards: $packages. Remove the references or delete the dashboards, then retry."
+
+const InvalidReleaseVersionChain = "8600"
+const ReleaseVersionPreviousVersionNotReleaseMsg = "Version $version for package $packageId cannot be published with the 'release' status because previous version $previousVersion for package $previousVersionPackageId is in the 'draft' status. Change the previous version to 'release', or publish this version as a draft."
+const VersionStatusChangePreviousVersionNotReleaseMsg = "Version $version for package $packageId cannot be changed to the 'release' status because previous version $previousVersion for package $previousVersionPackageId is in the 'draft' status. Change the previous version to 'release', then retry."
+const VersionReferencedAsPreviousByReleaseMsg = "Version $version for package $packageId cannot be changed to the 'draft' status because it is the previous version of: $releaseVersions"
+
 // AI Chat error codes (APIHUB-AI-*). Each public error has a Code constant; variant
 // messages reuse the parent Code (same pattern as InvalidParameterValue + InvalidLimitMsg).
 

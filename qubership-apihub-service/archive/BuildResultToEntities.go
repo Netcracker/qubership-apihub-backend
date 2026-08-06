@@ -635,7 +635,7 @@ func (a *BuildResultToEntitiesReader) ReadVersionInternalDocumentsToEntities() (
 					Params:  map[string]interface{}{"file": document.Filename, "error": err.Error()},
 				}
 			}
-			hash := utils.GetEncodedXXHash128(fileData, []byte(document.Filename))
+			hash := utils.GetEncodedXXHash128(fileData)
 			versionInternalDocEntities = append(versionInternalDocEntities, &entity.VersionInternalDocumentEntity{
 				PackageId:  a.PackageInfo.PackageId,
 				Version:    a.PackageInfo.Version,
@@ -688,7 +688,7 @@ func (a *BuildResultToEntitiesReader) ReadComparisonInternalDocumentsToEntities(
 					Params:  map[string]interface{}{"file": document.Filename, "error": err.Error()},
 				}
 			}
-			hash := utils.GetEncodedXXHash128(fileData, []byte(document.Filename))
+			hash := utils.GetEncodedXXHash128(fileData)
 
 			comparisonInternalDocEntities = append(comparisonInternalDocEntities, &entity.ComparisonInternalDocumentEntity{
 				PackageId:         comparisonKey.PackageId,

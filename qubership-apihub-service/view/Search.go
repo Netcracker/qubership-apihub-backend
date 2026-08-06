@@ -22,6 +22,7 @@ type OperationSearchParams struct {
 
 type SearchQueryReq_deprecated struct {
 	SearchString            string                  `json:"searchString" validate:"required"`
+	ApiType                 string                  `json:"apiType"`
 	PackageIds              []string                `json:"packageIds"`
 	Versions                []string                `json:"versions"`
 	Statuses                []string                `json:"statuses"`
@@ -70,6 +71,7 @@ type SearchQueryReq struct {
 
 func (r SearchQueryReq) ToDeprecated() SearchQueryReq_deprecated {
 	req := SearchQueryReq_deprecated{
+		ApiType:                 r.ApiType,
 		SearchString:            r.SearchString,
 		PackageIds:              r.PackageIds,
 		Versions:                r.Versions,
