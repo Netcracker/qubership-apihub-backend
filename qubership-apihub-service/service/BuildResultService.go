@@ -91,7 +91,7 @@ func (p buildResultServiceImpl) SaveBuildResult(ctx context.Context, packageId s
 	bgCtx, cancel := context.WithTimeout(secctx.Detach(ctx), buildResultStoreTimeout)
 	utils.SafeAsync(func() {
 		defer cancel()
-		err := p.StoreBuildResult(bgCtx, publishId, data)
+		err := utils.WrapContextError(bgCtx, p.StoreBuildResult(bgCtx, publishId, data))
 		if err != nil {
 			log.Errorf("Failed to save build result for %s: %s", publishId, err.Error())
 			return

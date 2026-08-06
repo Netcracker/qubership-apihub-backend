@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
@@ -17,8 +16,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const transitionMoveTimeout = 30 * time.Minute
-
 type TransitionService interface {
 	MoveOrRenamePackage(ctx context.Context, fromId string, toId string, overwriteHistory bool) (string, error)
 	GetMoveStatus(ctx context.Context, id string) (*view.TransitionStatus, error)
@@ -26,22 +23,24 @@ type TransitionService interface {
 	ListPackageTransitions(ctx context.Context) ([]view.PackageTransition, error)
 }
 
-func NewTransitionService(transRepo repository.TransitionRepository, pubRepo repository.PublishedRepository) TransitionService {
-	return &transitionServiceImpl{transRepo: transRepo, pubRepo: pubRepo}
+func NewTransitionService(transRepo repository.TransitionRepository, pubRepo repository.PublishedRepository, systemInfoService SystemInfoService) TransitionService {
+	return &transitionServiceImpl{transRepo: transRepo, pubRepo: pubRepo, systemInfoService: systemInfoService}
 }
 
 type transitionServiceImpl struct {
-	transRepo repository.TransitionRepository
-	pubRepo   repository.PublishedRepository
+	transRepo         repository.TransitionRepository
+	pubRepo           repository.PublishedRepository
+	systemInfoService SystemInfoService
 }
 
 // runTransitionMove runs a transition move under a safety-net bound, then persists the terminal
 // status on an independent short-lived context so a timed-out move can't leave the transition
-// stuck at 'running' (see transitionMoveTimeout / statusFinalizationTimeout).
+// stuck at 'running'
 func (p transitionServiceImpl) runTransitionMove(ctx context.Context, id string, move func(ctx context.Context) (int, error)) {
-	bgCtx, cancel := context.WithTimeout(secctx.Detach(ctx), transitionMoveTimeout)
+	bgCtx, cancel := context.WithTimeout(secctx.Detach(ctx), p.systemInfoService.GetTransitionMoveTimeout())
 	defer cancel()
 	objAffected, err := move(bgCtx)
+	err = utils.WrapContextError(bgCtx, err)
 
 	finCtx, finCancel := context.WithTimeout(secctx.Detach(ctx), statusFinalizationTimeout)
 	defer finCancel()

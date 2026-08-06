@@ -105,17 +105,34 @@ func IsContextCancelled(err error) bool {
 	return errors.Is(err, context.Canceled)
 }
 
-// IsClientDisconnected reports whether the client went away before the request completed. Every cancel()
-// in the call chain produces the same context.Canceled sentinel, so the error alone cannot tell an
-// internal cancellation from a disconnect: only the client going away also ends the request context.
-func IsClientDisconnected(r *http.Request, err error) bool {
-	return IsContextCancelled(err) && r != nil && IsContextCancelled(r.Context().Err())
+// IsClientDisconnected reports whether the client went away before the request completed
+func IsClientDisconnected(r *http.Request) bool {
+	return r != nil && IsContextCancelled(r.Context().Err())
+}
+
+// requestContextError reports the context failure that ended a request, or nil when the request is
+// still healthy. The request context is checked first: go-pg answers a query aborted by a deadline
+// with SQLSTATE 57014 or an i/o timeout, so the sentinel is usually missing from the error chain.
+// The error chain is checked second, which covers deadlines owned by an inner context: credential
+// verification and LDAP lookups bound themselves well below the request deadline.
+func requestContextError(r *http.Request, err error) error {
+	if r != nil {
+		if ctxErr := r.Context().Err(); ctxErr != nil {
+			return ctxErr
+		}
+	}
+	if IsRequestTimeout(err) {
+		return context.DeadlineExceeded
+	}
+	if IsContextCancelled(err) {
+		return context.Canceled
+	}
+	return nil
 }
 
 func RespondWithError(w http.ResponseWriter, r *http.Request, msg string, err error) {
-	// Nobody is left to read a response
-	if IsClientDisconnected(r, err) {
-		log.Infof("%s: client closed the request before it completed: %s", msg, err.Error())
+	if ctxErr := requestContextError(r, err); ctxErr != nil {
+		RespondWithContextError(w, r, msg, ctxErr, err)
 		return
 	}
 
@@ -126,28 +143,34 @@ func RespondWithError(w http.ResponseWriter, r *http.Request, msg string, err er
 	}
 
 	log.Errorf("%s: %s", msg, err.Error())
-	if IsRequestTimeout(err) {
-		RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusInternalServerError,
-			Code:    exception.RequestTimeout,
-			Message: exception.RequestTimeoutMsg,
-			Debug:   err.Error(),
-		})
-		return
-	}
-	if IsContextCancelled(err) {
-		RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusInternalServerError,
-			Code:    exception.RequestCancelled,
-			Message: exception.RequestCancelledMsg,
-			Debug:   err.Error(),
-		})
-		return
-	}
 	RespondWithCustomError(w, &exception.CustomError{
 		Status:  http.StatusInternalServerError,
 		Message: msg,
 		Debug:   err.Error()})
+}
+
+// RespondWithContextError reports a request that ended because its context was done: ctxErr tells a
+// timeout from a cancellation, cause is the failure the call chain actually returned.
+func RespondWithContextError(w http.ResponseWriter, r *http.Request, msg string, ctxErr error, cause error) {
+	// Nobody is left to read a response
+	if IsClientDisconnected(r) {
+		log.Debugf("%s: client closed the request before it completed: %s", msg, cause.Error())
+		return
+	}
+
+	// The log has no error code to carry the classification, so it names the context failure itself
+	log.Errorf("%s: %s: %s", msg, ctxErr.Error(), cause.Error())
+
+	code, message := exception.RequestCancelled, exception.RequestCancelledMsg
+	if IsRequestTimeout(ctxErr) {
+		code, message = exception.RequestTimeout, exception.RequestTimeoutMsg
+	}
+	RespondWithCustomError(w, &exception.CustomError{
+		Status:  http.StatusInternalServerError,
+		Code:    code,
+		Message: message,
+		Debug:   cause.Error(),
+	})
 }
 
 func logCustomError(msg string, customError *exception.CustomError, err error) {

@@ -100,10 +100,12 @@ type SystemInfoService interface {
 	GetFeatureFlags() view.FeatureFlags
 	GetMigrationLockMaxWaitMinutes() int
 	GetRequestTimeout() time.Duration
+	GetTransitionMoveTimeout() time.Duration
 	GetEphemeralFileDirectory() string
 	GetEphemeralFileMaxSizeMb() int
 	GetEphemeralFileTTLMinutes() int
 	GetEphemeralFilesCleanupSchedule() string
+	GetMinioMigrationTimeouts() config.S3MigrationTimeoutsConfig
 }
 
 func (g *systemInfoServiceImpl) GetCredsFromEnv() *view.DbCredentials {
@@ -222,6 +224,7 @@ func (g *systemInfoServiceImpl) setDefaults() {
 	viper.SetDefault("security.autoLogin", false)
 	viper.SetDefault("technicalParameters.migrationLockMaxWaitMinutes", 30)
 	viper.SetDefault("technicalParameters.requestTimeoutSec", 570) // nginx generic tier is 600s; 570 leaves a ~30s margin so the app's own error response wins
+	viper.SetDefault("technicalParameters.transitionMoveTimeoutMinutes", 30)
 	viper.SetDefault("technicalParameters.basePath", ".")
 	viper.SetDefault("technicalParameters.listenAddress", ":8080")
 	viper.SetDefault("technicalParameters.metricsGetterSchedule", "* * * * *") // every minute
@@ -235,6 +238,9 @@ func (g *systemInfoServiceImpl) setDefaults() {
 	viper.SetDefault("monitoring.enabled", false)
 	viper.SetDefault("s3Storage.enabled", false)
 	viper.SetDefault("s3Storage.storeOnlyBuildResult", false)
+	viper.SetDefault("s3Storage.migrationTimeouts.s3OperationSec", 600)       // 10 minutes
+	viper.SetDefault("s3Storage.migrationTimeouts.databaseOperationSec", 120) // 2 minutes
+	viper.SetDefault("s3Storage.migrationTimeouts.bulkDeleteMinutes", 180)    // 3 hours, covers the VACUUM FULL that follows deletion
 	viper.SetDefault("olric.discoveryMode", "local")
 	viper.SetDefault("olric.replicaCount", 1)
 	viper.SetDefault("olric.bindPort", 47375)
@@ -659,6 +665,10 @@ func (g *systemInfoServiceImpl) GetAiChatConfig() config.ChatConfig {
 	return g.config.Ai.Chat
 }
 
+func (g *systemInfoServiceImpl) GetMinioMigrationTimeouts() config.S3MigrationTimeoutsConfig {
+	return g.config.S3Storage.MigrationTimeouts
+}
+
 func (g *systemInfoServiceImpl) GetAiMCPConfig() config.MCPConfig {
 	return g.config.Ai.MCP
 }
@@ -696,4 +706,8 @@ func (g *systemInfoServiceImpl) GetMigrationLockMaxWaitMinutes() int {
 
 func (g *systemInfoServiceImpl) GetRequestTimeout() time.Duration {
 	return time.Duration(g.config.TechnicalParameters.RequestTimeoutSec) * time.Second
+}
+
+func (g *systemInfoServiceImpl) GetTransitionMoveTimeout() time.Duration {
+	return time.Duration(g.config.TechnicalParameters.TransitionMoveTimeoutMinutes) * time.Minute
 }

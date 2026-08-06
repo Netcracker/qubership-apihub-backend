@@ -87,19 +87,16 @@ type ZeroDayConfig struct {
 }
 
 type TechnicalParameters struct {
-	InstanceId                  string
-	BasePath                    string
-	BackendVersion              string
-	ListenAddress               string `validate:"required"`
-	MetricsGetterSchedule       string
-	ApiSpecDirectory            string
-	MigrationLockMaxWaitMinutes int
-	EphemeralFileDirectory      string
-	// The upper bound must stay < 600s nginx generic tier so the app's own error response wins.
-	// TODO: 0 is a temporary escape hatch that disables the cap while the right value is being
-	// tuned. Restore the gte=1 lower bound once it is settled, together with the matching branch
-	// in middleware.RequestTimeoutMiddleware.
-	RequestTimeoutSec int `validate:"gte=0,lte=590"`
+	InstanceId                   string
+	BasePath                     string
+	BackendVersion               string
+	ListenAddress                string `validate:"required"`
+	MetricsGetterSchedule        string
+	ApiSpecDirectory             string
+	MigrationLockMaxWaitMinutes  int
+	EphemeralFileDirectory       string
+	RequestTimeoutSec            int `validate:"gte=0,lte=590"` // The upper bound must stay < 600s nginx generic tier so the app's own error response wins. 0 disables the timeout.
+	TransitionMoveTimeoutMinutes int `validate:"gt=0"`
 }
 
 type BusinessParameters struct {
@@ -128,6 +125,14 @@ type S3Config struct {
 	Crt                  string
 	BucketName           string
 	StoreOnlyBuildResult bool
+	MigrationTimeouts    S3MigrationTimeoutsConfig
+}
+
+type S3MigrationTimeoutsConfig struct {
+	// Upper bounds keep the seconds-to-Duration conversion from overflowing into a negative deadline.
+	S3OperationSec       int `validate:"gt=0,lte=86400"`
+	DatabaseOperationSec int `validate:"gt=0,lte=86400"`
+	BulkDeleteMinutes    int `validate:"gt=0,lte=1440"`
 }
 
 type OlricConfig struct {

@@ -114,7 +114,7 @@ func main() {
 		panic("Failed to create PublishedRepository: " + err.Error())
 	}
 	minioStorageCreds := systemInfoService.GetMinioStorageCreds()
-	minioStorageService := service.NewMinioStorageService(buildResultRepository, publishedRepository, minioStorageCreds)
+	minioStorageService := service.NewMinioStorageService(buildResultRepository, publishedRepository, minioStorageCreds, systemInfoService.GetMinioMigrationTimeouts())
 	dbMigrationService, err := mService.NewDBMigrationService(cp, migrationRunRepository, buildCleanupRepository, transitionRepository, systemInfoService, minioStorageService)
 	if err != nil {
 		log.Error("Failed create dbMigrationService: " + err.Error())
@@ -286,7 +286,7 @@ func main() {
 		log.Error("Failed to start cleaning job" + err.Error())
 	}
 
-	transitionService := service.NewTransitionService(transitionRepository, publishedRepository)
+	transitionService := service.NewTransitionService(transitionRepository, publishedRepository, systemInfoService)
 	transformationService := service.NewTransformationService(publishedRepository, operationRepository, packageVersionEnrichmentService)
 
 	zeroDayAdminService := service.NewZeroDayAdminService(userService, roleService, usersRepository, systemInfoService)
@@ -728,10 +728,7 @@ func main() {
 
 	if systemInfoService.IsMinioStorageActive() {
 		utils.SafeAsync(func() {
-			err := minioStorageService.UploadFilesToBucket()
-			if err != nil {
-				log.Errorf("MINIO error - %s", err.Error())
-			}
+			minioStorageService.UploadFilesToBucket()
 		})
 	}
 

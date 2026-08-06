@@ -27,7 +27,7 @@ import (
 
 const (
 	csvPublishTimeout         = 60 * time.Minute
-	statusFinalizationTimeout = 10 * time.Second
+	statusFinalizationTimeout = 30 * time.Second
 	draftCleanupTimeout       = 240 * time.Minute
 )
 
@@ -1580,6 +1580,7 @@ func (v versionServiceImpl) DeleteVersionsRecursively(ctx context.Context, packa
 			}
 			packages, err := v.publishedRepo.GetFilteredPackagesWithOffset(ctx, getPackageListReq, secctx.GetUserId(ctx))
 			if err != nil {
+				err = utils.WrapContextError(ctx, err)
 				log.Errorf("failed to get child packages for versions cleanup %s: %s", jobId, err.Error())
 				finishedAt := time.Now()
 				err = v.finalizeVersionCleanupRun(ctx, jobId, string(view.StatusError), err.Error(), deletedItems, &finishedAt)
@@ -1594,6 +1595,7 @@ func (v versionServiceImpl) DeleteVersionsRecursively(ctx context.Context, packa
 					// deleteReleaseRevisions is false, so only draft revisions are deleted - no need to track release_versions_deleted metric
 					deleted, _, err := v.publishedRepo.DeletePackageRevisionsBeforeDate(ctx, rootPackage.Id, deleteBefore, true, false, "cleanup_job_"+jobId)
 					if err != nil {
+						err = utils.WrapContextError(ctx, err)
 						log.Errorf("failed to delete versions of package %s during versions cleanup %s: %s", rootPackage.Id, jobId, err.Error())
 						finishedAt := time.Now()
 						err = v.finalizeVersionCleanupRun(ctx, jobId, string(view.StatusError), err.Error(), deletedItems, &finishedAt)
@@ -1618,6 +1620,7 @@ func (v versionServiceImpl) DeleteVersionsRecursively(ctx context.Context, packa
 				// deleteReleaseRevisions is false, so only draft revisions are deleted - no need to track release_versions_deleted metric
 				deleted, _, err := v.publishedRepo.DeletePackageRevisionsBeforeDate(ctx, pkg.Id, deleteBefore, true, false, "cleanup_job_"+jobId)
 				if err != nil {
+					err = utils.WrapContextError(ctx, err)
 					log.Errorf("failed to delete versions of package %s during versions cleanup %s: %s", pkg.Id, jobId, err.Error())
 					finishedAt := time.Now()
 					err = v.finalizeVersionCleanupRun(ctx, jobId, string(view.StatusError), err.Error(), deletedItems, &finishedAt)
@@ -2123,12 +2126,12 @@ func (v versionServiceImpl) publishFromCSV(ctx context.Context, dashboardName st
 	}
 	build, err := v.buildService.PublishVersion(ctx, dashboardPublishBuildConfig, nil, false, "", nil, false, false)
 	if err != nil {
-		v.updateDashboardPublishProcess(ctx, publishEntity, string(view.StatusError), fmt.Sprintf("failed to start csv dashboard publish: %v", err.Error()))
+		v.updateDashboardPublishProcess(ctx, publishEntity, string(view.StatusError), fmt.Sprintf("failed to start csv dashboard publish: %v", utils.WrapContextError(ctx, err)))
 		return
 	}
 	err = v.buildService.AwaitBuildCompletion(ctx, build.PublishId)
 	if err != nil {
-		v.updateDashboardPublishProcess(ctx, publishEntity, string(view.StatusError), fmt.Sprintf("failed to publish dashboard from csv: %v", err.Error()))
+		v.updateDashboardPublishProcess(ctx, publishEntity, string(view.StatusError), fmt.Sprintf("failed to publish dashboard from csv: %v", utils.WrapContextError(ctx, err)))
 		return
 	}
 	err = v.operationGroupService.CreateOperationGroup(ctx, req.PackageId, req.Version, req.ApiType, view.CreateOperationGroupReq{
@@ -2137,11 +2140,11 @@ func (v versionServiceImpl) publishFromCSV(ctx context.Context, dashboardName st
 	if err != nil {
 		if customError, ok := err.(*exception.CustomError); ok {
 			if customError.Code != exception.OperationGroupAlreadyExists {
-				v.updateDashboardPublishProcess(ctx, publishEntity, string(view.StatusError), fmt.Sprintf("failed to create operation group: %v", err.Error()))
+				v.updateDashboardPublishProcess(ctx, publishEntity, string(view.StatusError), fmt.Sprintf("failed to create operation group: %v", utils.WrapContextError(ctx, err)))
 				return
 			}
 		} else {
-			v.updateDashboardPublishProcess(ctx, publishEntity, string(view.StatusError), fmt.Sprintf("failed to create operation group: %v", err.Error()))
+			v.updateDashboardPublishProcess(ctx, publishEntity, string(view.StatusError), fmt.Sprintf("failed to create operation group: %v", utils.WrapContextError(ctx, err)))
 			return
 		}
 	}
@@ -2167,7 +2170,7 @@ func (v versionServiceImpl) publishFromCSV(ctx context.Context, dashboardName st
 		Operations: &groupOperations,
 	})
 	if err != nil {
-		v.updateDashboardPublishProcess(ctx, publishEntity, string(view.StatusError), fmt.Sprintf("failed to add operations to operation group: %v", err.Error()))
+		v.updateDashboardPublishProcess(ctx, publishEntity, string(view.StatusError), fmt.Sprintf("failed to add operations to operation group: %v", utils.WrapContextError(ctx, err)))
 		return
 	}
 

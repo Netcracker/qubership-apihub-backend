@@ -28,16 +28,11 @@ func NewPlaygroundProxyController(systemInfoService service.SystemInfoService) (
 		return nil, err
 	}
 	return &playgroundProxyControllerImpl{
-		// Connection-level safety nets for the outbound proxy. The overall call still inherits the
-		// generic request timeout (~570s); these bound the phases the request context can't on its own:
-		// dial/TLS fail fast (15s) against a slow allowed host, and ResponseHeaderTimeout (480s) leaves
-		// ~60s headroom under 570s after worst-case dial+TLS before the request deadline.
 		tr: http.Transport{
-			TLSClientConfig:       tlsConfig,
-			DialContext:           (&net.Dialer{Timeout: 15 * time.Second}).DialContext,
-			TLSHandshakeTimeout:   15 * time.Second,
-			ResponseHeaderTimeout: 480 * time.Second,
-			IdleConnTimeout:       90 * time.Second,
+			TLSClientConfig:     tlsConfig,
+			DialContext:         (&net.Dialer{Timeout: 15 * time.Second}).DialContext,
+			TLSHandshakeTimeout: 15 * time.Second,
+			IdleConnTimeout:     90 * time.Second,
 		},
 		systemInfoService: systemInfoService}, nil
 }
@@ -78,6 +73,8 @@ func (p *playgroundProxyControllerImpl) Proxy(w http.ResponseWriter, r *http.Req
 	}
 	r.URL = proxyURL
 	r.Host = proxyURL.Host
+	// RoundTrip honors the context of the request it is given. r is the inbound request, so the
+	// deadline set by RequestTimeoutMiddleware bounds the whole exchange: dial, TLS, header wait and body streaming.
 	resp, err := p.tr.RoundTrip(r)
 	if err != nil {
 		utils.RespondWithCustomError(w, &exception.CustomError{
@@ -96,7 +93,8 @@ func (p *playgroundProxyControllerImpl) Proxy(w http.ResponseWriter, r *http.Req
 	}
 	w.WriteHeader(resp.StatusCode)
 	if _, err := io.Copy(w, resp.Body); err != nil {
-		// Headers/status are already sent, so we can only log; a read/write timeout surfaces here.
+		// Headers/status are already sent, so we can only log; a read/write timeout or an expired
+		// request deadline surfaces here.
 		log.Warnf("playground proxy: failed to stream upstream response for %s: %v", r.URL.String(), err)
 	}
 }

@@ -3623,6 +3623,9 @@ func (p publishedRepositoryImpl) DeletePublishedSourcesArchives(ctx context.Cont
 		deletedRows += result.RowsAffected()
 		return nil
 	})
+	if err != nil {
+		return errors.Wrap(err, "failed to delete rows from table published_sources_archives")
+	}
 
 	if deletedRows > 0 {
 		_, err = p.cp.GetConnection().WithContext(ctx).Exec("vacuum full published_sources_archives")

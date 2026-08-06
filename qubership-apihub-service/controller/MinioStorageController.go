@@ -44,10 +44,6 @@ func (m minioStorageControllerImpl) DownloadFilesFromMinioToDatabase(w http.Resp
 			Message: "Minio integration is inactive. Please check envs for configuration"})
 		return
 	}
-	err := m.minioStorageService.DownloadFilesFromBucketToDatabase()
-	if err != nil {
-		utils.RespondWithError(w, r, "Failed to download data from minio", err)
-		return
-	}
+	m.minioStorageService.DownloadFilesFromBucketToDatabase(ctx)
 	w.WriteHeader(http.StatusAccepted)
 }

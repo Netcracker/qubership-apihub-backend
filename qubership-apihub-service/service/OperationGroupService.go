@@ -675,18 +675,18 @@ func (o operationGroupServiceImpl) publishOperationGroup(ctx context.Context, ve
 	}
 	exportBuildId, _, err := o.buildService.CreateBuildWithoutDependencies(ctx, buildConfig, false, "")
 	if err != nil {
-		o.updatePublishProcess(ctx, publishEnt, string(view.StatusError), fmt.Sprintf("failed to create export build: %v", err.Error()))
+		o.updatePublishProcess(ctx, publishEnt, string(view.StatusError), fmt.Sprintf("failed to create export build: %v", utils.WrapContextError(ctx, err)))
 		return
 	}
 
 	err = o.buildService.AwaitBuildCompletion(ctx, exportBuildId)
 	if err != nil {
-		o.updatePublishProcess(ctx, publishEnt, string(view.StatusError), fmt.Sprintf("export build failed: %v", err.Error()))
+		o.updatePublishProcess(ctx, publishEnt, string(view.StatusError), fmt.Sprintf("export build failed: %v", utils.WrapContextError(ctx, err)))
 		return
 	}
 	exportResult, err := o.exportRepository.GetExportResult(ctx, exportBuildId)
 	if err != nil {
-		o.updatePublishProcess(ctx, publishEnt, string(view.StatusError), fmt.Sprintf("failed to get export result: %v", err.Error()))
+		o.updatePublishProcess(ctx, publishEnt, string(view.StatusError), fmt.Sprintf("failed to get export result: %v", utils.WrapContextError(ctx, err)))
 		return
 	}
 	if exportResult == nil {
@@ -743,12 +743,12 @@ func (o operationGroupServiceImpl) publishOperationGroup(ctx context.Context, ve
 	}
 	build, err := o.buildService.PublishVersion(ctx, groupPublishBuildConfig, data, false, "", nil, false, false)
 	if err != nil {
-		o.updatePublishProcess(ctx, publishEnt, string(view.StatusError), fmt.Sprintf("faield to start operation group publish: %v", err.Error()))
+		o.updatePublishProcess(ctx, publishEnt, string(view.StatusError), fmt.Sprintf("faield to start operation group publish: %v", utils.WrapContextError(ctx, err)))
 		return
 	}
 	err = o.buildService.AwaitBuildCompletion(ctx, build.PublishId)
 	if err != nil {
-		o.updatePublishProcess(ctx, publishEnt, string(view.StatusError), fmt.Sprintf("faield to publish operation group: %v", err.Error()))
+		o.updatePublishProcess(ctx, publishEnt, string(view.StatusError), fmt.Sprintf("faield to publish operation group: %v", utils.WrapContextError(ctx, err)))
 		return
 	}
 	o.updatePublishProcess(ctx, publishEnt, string(view.StatusComplete), "")

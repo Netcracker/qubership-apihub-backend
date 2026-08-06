@@ -72,6 +72,9 @@ func (b buildResultRepositoryImpl) DeleteBuildResults(ctx context.Context, build
 		deletedRows += result.RowsAffected()
 		return nil
 	})
+	if err != nil {
+		return errors.Wrap(err, "failed to delete rows from table build_result")
+	}
 
 	if deletedRows > 0 {
 		_, err = b.cp.GetConnection().WithContext(ctx).Exec("vacuum full build_result")

@@ -177,7 +177,7 @@ func (a activityTrackingServiceImpl) makePkgActivityResponse(ents []entity.Enric
 
 func (a activityTrackingServiceImpl) trackEventInternal(ctx context.Context, event view.ActivityTrackingEvent) {
 	ent := entity.MakeActivityTrackingEventEntity(event)
-	err := a.repo.CreateEvent(ctx, &ent)
+	err := utils.WrapContextError(ctx, a.repo.CreateEvent(ctx, &ent))
 	if err != nil {
 		log.Errorf("Failed to save tracked event %+v to DB with err: %s", ent, err)
 	}

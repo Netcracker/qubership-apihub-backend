@@ -244,13 +244,12 @@ func (s *aiChatTurnServiceImpl) SendMessageStream(ctx context.Context, userID, c
 		_, _, err := s.runTurn(ctx, userID, chat, req, out)
 		s.observeTurn(AiChatTurnModeStream, started, err)
 		if err != nil {
+			// Decide which code and message the terminal error event carries.
 			code, message := aiChatStreamErrorPayload(ctx, err)
-			emitCtx := ctx
-			if ctx.Err() != nil {
-				var emitCancel context.CancelFunc
-				emitCtx, emitCancel = context.WithTimeout(context.WithoutCancel(ctx), AiChatStreamTerminalEmitTimeout)
-				defer emitCancel()
-			}
+			// ctx is often already cancelled here, and emitStream sends nothing on a cancelled context.
+			// emitCtx ignores the cancellation so the error still reaches the client.
+			emitCtx, emitCancel := context.WithTimeout(context.WithoutCancel(ctx), AiChatStreamTerminalEmitTimeout)
+			defer emitCancel()
 			if emitErr := s.emitStream(emitCtx, out, aiChatSSEError, map[string]interface{}{
 				aiChatSSEFieldType: aiChatSSEError,
 				"code":             code,

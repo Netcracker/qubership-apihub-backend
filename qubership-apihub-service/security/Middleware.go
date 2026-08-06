@@ -16,14 +16,16 @@ import (
 
 const authTimeout = 15 * time.Second
 
-// authenticate verifies credentials under authTimeout. Routes exempt from RequestTimeoutMiddleware
-// (MCP transport, AI chat turns) are exempt for handler processing only
+// authenticate verifies credentials under authTimeout
 func authenticate(strategy auth.Strategy, r *http.Request) (auth.Info, error) {
 	ctx, cancel := context.WithTimeout(r.Context(), authTimeout)
 	defer cancel()
 	// union.Union.Authenticate ignores its ctx argument and reads r.Context(), so the deadline has
 	// to travel on the request as well.
-	return strategy.Authenticate(ctx, r.WithContext(ctx))
+	info, err := strategy.Authenticate(ctx, r.WithContext(ctx))
+	// authTimeout is shorter than the request deadline, so a credential check that runs out of time
+	// leaves the request context healthy. Without this the failure looks like a rejected credential.
+	return info, utils.WrapContextError(ctx, err)
 }
 
 func Secure(next http.HandlerFunc) http.HandlerFunc {
@@ -196,6 +198,13 @@ func RefreshToken(next http.HandlerFunc) http.HandlerFunc {
 			})
 			w.WriteHeader(http.StatusOK)
 		} else {
+			// Falling through belongs to a missing, expired, or invalid refresh token. A refresh that
+			// ran out of time says nothing about the session, so sending a valid one to the identity
+			// provider would loop while the database or the cache is degraded.
+			if cause := contextErrorCause(err); cause != nil {
+				utils.RespondWithContextError(w, r, "Token refresh aborted", cause, err)
+				return
+			}
 			if err != nil {
 				log.Debugf("Failed to refresh access token: %v", err)
 			}
@@ -247,29 +256,9 @@ func contextErrorCause(err error) error {
 
 func respondWithAuthFailedError(w http.ResponseWriter, r *http.Request, err error) {
 	if cause := contextErrorCause(err); cause != nil {
-		// Nobody is left to read a response
-		if utils.IsClientDisconnected(r, cause) {
-			log.Infof("Authentication stopped: client closed the request before it completed: %v", err)
-			return
-		}
 		// A request that gave up while authenticating is not an authentication failure, and reporting it
 		// as 401 sends the user off to fix credentials that can be perfectly valid.
-		log.Errorf("Authentication aborted: %v", err)
-		if utils.IsRequestTimeout(cause) {
-			utils.RespondWithCustomError(w, &exception.CustomError{
-				Status:  http.StatusInternalServerError,
-				Code:    exception.RequestTimeout,
-				Message: exception.RequestTimeoutMsg,
-				Debug:   err.Error(),
-			})
-			return
-		}
-		utils.RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusInternalServerError,
-			Code:    exception.RequestCancelled,
-			Message: exception.RequestCancelledMsg,
-			Debug:   err.Error(),
-		})
+		utils.RespondWithContextError(w, r, "Authentication aborted", cause, err)
 		return
 	}
 	log.Tracef("Authentication failed: %+v", err)
