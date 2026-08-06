@@ -6,10 +6,8 @@ type ExpiredS3FilesCleanupEntity struct {
 	tableName struct{} `pg:"expired_s3_files_cleanup_run"`
 
 	RunId        string     `pg:"run_id, pk, type:uuid"`
-	InstanceId   string     `pg:"instance_id, type:uuid"`
 	StartedAt    time.Time  `pg:"started_at, type:timestamp without time zone"`
 	FinishedAt   *time.Time `pg:"finished_at, type:timestamp without time zone"`
-	Status       string     `pg:"status, type:varchar"`
 	Details      string     `pg:"details, type:varchar"`
 	DeletedItems int        `pg:"deleted_items, type:integer"`
 }

@@ -103,6 +103,7 @@ func main() {
 
 	migrationRunRepository := mRepository.NewMigrationRunRepository(cp)
 	buildCleanupRepository := repository.NewBuildCleanupRepository(cp)
+	expiredS3FilesCleanupRepository := repository.NewExpiredS3FilesCleanupRepository(cp)
 	transitionRepository := repository.NewTransitionRepository(cp)
 	buildResultRepository := repository.NewBuildResultRepository(cp)
 	publishedRepository, err := repository.NewPublishedRepositoryPG(cp)
@@ -211,7 +212,6 @@ func main() {
 	deletedDataCleanupRepository := repository.NewSoftDeletedDataCleanupRepository(cp)
 
 	unreferencedDataCleanupRepository := repository.NewUnreferencedDataCleanupRepository(cp)
-	expiredS3FilesCleanupRepository := repository.NewExpiredS3FilesCleanupRepository(cp)
 
 	lockRepo := repository.NewLockRepository(cp)
 
@@ -243,12 +243,6 @@ func main() {
 	}
 	if err := cleanupService.CreateMaintenanceVacuumCleanupJob(migrationRunRepository, lockService, systemInfoService.GetInstanceId(), systemInfoService.GetMaintenanceVacuumCleanupSchedule(), systemInfoService.GetMaintenanceVacuumCleanupTimeout()); err != nil {
 		log.Error("Failed to start maintenance vacuum cleaning job" + err.Error())
-	}
-
-	if systemInfoService.IsMinioStorageActive() {
-		if err := cleanupService.CreateExpiredS3FilesCleanupJob(minioStorageService, expiredS3FilesCleanupRepository, migrationRunRepository, lockService, systemInfoService.GetInstanceId(), systemInfoService.GetExpiredS3FilesCleanupSchedule(), systemInfoService.GetExpiredS3FilesCleanupTimeout()); err != nil {
-			log.Error("Failed to start expired s3 files cleaning job" + err.Error())
-		}
 	}
 
 	packageVersionEnrichmentService := service.NewPackageVersionEnrichmentService(publishedRepository)
@@ -285,7 +279,7 @@ func main() {
 	comparisonService := service.NewComparisonService(publishedRepository, operationRepository, packageVersionEnrichmentService, ddlContractServiceForVersion)
 	businessMetricService := service.NewBusinessMetricService(businessMetricRepository)
 
-	dbCleanupService := service.NewDBCleanupService(buildCleanupRepository, migrationRunRepository, minioStorageService, systemInfoService)
+	dbCleanupService := service.NewDBCleanupService(buildCleanupRepository, expiredS3FilesCleanupRepository, migrationRunRepository, minioStorageService, systemInfoService)
 	if err := dbCleanupService.CreateCleanupJob(systemInfoService.GetBuildsCleanupSchedule()); err != nil {
 		log.Error("Failed to start cleaning job" + err.Error())
 	}

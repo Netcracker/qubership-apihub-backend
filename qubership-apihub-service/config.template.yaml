@@ -209,9 +209,8 @@ cleanup:
     # Optional; Cron schedule for ephemeral files cleanup job; If not set, default value: "*/5 * * * *"; Example: "*/10 * * * *"
     schedule: '*/5 * * * *'
   expiredS3Files:
-    # Optional; Cron schedule for the expired S3 files cleanup job. Only applies when S3 storage is enabled; If not set, default value: '0 3 * * 0'; Example: '0 4 * * *'
-    schedule: '0 3 * * 0'
-    # Optional; Timeout in minutes for the expired S3 files cleanup job; If not set, default value: 360; Example: 120
+    # Removal of expired S3 objects runs as a phase of the builds cleanup job and follows cleanup.builds.schedule. Only applies when S3 storage is enabled
+    # Optional; Timeout in minutes for the expired S3 files phase. After the timeout, the sweep stops and resumes on the next run; If not set, default value: 360; Example: 120
     timeoutMinutes: 360
 
 ai:

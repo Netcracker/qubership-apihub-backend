@@ -10,7 +10,7 @@ import (
 
 type ExpiredS3FilesCleanupRepository interface {
 	StoreCleanupRun(ctx context.Context, ent entity.ExpiredS3FilesCleanupEntity) error
-	UpdateCleanupRun(ctx context.Context, runId string, status string, details string, deletedItems int, finishedAt *time.Time) error
+	UpdateCleanupRun(ctx context.Context, runId string, details string, deletedItems int, finishedAt *time.Time) error
 }
 
 func NewExpiredS3FilesCleanupRepository(cp db.ConnectionProvider) ExpiredS3FilesCleanupRepository {
@@ -26,12 +26,8 @@ func (s expiredS3FilesCleanupRepositoryImpl) StoreCleanupRun(ctx context.Context
 	return err
 }
 
-func (s expiredS3FilesCleanupRepositoryImpl) UpdateCleanupRun(ctx context.Context, runId string, status string, details string, deletedItems int, finishedAt *time.Time) error {
+func (s expiredS3FilesCleanupRepositoryImpl) UpdateCleanupRun(ctx context.Context, runId string, details string, deletedItems int, finishedAt *time.Time) error {
 	query := s.cp.GetConnection().ModelContext(ctx, &entity.ExpiredS3FilesCleanupEntity{}).Set("deleted_items=?", deletedItems)
-
-	if status != "" {
-		query = query.Set("status=?", status)
-	}
 
 	if details != "" {
 		query = query.Set("details=?", details)

@@ -17,8 +17,6 @@ const (
 	defaultCleanupJobTimeout = 48 * time.Hour
 	cleanupJobTimeoutBuffer  = 1 * time.Hour
 	maxRevisionsJobTimeout   = 4 * time.Hour
-
-	expiredS3FilesCleanupTTLDays = 45
 )
 
 type CleanupService interface {
@@ -28,7 +26,6 @@ type CleanupService interface {
 	CreateSoftDeletedDataCleanupJob(publishedRepo repository.PublishedRepository, migrationRepository mRepository.MigrationRunRepository, deletedDataCleanupRepo repository.SoftDeletedDataCleanupRepository, lockService service.LockService, instanceId string, schedule string, timeoutMinutes int, ttl int) error
 	CreateUnreferencedDataCleanupJob(migrationRepository mRepository.MigrationRunRepository, unreferencedDataCleanupRepo repository.UnreferencedDataCleanupRepository, lockService service.LockService, instanceId string, schedule string, timeoutMinutes int) error
 	CreateMaintenanceVacuumCleanupJob(migrationRepository mRepository.MigrationRunRepository, lockService service.LockService, instanceId string, schedule string, timeoutMinutes int) error
-	CreateExpiredS3FilesCleanupJob(minioStorageService service.MinioStorageService, expiredS3FilesCleanupRepo repository.ExpiredS3FilesCleanupRepository, migrationRepository mRepository.MigrationRunRepository, lockService service.LockService, instanceId string, schedule string, timeoutMinutes int) error
 }
 
 func NewCleanupService(cp db.ConnectionProvider) CleanupService {
@@ -282,30 +279,6 @@ func (c cleanupServiceImpl) CreateMaintenanceVacuumCleanupJob(migrationRepositor
 		processor:           processor,
 	}
 	return c.addCleanupJob(runner, schedule, maintenanceVacuum)
-}
-
-func (c cleanupServiceImpl) CreateExpiredS3FilesCleanupJob(minioStorageService service.MinioStorageService, expiredS3FilesCleanupRepo repository.ExpiredS3FilesCleanupRepository, migrationRepository mRepository.MigrationRunRepository, lockService service.LockService, instanceId string, schedule string, timeoutMinutes int) error {
-	timeout := time.Duration(timeoutMinutes) * time.Minute
-	config := jobConfig{
-		jobType:    expiredS3FilesCleanup,
-		instanceId: instanceId,
-		ttl:        expiredS3FilesCleanupTTLDays,
-		timeout:    timeout,
-	}
-
-	processor := NewExpiredS3FilesCleanupJobProcessor(
-		minioStorageService,
-		expiredS3FilesCleanupRepo,
-	)
-
-	runner := &JobRunner{
-		cp:                  c.cp,
-		migrationRepository: migrationRepository,
-		lockService:         lockService,
-		config:              config,
-		processor:           processor,
-	}
-	return c.addCleanupJob(runner, schedule, expiredS3FilesCleanup)
 }
 
 func (c cleanupServiceImpl) addCleanupJob(job cron.Job, schedule string, jobType jobType) error {

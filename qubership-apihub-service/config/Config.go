@@ -215,8 +215,7 @@ type MaintenanceVacuumCleanupConfig struct {
 }
 
 type ExpiredS3FilesCleanupConfig struct {
-	Schedule       string
-	TimeoutMinutes int
+	TimeoutMinutes int `validate:"gt=0"`
 }
 
 type FeatureFlagsConfig struct {
