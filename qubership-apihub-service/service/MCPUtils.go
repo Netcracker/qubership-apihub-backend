@@ -6,30 +6,10 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	"github.com/mark3labs/mcp-go/mcp"
 )
-
-// CalculateNearestCompletedReleaseVersion calculates the nearest completed release version
-func CalculateNearestCompletedReleaseVersion() string {
-	t := time.Now()
-	year := t.Year()
-	month := int(t.Month())
-
-	// Calculate current quarter (1..4)
-	currentQuarter := (month-1)/3 + 1
-
-	// Move to previous quarter
-	prevQuarter := currentQuarter - 1
-	if prevQuarter == 0 {
-		prevQuarter = 4
-		year -= 1
-	}
-
-	return fmt.Sprintf("%d.%d", year, prevQuarter)
-}
 
 // convertPackagesToMCP filters and converts Packages to PackagesMCP
 // Removes packages with packageId containing ".RUNENV." and excludes defaultRole, permissions, releaseVersionPattern, createdAt, IsFavorite, ImageUrl, DeletedAt fields

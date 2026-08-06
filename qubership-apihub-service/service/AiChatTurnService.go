@@ -615,6 +615,8 @@ func (s *aiChatTurnServiceImpl) executeToolCalls(ctx context.Context, toolCalls 
 			result, err = s.mcpService.ExecuteGetOperationDiffTool(ctx, mcpReq)
 		case ToolNameGetDocument:
 			result, err = s.mcpService.ExecuteGetDocumentTool(ctx, mcpReq)
+		case ToolNameListWorkspaces:
+			result, err = s.mcpService.ExecuteListWorkspacesTool(ctx, mcpReq)
 		case ToolNameListDdlEntities:
 			result, err = s.mcpService.ExecuteListDdlEntitiesTool(ctx, mcpReq)
 		case ToolNameGetDdlEntity:
@@ -789,7 +791,7 @@ func (s *aiChatTurnServiceImpl) buildSystemMessage(ctx context.Context) string {
 
 	if cached && entry.data != "" && !cacheExpired {
 		log.Debugf("Using cached api-packages-list resource (expires at: %v)", entry.expiresAt)
-		return systemMessageBaseContent + "\n\nCURRENT WORKSPACE PACKAGES (from api-packages-list resource):\n" + entry.data
+		return systemMessageBaseContent + "\n\nCURRENT WORKSPACE PACKAGES (from mcp://api-packages-list resource):\n" + entry.data
 	}
 
 	log.Debugf("Cache expired or empty, fetching fresh api-packages-list resource")
@@ -798,7 +800,7 @@ func (s *aiChatTurnServiceImpl) buildSystemMessage(ctx context.Context) string {
 		log.Warnf("Failed to read api-packages-list resource: %v", err)
 		if cached && entry.data != "" {
 			log.Debugf("Using expired cache as fallback")
-			return systemMessageBaseContent + "\n\nCURRENT WORKSPACE PACKAGES (from api-packages-list resource):\n" + entry.data
+			return systemMessageBaseContent + "\n\nCURRENT WORKSPACE PACKAGES (from mcp://api-packages-list resource):\n" + entry.data
 		}
 		return systemMessageBaseContent
 	}
@@ -819,7 +821,7 @@ func (s *aiChatTurnServiceImpl) buildSystemMessage(ctx context.Context) string {
 		s.packagesListCache.entries[cacheKey] = newEntry
 		s.packagesListCache.mu.Unlock()
 		log.Debugf("Updated api-packages-list cache (expires at: %v)", newEntry.expiresAt)
-		return systemMessageBaseContent + "\n\nCURRENT WORKSPACE PACKAGES (from api-packages-list resource):\n" + resourceData
+		return systemMessageBaseContent + "\n\nCURRENT WORKSPACE PACKAGES (from mcp://api-packages-list resource):\n" + resourceData
 	}
 	return systemMessageBaseContent
 }

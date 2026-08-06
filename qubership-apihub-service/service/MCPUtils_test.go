@@ -341,6 +341,7 @@ func TestGetToolMetadataUsesGenericToolNames(t *testing.T) {
 		ToolNameGetOperationSpec,
 		ToolNameGetOperationDiff,
 		ToolNameGetDocument,
+		ToolNameListWorkspaces,
 		ToolNameListDdlEntities,
 		ToolNameGetDdlEntity,
 		ToolNameGetDdlEntityDiff,
@@ -356,10 +357,12 @@ func TestGetMCPServerToolMetadataIncludesV2AndNavigationTools(t *testing.T) {
 		names = append(names, item.Name)
 	}
 
+	require.Contains(t, names, ToolNameListWorkspaces)
 	require.Contains(t, names, ToolNameSearchOperationsV2)
 	require.Contains(t, names, ToolNameListWorkspacePackages)
 	require.Contains(t, names, ToolNameListPackageVersions)
-	// getToolMetadata (used by AI-chat) must stay unchanged: only the MCP server surface grows.
+	// list_workspaces is shared with AI Chat; workspace-aware search/navigation stay MCP-server-only.
+	require.Contains(t, getToolMetadataNames(t), ToolNameListWorkspaces)
 	require.NotContains(t, getToolMetadataNames(t), ToolNameSearchOperationsV2)
 }
 
@@ -453,10 +456,29 @@ func TestGetPackagesListFailsClosedWithoutSecurityContext(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestGetWorkspacesListFailsClosedWithoutSecurityContext(t *testing.T) {
+func TestExecuteListWorkspacesToolFailsClosedWithoutSecurityContext(t *testing.T) {
 	m := mcpService{}
 
-	_, err := m.GetWorkspacesList(context.Background())
+	_, err := m.ExecuteListWorkspacesTool(context.Background(), mcp.CallToolRequest{})
 
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "security context")
+}
+
+func TestValidateMCPGroup(t *testing.T) {
+	require.NoError(t, validateMCPGroup("", "SECRET"))
+	require.NoError(t, validateMCPGroup("SECRET", "SECRET"))
+	require.NoError(t, validateMCPGroup("SECRET.pkg2", "SECRET"))
+	require.Error(t, validateMCPGroup("OTHER.pkg", "SECRET"))
+	require.Error(t, validateMCPGroup("SECRETARY", "SECRET"))
+}
+
+func TestResolveMCPSearchPackageIds(t *testing.T) {
+	require.Equal(t, []string{"SECRET"}, resolveMCPSearchPackageIds("", "SECRET"))
+	require.Equal(t, []string{"SECRET.pkg2"}, resolveMCPSearchPackageIds("SECRET.pkg2", "SECRET"))
+}
+
+func TestResolveMCPSearchVersions(t *testing.T) {
+	require.Empty(t, resolveMCPSearchVersions(""))
+	require.Equal(t, []string{"linter@2"}, resolveMCPSearchVersions("linter@2"))
 }

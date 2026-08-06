@@ -36,11 +36,32 @@ func mcpLegacyMetricKey(ctx context.Context, packageOrGroup string) string {
 }
 
 func validateMCPGroup(group, workspace string) error {
-	if workspace != "" && !strings.HasPrefix(group, workspace) {
+	if group == "" {
+		return nil
+	}
+	if workspace != "" && group != workspace && !strings.HasPrefix(group, workspace+".") {
 		log.Errorf("Group parameter should start with %s. Given: %s", workspace, group)
 		return fmt.Errorf("Requested package is not allowed for search, only packages from workspace %s are allowed", workspace)
 	}
 	return nil
+}
+
+// resolveMCPSearchPackageIds maps an optional MCP group filter to SearchQueryReq.PackageIds.
+// When group is omitted, scope to the whole workspace (same as REST SearchController).
+func resolveMCPSearchPackageIds(group, workspace string) []string {
+	if group != "" {
+		return []string{group}
+	}
+	return []string{workspace}
+}
+
+// resolveMCPSearchVersions maps an optional MCP release filter to SearchQueryReq.Versions.
+// When release is omitted, return an empty slice so SQL does not filter by version.
+func resolveMCPSearchVersions(release string) []string {
+	if release == "" {
+		return []string{}
+	}
+	return []string{release}
 }
 
 func (m mcpService) ExecuteLegacyRestSearchTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -165,27 +186,29 @@ func (m mcpService) executeSearchCore(ctx context.Context, req mcp.CallToolReque
 
 	limit := req.GetInt("limit", 100)
 	page := req.GetInt("page", 0)
-	group := req.GetString("group", workspace)
-	releaseVersion := req.GetString("release", CalculateNearestCompletedReleaseVersion())
+	group := req.GetString("group", "")
+	releaseVersion := req.GetString("release", "")
 	if err := validateMCPGroup(group, workspace); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
+	packageIds := resolveMCPSearchPackageIds(group, workspace)
+	versions := resolveMCPSearchVersions(releaseVersion)
+
 	log.Infof("search_api_operations: apiType=%s, query=%s, limit=%d, page=%d, group=%s, releaseVersion=%s, workspace=%s", apiType, q, limit, page, group, releaseVersion, workspace)
 
-	m.monitoringService.IncreaseBusinessMetricCounter(UserIDFromMCPCtx(ctx), metric, mcpMetricKey(ctx, apiType, group))
-
-	var packageIds []string
-	if group != "" {
-		packageIds = []string{group}
+	metricPackage := group
+	if metricPackage == "" {
+		metricPackage = workspace
 	}
+	m.monitoringService.IncreaseBusinessMetricCounter(UserIDFromMCPCtx(ctx), metric, mcpMetricKey(ctx, apiType, metricPackage))
 
 	searchReq := view.SearchQueryReq{
 		SearchString: q,
 		ApiType:      apiType,
 		PackageIds:   packageIds,
 		Workspace:    workspace,
-		Versions:     []string{releaseVersion},
+		Versions:     versions,
 		Status:       view.Release.String(),
 		Limit:        limit,
 		Page:         page,
@@ -234,6 +257,36 @@ func (m mcpService) executeSearchCore(ctx context.Context, req mcp.CallToolReque
 	// Log MCP tool response at debug level
 	payloadJSON, _ := json.Marshal(payload)
 	log.Debugf("MCP tool search_api_operations response: %s", string(payloadJSON))
+
+	return mcp.NewToolResultStructuredOnly(payload), nil
+}
+
+// ExecuteListWorkspacesTool executes the list_workspaces tool
+func (m mcpService) ExecuteListWorkspacesTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	secCtx := GetSecCtxFromMCPCtx(ctx)
+	if secCtx == nil {
+		return nil, fmt.Errorf("missing security context for list_workspaces request")
+	}
+
+	log.Infof("list_workspaces: listing accessible workspaces")
+
+	m.monitoringService.IncreaseBusinessMetricCounter(UserIDFromMCPCtx(ctx), metrics.MCPListWorkspacesToolCalled, mcpListWorkspacesMetricKey)
+
+	workspaceListReq := view.PackageListReq{
+		Kind:  []string{entity.KIND_WORKSPACE},
+		Limit: mcpWorkspacesListLimit,
+	}
+
+	workspaces, err := m.packageService.GetPackagesList(secCtx, workspaceListReq, false)
+	if err != nil {
+		log.Errorf("Failed to get workspaces list: %v", err)
+		return nil, fmt.Errorf("failed to get workspaces list: %w", err)
+	}
+
+	payload := convertPackagesToWorkspacesMCP(workspaces)
+
+	payloadJSON, _ := json.Marshal(payload)
+	log.Debugf("MCP tool list_workspaces response: %s", string(payloadJSON))
 
 	return mcp.NewToolResultStructuredOnly(payload), nil
 }
