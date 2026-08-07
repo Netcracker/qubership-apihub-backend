@@ -333,17 +333,33 @@ func MakeProtobufOperationView(operationEnt *OperationEntity) view.ProtobufOpera
 	}
 }
 
+// makeAsyncAPIOperationMetadata projects stored metadata onto the wire shape every AsyncAPI
+// operation view embeds.
+//
+// One function rather than a literal per view: the seven call sites this replaced were identical
+// apart from which Metadata they read, and widening each of them by hand is precisely the edit
+// that gets missed at the next site. Address and PayloadIdentity went unnoticed for exactly that
+// reason - the builder had been sending them for a while before anything here carried them.
+//
+// Absent values arrive as "" and both new fields are omitempty, so a channel with no address and a
+// message with an inline payload stay absent on the wire rather than becoming empty strings.
+func makeAsyncAPIOperationMetadata(metadata Metadata) view.AsyncAPIOperationMetadata {
+	return view.AsyncAPIOperationMetadata{
+		Action:           metadata.GetAction(),
+		Channel:          metadata.GetChannel(),
+		Protocol:         metadata.GetProtocol(),
+		AsyncOperationId: metadata.GetAsyncOperationId(),
+		MessageId:        metadata.GetMessageId(),
+		Tags:             metadata.GetTags(),
+		Address:          metadata.GetAddress(),
+		PayloadIdentity:  metadata.GetPayloadIdentity(),
+	}
+}
+
 func MakeAsyncAPIOperationView(operationEnt *OperationEntity) view.AsyncAPIOperationView {
 	return view.AsyncAPIOperationView{
-		OperationListView: MakeCommonOperationView(operationEnt),
-		AsyncAPIOperationMetadata: view.AsyncAPIOperationMetadata{
-			Action:           operationEnt.Metadata.GetAction(),
-			Channel:          operationEnt.Metadata.GetChannel(),
-			Protocol:         operationEnt.Metadata.GetProtocol(),
-			AsyncOperationId: operationEnt.Metadata.GetAsyncOperationId(),
-			MessageId:        operationEnt.Metadata.GetMessageId(),
-			Tags:             operationEnt.Metadata.GetTags(),
-		},
+		OperationListView:         MakeCommonOperationView(operationEnt),
+		AsyncAPIOperationMetadata: makeAsyncAPIOperationMetadata(operationEnt.Metadata),
 	}
 }
 
@@ -396,14 +412,7 @@ func MakeDeprecatedOperationView(operationEnt OperationRichEntity, includeDeprec
 	case string(view.AsyncapiApiType):
 		return view.DeprecatedAsyncAPIOperationView{
 			DeprecatedOperationView: operationView,
-			AsyncAPIOperationMetadata: view.AsyncAPIOperationMetadata{
-				Action:           operationEnt.Metadata.GetAction(),
-				Channel:          operationEnt.Metadata.GetChannel(),
-				Protocol:         operationEnt.Metadata.GetProtocol(),
-				AsyncOperationId: operationEnt.Metadata.GetAsyncOperationId(),
-				MessageId:        operationEnt.Metadata.GetMessageId(),
-				Tags:             operationEnt.Metadata.GetTags(),
-			},
+			AsyncAPIOperationMetadata: makeAsyncAPIOperationMetadata(operationEnt.Metadata),
 		}
 	}
 	return operationView
@@ -461,14 +470,7 @@ func MakeSingleOperationView(operationEnt OperationRichEntity) interface{} {
 	case string(view.AsyncapiApiType):
 		return view.AsyncAPIOperationSingleView{
 			SingleOperationView: operationView,
-			AsyncAPIOperationMetadata: view.AsyncAPIOperationMetadata{
-				Action:           operationEnt.Metadata.GetAction(),
-				Channel:          operationEnt.Metadata.GetChannel(),
-				Protocol:         operationEnt.Metadata.GetProtocol(),
-				AsyncOperationId: operationEnt.Metadata.GetAsyncOperationId(),
-				MessageId:        operationEnt.Metadata.GetMessageId(),
-				Tags:             operationEnt.Metadata.GetTags(),
-			},
+			AsyncAPIOperationMetadata: makeAsyncAPIOperationMetadata(operationEnt.Metadata),
 		}
 	}
 	return operationView
@@ -609,27 +611,13 @@ func MakeOperationComparisonChangelogView(entity OperationComparisonChangelogEnt
 		if entity.OperationId != "" {
 			current = &view.AsyncAPIOperationComparisonChangelogView{
 				GenericComparisonOperationView: currentGenericView,
-				AsyncAPIOperationMetadata: view.AsyncAPIOperationMetadata{
-					Action:           entity.Metadata.GetAction(),
-					Channel:          entity.Metadata.GetChannel(),
-					Protocol:         entity.Metadata.GetProtocol(),
-					AsyncOperationId: entity.Metadata.GetAsyncOperationId(),
-					MessageId:        entity.Metadata.GetMessageId(),
-					Tags:             entity.Metadata.GetTags(),
-				},
+				AsyncAPIOperationMetadata: makeAsyncAPIOperationMetadata(entity.Metadata),
 			}
 		}
 		if entity.PreviousOperationId != "" {
 			previous = &view.AsyncAPIOperationComparisonChangelogView{
 				GenericComparisonOperationView: previousGenericView,
-				AsyncAPIOperationMetadata: view.AsyncAPIOperationMetadata{
-					Action:           entity.PreviousMetadata.GetAction(),
-					Channel:          entity.PreviousMetadata.GetChannel(),
-					Protocol:         entity.PreviousMetadata.GetProtocol(),
-					AsyncOperationId: entity.PreviousMetadata.GetAsyncOperationId(),
-					MessageId:        entity.PreviousMetadata.GetMessageId(),
-					Tags:             entity.PreviousMetadata.GetTags(),
-				},
+				AsyncAPIOperationMetadata: makeAsyncAPIOperationMetadata(entity.PreviousMetadata),
 			}
 		}
 
@@ -737,26 +725,12 @@ func MakeOperationComparisonChangesView(entity OperationComparisonChangelogEntit
 		if action == view.ChangelogActionRemove {
 			return view.AsyncAPIOperationComparisonChangesView{
 				OperationComparisonChangesView: operationComparisonChangelogView,
-				AsyncAPIOperationMetadata: view.AsyncAPIOperationMetadata{
-					Action:           entity.PreviousMetadata.GetAction(),
-					Channel:          entity.PreviousMetadata.GetChannel(),
-					Protocol:         entity.PreviousMetadata.GetProtocol(),
-					AsyncOperationId: entity.PreviousMetadata.GetAsyncOperationId(),
-					MessageId:        entity.PreviousMetadata.GetMessageId(),
-					Tags:             entity.PreviousMetadata.GetTags(),
-				},
+				AsyncAPIOperationMetadata: makeAsyncAPIOperationMetadata(entity.PreviousMetadata),
 			}
 		} else {
 			return view.AsyncAPIOperationComparisonChangesView{
 				OperationComparisonChangesView: operationComparisonChangelogView,
-				AsyncAPIOperationMetadata: view.AsyncAPIOperationMetadata{
-					Action:           entity.Metadata.GetAction(),
-					Channel:          entity.Metadata.GetChannel(),
-					Protocol:         entity.Metadata.GetProtocol(),
-					AsyncOperationId: entity.Metadata.GetAsyncOperationId(),
-					MessageId:        entity.Metadata.GetMessageId(),
-					Tags:             entity.Metadata.GetTags(),
-				},
+				AsyncAPIOperationMetadata: makeAsyncAPIOperationMetadata(entity.Metadata),
 			}
 		}
 	}

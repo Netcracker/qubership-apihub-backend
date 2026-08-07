@@ -261,6 +261,16 @@ func (a *BuildResultToEntitiesReader) ReadOperationsToEntities() ([]*entity.Oper
 			metadata.SetProtocol(operationMetadata.GetStringValue("protocol"))
 			metadata.SetAsyncOperationId(operationMetadata.GetStringValue("asyncOperationId"))
 			metadata.SetMessageId(operationMetadata.GetStringValue("messageId"))
+			// Both are optional and the builder omits them rather than sending an empty value: a
+			// channel may have no address, and a message with an inline payload has no reusable
+			// schema declaration to anchor on. Carry that absence through instead of storing "",
+			// which the pairing would otherwise have to treat as a value.
+			if address := operationMetadata.GetStringValue("address"); address != "" {
+				metadata.SetAddress(address)
+			}
+			if payloadIdentity := operationMetadata.GetStringValue("payloadIdentity"); payloadIdentity != "" {
+				metadata.SetPayloadIdentity(payloadIdentity)
+			}
 		}
 
 		if operationMetadata.GetOperationIdV1() != "" {

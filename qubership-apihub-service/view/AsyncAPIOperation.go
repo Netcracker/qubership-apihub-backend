@@ -20,6 +20,15 @@ type AsyncAPIOperationMetadata struct {
 	AsyncOperationId string   `json:"asyncOperationId"`
 	MessageId        string   `json:"messageId"`
 	Tags             []string `json:"tags,omitempty"`
+	// Address is the channel's address - what a consumer binds to, as opposed to Channel above,
+	// which is a display title. PayloadIdentity is the declaration path of the message's payload
+	// schema. The builder pairs operations across versions on the two of them together, which is
+	// what lets a version survive an id whose generated suffix changed.
+	//
+	// Both omitempty: the builder omits them for a channel with no address and for a message with
+	// an inline payload, and a client must be able to tell that apart from an empty value.
+	Address         string `json:"address,omitempty"`
+	PayloadIdentity string `json:"payloadIdentity,omitempty"`
 }
 
 type AsyncAPIOperationSingleView struct {

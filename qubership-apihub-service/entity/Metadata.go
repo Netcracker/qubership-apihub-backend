@@ -33,6 +33,8 @@ const CHANNEL_KEY = "channel"
 const PROTOCOL_KEY = "protocol"
 const ASYNC_OPERATION_ID_KEY = "asyncOperationId"
 const MESSAGE_ID_KEY = "messageId"
+const ADDRESS_KEY = "address"
+const PAYLOAD_IDENTITY_KEY = "payloadIdentity"
 const OPERATION_ID_V1 = "operationIdV1"
 
 type Metadata map[string]interface{}
@@ -405,6 +407,44 @@ func (m Metadata) SetMessageId(messageId string) {
 func (m Metadata) GetMessageId() string {
 	if messageId, ok := m[MESSAGE_ID_KEY].(string); ok {
 		return messageId
+	}
+	return ""
+}
+
+// SetAddress records the AsyncAPI channel's address - what a consumer binds to, as opposed to
+// GetChannel above, which holds a display title. Together with the payload identity it is what
+// pairs operations across versions whose generated ids differ.
+//
+// The builder omits the field entirely when a channel has no address, so callers must set it only
+// when non-empty: storing "" would make "this channel has no address" indistinguishable from a
+// value, and the pairing treats the two differently.
+func (m Metadata) SetAddress(address string) {
+	m[ADDRESS_KEY] = address
+}
+
+func (m Metadata) GetAddress() string {
+	if address, ok := m[ADDRESS_KEY].(string); ok {
+		return address
+	}
+	return ""
+}
+
+// SetPayloadIdentity records the declaration path of the message's payload schema, e.g.
+// "components/schemas/OrderEvent".
+//
+// Store and compare it verbatim - the format belongs to the builder's pairing algorithm and is not
+// stable. Nothing here may parse it; in particular no display name may be derived from its last
+// segment.
+//
+// Omitted by the builder for a message whose payload has no reusable declaration to anchor on, so
+// the same "set only when non-empty" rule as SetAddress applies.
+func (m Metadata) SetPayloadIdentity(payloadIdentity string) {
+	m[PAYLOAD_IDENTITY_KEY] = payloadIdentity
+}
+
+func (m Metadata) GetPayloadIdentity() string {
+	if payloadIdentity, ok := m[PAYLOAD_IDENTITY_KEY].(string); ok {
+		return payloadIdentity
 	}
 	return ""
 }
