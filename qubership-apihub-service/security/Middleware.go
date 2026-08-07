@@ -223,5 +223,5 @@ func respondWithAuthFailedError(w http.ResponseWriter, err error) {
 		Message: http.StatusText(http.StatusUnauthorized),
 		Debug:   fmt.Sprintf("%v", err),
 	}
-	utils.RespondWithJson(w, customErr.Status, customErr)
+	utils.RespondWithCustomError(w, customErr)
 }
