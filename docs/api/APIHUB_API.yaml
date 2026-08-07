@@ -3276,6 +3276,15 @@ paths:
                                   operationsCount:
                                     type: number
                                     description: Number of operations in which the apiAudience was changed from previousAudience to currentAudience
+                            hasErrors:
+                              description: |
+                                Flag showing that at least one document of this API type has a critical problem
+                                detected during the build.
+
+                                Note a document that failed before its API type could be determined is not
+                                counted here, but still sets hasErrors on the version.
+                              type: boolean
+                              default: false
                       contractsSummary:
                         $ref: "#/components/schemas/VersionContractsSummary"
                   - type: object
@@ -10438,6 +10447,120 @@ paths:
               examples:
                 InternalServerError:
                   $ref: "#/components/examples/InternalServerError"
+  "/api/v2/packages/{packageId}/versions/{version}/notifications":
+    parameters:
+      - $ref: "#/components/parameters/packageId"
+      - $ref: "#/components/parameters/version"
+    get:
+      tags:
+        - Versions
+      summary: Get package version notifications
+      description: |
+        Get the list of messages produced by api-processor while building the package version: parse,
+        validation and comparison problems.
+
+        A message with severity = error is a critical problem. A version that has at least one such message can
+        only be published in `draft` status, and is marked with hasErrors = true. Documents affected by such a
+        message are marked with hasErrors = true as well.
+
+        A message is not necessarily attributable to a document: problems that belong to the version as a whole,
+        e.g. an unresolvable previous version, have no documentId. Query the endpoint without filters to get
+        those.
+
+        Messages are denormalized by document: a problem that concerns several documents at once is returned as
+        several messages with the same text, one per affected document.
+      operationId: getPackagesIdVersionsIdNotifications
+      parameters:
+        - name: documentId
+          in: query
+          description: Filter by document slug. Returns the messages attributed to the document.
+          schema:
+            type: string
+            example: qitmf-v5-11-json
+        - name: severity
+          in: query
+          description: Filter by severity. Repeat the parameter to filter by several values.
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                - error
+                - warning
+                - information
+                - hint
+          example: ["error"]
+        - name: category
+          in: query
+          description: Filter by message category. Repeat the parameter to filter by several values.
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/NotificationCategoryEnum"
+          example: ["document-build"]
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notifications:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/VersionNotification"
+              examples: {}
+        "301":
+          description: Moved Permanently
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                IncorrectInputParams:
+                  $ref: "#/components/examples/IncorrectInputParameters"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                PackageNotFound:
+                  $ref: "#/components/examples/PackageNotFound"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
   "/api/v1/ai-chat/chats":
     get:
       tags:
@@ -11502,6 +11625,72 @@ components:
                 - $ref: "#/components/schemas/ChangeSummary"
                 - type: object
                   description: Number of DDL entities impacted by each severity type.
+    NotificationCategoryEnum:
+      description: |
+        Category of a package version build notification, used to group and filter messages.
+          * **document-parsing** - the document could not be parsed.
+          * **document-build** - the document could not be built.
+          * **operation-build** - operations could not be built from the document.
+          * **validation** - the document does not satisfy a specification rule.
+          * **duplicate** - a duplicated id within or between documents.
+          * **references** - a reference in the document could not be resolved.
+          * **changelog** - a problem detected while calculating the changelog.
+          * **resolution** - a version, document or data could not be resolved.
+          * **mcp** - an MCP specific problem.
+          * **packaging** - a problem detected while creating the build result.
+      type: string
+      enum:
+        - document-parsing
+        - document-build
+        - operation-build
+        - validation
+        - duplicate
+        - references
+        - changelog
+        - resolution
+        - mcp
+        - packaging
+      example: document-build
+    VersionNotification:
+      description: |
+        A message produced by api-processor while building the package version.
+      type: object
+      title: Version notification
+      required:
+        - category
+        - severity
+        - message
+      properties:
+        category:
+          $ref: "#/components/schemas/NotificationCategoryEnum"
+        severity:
+          description: |
+            Severity of the message. A message with severity = error is a critical problem that prevents the
+            version from being published in `release` status.
+          type: string
+          enum:
+            - error
+            - warning
+            - information
+            - hint
+          example: error
+        message:
+          description: Human readable message text.
+          type: string
+          example: "Cannot process the \"docs/events.yaml\" document. Unexpected token"
+        documentId:
+          description: |
+            Slug of the document the message is attributed to, matching the `slug` field of the version
+            documents.
+
+            Messages are denormalized by document: a problem that concerns several documents at once, e.g. an
+            operation id duplicated between two documents, is returned as several messages with the same text,
+            one per affected document.
+
+            Absent when the message is not attributable to any document, e.g. the previous version of the
+            comparison could not be resolved.
+          type: string
+          example: "events-yaml"
     VersionContractsSummary:
       description: |
         Summary of contract entities published in a package version, keyed by contract type.
@@ -11524,6 +11713,12 @@ components:
                 - $ref: "#/components/schemas/ChangeSummary"
                 - type: object
                   description: Number of DDL entities impacted by each severity type. Present only when the version has a previous version to compare against.
+            hasErrors:
+              description: |
+                Flag showing that at least one DDL document of the version has a critical problem detected
+                during the build.
+              type: boolean
+              default: false
         mcp:
           description: MCP summary keyed by MCP endpoint (one entry per published MCP endpoint in this version).
           type: object
@@ -11539,11 +11734,18 @@ components:
               resourcesCount:
                 type: integer
                 default: 0
+              hasErrors:
+                description: |
+                  Flag showing that at least one MCP document of this endpoint has a critical problem detected
+                  during the build.
+                type: boolean
+                default: false
           example:
             /mcp:
               toolsCount: 3
               promptsCount: 1
               resourcesCount: 2
+              hasErrors: false
     ExportVersion:
       type: object
       title: Export entire version
@@ -12187,6 +12389,14 @@ components:
         apiProcessorVerson:
           description: Version of api-processor with which current version was built.
           type: string
+        hasErrors:
+          description: |
+            Flag showing that at least one document of the version has a critical problem detected during the
+            build. Such a version can only be published in `draft` status.
+
+            Use `GET /api/v2/packages/{packageId}/versions/{version}/notifications` to get the details.
+          type: boolean
+          default: false
     PackageVersionContent:
       description: Published package version content
       type: object
@@ -12242,6 +12452,17 @@ components:
         apiProcessorVerson:
           description: Version of api-processor with which current version was built.
           type: string
+        hasErrors:
+          description: |
+            Flag showing that at least one document of the version has a critical problem detected during the
+            build. Such a version can only be published in `draft` status.
+
+            Note the flag can be true while every document has hasErrors = false, when the problem belongs to
+            the version as a whole rather than to a document, e.g. the previous version could not be resolved.
+
+            Use `GET /api/v2/packages/{packageId}/versions/{version}/notifications` to get the details.
+          type: boolean
+          default: false
     PackageVersionFile:
       description: Parameters of published file in package version
       type: object
@@ -12294,6 +12515,15 @@ components:
             - unknown
           default: unknown
           example: "unknown"
+        hasErrors:
+          description: |
+            Flag showing that the document has a critical problem detected during the build. Such a document is
+            published, but exposes no operations or contract entities.
+
+            Use `GET /api/v2/packages/{packageId}/versions/{version}/notifications?documentId={slug}` to get
+            the details.
+          type: boolean
+          default: false
     PackageTransformationFile:
       description: Parameters of published file in package version
       type: object
