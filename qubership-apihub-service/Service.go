@@ -103,7 +103,6 @@ func main() {
 
 	migrationRunRepository := mRepository.NewMigrationRunRepository(cp)
 	buildCleanupRepository := repository.NewBuildCleanupRepository(cp)
-	expiredS3FilesCleanupRepository := repository.NewExpiredS3FilesCleanupRepository(cp)
 	transitionRepository := repository.NewTransitionRepository(cp)
 	buildResultRepository := repository.NewBuildResultRepository(cp)
 	publishedRepository, err := repository.NewPublishedRepositoryPG(cp)
@@ -279,7 +278,7 @@ func main() {
 	comparisonService := service.NewComparisonService(publishedRepository, operationRepository, packageVersionEnrichmentService, ddlContractServiceForVersion)
 	businessMetricService := service.NewBusinessMetricService(businessMetricRepository)
 
-	dbCleanupService := service.NewDBCleanupService(buildCleanupRepository, expiredS3FilesCleanupRepository, migrationRunRepository, minioStorageService, systemInfoService)
+	dbCleanupService := service.NewDBCleanupService(buildCleanupRepository, migrationRunRepository, minioStorageService, systemInfoService)
 	if err := dbCleanupService.CreateCleanupJob(systemInfoService.GetBuildsCleanupSchedule()); err != nil {
 		log.Error("Failed to start cleaning job" + err.Error())
 	}

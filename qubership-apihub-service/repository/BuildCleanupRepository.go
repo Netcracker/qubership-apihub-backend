@@ -22,6 +22,7 @@ type BuildCleanupRepository interface {
 	RemoveMigrationBuildSourceData(ctx context.Context, ids []string) (deletedRows int, err error)
 	StoreCleanup(ent *entity.BuildCleanupEntity) error
 	GetCleanup(runId int) (*entity.BuildCleanupEntity, error)
+	UpdateDeletedS3Files(ctx context.Context, runId int, count int, details string) error
 }
 
 func NewBuildCleanupRepository(cp db.ConnectionProvider) BuildCleanupRepository {
@@ -145,6 +146,12 @@ func (b buildCleanUpRepositoryImpl) StoreCleanup(ent *entity.BuildCleanupEntity)
 
 func (b buildCleanUpRepositoryImpl) updateCleanupTx(tx *pg.Tx, ent entity.BuildCleanupEntity) error {
 	_, err := tx.Model(&ent).Where("run_id = ?", ent.RunId).Update()
+	return err
+}
+
+func (b buildCleanUpRepositoryImpl) UpdateDeletedS3Files(ctx context.Context, runId int, count int, details string) error {
+	query := b.cp.GetConnection().ModelContext(ctx, &entity.BuildCleanupEntity{}).Set("expired_s3_files_count=?", count).Set("expired_s3_files_details=?", details)
+	_, err := query.Where("run_id = ?", runId).Update()
 	return err
 }
 
