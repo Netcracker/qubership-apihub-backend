@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/db"
@@ -10,10 +11,10 @@ import (
 )
 
 type ActivityTrackingRepository interface {
-	CreateEvent(ent *entity.ActivityTrackingEntity) error
+	CreateEvent(ctx context.Context, ent *entity.ActivityTrackingEntity) error
 
-	GetEvents(scope view.PackageReadScope, req view.ActivityHistoryReq, userId string) ([]entity.EnrichedActivityTrackingEntity, error)
-	GetEventsForPackages(scope view.PackageReadScope, req view.ActivityHistoryReq, packageIds []string) ([]entity.EnrichedActivityTrackingEntity, error)
+	GetEvents(ctx context.Context, scope view.PackageReadScope, req view.ActivityHistoryReq, userId string) ([]entity.EnrichedActivityTrackingEntity, error)
+	GetEventsForPackages(ctx context.Context, scope view.PackageReadScope, req view.ActivityHistoryReq, packageIds []string) ([]entity.EnrichedActivityTrackingEntity, error)
 }
 
 func NewActivityTrackingRepository(cp db.ConnectionProvider) ActivityTrackingRepository {
@@ -26,15 +27,15 @@ type activityTrackingRepositoryImpl struct {
 	cp db.ConnectionProvider
 }
 
-func (a activityTrackingRepositoryImpl) CreateEvent(ent *entity.ActivityTrackingEntity) error {
-	_, err := a.cp.GetConnection().Model(ent).Insert()
+func (a activityTrackingRepositoryImpl) CreateEvent(ctx context.Context, ent *entity.ActivityTrackingEntity) error {
+	_, err := a.cp.GetConnection().WithContext(ctx).Model(ent).Insert()
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (a activityTrackingRepositoryImpl) GetEvents(scope view.PackageReadScope, req view.ActivityHistoryReq, userId string) ([]entity.EnrichedActivityTrackingEntity, error) {
+func (a activityTrackingRepositoryImpl) GetEvents(ctx context.Context, scope view.PackageReadScope, req view.ActivityHistoryReq, userId string) ([]entity.EnrichedActivityTrackingEntity, error) {
 	var result []entity.EnrichedActivityTrackingEntity
 
 	query, params, err := buildActivityEventsQuery(scope, req, userId, nil)
@@ -42,13 +43,13 @@ func (a activityTrackingRepositoryImpl) GetEvents(scope view.PackageReadScope, r
 		return nil, err
 	}
 
-	if _, err := a.cp.GetConnection().Model(&params).Query(&result, query); err != nil {
+	if _, err := a.cp.GetConnection().WithContext(ctx).Model(&params).Query(&result, query); err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 
-func (a activityTrackingRepositoryImpl) GetEventsForPackages(scope view.PackageReadScope, req view.ActivityHistoryReq, packageIds []string) ([]entity.EnrichedActivityTrackingEntity, error) {
+func (a activityTrackingRepositoryImpl) GetEventsForPackages(ctx context.Context, scope view.PackageReadScope, req view.ActivityHistoryReq, packageIds []string) ([]entity.EnrichedActivityTrackingEntity, error) {
 	var result []entity.EnrichedActivityTrackingEntity
 
 	query, params, err := buildActivityEventsQuery(scope, req, "", packageIds)
@@ -56,7 +57,7 @@ func (a activityTrackingRepositoryImpl) GetEventsForPackages(scope view.PackageR
 		return nil, err
 	}
 
-	if _, err := a.cp.GetConnection().Model(&params).Query(&result, query); err != nil {
+	if _, err := a.cp.GetConnection().WithContext(ctx).Model(&params).Query(&result, query); err != nil {
 		return nil, err
 	}
 	return result, nil

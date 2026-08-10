@@ -6,9 +6,9 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -107,11 +107,10 @@ func (a activityTrackingControllerImpl) GetActivityHistory(w http.ResponseWriter
 		return
 	}
 
-	ctx := context.Create(r)
-
+	ctx := secctx.MakeUserContext(r)
 	scope, err := a.roleService.GetPackageReadScope(ctx)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to resolve activity read scope", err)
+		utils.RespondWithError(w, r, "Failed to resolve activity read scope", err)
 		return
 	}
 
@@ -126,7 +125,7 @@ func (a activityTrackingControllerImpl) GetActivityHistory(w http.ResponseWriter
 	}
 	result, err := a.activityTrackingService.GetActivityHistory(ctx, activityHistoryReq, scope)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get activity events", err)
+		utils.RespondWithError(w, r, "Failed to get activity events", err)
 		return
 	}
 	utils.RespondWithJson(w, http.StatusOK, result)
@@ -134,7 +133,7 @@ func (a activityTrackingControllerImpl) GetActivityHistory(w http.ResponseWriter
 
 func (a activityTrackingControllerImpl) GetActivityHistoryForPackage(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := a.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, a.ptHandler, packageId, "Failed to check user privileges", err)
@@ -210,7 +209,7 @@ func (a activityTrackingControllerImpl) GetActivityHistoryForPackage(w http.Resp
 		Limit:      limit,
 		Page:       page,
 	}
-	result, err := a.activityTrackingService.GetEventsForPackage(packageId, includeRefs, activityHistoryReq)
+	result, err := a.activityTrackingService.GetEventsForPackage(ctx, packageId, includeRefs, activityHistoryReq)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, a.ptHandler, packageId, fmt.Sprintf("Failed to get activity events for package %s", packageId), err)
 		return

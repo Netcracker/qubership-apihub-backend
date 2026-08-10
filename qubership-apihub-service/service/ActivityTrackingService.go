@@ -1,24 +1,28 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/repository"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	log "github.com/sirupsen/logrus"
 )
 
-type ActivityTrackingService interface {
-	TrackEvent(event view.ActivityTrackingEvent) // return no error due to async processing
+const activityTrackingTimeout = 30 * time.Second
 
-	GetActivityHistory(ctx context.SecurityContext, req view.ActivityHistoryReq, scope view.PackageReadScope) (*view.PkgActivityResponse, error)
-	GetEventsForPackage(packageId string, includeRefs bool, req view.ActivityHistoryReq) (*view.PkgActivityResponse, error)
+type ActivityTrackingService interface {
+	TrackEvent(ctx context.Context, event view.ActivityTrackingEvent) // return no error due to async processing
+
+	GetActivityHistory(ctx context.Context, req view.ActivityHistoryReq, scope view.PackageReadScope) (*view.PkgActivityResponse, error)
+	GetEventsForPackage(ctx context.Context, packageId string, includeRefs bool, req view.ActivityHistoryReq) (*view.PkgActivityResponse, error)
 }
 
 func NewActivityTrackingService(repo repository.ActivityTrackingRepository, publishedRepo repository.PublishedRepository, userService UserService) ActivityTrackingService {
@@ -31,20 +35,23 @@ type activityTrackingServiceImpl struct {
 	userService   UserService
 }
 
-func (a activityTrackingServiceImpl) TrackEvent(event view.ActivityTrackingEvent) {
+func (a activityTrackingServiceImpl) TrackEvent(ctx context.Context, event view.ActivityTrackingEvent) {
+	// Detach from the request but keep a safety-net bound; a single telemetry insert should be quick.
+	bgCtx, cancel := context.WithTimeout(secctx.Detach(ctx), activityTrackingTimeout)
 	utils.SafeAsync(func() {
-		a.trackEventInternal(event)
+		defer cancel()
+		a.trackEventInternal(bgCtx, event)
 	})
 }
 
-func (a activityTrackingServiceImpl) GetActivityHistory(ctx context.SecurityContext, req view.ActivityHistoryReq, scope view.PackageReadScope) (*view.PkgActivityResponse, error) {
+func (a activityTrackingServiceImpl) GetActivityHistory(ctx context.Context, req view.ActivityHistoryReq, scope view.PackageReadScope) (*view.PkgActivityResponse, error) {
 	if scope.Kind == view.PackageReadScopeNone {
 		return &view.PkgActivityResponse{Events: make([]view.PkgActivityResponseItem, 0)}, nil
 	}
 
 	req.Types = view.ConvertEventTypes(req.Types)
 
-	ents, err := a.repo.GetEvents(scope, req, ctx.GetUserId())
+	ents, err := a.repo.GetEvents(ctx, scope, req, secctx.GetUserId(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get activity events: %w", err)
 	}
@@ -52,8 +59,8 @@ func (a activityTrackingServiceImpl) GetActivityHistory(ctx context.SecurityCont
 	return a.makePkgActivityResponse(ents)
 }
 
-func (a activityTrackingServiceImpl) GetEventsForPackage(packageId string, includeRefs bool, req view.ActivityHistoryReq) (*view.PkgActivityResponse, error) {
-	pkgEnt, err := a.publishedRepo.GetPackageIncludingDeleted(packageId)
+func (a activityTrackingServiceImpl) GetEventsForPackage(ctx context.Context, packageId string, includeRefs bool, req view.ActivityHistoryReq) (*view.PkgActivityResponse, error) {
+	pkgEnt, err := a.publishedRepo.GetPackageIncludingDeleted(ctx, packageId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get package %s for events: %w", packageId, err)
 	}
@@ -68,7 +75,7 @@ func (a activityTrackingServiceImpl) GetEventsForPackage(packageId string, inclu
 
 	var ids []string
 	if includeRefs {
-		childIds, err := a.publishedRepo.GetAllChildPackageIdsIncludingParent(packageId)
+		childIds, err := a.publishedRepo.GetAllChildPackageIdsIncludingParent(ctx, packageId)
 		if err != nil {
 			return nil, err
 		}
@@ -81,7 +88,7 @@ func (a activityTrackingServiceImpl) GetEventsForPackage(packageId string, inclu
 
 	// The caller already enforced read access on packageId, and ids holds that package plus, optionally, its
 	// descendants, which inherit read from it
-	ents, err := a.repo.GetEventsForPackages(view.PackageReadScope{Kind: view.PackageReadScopeAll}, req, ids)
+	ents, err := a.repo.GetEventsForPackages(ctx, view.PackageReadScope{Kind: view.PackageReadScopeAll}, req, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -148,9 +155,9 @@ func (a activityTrackingServiceImpl) makePkgActivityResponse(ents []entity.Enric
 	return &result, nil
 }
 
-func (a activityTrackingServiceImpl) trackEventInternal(event view.ActivityTrackingEvent) {
+func (a activityTrackingServiceImpl) trackEventInternal(ctx context.Context, event view.ActivityTrackingEvent) {
 	ent := entity.MakeActivityTrackingEventEntity(event)
-	err := a.repo.CreateEvent(&ent)
+	err := utils.WrapContextError(ctx, a.repo.CreateEvent(ctx, &ent))
 	if err != nil {
 		log.Errorf("Failed to save tracked event %+v to DB with err: %s", ent, err)
 	}
