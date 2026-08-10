@@ -87,14 +87,16 @@ type ZeroDayConfig struct {
 }
 
 type TechnicalParameters struct {
-	InstanceId                  string
-	BasePath                    string
-	BackendVersion              string
-	ListenAddress               string `validate:"required"`
-	MetricsGetterSchedule       string
-	ApiSpecDirectory            string
-	MigrationLockMaxWaitMinutes int
-	EphemeralFileDirectory      string
+	InstanceId                   string
+	BasePath                     string
+	BackendVersion               string
+	ListenAddress                string `validate:"required"`
+	MetricsGetterSchedule        string
+	ApiSpecDirectory             string
+	MigrationLockMaxWaitMinutes  int
+	EphemeralFileDirectory       string
+	RequestTimeoutSec            int `validate:"gte=0,lte=590"` // The upper bound must stay < 600s nginx generic tier so the app's own error response wins. 0 disables the timeout.
+	TransitionMoveTimeoutMinutes int `validate:"gt=0"`
 }
 
 type BusinessParameters struct {
@@ -123,6 +125,14 @@ type S3Config struct {
 	Crt                  string
 	BucketName           string
 	StoreOnlyBuildResult bool
+	MigrationTimeouts    S3MigrationTimeoutsConfig
+}
+
+type S3MigrationTimeoutsConfig struct {
+	// Upper bounds keep the seconds-to-Duration conversion from overflowing into a negative deadline.
+	S3OperationSec       int `validate:"gt=0,lte=86400"`
+	DatabaseOperationSec int `validate:"gt=0,lte=86400"`
+	BulkDeleteMinutes    int `validate:"gt=0,lte=1440"`
 }
 
 type OlricConfig struct {
@@ -190,28 +200,29 @@ type RevisionsCleanupConfig struct {
 
 type ComparisonsCleanupConfig struct {
 	Schedule       string
-	TimeoutMinutes int
+	TimeoutMinutes int `validate:"gt=0"`
 	TTLDays        int
 }
 
 type SoftDeletedDataCleanupConfig struct {
 	Schedule       string
-	TimeoutMinutes int
+	TimeoutMinutes int `validate:"gt=0"`
 	TTLDays        int
 }
 
 type UnreferencedDataCleanupConfig struct {
 	Schedule       string
-	TimeoutMinutes int
+	TimeoutMinutes int `validate:"gt=0"`
 }
 
 type BuildsCleanupConfig struct {
-	Schedule string
+	Schedule       string
+	TimeoutMinutes int `validate:"gt=0"`
 }
 
 type MaintenanceVacuumCleanupConfig struct {
 	Schedule       string
-	TimeoutMinutes int
+	TimeoutMinutes int `validate:"gt=0"`
 }
 
 type ExpiredS3FilesCleanupConfig struct {
