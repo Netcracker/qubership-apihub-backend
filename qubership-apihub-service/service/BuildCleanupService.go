@@ -18,8 +18,7 @@ const (
 	// expiredS3FilesTTLDays must stay above the 30-day retention of failed builds,
 	// otherwise the sweep removes files of builds that are still referenced in the database
 	expiredS3FilesTTLDays = 45
-	// cleanupRunUpdateTimeout bounds the write of the cleanup run result, which must happen even when the job context
-	// is already cancelled by its timeout
+	// cleanupRunUpdateTimeout bounds the write of the cleanup run result when the phase context is already cancelled
 	cleanupRunUpdateTimeout = 10 * time.Second
 )
 
@@ -181,15 +180,19 @@ func (j BuildCleanupJob) cleanupOldBuilds(ctx context.Context, runId int, schedu
 }
 
 func (j BuildCleanupJob) cleanupExpiredS3Files(ctx context.Context, runId int) {
+	timeout := time.Duration(j.systemInfoService.GetExpiredS3FilesCleanupTimeout()) * time.Minute
+	phaseCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
 	olderThan := time.Now().AddDate(0, 0, -expiredS3FilesTTLDays)
-	deletedCount, err := j.minioStorageService.RemoveObjectsOlderThan(ctx, view.BUILD_RESULT_TABLE, olderThan)
+	deletedCount, err := j.minioStorageService.RemoveObjectsOlderThan(phaseCtx, view.BUILD_RESULT_TABLE, olderThan)
 	details := ""
 	if err != nil {
 		log.Errorf("Failed to remove old S3 objects: %v", err)
 		details = err.Error()
 	}
 
-	updateCtx, updateCancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupRunUpdateTimeout)
+	updateCtx, updateCancel := context.WithTimeout(context.WithoutCancel(phaseCtx), cleanupRunUpdateTimeout)
 	defer updateCancel()
 
 	if err := j.buildCleanupRepository.UpdateDeletedS3Files(updateCtx, runId, deletedCount, details); err != nil {
