@@ -154,7 +154,6 @@ type CleanupConfig struct {
 	MaintenanceVacuum MaintenanceVacuumCleanupConfig
 	Builds            BuildsCleanupConfig
 	EphemeralFiles    EphemeralFilesCleanupConfig
-	ExpiredS3Files    ExpiredS3FilesCleanupConfig
 }
 
 type EphemeralFilesCleanupConfig struct {
@@ -218,6 +217,7 @@ type UnreferencedDataCleanupConfig struct {
 type BuildsCleanupConfig struct {
 	Schedule       string
 	TimeoutMinutes int `validate:"gt=0"`
+	ExpiredS3Files ExpiredS3FilesCleanupConfig
 }
 
 type MaintenanceVacuumCleanupConfig struct {
