@@ -118,16 +118,16 @@ func (r *mcpContractRepositoryImpl) GlobalSearchForMCP(ctx context.Context, sear
 	var result []entity.MCPContractSearchResult
 	mcpSearchQuery := `
 select
-    me.package_id,
-    pg.name,
-    me.version,
-    me.revision,
-    pv.status,
-    me.mcp_entity_id,
-    me.kind,
-    me.title,
-    me.mcp_endpoint,
-    parent_package_names(me.package_id) parent_names
+	me.package_id,
+	pg.name,
+	me.version,
+	me.revision,
+	pv.status,
+	me.mcp_entity_id,
+	me.kind,
+	me.title,
+	me.mcp_endpoint,
+	parent_package_names(me.package_id) parent_names
 from mcp_entities me
          inner join (
     SELECT DISTINCT ON (rank, package_id, mcp_entity_id)

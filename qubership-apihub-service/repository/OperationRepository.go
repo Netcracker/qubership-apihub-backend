@@ -1302,20 +1302,20 @@ func (o operationRepositoryImpl) GlobalSearchForOperations(ctx context.Context, 
 
 	operationsSearchQuery := `
 select
-    o.package_id,
-    pg.name,
-    o.version,
-    o.revision,
-    all_ts.status,
-    o.operation_id,
-    o.title,
-    o.data_hash,
-    o.deprecated,
-    o.kind,
-    o.type,
-    o.metadata,
-    o.document_id,
-    parent_package_names(o.package_id) parent_names
+	o.package_id,
+	pg.name,
+	o.version,
+	o.revision,
+	all_ts.status,
+	o.operation_id,
+	o.title,
+	o.data_hash,
+	o.deprecated,
+	o.kind,
+	o.type,
+	o.metadata,
+	o.document_id,
+	parent_package_names(o.package_id) parent_names
 from operation o
     inner join (
         SELECT DISTINCT ON (rank, package_id, operation_id)

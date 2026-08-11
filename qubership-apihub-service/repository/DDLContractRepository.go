@@ -245,16 +245,16 @@ func (r *ddlContractRepositoryImpl) GlobalSearchForDDL(ctx context.Context, sear
 	var result []entity.DDLContractSearchResult
 	ddlSearchQuery := `
 select
-    dt.package_id,
-    pg.name,
-    dt.version,
-    dt.revision,
-    pv.status,
-    dt.ddl_entity_id,
-    dt.kind,
-    dt.schema_name,
-    dt.name,
-    parent_package_names(dt.package_id) parent_names
+	dt.package_id,
+	pg.name,
+	dt.version,
+	dt.revision,
+	pv.status,
+	dt.ddl_entity_id,
+	dt.kind,
+	dt.schema_name,
+	dt.name,
+	parent_package_names(dt.package_id) parent_names
 from ddl_tables dt
          inner join (
     SELECT DISTINCT ON (rank, package_id, ddl_entity_id)
