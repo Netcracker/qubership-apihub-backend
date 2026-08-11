@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -137,20 +138,20 @@ func parseVersionStatusQueryParam(r *http.Request) ([]string, *exception.CustomE
 	if customError != nil {
 		return nil, customError
 	}
-	if len(statusParts) == 0 {
-		return nil, nil
-	}
-	statuses := make([]string, 0, len(statusParts))
-	for _, part := range statusParts {
-		if _, err := view.ParseVersionStatus(part); err != nil {
-			return nil, &exception.CustomError{
-				Status:  http.StatusBadRequest,
-				Code:    exception.InvalidParameterValue,
-				Message: exception.InvalidParameterValueMsg,
-				Params:  map[string]interface{}{"param": "status", "value": part},
-			}
+	statuses, err := view.ParseVersionStatuses(statusParts)
+	if err != nil {
+		value := statusParts[0]
+		var invalidStatusErr *view.InvalidVersionStatusError
+		if errors.As(err, &invalidStatusErr) {
+			value = invalidStatusErr.Value
 		}
-		statuses = append(statuses, part)
+		return nil, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidParameterValue,
+			Message: exception.InvalidParameterValueMsg,
+			Params:  map[string]interface{}{"param": "status", "value": value},
+			Debug:   err.Error(),
+		}
 	}
 	return statuses, nil
 }
