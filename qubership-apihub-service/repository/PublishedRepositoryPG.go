@@ -2757,9 +2757,9 @@ func (p publishedRepositoryImpl) GetDescendantPackages(parentId string) ([]entit
 		select g.id from package_group g inner join children on children.id = g.parent_id)
 	select * from package_group
 	where id in (select id from children)
-	  and id != ?
-	  and kind = ?
-	  and deleted_at is null`
+		and id != ?
+		and kind = ?
+		and deleted_at is null`
 	_, err := p.cp.GetConnection().Query(&result, query, parentId, parentId, entity.KIND_PACKAGE)
 	if err != nil {
 		return nil, err
