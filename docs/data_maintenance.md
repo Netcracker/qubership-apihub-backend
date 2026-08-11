@@ -264,9 +264,12 @@ The builds cleanup job is configured via configuration properties:
 |------------------------------------------------|---------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `cleanup.builds.schedule`                      | `0 1 * * 0`   | Cron schedule for the cleanup job (Sunday 1:00 AM by default)                                                                                                                                                                                                                                                   |
 | `cleanup.builds.timeoutMinutes`                | `360`         | Maximum execution time for the whole job in minutes, including the expired S3 files phase. After the timeout, the running database operations and the S3 sweep are cancelled. Must be greater than `0`. The service fails to start if the value is zero or negative.                                             |
+| `cleanup.builds.expiredS3Files.timeoutMinutes` | `360`         | Maximum execution time for the expired S3 files phase in minutes. After the timeout, the sweep stops and resumes on the next run. Must be greater than `0`. The service fails to start if the value is zero or negative.                                                                                         |
 
-The expired S3 files phase runs only when S3 storage is enabled. It shares the job timeout with the rest of the job:
-the phase gets whatever time is left once the expired builds are removed, and stops as soon as the timeout expires.
+The expired S3 files phase runs only when S3 storage is enabled. It starts after the expired builds are removed, so it
+gets whatever time is left in the job, but never more than its own timeout. Both defaults are equal, so the job timeout
+is normally reached first. If the job timeout has already expired, the phase stops at once and records zero deleted
+objects.
 
 ### How job works
 
@@ -320,10 +323,11 @@ All cleanup jobs run on predefined schedules to avoid conflicts and distribute s
 | Comparisons Cleanup        | `0 5 * * 0`      | Sunday at 5:00 AM    | Every Sunday   | Configured via `cleanup.comparisons.timeoutMinutes`                                                                | 3 hours (not configurable)                                |
 | Soft Deleted Data Cleanup  | `0 22 * * 5`     | Friday at 10:00 PM   | Every Friday   | Configured via `cleanup.softDeletedData.timeoutMinutes`                                                            | 6 hours (not configurable)                                |
 | Unreferenced Data Cleanup  | `0 15 * * 6`     | Saturday at 3:00 PM  | Every Saturday | Configured via `cleanup.unreferencedData.timeoutMinutes`                                                           | 3 hours (not configurable)                                |
-| Builds Cleanup             | `0 1 * * 0`      | Sunday at 1:00 AM    | Every Sunday   | Configured via `cleanup.builds.timeoutMinutes`, shared with the expired S3 files phase                              | Shared with cleanup phase                                 |
+| Builds Cleanup             | `0 1 * * 0`      | Sunday at 1:00 AM    | Every Sunday   | Configured via `cleanup.builds.timeoutMinutes`; the expired S3 files phase is also limited by `cleanup.builds.expiredS3Files.timeoutMinutes` | Shared with cleanup phase                                 |
 | Maintenance Vacuum         | `0 2 * * 1`      | Monday at 2:00 AM    | Every Monday   | —                                                                                                                  | Configured via `cleanup.maintenanceVacuum.timeoutMinutes` |
 
 **Note**: when scheduling `Comparisons Cleanup`, `Soft Deleted Data Cleanup`, `Unreferenced Data Cleanup` and
 `Builds Cleanup` jobs, it is important to keep in mind that each job consists of two phases: cleanup and vacuuming of
-the affected tables. Both phases of a job should be completed before the next job starts in order to avoid excessive
-system load and database table locks.
+the affected tables. `Builds Cleanup` has a third phase, the expired S3 files sweep, when S3 storage is enabled. All
+phases of a job should be completed before the next job starts in order to avoid excessive system load and database
+table locks.
