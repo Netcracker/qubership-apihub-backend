@@ -133,8 +133,6 @@ func (j BuildCleanupJob) Run() {
 			return
 		}
 		if j.systemInfoService.IsMinioStorageActive() {
-			ctx := context.Background()
-
 			if err := j.cleanupOldBuilds(ctx, lockId, scheduledAt); err != nil {
 				log.Errorf("Failed to clean up old builds: %v", err)
 			}
@@ -194,7 +192,7 @@ func (j BuildCleanupJob) cleanupExpiredS3Files(ctx context.Context, runId int) {
 		details = err.Error()
 	}
 
-	updateCtx, updateCancel := contextForCleanupRunUpdate(phaseCtx)
+	updateCtx, updateCancel := context.WithTimeout(context.WithoutCancel(phaseCtx), cleanupRunUpdateTimeout)
 	defer updateCancel()
 
 	if err := j.buildCleanupRepository.UpdateDeletedS3Files(updateCtx, runId, deletedCount, details); err != nil {
@@ -202,11 +200,4 @@ func (j BuildCleanupJob) cleanupExpiredS3Files(ctx context.Context, runId int) {
 	} else {
 		log.Infof("Deleted %d expired S3 objects", deletedCount)
 	}
-}
-
-func contextForCleanupRunUpdate(parentCtx context.Context) (context.Context, context.CancelFunc) {
-	if parentCtx.Err() != nil {
-		return context.WithTimeout(context.Background(), cleanupRunUpdateTimeout)
-	}
-	return parentCtx, func() {}
 }
