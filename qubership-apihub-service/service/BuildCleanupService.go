@@ -137,7 +137,7 @@ func (j BuildCleanupJob) Run() {
 				log.Errorf("Failed to clean up old builds: %v", err)
 			}
 
-			j.cleanupExpiredS3Files(ctx, lockId)
+			j.cleanupExpiredS3Files(lockId)
 		} else {
 			err = j.buildCleanupRepository.RemoveOldBuildEntities(ctx, lockId, scheduledAt)
 			if err != nil {
@@ -179,9 +179,8 @@ func (j BuildCleanupJob) cleanupOldBuilds(ctx context.Context, runId int, schedu
 	return nil
 }
 
-func (j BuildCleanupJob) cleanupExpiredS3Files(ctx context.Context, runId int) {
-	timeout := time.Duration(j.systemInfoService.GetExpiredS3FilesCleanupTimeout()) * time.Minute
-	phaseCtx, cancel := context.WithTimeout(ctx, timeout)
+func (j BuildCleanupJob) cleanupExpiredS3Files(runId int) {
+	phaseCtx, cancel := context.WithTimeout(context.Background(), time.Duration(j.systemInfoService.GetExpiredS3FilesCleanupTimeout())*time.Minute)
 	defer cancel()
 
 	olderThan := time.Now().AddDate(0, 0, -expiredS3FilesTTLDays)
@@ -192,7 +191,7 @@ func (j BuildCleanupJob) cleanupExpiredS3Files(ctx context.Context, runId int) {
 		details = err.Error()
 	}
 
-	updateCtx, updateCancel := context.WithTimeout(context.WithoutCancel(phaseCtx), cleanupRunUpdateTimeout)
+	updateCtx, updateCancel := context.WithTimeout(context.Background(), cleanupRunUpdateTimeout)
 	defer updateCancel()
 
 	if err := j.buildCleanupRepository.UpdateDeletedS3Files(updateCtx, runId, deletedCount, details); err != nil {
