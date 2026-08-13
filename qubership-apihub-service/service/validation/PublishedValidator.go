@@ -1,6 +1,7 @@
 package validation
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -14,9 +15,9 @@ import (
 )
 
 type PublishedValidator interface {
-	ValidatePackage(buildArc *archive.BuildResultArchive, buildConfig *view.BuildConfig) error
+	ValidatePackage(ctx context.Context, buildArc *archive.BuildResultArchive, buildConfig *view.BuildConfig) error
 	ValidateBuildResultAgainstConfig(buildArc *archive.BuildResultArchive, buildConfig *view.BuildConfig) error //TODO remove and merge logic with ValidatePackage
-	ValidateChanges(buildArc *archive.BuildResultArchive) error                                                 //TODO remove and merge logic with ValidatePackage
+	ValidateChanges(ctx context.Context, buildArc *archive.BuildResultArchive) error                            //TODO remove and merge logic with ValidatePackage
 }
 
 func NewPublishedValidator(publishedRepo repository.PublishedRepository) PublishedValidator {
@@ -29,8 +30,8 @@ type publishedValidatorImpl struct {
 	publishedRepo repository.PublishedRepository
 }
 
-func (p publishedValidatorImpl) ValidatePackage(buildArc *archive.BuildResultArchive, buildConfig *view.BuildConfig) error {
-	if err := p.validatePackageInfo(buildArc, buildConfig); err != nil {
+func (p publishedValidatorImpl) ValidatePackage(ctx context.Context, buildArc *archive.BuildResultArchive, buildConfig *view.BuildConfig) error {
+	if err := p.validatePackageInfo(ctx, buildArc, buildConfig); err != nil {
 		return err
 	}
 
@@ -42,11 +43,11 @@ func (p publishedValidatorImpl) ValidatePackage(buildArc *archive.BuildResultArc
 		return err
 	}
 
-	if err := p.validatePackageComparisons(buildArc, buildConfig); err != nil {
+	if err := p.validatePackageComparisons(ctx, buildArc, buildConfig); err != nil {
 		return err
 	}
 
-	if err := p.validatePackageDdlContracts(buildArc, buildConfig); err != nil {
+	if err := p.validatePackageDdlContracts(ctx, buildArc, buildConfig); err != nil {
 		return err
 	}
 
@@ -193,7 +194,7 @@ func (p publishedValidatorImpl) ValidateBuildResultAgainstConfig(buildArc *archi
 	return nil
 }
 
-func (p publishedValidatorImpl) ValidateChanges(buildArc *archive.BuildResultArchive) error {
+func (p publishedValidatorImpl) ValidateChanges(ctx context.Context, buildArc *archive.BuildResultArchive) error {
 	info := view.MakeChangelogInfoFileView(buildArc.PackageInfo)
 	comparisons := buildArc.PackageComparisons
 	ddlComparisons := buildArc.PackageDdlComparisons
@@ -276,7 +277,7 @@ func (p publishedValidatorImpl) ValidateChanges(buildArc *archive.BuildResultArc
 			FromCache: comparison.FromCache,
 		})
 	}
-	if err := p.validateChangelogComparisonEntries(buildArc, entries); err != nil {
+	if err := p.validateChangelogComparisonEntries(ctx, buildArc, entries); err != nil {
 		return err
 	}
 
@@ -292,13 +293,13 @@ func (p publishedValidatorImpl) ValidateChanges(buildArc *archive.BuildResultArc
 // existing version_comparison row. Unlike validateComparisonEntries (used by ValidatePackage),
 // a changelog build only ever compares two already-published versions, so lookups use
 // GetVersionByRevision rather than GetVersionIncludingDeleted.
-func (p publishedValidatorImpl) validateChangelogComparisonEntries(buildArc *archive.BuildResultArchive, entries []comparisonEntry) error {
+func (p publishedValidatorImpl) validateChangelogComparisonEntries(ctx context.Context, buildArc *archive.BuildResultArchive, entries []comparisonEntry) error {
 	for _, comparison := range entries {
 		if comparison.Version != "" {
 			if (buildArc.PackageInfo.Revision != comparison.Revision && comparison.Revision != 0) ||
 				buildArc.PackageInfo.Version != comparison.Version ||
 				buildArc.PackageInfo.PackageId != comparison.PackageId {
-				versionEnt, err := p.publishedRepo.GetVersionByRevision(comparison.PackageId, comparison.Version, comparison.Revision)
+				versionEnt, err := p.publishedRepo.GetVersionByRevision(ctx, comparison.PackageId, comparison.Version, comparison.Revision)
 				if err != nil {
 					return err
 				}
@@ -313,7 +314,7 @@ func (p publishedValidatorImpl) validateChangelogComparisonEntries(buildArc *arc
 			}
 		}
 		if comparison.PreviousVersion != "" {
-			previousVersionEnt, err := p.publishedRepo.GetVersionByRevision(comparison.PreviousVersionPackageId, comparison.PreviousVersion, comparison.PreviousVersionRevision)
+			previousVersionEnt, err := p.publishedRepo.GetVersionByRevision(ctx, comparison.PreviousVersionPackageId, comparison.PreviousVersion, comparison.PreviousVersionRevision)
 			if err != nil {
 				return err
 			}
@@ -334,7 +335,7 @@ func (p publishedValidatorImpl) validateChangelogComparisonEntries(buildArc *arc
 				comparison.PreviousVersionPackageId,
 				comparison.PreviousVersion,
 				comparison.PreviousVersionRevision)
-			comparisonEntity, err := p.publishedRepo.GetVersionComparison(comparisonId)
+			comparisonEntity, err := p.publishedRepo.GetVersionComparison(ctx, comparisonId)
 			if err != nil {
 				return err
 			}
@@ -359,7 +360,7 @@ func (p publishedValidatorImpl) validateChangelogComparisonEntries(buildArc *arc
 	return nil
 }
 
-func (p publishedValidatorImpl) validatePackageInfo(buildArc *archive.BuildResultArchive, buildConfig *view.BuildConfig) error {
+func (p publishedValidatorImpl) validatePackageInfo(ctx context.Context, buildArc *archive.BuildResultArchive, buildConfig *view.BuildConfig) error {
 	if err := utils.ValidateObject(buildArc.PackageInfo); err != nil {
 		return &exception.CustomError{
 			Status:  http.StatusBadRequest,
@@ -413,7 +414,7 @@ func (p publishedValidatorImpl) validatePackageInfo(buildArc *archive.BuildResul
 		}
 	}
 	if buildArc.PackageInfo.MigrationBuild {
-		ent, err := p.publishedRepo.GetVersion(buildArc.PackageInfo.PackageId, buildArc.PackageInfo.Version)
+		ent, err := p.publishedRepo.GetVersion(ctx, buildArc.PackageInfo.PackageId, buildArc.PackageInfo.Version)
 		if err != nil {
 			return err
 		}
@@ -558,7 +559,7 @@ func (p publishedValidatorImpl) validatePackageOperations(buildArc *archive.Buil
 					},
 				}
 			}
-			case view.GraphqlApiType:
+		case view.GraphqlApiType:
 			if operationMetadata.GetType() == "" {
 				return &exception.CustomError{
 					Status:  http.StatusBadRequest,
@@ -679,7 +680,7 @@ type comparisonEntry struct {
 	FromCache bool
 }
 
-func (p publishedValidatorImpl) validatePackageComparisons(buildArc *archive.BuildResultArchive, buildConfig *view.BuildConfig) error {
+func (p publishedValidatorImpl) validatePackageComparisons(ctx context.Context, buildArc *archive.BuildResultArchive, buildConfig *view.BuildConfig) error {
 	if err := utils.ValidateObject(buildArc.PackageComparisons); err != nil {
 		return &exception.CustomError{
 			Status:  http.StatusBadRequest,
@@ -699,7 +700,7 @@ func (p publishedValidatorImpl) validatePackageComparisons(buildArc *archive.Bui
 	}
 
 	if !info.NoChangelog && info.PreviousVersion != "" && len(comparisons.Comparisons) == 0 {
-		if err := p.validatePreviousVersionComparisonRequired(info, "comparisons", "at least one comparison required for publishing package with previous version"); err != nil {
+		if err := p.validatePreviousVersionComparisonRequired(ctx, info, "comparisons", "at least one comparison required for publishing package with previous version"); err != nil {
 			return err
 		}
 	}
@@ -718,13 +719,13 @@ func (p publishedValidatorImpl) validatePackageComparisons(buildArc *archive.Bui
 			FromCache: comparison.FromCache,
 		})
 	}
-	return p.validateComparisonEntries(buildArc, entries)
+	return p.validateComparisonEntries(ctx, buildArc, entries)
 }
 
 // validatePreviousVersionComparisonRequired checks whether the previous version was deleted
 // (in which case the caller's "at least one comparison" requirement is waived) and otherwise
 // returns an InvalidPackagedFile error for the given file/errorDetail.
-func (p publishedValidatorImpl) validatePreviousVersionComparisonRequired(info view.PackageInfoFile, file string, errorDetail string) error {
+func (p publishedValidatorImpl) validatePreviousVersionComparisonRequired(ctx context.Context, info view.PackageInfoFile, file string, errorDetail string) error {
 	// need to check if previous version was deleted
 	prevPkgId := ""
 	if info.PreviousVersionPackageId != "" {
@@ -732,7 +733,7 @@ func (p publishedValidatorImpl) validatePreviousVersionComparisonRequired(info v
 	} else {
 		prevPkgId = info.PackageId
 	}
-	pvEnt, err := p.publishedRepo.GetVersionIncludingDeleted(prevPkgId, info.PreviousVersion)
+	pvEnt, err := p.publishedRepo.GetVersionIncludingDeleted(ctx, prevPkgId, info.PreviousVersion)
 	if err != nil {
 		return fmt.Errorf("failed to get previous version in validatePackage: %w", err)
 	}
@@ -759,7 +760,7 @@ func (p publishedValidatorImpl) validatePreviousVersionComparisonRequired(info v
 
 // validateComparisonEntries runs the shared business-logic checks (excluded refs, field
 // consistency, referenced version/comparison existence) against both regular and DDL comparisons.
-func (p publishedValidatorImpl) validateComparisonEntries(buildArc *archive.BuildResultArchive, entries []comparisonEntry) error {
+func (p publishedValidatorImpl) validateComparisonEntries(ctx context.Context, buildArc *archive.BuildResultArchive, entries []comparisonEntry) error {
 	excludedRefs := make(map[string]struct{}, 0)
 	for _, ref := range buildArc.PackageInfo.Refs {
 		if ref.Excluded {
@@ -831,7 +832,7 @@ func (p publishedValidatorImpl) validateComparisonEntries(buildArc *archive.Buil
 			if (buildArc.PackageInfo.Revision != comparison.Revision && comparison.Revision != 0) ||
 				buildArc.PackageInfo.Version != comparison.Version ||
 				buildArc.PackageInfo.PackageId != comparison.PackageId {
-				versionEnt, err := p.publishedRepo.GetVersionIncludingDeleted(comparison.PackageId, view.MakeVersionRefKey(comparison.Version, comparison.Revision))
+				versionEnt, err := p.publishedRepo.GetVersionIncludingDeleted(ctx, comparison.PackageId, view.MakeVersionRefKey(comparison.Version, comparison.Revision))
 				if err != nil {
 					return err
 				}
@@ -849,7 +850,7 @@ func (p publishedValidatorImpl) validateComparisonEntries(buildArc *archive.Buil
 			}
 		}
 		if comparison.PreviousVersion != "" {
-			previousVersionEnt, err := p.publishedRepo.GetVersionIncludingDeleted(comparison.PreviousVersionPackageId, view.MakeVersionRefKey(comparison.PreviousVersion, comparison.PreviousVersionRevision))
+			previousVersionEnt, err := p.publishedRepo.GetVersionIncludingDeleted(ctx, comparison.PreviousVersionPackageId, view.MakeVersionRefKey(comparison.PreviousVersion, comparison.PreviousVersionRevision))
 			if err != nil {
 				return err
 			}
@@ -873,7 +874,7 @@ func (p publishedValidatorImpl) validateComparisonEntries(buildArc *archive.Buil
 				comparison.PreviousVersionPackageId,
 				comparison.PreviousVersion,
 				comparison.PreviousVersionRevision)
-			comparisonEntity, err := p.publishedRepo.GetVersionComparison(comparisonId)
+			comparisonEntity, err := p.publishedRepo.GetVersionComparison(ctx, comparisonId)
 			if err != nil {
 				return err
 			}
@@ -908,7 +909,7 @@ func (p publishedValidatorImpl) validateComparisonEntries(buildArc *archive.Buil
 	return nil
 }
 
-func (p publishedValidatorImpl) validatePackageDdlContracts(buildArc *archive.BuildResultArchive, buildConfig *view.BuildConfig) error {
+func (p publishedValidatorImpl) validatePackageDdlContracts(ctx context.Context, buildArc *archive.BuildResultArchive, buildConfig *view.BuildConfig) error {
 	if err := utils.ValidateObject(buildArc.PackageDdlContracts); err != nil {
 		return &exception.CustomError{
 			Status:  http.StatusBadRequest,
@@ -953,7 +954,7 @@ func (p publishedValidatorImpl) validatePackageDdlContracts(buildArc *archive.Bu
 	// A DDL comparison is only required when the build actually carries DDL contracts to diff;
 	// packages without DDL contracts never populate ddl-comparisons.json.
 	if !info.NoChangelog && info.PreviousVersion != "" && len(buildArc.PackageDdlContracts.Tables) != 0 && len(ddlComparisons.Comparisons) == 0 {
-		if err := p.validatePreviousVersionComparisonRequired(info, "ddl-comparisons", "at least one ddl comparison required for publishing package with previous version when ddl contracts are present"); err != nil {
+		if err := p.validatePreviousVersionComparisonRequired(ctx, info, "ddl-comparisons", "at least one ddl comparison required for publishing package with previous version when ddl contracts are present"); err != nil {
 			return err
 		}
 	}
@@ -972,7 +973,7 @@ func (p publishedValidatorImpl) validatePackageDdlContracts(buildArc *archive.Bu
 			FromCache: comparison.FromCache,
 		})
 	}
-	return p.validateComparisonEntries(buildArc, entries)
+	return p.validateComparisonEntries(ctx, buildArc, entries)
 }
 
 func (p publishedValidatorImpl) validatePackageMcpContracts(buildArc *archive.BuildResultArchive, buildConfig *view.BuildConfig) error {

@@ -1,6 +1,7 @@
 package validation
 
 import (
+	"context"
 	"testing"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/archive"
@@ -121,7 +122,7 @@ func TestValidatePackageDdlContracts(t *testing.T) {
 				PackageDdlContracts:   view.PackageDdlContractsFile{Tables: tt.tables},
 				PackageDdlComparisons: view.PackageDdlComparisonsFile{Comparisons: tt.comparison},
 			}
-			err := p.validatePackageDdlContracts(buildArc, &view.BuildConfig{})
+			err := p.validatePackageDdlContracts(context.Background(), buildArc, &view.BuildConfig{})
 			if tt.wantErr {
 				assert.Error(t, err)
 				customErr, ok := err.(*exception.CustomError)
@@ -246,7 +247,7 @@ func TestValidateChanges(t *testing.T) {
 				PackageComparisons:    view.PackageComparisonsFile{Comparisons: tt.comparisons},
 				PackageDdlComparisons: view.PackageDdlComparisonsFile{Comparisons: tt.ddlComparisons},
 			}
-			err := p.ValidateChanges(buildArc)
+			err := p.ValidateChanges(context.Background(), buildArc)
 			if tt.wantErr {
 				assert.Error(t, err)
 				customErr, ok := err.(*exception.CustomError)
