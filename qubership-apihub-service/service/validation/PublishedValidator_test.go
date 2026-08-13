@@ -33,9 +33,11 @@ func validMcpContract() view.PackageMcpContract {
 func TestValidatePackageDdlContracts(t *testing.T) {
 	tests := []struct {
 		name       string
+		info       view.PackageInfoFile
 		tables     []view.PackageDdlContract
 		comparison []view.DdlVersionComparison
 		wantErr    bool
+		wantCode   string
 	}{
 		{
 			name:    "valid ddl contract",
@@ -56,7 +58,8 @@ func TestValidatePackageDdlContracts(t *testing.T) {
 					return c
 				}(),
 			},
-			wantErr: true,
+			wantErr:  true,
+			wantCode: exception.InvalidPackagedFile,
 		},
 		{
 			name: "unsupported kind",
@@ -67,7 +70,46 @@ func TestValidatePackageDdlContracts(t *testing.T) {
 					return c
 				}(),
 			},
-			wantErr: true,
+			wantErr:  true,
+			wantCode: exception.InvalidPackagedFile,
+		},
+		{
+			name: "noChangelog forbids ddl comparisons",
+			info: view.PackageInfoFile{NoChangelog: true},
+			comparison: []view.DdlVersionComparison{
+				{PackageId: "pkg", Version: "1.0.0", Revision: 1},
+			},
+			wantErr:  true,
+			wantCode: exception.ChangesAreNotEmpty,
+		},
+		{
+			name: "ddl comparison missing packageId when version is set",
+			comparison: []view.DdlVersionComparison{
+				{Version: "1.0.0"},
+			},
+			wantErr:  true,
+			wantCode: exception.InvalidComparisonField,
+		},
+		{
+			name: "ddl comparison with both version and previousVersion empty",
+			comparison: []view.DdlVersionComparison{
+				{PackageId: "pkg"},
+			},
+			wantErr:  true,
+			wantCode: exception.InvalidComparisonField,
+		},
+		{
+			name: "ddl comparison referencing excluded ref",
+			info: view.PackageInfoFile{
+				Refs: []view.BCRef{
+					{RefId: "pkg", Version: "1.0.0@1", Excluded: true},
+				},
+			},
+			comparison: []view.DdlVersionComparison{
+				{PackageId: "pkg", Version: "1.0.0", Revision: 1},
+			},
+			wantErr:  true,
+			wantCode: exception.ExcludedComparisonReference,
 		},
 	}
 
@@ -75,6 +117,7 @@ func TestValidatePackageDdlContracts(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			buildArc := &archive.BuildResultArchive{
+				PackageInfo:           tt.info,
 				PackageDdlContracts:   view.PackageDdlContractsFile{Tables: tt.tables},
 				PackageDdlComparisons: view.PackageDdlComparisonsFile{Comparisons: tt.comparison},
 			}
@@ -83,7 +126,7 @@ func TestValidatePackageDdlContracts(t *testing.T) {
 				assert.Error(t, err)
 				customErr, ok := err.(*exception.CustomError)
 				assert.True(t, ok, "expected *exception.CustomError, got %T", err)
-				assert.Equal(t, exception.InvalidPackagedFile, customErr.Code)
+				assert.Equal(t, tt.wantCode, customErr.Code)
 			} else {
 				assert.NoError(t, err)
 			}
@@ -140,6 +183,70 @@ func TestValidatePackageMcpContracts(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			buildArc := &archive.BuildResultArchive{PackageMcpContracts: tt.mcp}
 			err := p.validatePackageMcpContracts(buildArc, &view.BuildConfig{})
+			if tt.wantErr {
+				assert.Error(t, err)
+				customErr, ok := err.(*exception.CustomError)
+				assert.True(t, ok, "expected *exception.CustomError, got %T", err)
+				assert.Equal(t, exception.InvalidPackagedFile, customErr.Code)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func changelogPackageInfo() view.PackageInfoFile {
+	return view.PackageInfoFile{
+		PackageId:                "pkg",
+		Version:                  "2.0.0",
+		Revision:                 2,
+		PreviousVersionPackageId: "pkg",
+		PreviousVersion:          "1.0.0",
+		PreviousVersionRevision:  1,
+	}
+}
+
+func TestValidateChanges(t *testing.T) {
+	tests := []struct {
+		name           string
+		comparisons    []view.VersionComparison
+		ddlComparisons []view.DdlVersionComparison
+		wantErr        bool
+	}{
+		{
+			name:    "no comparisons of either kind is rejected",
+			wantErr: true,
+		},
+		{
+			name: "ddl-only comparison is accepted",
+			ddlComparisons: []view.DdlVersionComparison{
+				{PackageId: "pkg", Version: "2.0.0", Revision: 2},
+			},
+			wantErr: false,
+		},
+		{
+			name: "regular comparison is accepted",
+			comparisons: []view.VersionComparison{
+				{
+					PackageId: "pkg", Version: "2.0.0", Revision: 2,
+					OperationTypes: []view.OperationType{
+						{ApiType: "rest", ChangesSummary: view.ChangeSummary{Breaking: 1}},
+					},
+				},
+			},
+			wantErr: false,
+		},
+	}
+
+	p := publishedValidatorImpl{}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buildArc := &archive.BuildResultArchive{
+				PackageInfo:           changelogPackageInfo(),
+				PackageComparisons:    view.PackageComparisonsFile{Comparisons: tt.comparisons},
+				PackageDdlComparisons: view.PackageDdlComparisonsFile{Comparisons: tt.ddlComparisons},
+			}
+			err := p.ValidateChanges(buildArc)
 			if tt.wantErr {
 				assert.Error(t, err)
 				customErr, ok := err.(*exception.CustomError)

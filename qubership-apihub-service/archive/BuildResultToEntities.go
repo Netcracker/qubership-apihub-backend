@@ -779,9 +779,10 @@ func (a *BuildResultToEntitiesReader) ReadDdlContractsToEntities() ([]*entity.DD
 // the ddl-comparisons.json index (creating version_comparison rows carrying contractTypes) and
 // the per-pair ddl-comparisons/<comparisonFileId> files (creating ddl_comparison rows). It mirrors
 // ReadOperationComparisonsToEntities so DDL-only changelogs still produce their version_comparison row.
-func (a *BuildResultToEntitiesReader) ReadDdlContractComparisonsToEntities(publishingDdlDataHashes map[string]string, ddlRepository repository.DDLContractRepository) ([]*entity.VersionComparisonEntity, []*entity.DDLContractComparisonEntity, map[string]view.ComparisonKey, error) {
+func (a *BuildResultToEntitiesReader) ReadDdlContractComparisonsToEntities(publishingDdlDataHashes map[string]string, ddlRepository repository.DDLContractRepository) ([]*entity.VersionComparisonEntity, []*entity.DDLContractComparisonEntity, []string, map[string]view.ComparisonKey, error) {
 	versionComparisonEntities := make([]*entity.VersionComparisonEntity, 0)
 	ddlComparisonEntities := make([]*entity.DDLContractComparisonEntity, 0)
+	ddlComparisonsFromCache := make([]string, 0)
 	comparisonFileIdToKeyMap := make(map[string]view.ComparisonKey)
 	var mainVersionComparison *entity.VersionComparisonEntity
 	mainVersionRefs := make([]string, 0)
@@ -864,6 +865,7 @@ func (a *BuildResultToEntitiesReader) ReadDdlContractComparisonsToEntities(publi
 			}
 		}
 		if comparison.FromCache {
+			ddlComparisonsFromCache = append(ddlComparisonsFromCache, versionComparisonEnt.ComparisonId)
 			continue
 		}
 		versionComparisonEntities = append(versionComparisonEntities, versionComparisonEnt)
@@ -876,7 +878,7 @@ func (a *BuildResultToEntitiesReader) ReadDdlContractComparisonsToEntities(publi
 		}
 		fileData, err := ReadZipFile(fileHeader)
 		if err != nil {
-			return nil, nil, nil, &exception.CustomError{
+			return nil, nil, nil, nil, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.InvalidPackageArchivedFile,
 				Message: exception.InvalidPackageArchivedFileMsg,
@@ -886,7 +888,7 @@ func (a *BuildResultToEntitiesReader) ReadDdlContractComparisonsToEntities(publi
 		var ddlChanges view.PackageDdlContractChanges
 		err = json.Unmarshal(fileData, &ddlChanges)
 		if err != nil {
-			return nil, nil, nil, &exception.CustomError{
+			return nil, nil, nil, nil, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.InvalidPackageArchivedFile,
 				Message: exception.InvalidPackageArchivedFileMsg,
@@ -929,7 +931,7 @@ func (a *BuildResultToEntitiesReader) ReadDdlContractComparisonsToEntities(publi
 				if !mainVersion {
 					currentInfo, err = getDdlInfo(versionComparisonEnt.PackageId, versionComparisonEnt.Version, versionComparisonEnt.Revision)
 					if err != nil {
-						return nil, nil, nil, &exception.CustomError{
+						return nil, nil, nil, nil, &exception.CustomError{
 							Status:  http.StatusInternalServerError,
 							Message: "Failed to get ddl entities info for $packageId-$version-$revision",
 							Debug:   err.Error(),
@@ -944,7 +946,7 @@ func (a *BuildResultToEntitiesReader) ReadDdlContractComparisonsToEntities(publi
 			if ddlComparisonEnt.PreviousDdlEntityId != "" {
 				previousInfo, err := getDdlInfo(versionComparisonEnt.PreviousPackageId, versionComparisonEnt.PreviousVersion, versionComparisonEnt.PreviousRevision)
 				if err != nil {
-					return nil, nil, nil, &exception.CustomError{
+					return nil, nil, nil, nil, &exception.CustomError{
 						Status:  http.StatusInternalServerError,
 						Message: "Failed to get ddl entities info for $packageId-$version-$revision",
 						Debug:   err.Error(),
@@ -961,7 +963,7 @@ func (a *BuildResultToEntitiesReader) ReadDdlContractComparisonsToEntities(publi
 	if mainVersionComparison != nil {
 		mainVersionComparison.Refs = mainVersionRefs
 	}
-	return versionComparisonEntities, ddlComparisonEntities, comparisonFileIdToKeyMap, nil
+	return versionComparisonEntities, ddlComparisonEntities, ddlComparisonsFromCache, comparisonFileIdToKeyMap, nil
 }
 
 func (a *BuildResultToEntitiesReader) ReadMcpContractsToEntities() ([]*entity.MCPContractEntity, []*entity.MCPContractDataEntity, []*entity.MCPContractSearchTextEntity, error) {

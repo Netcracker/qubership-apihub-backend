@@ -196,6 +196,7 @@ func (p publishedValidatorImpl) ValidateBuildResultAgainstConfig(buildArc *archi
 func (p publishedValidatorImpl) ValidateChanges(buildArc *archive.BuildResultArchive) error {
 	info := view.MakeChangelogInfoFileView(buildArc.PackageInfo)
 	comparisons := buildArc.PackageComparisons
+	ddlComparisons := buildArc.PackageDdlComparisons
 	if err := utils.ValidateObject(info); err != nil {
 		return &exception.CustomError{
 			Status:  http.StatusBadRequest,
@@ -221,7 +222,9 @@ func (p publishedValidatorImpl) ValidateChanges(buildArc *archive.BuildResultArc
 		}
 	}
 
-	if len(comparisons.Comparisons) == 0 {
+	// A changelog build may carry only DDL comparisons (see PublishChanges), so at least one
+	// comparison of either kind is required, not specifically a REST/operation comparison.
+	if len(comparisons.Comparisons) == 0 && len(ddlComparisons.Comparisons) == 0 {
 		return &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidPackagedFile,
@@ -237,7 +240,60 @@ func (p publishedValidatorImpl) ValidateChanges(buildArc *archive.BuildResultArc
 			Params:  map[string]interface{}{"file": "comparisons", "error": err.Error()},
 		}
 	}
+	if err := utils.ValidateObject(ddlComparisons); err != nil {
+		return &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidPackagedFile,
+			Message: exception.InvalidPackagedFileMsg,
+			Params:  map[string]interface{}{"file": "ddl-comparisons", "error": err.Error()},
+		}
+	}
+
+	entries := make([]comparisonEntry, 0, len(comparisons.Comparisons)+len(ddlComparisons.Comparisons))
 	for _, comparison := range comparisons.Comparisons {
+		entries = append(entries, comparisonEntry{
+			ComparisonKey: view.ComparisonKey{
+				PackageId:                comparison.PackageId,
+				Version:                  comparison.Version,
+				Revision:                 comparison.Revision,
+				PreviousVersionPackageId: comparison.PreviousVersionPackageId,
+				PreviousVersion:          comparison.PreviousVersion,
+				PreviousVersionRevision:  comparison.PreviousVersionRevision,
+			},
+			FromCache: comparison.FromCache,
+		})
+	}
+	for _, comparison := range ddlComparisons.Comparisons {
+		entries = append(entries, comparisonEntry{
+			ComparisonKey: view.ComparisonKey{
+				PackageId:                comparison.PackageId,
+				Version:                  comparison.Version,
+				Revision:                 comparison.Revision,
+				PreviousVersionPackageId: comparison.PreviousVersionPackageId,
+				PreviousVersion:          comparison.PreviousVersion,
+				PreviousVersionRevision:  comparison.PreviousVersionRevision,
+			},
+			FromCache: comparison.FromCache,
+		})
+	}
+	if err := p.validateChangelogComparisonEntries(buildArc, entries); err != nil {
+		return err
+	}
+
+	if err := p.validateComparisonInternalDocuments(buildArc); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateChangelogComparisonEntries checks that every comparison entry in a changelog build
+// (regular or DDL) references an existing published version and, for FromCache entries, an
+// existing version_comparison row. Unlike validateComparisonEntries (used by ValidatePackage),
+// a changelog build only ever compares two already-published versions, so lookups use
+// GetVersionByRevision rather than GetVersionIncludingDeleted.
+func (p publishedValidatorImpl) validateChangelogComparisonEntries(buildArc *archive.BuildResultArchive, entries []comparisonEntry) error {
+	for _, comparison := range entries {
 		if comparison.Version != "" {
 			if (buildArc.PackageInfo.Revision != comparison.Revision && comparison.Revision != 0) ||
 				buildArc.PackageInfo.Version != comparison.Version ||
@@ -300,11 +356,6 @@ func (p publishedValidatorImpl) ValidateChanges(buildArc *archive.BuildResultArc
 			}
 		}
 	}
-
-	if err := p.validateComparisonInternalDocuments(buildArc); err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -621,6 +672,13 @@ func (p publishedValidatorImpl) validatePackageOperations(buildArc *archive.Buil
 	return nil
 }
 
+// comparisonEntry is the subset of fields shared by view.VersionComparison and
+// view.DdlVersionComparison, so validateComparisonEntries can validate both kinds.
+type comparisonEntry struct {
+	view.ComparisonKey
+	FromCache bool
+}
+
 func (p publishedValidatorImpl) validatePackageComparisons(buildArc *archive.BuildResultArchive, buildConfig *view.BuildConfig) error {
 	if err := utils.ValidateObject(buildArc.PackageComparisons); err != nil {
 		return &exception.CustomError{
@@ -641,45 +699,74 @@ func (p publishedValidatorImpl) validatePackageComparisons(buildArc *archive.Bui
 	}
 
 	if !info.NoChangelog && info.PreviousVersion != "" && len(comparisons.Comparisons) == 0 {
-		// need to check if previous version was deleted
-		prevPkgId := ""
-		if info.PreviousVersionPackageId != "" {
-			prevPkgId = info.PreviousVersionPackageId
-		} else {
-			prevPkgId = info.PackageId
-		}
-		pvEnt, err := p.publishedRepo.GetVersionIncludingDeleted(prevPkgId, info.PreviousVersion)
-		if err != nil {
-			return fmt.Errorf("failed to get previous version in validatePackage: %w", err)
-		}
-		if pvEnt == nil {
-			return &exception.CustomError{
-				Status:  http.StatusBadRequest,
-				Code:    exception.PublishedPackageVersionNotFound,
-				Message: exception.PublishedPackageVersionNotFoundMsg,
-				Params:  map[string]interface{}{"version": info.PreviousVersion, "packageId": prevPkgId},
-			}
-		}
-		if pvEnt.DeletedAt != nil && !pvEnt.DeletedAt.IsZero() {
-			// previous version is deleted, so it's ok
-		} else {
-			// previous version is not deleted, and we don't have comparisons
-			return &exception.CustomError{
-				Status:  http.StatusBadRequest,
-				Code:    exception.InvalidPackagedFile,
-				Message: exception.InvalidPackagedFileMsg,
-				Params:  map[string]interface{}{"file": "comparisons", "error": "at least one comparison required for publishing package with previous version"},
-			}
+		if err := p.validatePreviousVersionComparisonRequired(info, "comparisons", "at least one comparison required for publishing package with previous version"); err != nil {
+			return err
 		}
 	}
 
+	entries := make([]comparisonEntry, 0, len(comparisons.Comparisons))
+	for _, comparison := range comparisons.Comparisons {
+		entries = append(entries, comparisonEntry{
+			ComparisonKey: view.ComparisonKey{
+				PackageId:                comparison.PackageId,
+				Version:                  comparison.Version,
+				Revision:                 comparison.Revision,
+				PreviousVersionPackageId: comparison.PreviousVersionPackageId,
+				PreviousVersion:          comparison.PreviousVersion,
+				PreviousVersionRevision:  comparison.PreviousVersionRevision,
+			},
+			FromCache: comparison.FromCache,
+		})
+	}
+	return p.validateComparisonEntries(buildArc, entries)
+}
+
+// validatePreviousVersionComparisonRequired checks whether the previous version was deleted
+// (in which case the caller's "at least one comparison" requirement is waived) and otherwise
+// returns an InvalidPackagedFile error for the given file/errorDetail.
+func (p publishedValidatorImpl) validatePreviousVersionComparisonRequired(info view.PackageInfoFile, file string, errorDetail string) error {
+	// need to check if previous version was deleted
+	prevPkgId := ""
+	if info.PreviousVersionPackageId != "" {
+		prevPkgId = info.PreviousVersionPackageId
+	} else {
+		prevPkgId = info.PackageId
+	}
+	pvEnt, err := p.publishedRepo.GetVersionIncludingDeleted(prevPkgId, info.PreviousVersion)
+	if err != nil {
+		return fmt.Errorf("failed to get previous version in validatePackage: %w", err)
+	}
+	if pvEnt == nil {
+		return &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.PublishedPackageVersionNotFound,
+			Message: exception.PublishedPackageVersionNotFoundMsg,
+			Params:  map[string]interface{}{"version": info.PreviousVersion, "packageId": prevPkgId},
+		}
+	}
+	if pvEnt.DeletedAt != nil && !pvEnt.DeletedAt.IsZero() {
+		// previous version is deleted, so it's ok
+		return nil
+	}
+	// previous version is not deleted, and we don't have comparisons
+	return &exception.CustomError{
+		Status:  http.StatusBadRequest,
+		Code:    exception.InvalidPackagedFile,
+		Message: exception.InvalidPackagedFileMsg,
+		Params:  map[string]interface{}{"file": file, "error": errorDetail},
+	}
+}
+
+// validateComparisonEntries runs the shared business-logic checks (excluded refs, field
+// consistency, referenced version/comparison existence) against both regular and DDL comparisons.
+func (p publishedValidatorImpl) validateComparisonEntries(buildArc *archive.BuildResultArchive, entries []comparisonEntry) error {
 	excludedRefs := make(map[string]struct{}, 0)
-	for _, ref := range info.Refs {
+	for _, ref := range buildArc.PackageInfo.Refs {
 		if ref.Excluded {
 			excludedRefs[view.MakePackageVersionRefKey(ref.RefId, ref.Version)] = struct{}{}
 		}
 	}
-	for _, comparison := range comparisons.Comparisons {
+	for _, comparison := range entries {
 		if _, refExcluded := excludedRefs[view.MakePackageVersionRefKey(comparison.PackageId, view.MakeVersionRefKey(comparison.Version, comparison.Revision))]; refExcluded {
 			return &exception.CustomError{
 				Status:  http.StatusBadRequest,
@@ -853,7 +940,39 @@ func (p publishedValidatorImpl) validatePackageDdlContracts(buildArc *archive.Bu
 		}
 	}
 
-	return nil
+	ddlComparisons := buildArc.PackageDdlComparisons
+	info := buildArc.PackageInfo
+	if info.NoChangelog && len(ddlComparisons.Comparisons) != 0 {
+		return &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.ChangesAreNotEmpty,
+			Message: exception.ChangesAreNotEmptyMsg,
+		}
+	}
+
+	// A DDL comparison is only required when the build actually carries DDL contracts to diff;
+	// packages without DDL contracts never populate ddl-comparisons.json.
+	if !info.NoChangelog && info.PreviousVersion != "" && len(buildArc.PackageDdlContracts.Tables) != 0 && len(ddlComparisons.Comparisons) == 0 {
+		if err := p.validatePreviousVersionComparisonRequired(info, "ddl-comparisons", "at least one ddl comparison required for publishing package with previous version when ddl contracts are present"); err != nil {
+			return err
+		}
+	}
+
+	entries := make([]comparisonEntry, 0, len(ddlComparisons.Comparisons))
+	for _, comparison := range ddlComparisons.Comparisons {
+		entries = append(entries, comparisonEntry{
+			ComparisonKey: view.ComparisonKey{
+				PackageId:                comparison.PackageId,
+				Version:                  comparison.Version,
+				Revision:                 comparison.Revision,
+				PreviousVersionPackageId: comparison.PreviousVersionPackageId,
+				PreviousVersion:          comparison.PreviousVersion,
+				PreviousVersionRevision:  comparison.PreviousVersionRevision,
+			},
+			FromCache: comparison.FromCache,
+		})
+	}
+	return p.validateComparisonEntries(buildArc, entries)
 }
 
 func (p publishedValidatorImpl) validatePackageMcpContracts(buildArc *archive.BuildResultArchive, buildConfig *view.BuildConfig) error {

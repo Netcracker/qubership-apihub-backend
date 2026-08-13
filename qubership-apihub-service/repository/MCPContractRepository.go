@@ -80,7 +80,13 @@ func (r *mcpContractRepositoryImpl) GetMcpEntity(packageId, version string, revi
 	if ent.DataHash != nil {
 		dataEnt := new(entity.MCPContractDataEntity)
 		err = conn.Model(dataEnt).Where("data_hash = ?", *ent.DataHash).First()
-		if err == nil {
+		if err != nil {
+			if err == pg.ErrNoRows {
+				return nil, nil, fmt.Errorf("failed to find mcp entity data with id = %s", *ent.DataHash)
+			} else {
+				return nil, nil, err
+			}
+		} else {
 			data = dataEnt.Data
 		}
 	}

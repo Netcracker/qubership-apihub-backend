@@ -597,7 +597,7 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 	// DDL comparisons share version_comparison with REST. Read the DDL index/per-pair files, then
 	// merge the version-comparison rows by comparison_id (REST + DDL contractTypes on the same row;
 	// DDL-only pairs are appended so the ddl_comparison FK is satisfied for pure DDL changelogs).
-	ddlVersionComparisonEntities, ddlContractComparisonEntities, ddlComparisonFileIdToKeyMap, err := buildArcEntitiesReader.ReadDdlContractComparisonsToEntities(publishingDdlDataHashes, p.ddlContractRepo)
+	ddlVersionComparisonEntities, ddlContractComparisonEntities, ddlComparisonsFromCache, ddlComparisonFileIdToKeyMap, err := buildArcEntitiesReader.ReadDdlContractComparisonsToEntities(publishingDdlDataHashes, p.ddlContractRepo)
 	if err != nil {
 		return err
 	}
@@ -607,6 +607,9 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 	operationComparisonIdsToRebuild := comparisonIds(operationsComparisonEntities)
 	ddlComparisonIdsToRebuild := comparisonIds(ddlVersionComparisonEntities)
 	operationsComparisonEntities = mergeVersionComparisons(operationsComparisonEntities, ddlVersionComparisonEntities)
+	// migration re-validation treats a comparison id as legitimately absent from the build archive
+	// only if it appears here, so the DDL-side cache hits must be included, not just the operation side.
+	versionComparisonsFromCache = mergeUniqueStrings(versionComparisonsFromCache, ddlComparisonsFromCache)
 	for fileId, key := range ddlComparisonFileIdToKeyMap {
 		if _, ok := comparisonFileIdToKeyMap[fileId]; !ok {
 			comparisonFileIdToKeyMap[fileId] = key
@@ -943,12 +946,32 @@ func mergeVersionComparisons(operationComparisons []*entity.VersionComparisonEnt
 	for _, ddlComparison := range ddlComparisons {
 		if existing, exists := versionComparisonByComparisonId[ddlComparison.ComparisonId]; exists {
 			existing.ContractTypes = ddlComparison.ContractTypes
+			// A dashboard can reference a package with only operation changes and another with only
+			// DDL changes; each side's reader only records refs for the comparisons it produced, so
+			// the merged row must carry both, or the DDL-only referenced comparison is never fetched.
+			existing.Refs = mergeUniqueStrings(existing.Refs, ddlComparison.Refs)
 		} else {
 			operationComparisons = append(operationComparisons, ddlComparison)
 			versionComparisonByComparisonId[ddlComparison.ComparisonId] = ddlComparison
 		}
 	}
 	return operationComparisons
+}
+
+// mergeUniqueStrings unions two string lists, preserving order and dropping duplicates.
+func mergeUniqueStrings(a []string, b []string) []string {
+	seen := make(map[string]struct{}, len(a)+len(b))
+	merged := make([]string, 0, len(a)+len(b))
+	for _, list := range [][]string{a, b} {
+		for _, s := range list {
+			if _, ok := seen[s]; ok {
+				continue
+			}
+			seen[s] = struct{}{}
+			merged = append(merged, s)
+		}
+	}
+	return merged
 }
 
 // comparisonIds returns the ComparisonId of every entity in the list. A comparison id only appears
@@ -1041,11 +1064,15 @@ func (p publishedServiceImpl) PublishChanges(buildArc *archive.BuildResultArchiv
 		if ddlErr != nil {
 			return ddlErr
 		}
+		var ddlComparisonsFromCache []string
 		var ddlComparisonFileIdToKeyMap map[string]view.ComparisonKey
-		ddlVersionComparisonEntities, ddlContractComparisonEntities, ddlComparisonFileIdToKeyMap, err = buildArcEntitiesReader.ReadDdlContractComparisonsToEntities(currentDdlDataHashes, p.ddlContractRepo)
+		ddlVersionComparisonEntities, ddlContractComparisonEntities, ddlComparisonsFromCache, ddlComparisonFileIdToKeyMap, err = buildArcEntitiesReader.ReadDdlContractComparisonsToEntities(currentDdlDataHashes, p.ddlContractRepo)
 		if err != nil {
 			return err
 		}
+		// migration re-validation treats a comparison id as legitimately absent from the build archive
+		// only if it appears here, so the DDL-side cache hits must be included, not just the operation side.
+		versionComparisonsFromCache = mergeUniqueStrings(versionComparisonsFromCache, ddlComparisonsFromCache)
 		for fileId, key := range ddlComparisonFileIdToKeyMap {
 			if _, ok := comparisonFileIdToKeyMap[fileId]; !ok {
 				comparisonFileIdToKeyMap[fileId] = key

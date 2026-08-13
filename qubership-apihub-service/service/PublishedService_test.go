@@ -188,11 +188,12 @@ func TestMergeVersionComparisons(t *testing.T) {
 	ddlOnlyId := view.MakeVersionComparisonId("p3", "v2", 1, "p3", "v1", 1)
 
 	operationComparisons := []*entity.VersionComparisonEntity{
-		{ComparisonId: mainId, OperationTypes: []view.OperationType{{ApiType: "rest"}}},
+		{ComparisonId: mainId, OperationTypes: []view.OperationType{{ApiType: "rest"}}, Refs: []string{sharedId, opOnlyId}},
 		{ComparisonId: sharedId, OperationTypes: []view.OperationType{{ApiType: "rest"}}},
 		{ComparisonId: opOnlyId, OperationTypes: []view.OperationType{{ApiType: "rest"}}},
 	}
 	ddlComparisons := []*entity.VersionComparisonEntity{
+		{ComparisonId: mainId, Refs: []string{sharedId, ddlOnlyId}},
 		{ComparisonId: sharedId, ContractTypes: []view.ContractType{{ContractType: view.ContractTypeDdl}}},
 		{ComparisonId: ddlOnlyId, ContractTypes: []view.ContractType{{ContractType: view.ContractTypeDdl}}},
 	}
@@ -217,5 +218,17 @@ func TestMergeVersionComparisons(t *testing.T) {
 	}
 	if byId[mainId].ContractTypes != nil {
 		t.Errorf("main comparison has no DDL data, contract types must stay empty")
+	}
+	// The dashboard's main comparison references one package with only operation changes (opOnlyId)
+	// and another with only DDL changes (ddlOnlyId); each reader only records refs for the
+	// comparisons it produced, so the merge must union them or the DDL-only ref is dropped.
+	wantRefs := map[string]bool{sharedId: true, opOnlyId: true, ddlOnlyId: true}
+	if len(byId[mainId].Refs) != len(wantRefs) {
+		t.Fatalf("main comparison refs = %v, want union of %v", byId[mainId].Refs, wantRefs)
+	}
+	for _, ref := range byId[mainId].Refs {
+		if !wantRefs[ref] {
+			t.Errorf("main comparison refs contains unexpected ref %s", ref)
+		}
 	}
 }
