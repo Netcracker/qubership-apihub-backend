@@ -1527,7 +1527,16 @@ components:
                                   url:
                                     type: string
             notifications.json:
-              $ref: "#/components/schemas/BuildResultNotifications"
+              description: |
+                Problems detected while building the version's own documents and operations.
+              allOf:
+                - $ref: "#/components/schemas/BuildResultNotifications"
+            comparison-notifications.json:
+              description: |
+                Problems detected while calculating the changelog against the previous version, grouped by
+                comparison. Only present when previousVersion is specified in the build configuration.
+              allOf:
+                - $ref: "#/components/schemas/BuildResultComparisonNotifications"
             version-internal-documents.json:
               type: object
               description: List of version internal documents data. Only provided for packages of kind `package`.
@@ -1741,8 +1750,12 @@ components:
               $ref: "#/components/schemas/BuildResultDdlComparisons"
             ddl-comparisons/{comparisonFileId}:
               $ref: "#/components/schemas/BuildResultDdlComparisonsData"
-            notifications.json:
-              $ref: "#/components/schemas/BuildResultNotifications"
+            comparison-notifications.json:
+              description: |
+                Problems detected while calculating the changelog against the previous version, grouped by
+                comparison.
+              allOf:
+                - $ref: "#/components/schemas/BuildResultComparisonNotifications"
         - title: Build result for mergedSpecification and reducedSourceSpecifications
           description: |
             Build result for the following buildType:
@@ -2480,71 +2493,141 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/InternalDocumentMetadata"
+    BuildResultNotificationMessage:
+      type: object
+      description: |
+        A single message produced while processing the build.
+      required:
+        - category
+        - severity
+        - message
+      properties:
+        category:
+          description: |
+            Stable code identifying which check produced the message. One value per diagnostic, so it is
+            precise enough to filter on without matching message text. The category describes the kind of
+            problem, not the build phase - the phase is defined by the file the message is in.
+
+            Values share a domain prefix (ref-, mcp-, ddl-, tolerant-hash-, risky-, version-), so a coarse
+            grouping can be derived by prefix without a second field.
+          type: string
+          enum:
+            - parse-file
+            - invalid-text-file
+            - file-not-parsed
+            - build-document
+            - swagger-conversion
+            - ref-has-siblings
+            - ref-not-allowed
+            - ref-not-found
+            - ref-not-valid-format
+            - build-operations
+            - duplicate-operation-id
+            - rest-duplicate-operation
+            - empty-path-parameter
+            - double-slash-path
+            - ddl-duplicate-object
+            - ddl-parse-issue
+            - ddl-entity-build
+            - ddl-duplicate-entity
+            - mcp-entity-build
+            - mcp-document-schema
+            - mcp-init-required
+            - mcp-duplicate-entity
+            - mcp-capability-unused
+            - tolerant-hash-missing
+            - tolerant-hash-failed
+            - deprecated-component-path
+            - version-not-resolved
+            - version-refs-not-resolved
+            - version-documents-missing
+            - operation-data-missing
+            - risky-before-value
+            - risky-origins
+            - comparison-serialization
+            - previous-version-missing
+            - group-documents-missing
+            - partial-group-documents
+          example: build-document
+        severity:
+          description: |
+            Severity of the message.
+            * **0** - Error
+            * **1** - Warning
+            * **2** - Information
+            * **3** - Hint
+          type: integer
+          enum:
+            - 0
+            - 1
+            - 2
+            - 3
+          example: 0
+        message:
+          description: Human readable message text.
+          type: string
+          example: "Cannot process the \"docs/events.yaml\" document. Unexpected token"
+        documentId:
+          description: |
+            Slug of the document the message is attributed to, matching the `slug` field in documents.json.
+
+            Messages are denormalized by document: a problem that concerns several documents at once,
+            e.g. an operation id duplicated between two documents, is reported as several messages with
+            the same text, one per affected document.
+
+            Absent when the message is not attributable to any document, e.g. the previous version of
+            the comparison could not be resolved.
+          type: string
+          example: "events-yaml"
     BuildResultNotifications:
       type: object
       description: |
-        Messages produced while processing the build: parse, validation and comparison problems.
+        Content of notifications.json - problems detected while building the version's own documents and
+        operations, e.g. parse and validation problems.
 
-        A message with severity = 0 (Error) is a critical problem. A version that has at least one such message
-        can only be published in `draft` status; publishing it in `release` status fails the build.
+        A message with severity = 0 (Error) is a critical problem: the affected document and the version are
+        marked with hasErrors, and the version can only be published in `draft` status.
       properties:
         notifications:
           description: List of build notifications.
           type: array
           items:
-            type: object
-            required:
-              - category
-              - severity
-              - message
-            properties:
-              category:
-                description: |
-                  Category of the message, used to group and filter notifications.
-                type: string
-                enum:
-                  - document-parsing
-                  - document-build
-                  - operation-build
-                  - validation
-                  - duplicate
-                  - references
-                  - changelog
-                  - resolution
-                  - mcp
-                  - packaging
-                example: document-build
-              severity:
-                description: |
-                  Severity of the message.
-                  * **0** - Error
-                  * **1** - Warning
-                  * **2** - Information
-                  * **3** - Hint
-                type: integer
-                enum:
-                  - 0
-                  - 1
-                  - 2
-                  - 3
-                example: 0
-              message:
-                description: Human readable message text.
-                type: string
-                example: "Cannot process the \"docs/events.yaml\" document. Unexpected token"
-              documentId:
-                description: |
-                  Slug of the document the message is attributed to, matching the `slug` field in
-                  documents.json.
+            $ref: "#/components/schemas/BuildResultNotificationMessage"
+    BuildResultComparisonNotifications:
+      type: object
+      description: |
+        Content of comparison-notifications.json - problems detected while calculating a changelog against a
+        previous version.
 
-                  Messages are denormalized by document: a problem that concerns several documents at once,
-                  e.g. an operation id duplicated between two documents, is reported as several messages with
-                  the same text, one per affected document.
+        Messages are grouped by the version pair they belong to, because a single build can produce several
+        comparisons (the root version pair plus one per dashboard reference). Each entry of `comparisons`
+        carries the same version pair identity as the corresponding entry of comparisons.json, so it can be
+        matched to that comparison without guessing.
 
-                  Absent when the message is not attributable to any document, e.g. the previous version of
-                  the comparison could not be resolved.
-                type: string
-                example: "events-yaml"
+        Every message belongs to exactly one version pair: it is reported for the comparison it was produced
+        for and for no other, whatever else the build was comparing at the time. There is no build-level
+        bucket.
+
+        A message with severity = 0 (Error) marks the corresponding entry of comparisons.json /
+        ddl-comparisons.json with hasErrors. It never marks the version or its documents - it describes the
+        comparison, not the quality of the version being published. It does, however, prevent publication in
+        `release` status: a release version that declares a previousVersion is expected to ship a reliable
+        changelog.
+      properties:
+        comparisons:
+          description: Messages grouped by the version pair they were produced for.
+          type: array
+          items:
+            allOf:
+              - $ref: "#/components/schemas/BuildResultComparisonData"
+              - type: object
+                properties:
+                  notifications:
+                    description: |
+                      Messages produced while calculating this comparison, and only those.
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/BuildResultNotificationMessage"
     BuildResultComparisonData:
       type: object
       description: |
@@ -2581,6 +2664,16 @@ components:
         fromCache:
           description: True if the changes were retrieved from BE (not calculated).
           type: boolean
+        hasErrors:
+          description: |
+            Flag showing that the changelog calculation for this version pair produced at least one message
+            with severity = 0 (Error), i.e. the comparison may be incomplete or inaccurate.
+            See comparison-notifications.json for the details.
+
+            The flag describes the comparison only. It does not mark the compared versions and does not
+            prevent publication of a version in `release` status.
+          type: boolean
+          default: false
     BuildResultComparisons:
       type: object
       properties:
@@ -2743,9 +2836,12 @@ components:
                   search:
                     $ref: "#/components/schemas/SearchUseEntityData"
                   documentId:
-                    description: fileId of the source DDL document this entity was extracted from.
+                    description: |
+                      Slug of the source DDL document this entity was extracted from.
+                      Corresponds to the `slug` field of the document in documents.json.
                     type: string
-                    example: ddl/shop.sql
+                    pattern: "^[a-z0-9-]"
+                    example: shop-sql
                   versionInternalDocumentId:
                     description: |
                       Id of the version internal document holding the normalized/denormalized Realm for the
@@ -2850,8 +2946,11 @@ components:
           type: string
           example: /mcp
         documentId:
-          description: Source document identifier.
+          description: |
+            Slug of the source MCP document this entity was extracted from.
+            Corresponds to the `slug` field of the document in documents.json.
           type: string
+          pattern: "^[a-z0-9-]"
           example: tools-forecast-json
     BuildResultDdlComparisons:
       type: object

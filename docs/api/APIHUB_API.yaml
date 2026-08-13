@@ -2357,6 +2357,12 @@ paths:
                   $ref: "#/components/examples/PreviousVersionNotRelease"
                 VersionReferencedAsPreviousByRelease:
                   $ref: "#/components/examples/VersionReferencedAsPreviousByRelease"
+                ReleasePublishWithErrors:
+                  $ref: "#/components/examples/ReleasePublishWithErrors"
+                PreviousVersionHasErrors:
+                  $ref: "#/components/examples/PreviousVersionHasErrors"
+                ReferencedVersionHasErrors:
+                  $ref: "#/components/examples/ReferencedVersionHasErrors"
         "401":
           description: Unauthorized
           content:
@@ -3049,6 +3055,8 @@ paths:
               examples:
                 IncorrectInputParams:
                   $ref: "#/components/examples/IncorrectInputParameters"
+                VersionStatusChangeWithErrors:
+                  $ref: "#/components/examples/VersionStatusChangeWithErrors"
                 VersionStatusChangePreviousVersionNotRelease:
                   $ref: "#/components/examples/VersionStatusChangePreviousVersionNotRelease"
                 VersionReferencedAsPreviousByRelease:
@@ -3287,6 +3295,20 @@ paths:
                               default: false
                       contractsSummary:
                         $ref: "#/components/schemas/VersionContractsSummary"
+                      comparisonHasErrors:
+                        description: |
+                          Flag showing that the changelog calculation between this version and its
+                          previousVersion produced at least one critical problem, i.e. the comparison may be
+                          incomplete or inaccurate. Returned when includeSummary = true and the version has a
+                          previous version.
+
+                          The flag describes the comparison only, it does not mean that the version itself has
+                          problems - see hasErrors for that.
+
+                          Use `GET /api/v2/packages/{packageId}/versions/{version}/changes/notifications` to
+                          get the details.
+                        type: boolean
+                        default: false
                   - type: object
                     properties:
                       operationGroups:
@@ -3404,6 +3426,18 @@ paths:
                         default: false
                       contractsChangesSummary:
                         $ref: "#/components/schemas/VersionComparisonContractsSummary"
+                      hasErrors:
+                        description: |
+                          Flag showing that the changelog calculation for this version pair produced at least
+                          one critical problem, i.e. the comparison may be incomplete or inaccurate.
+
+                          The flag describes the comparison only, it does not mean that any of the compared
+                          versions has problems.
+
+                          Use `GET /api/v2/packages/{packageId}/versions/{version}/changes/notifications` to
+                          get the details.
+                        type: boolean
+                        default: false
                   - type: object
                     title: dashboardComparison
                     required:
@@ -3460,6 +3494,16 @@ paths:
                               default: false
                             contractsChangesSummary:
                               $ref: "#/components/schemas/VersionComparisonContractsSummary"
+                            hasErrors:
+                              description: |
+                                Flag showing that the changelog calculation for this referenced package pair
+                                produced at least one critical problem, i.e. the comparison may be incomplete
+                                or inaccurate.
+
+                                The flag describes the comparison only, it does not mean that any of the
+                                compared versions has problems.
+                              type: boolean
+                              default: false
                       packages:
                         $ref: "#/components/schemas/PackagesMap"
         "301":
@@ -4271,6 +4315,8 @@ paths:
               examples:
                 IncorrectInputParams:
                   $ref: "#/components/examples/IncorrectInputParameters"
+                PreviousVersionHasErrors:
+                  $ref: "#/components/examples/PreviousVersionHasErrors"
         "401":
           description: Unauthorized
           content:
@@ -10456,8 +10502,11 @@ paths:
         - Versions
       summary: Get package version notifications
       description: |
-        Get the list of messages produced by api-processor while building the package version: parse,
-        validation and comparison problems.
+        Get the list of messages produced by api-processor while building the package version's own documents
+        and operations, e.g. parse and validation problems.
+
+        Problems detected while calculating a changelog are returned by
+        `GET /api/v2/packages/{packageId}/versions/{version}/changes/notifications` instead.
 
         A message with severity = error is a critical problem. A version that has at least one such message can
         only be published in `draft` status, and is marked with hasErrors = true. Documents affected by such a
@@ -10498,6 +10547,120 @@ paths:
             items:
               $ref: "#/components/schemas/NotificationCategoryEnum"
           example: ["document-build"]
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notifications:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/VersionNotification"
+              examples: {}
+        "301":
+          description: Moved Permanently
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                IncorrectInputParams:
+                  $ref: "#/components/examples/IncorrectInputParameters"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                PackageNotFound:
+                  $ref: "#/components/examples/PackageNotFound"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+  "/api/v2/packages/{packageId}/versions/{version}/changes/notifications":
+    parameters:
+      - $ref: "#/components/parameters/packageId"
+      - $ref: "#/components/parameters/version"
+    get:
+      tags:
+        - Changes
+      summary: Get comparison notifications
+      description: |
+        Get the list of messages produced by api-processor while calculating the changelog between two package
+        versions.
+
+        A message with severity = error means that the comparison may be incomplete or inaccurate, and the
+        corresponding comparison is marked with hasErrors. Such a message describes the comparison only: it
+        does not mark either of the compared versions and does not prevent publication of a version in
+        `release` status. Problems of the versions themselves are returned by
+        `GET /api/v2/packages/{packageId}/versions/{version}/notifications` instead.
+
+        Most comparison messages are not attributable to a document, e.g. the previous version could not be
+        resolved, so documentId is empty more often than for the version notifications.
+      operationId: getPackagesIdVersionsIdChangesNotifications
+      parameters:
+        - $ref: "#/components/parameters/previousVersion"
+        - $ref: "#/components/parameters/previousVersionPackageId"
+        - name: documentId
+          in: query
+          description: Filter by document slug. Returns the messages attributed to the document.
+          schema:
+            type: string
+            example: qitmf-v5-11-json
+        - name: severity
+          in: query
+          description: Filter by severity. Repeat the parameter to filter by several values.
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                - error
+                - warning
+                - information
+                - hint
+          example: ["error"]
+        - name: category
+          in: query
+          description: Filter by message category. Repeat the parameter to filter by several values.
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/NotificationCategoryEnum"
+          example: ["resolution"]
       responses:
         "200":
           description: Success
@@ -11526,8 +11689,12 @@ components:
             - versionInternalDocumentId
           properties:
             documentId:
-              description: Source document identifier.
+              description: |
+                Slug of the source document this entity was extracted from.
+                Can be used to request the document via
+                `GET /api/v3/packages/{packageId}/versions/{version}/documents/{slug}`.
               type: string
+              pattern: "^[a-z0-9-]"
               example: "shop-sql"
             versionInternalDocumentId:
               description: >
@@ -11590,8 +11757,12 @@ components:
           type: string
           example: /mcp
         documentId:
-          description: Source document identifier.
+          description: |
+            Slug of the source document this entity was extracted from.
+            Can be used to request the document via
+            `GET /api/v3/packages/{packageId}/versions/{version}/documents/{slug}`.
           type: string
+          pattern: "^[a-z0-9-]"
           example: tools-forecast-json
     McpEntityView:
       description: |
@@ -11627,33 +11798,63 @@ components:
                   description: Number of DDL entities impacted by each severity type.
     NotificationCategoryEnum:
       description: |
-        Category of a package version build notification, used to group and filter messages.
-          * **document-parsing** - the document could not be parsed.
-          * **document-build** - the document could not be built.
-          * **operation-build** - operations could not be built from the document.
-          * **validation** - the document does not satisfy a specification rule.
-          * **duplicate** - a duplicated id within or between documents.
-          * **references** - a reference in the document could not be resolved.
-          * **changelog** - a problem detected while calculating the changelog.
-          * **resolution** - a version, document or data could not be resolved.
-          * **mcp** - an MCP specific problem.
-          * **packaging** - a problem detected while creating the build result.
+        Stable code identifying which check produced the message. There is one value per diagnostic, so the
+        category is precise enough to filter on without matching message text. It describes the kind of
+        problem, not the build phase - the phase is defined by the endpoint the message is returned by.
+
+        Values share a domain prefix, so a coarse grouping can be derived without a second field:
+          * **ref-*** - reference resolution (`ref-has-siblings`, `ref-not-allowed`, `ref-not-found`,
+            `ref-not-valid-format`).
+          * **mcp-*** - MCP entity, schema, init and capability problems.
+          * **ddl-*** - DDL parsing, entity build and duplicates.
+          * **tolerant-hash-*** / **deprecated-component-path** - deprecated item hashing and matching.
+          * **risky-*** - reclassification of breaking changes during a comparison.
+          * **version-*** / **operation-data-missing** / **previous-version-missing** - a version, its
+            references, its documents or its operation data could not be resolved.
+          * everything else names the check directly, e.g. `parse-file`, `invalid-text-file`,
+            `duplicate-operation-id`, `empty-path-parameter`, `comparison-serialization`.
       type: string
       enum:
-        - document-parsing
-        - document-build
-        - operation-build
-        - validation
-        - duplicate
-        - references
-        - changelog
-        - resolution
-        - mcp
-        - packaging
-      example: document-build
+        - parse-file
+        - invalid-text-file
+        - file-not-parsed
+        - build-document
+        - swagger-conversion
+        - ref-has-siblings
+        - ref-not-allowed
+        - ref-not-found
+        - ref-not-valid-format
+        - build-operations
+        - duplicate-operation-id
+        - rest-duplicate-operation
+        - empty-path-parameter
+        - double-slash-path
+        - ddl-duplicate-object
+        - ddl-parse-issue
+        - ddl-entity-build
+        - ddl-duplicate-entity
+        - mcp-entity-build
+        - mcp-document-schema
+        - mcp-init-required
+        - mcp-duplicate-entity
+        - mcp-capability-unused
+        - tolerant-hash-missing
+        - tolerant-hash-failed
+        - deprecated-component-path
+        - version-not-resolved
+        - version-refs-not-resolved
+        - version-documents-missing
+        - operation-data-missing
+        - risky-before-value
+        - risky-origins
+        - comparison-serialization
+        - previous-version-missing
+        - group-documents-missing
+        - partial-group-documents
+      example: build-document
     VersionNotification:
       description: |
-        A message produced by api-processor while building the package version.
+        A message produced by api-processor while building a package version or calculating a changelog.
       type: object
       title: Version notification
       required:
@@ -14389,6 +14590,42 @@ components:
           packageId: "QS.group.my-package"
           previousVersion: "2024.1"
           previousVersionPackageId: "QS.group.previous-package"
+    ReleasePublishWithErrors:
+      description: Version cannot be published in 'release' status because it has errors
+      value:
+        status: 400
+        code: '8700'
+        message: Version 2024.2 for package QS.group.my-package cannot be published in the 'release' status because it has critical errors. Publish it in the 'draft' status to investigate them.
+        params:
+          version: '2024.2'
+          packageId: QS.group.my-package
+    VersionStatusChangeWithErrors:
+      description: Version status cannot be changed to 'release' because the version has errors
+      value:
+        status: 400
+        code: '8700'
+        message: Version 2024.2 for package QS.group.my-package cannot be changed to the 'release' status because it or its changelog has critical errors. Fix them and republish the version.
+        params:
+          version: '2024.2'
+          packageId: QS.group.my-package
+    PreviousVersionHasErrors:
+      description: Version cannot be used as the previous version because it has errors
+      value:
+        status: 400
+        code: '8700'
+        message: Version 2024.1 for package QS.group.previous-package cannot be used as the previous version because it or its changelog has critical errors, so the calculated changes would be unreliable.
+        params:
+          previousVersion: '2024.1'
+          previousVersionPackageId: QS.group.previous-package
+    ReferencedVersionHasErrors:
+      description: Dashboard cannot reference a version that has errors
+      value:
+        status: 400
+        code: '8700'
+        message: Version 2024.1 for package QS.group.referenced-package cannot be added to the dashboard because it or its changelog has critical errors.
+        params:
+          version: '2024.1'
+          packageId: QS.group.referenced-package
     VersionStatusChangePreviousVersionNotRelease:
       description: Version status cannot be changed to 'release' when the previous version is a draft
       value:
