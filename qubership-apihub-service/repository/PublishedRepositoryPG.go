@@ -1964,6 +1964,19 @@ func (p publishedRepositoryImpl) CreateVersionWithData(ctx context.Context, pack
 			}
 			utils.PerfLog(time.Since(start).Milliseconds(), 100, "CreateVersionWithData: ddl_table_data insert")
 		}
+		if packageInfo.MigrationBuild {
+			// In case of migration list of DDL entities may change due to new builder implementation, so need to cleanup existing list before insert
+			start = time.Now()
+			_, err = tx.Model(&entity.DDLContractEntity{}).
+				Where("package_id = ?", version.PackageId).
+				Where("version = ?", version.Version).
+				Where("revision = ?", version.Revision).
+				Delete()
+			utils.PerfLog(time.Since(start).Milliseconds(), 50+int64(len(ddlContractEntities)*10), "CreateVersionWithData: old ddl_tables delete")
+			if err != nil {
+				return fmt.Errorf("failed to cleanup ddl_tables for migration: %w", err)
+			}
+		}
 		if len(ddlContractEntities) > 0 {
 			start = time.Now()
 			_, err = tx.Model(&ddlContractEntities).OnConflict("(package_id, version, revision, ddl_entity_id) DO UPDATE").Insert()
@@ -1971,6 +1984,23 @@ func (p publishedRepositoryImpl) CreateVersionWithData(ctx context.Context, pack
 				return fmt.Errorf("failed to insert ddl_tables: %w", err)
 			}
 			utils.PerfLog(time.Since(start).Milliseconds(), 100, "CreateVersionWithData: ddl_tables insert")
+		}
+
+		if packageInfo.MigrationBuild && !pkg.ExcludeFromSearch && version.Revision == maxRevision {
+			deleteStaleFtsDdlSearchTextQuery := `
+				DELETE FROM fts_ddl_search_text fts
+				WHERE fts.package_id = ? AND fts.version = ? AND fts.revision = ?
+					AND NOT EXISTS (
+						SELECT 1 FROM ddl_tables t
+						WHERE t.package_id = fts.package_id
+							AND t.version = fts.version
+							AND t.revision = fts.revision
+							AND t.ddl_entity_id = fts.ddl_entity_id
+					)`
+			_, err = tx.Exec(deleteStaleFtsDdlSearchTextQuery, version.PackageId, version.Version, version.Revision)
+			if err != nil {
+				return fmt.Errorf("failed to delete stale fts_ddl_search_text during migration rebuild: %w", err)
+			}
 		}
 		if len(ddlContractSearchTexts) > 0 && !pkg.ExcludeFromSearch {
 			if !packageInfo.MigrationBuild {
@@ -2060,6 +2090,19 @@ func (p publishedRepositoryImpl) CreateVersionWithData(ctx context.Context, pack
 			}
 			utils.PerfLog(time.Since(start).Milliseconds(), 100, "CreateVersionWithData: mcp_entity_data insert")
 		}
+		if packageInfo.MigrationBuild {
+			// In case of migration list of MCP entities may change due to new builder implementation, so need to cleanup existing list before insert
+			start = time.Now()
+			_, err = tx.Model(&entity.MCPContractEntity{}).
+				Where("package_id = ?", version.PackageId).
+				Where("version = ?", version.Version).
+				Where("revision = ?", version.Revision).
+				Delete()
+			utils.PerfLog(time.Since(start).Milliseconds(), 50+int64(len(mcpContractEntities)*10), "CreateVersionWithData: old mcp_entities delete")
+			if err != nil {
+				return fmt.Errorf("failed to cleanup mcp_entities for migration: %w", err)
+			}
+		}
 		if len(mcpContractEntities) > 0 {
 			start = time.Now()
 			_, err = tx.Model(&mcpContractEntities).OnConflict("(package_id, version, revision, mcp_entity_id) DO UPDATE").Insert()
@@ -2069,6 +2112,22 @@ func (p publishedRepositoryImpl) CreateVersionWithData(ctx context.Context, pack
 			utils.PerfLog(time.Since(start).Milliseconds(), 100, "CreateVersionWithData: mcp_entities insert")
 		}
 
+		if packageInfo.MigrationBuild && !pkg.ExcludeFromSearch && version.Revision == maxRevision {
+			deleteStaleFtsMcpSearchTextQuery := `
+				DELETE FROM fts_mcp_search_text fts
+				WHERE fts.package_id = ? AND fts.version = ? AND fts.revision = ?
+					AND NOT EXISTS (
+						SELECT 1 FROM mcp_entities me
+						WHERE me.package_id = fts.package_id
+							AND me.version = fts.version
+							AND me.revision = fts.revision
+							AND me.mcp_entity_id = fts.mcp_entity_id
+					)`
+			_, err = tx.Exec(deleteStaleFtsMcpSearchTextQuery, version.PackageId, version.Version, version.Revision)
+			if err != nil {
+				return fmt.Errorf("failed to delete stale fts_mcp_search_text during migration rebuild: %w", err)
+			}
+		}
 		if len(mcpContractSearchTexts) > 0 && !pkg.ExcludeFromSearch {
 			if !packageInfo.MigrationBuild {
 				start = time.Now()
