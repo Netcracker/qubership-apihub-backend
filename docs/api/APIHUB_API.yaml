@@ -10547,6 +10547,8 @@ paths:
             items:
               $ref: "#/components/schemas/NotificationCategoryEnum"
           example: ["document-build"]
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/page"
       responses:
         "200":
           description: Success
@@ -10661,6 +10663,8 @@ paths:
             items:
               $ref: "#/components/schemas/NotificationCategoryEnum"
           example: ["resolution"]
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/page"
       responses:
         "200":
           description: Success
