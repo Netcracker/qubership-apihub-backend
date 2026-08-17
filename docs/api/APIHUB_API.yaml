@@ -10518,6 +10518,8 @@ paths:
 
         Messages are denormalized by document: a problem that concerns several documents at once is returned as
         several messages with the same text, one per affected document.
+
+        Requires read permission on the package.
       operationId: getPackagesIdVersionsIdNotifications
       parameters:
         - name: documentId
@@ -10589,7 +10591,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
-          description: Forbidden
+          description: Forbidden - the user has no read permission on the package
           content:
             application/json:
               schema:
@@ -10632,6 +10634,8 @@ paths:
 
         Most comparison messages are not attributable to a document, e.g. the previous version could not be
         resolved, so documentId is empty more often than for the version notifications.
+
+        Requires read permission on the package.
       operationId: getPackagesIdVersionsIdChangesNotifications
       parameters:
         - $ref: "#/components/parameters/previousVersion"
@@ -10705,7 +10709,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
-          description: Forbidden
+          description: Forbidden - the user has no read permission on the package
           content:
             application/json:
               schema:
