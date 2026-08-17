@@ -2615,7 +2615,13 @@ components:
         changelog.
       properties:
         comparisons:
-          description: Messages grouped by the version pair they were produced for.
+          description: |
+            Messages grouped by the version pair they were produced for.
+
+            Contains an entry only for comparisons this build actually calculated. A comparison reused from
+            the backend (fromCache = true in comparisons.json) has no entry, because nothing was computed for
+            it - an empty entry would replace the notifications stored when that comparison was calculated.
+            Its hasErrors flag is still reported in comparisons.json, carried over from the stored comparison.
           type: array
           items:
             allOf:
@@ -2669,6 +2675,9 @@ components:
             Flag showing that the changelog calculation for this version pair produced at least one message
             with severity = 0 (Error), i.e. the comparison may be incomplete or inaccurate.
             See comparison-notifications.json for the details.
+
+            When fromCache = true the comparison was reused rather than calculated, so the flag is carried
+            over from the stored comparison and comparison-notifications.json holds no entry for it.
 
             The flag describes the comparison only. It does not mark the compared versions and does not
             prevent publication of a version in `release` status.
