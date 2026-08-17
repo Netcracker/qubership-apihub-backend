@@ -3295,7 +3295,7 @@ paths:
                               default: false
                       contractsSummary:
                         $ref: "#/components/schemas/VersionContractsSummary"
-                      comparisonHasErrors:
+                      changelogHasErrors:
                         description: |
                           Flag showing that the changelog calculation between this version and its
                           previousVersion produced at least one critical problem, i.e. the comparison may be
