@@ -19,6 +19,8 @@ type VersionContent struct {
 	OperationGroups          []VersionOperationGroup `json:"operationGroups,omitempty"`
 	ApiProcessorVersion      string                  `json:"apiProcessorVersion"`
 	ContractsSummary         *ContractsSummaryView   `json:"contractsSummary,omitempty"`
+	HasErrors                bool                    `json:"hasErrors"`
+	ChangelogHasErrors       bool                    `json:"changelogHasErrors,omitempty"`
 }
 
 // ContractsSummaryView is an object keyed by contract type (ddl, mcp).
@@ -31,13 +33,15 @@ type DdlVersionContractSummary struct {
 	TablesCount              int            `json:"tablesCount"`
 	ChangesSummary           *ChangeSummary `json:"changesSummary,omitempty"`
 	NumberOfImpactedEntities *ChangeSummary `json:"numberOfImpactedEntities,omitempty"`
+	HasErrors                bool           `json:"hasErrors"`
 }
 
 // McpEndpointSummary is the per-MCP-endpoint entity counts (inits intentionally omitted).
 type McpEndpointSummary struct {
-	ToolsCount     int `json:"toolsCount"`
-	PromptsCount   int `json:"promptsCount"`
-	ResourcesCount int `json:"resourcesCount"`
+	ToolsCount     int  `json:"toolsCount"`
+	PromptsCount   int  `json:"promptsCount"`
+	ResourcesCount int  `json:"resourcesCount"`
+	HasErrors      bool `json:"hasErrors"`
 }
 
 type VersionOperationType struct {
@@ -50,6 +54,7 @@ type VersionOperationType struct {
 	InternalAudienceOperationsCount *int                    `json:"internalAudienceOperationsCount,omitempty"`
 	UnknownAudienceOperationsCount  *int                    `json:"unknownAudienceOperationsCount,omitempty"`
 	ApiAudienceTransitions          []ApiAudienceTransition `json:"apiAudienceTransitions,omitempty"`
+	HasErrors                       bool                    `json:"hasErrors"`
 }
 
 type VersionOperationGroup struct {
@@ -88,6 +93,7 @@ type PublishedVersionListView struct {
 	PreviousVersionPackageId string                 `json:"previousVersionPackageId,omitempty"`
 	NotLatestRevision        bool                   `json:"notLatestRevision,omitempty"`
 	ApiProcessorVersion      string                 `json:"apiProcessorVersion"`
+	HasErrors                bool                   `json:"hasErrors"`
 }
 
 // PublishedVersionListMCPView is a compact view used in MCP resources.

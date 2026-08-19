@@ -1,9 +1,11 @@
 package service
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/repository"
 )
 
 func pv(version string, revision int, previousVersion string) entity.PackageVersionRevisionEntity {
@@ -177,5 +179,103 @@ func TestCheckPreviousVersionDependencyCycle_graph(t *testing.T) {
 				t.Fatalf("detectPreviousVersionDependencyCycleWithCurrVersion(...) = %v, want %v for %s", got, tt.wantCycle, tt.name)
 			}
 		})
+	}
+}
+
+type errorSummaryRepoStub struct {
+	repository.PublishedRepository
+	errorSummary         *entity.VersionErrorSummaryEntity
+	erroredReferences    bool
+	referencesLookupDone bool
+}
+
+func (s *errorSummaryRepoStub) GetVersionErrorSummary(string, string, int) (*entity.VersionErrorSummaryEntity, error) {
+	return s.errorSummary, nil
+}
+
+func (s *errorSummaryRepoStub) VersionHasErroredReferences(string, string, int) (bool, error) {
+	s.referencesLookupDone = true
+	return s.erroredReferences, nil
+}
+
+func TestVersionHasAnyErrors(t *testing.T) {
+	tests := []struct {
+		name              string
+		errorSummary      *entity.VersionErrorSummaryEntity
+		erroredReferences bool
+		expected          bool
+	}{
+		{
+			name:         "version without errors",
+			errorSummary: &entity.VersionErrorSummaryEntity{},
+			expected:     false,
+		},
+		{
+			name:         "errors in the version's own documents",
+			errorSummary: &entity.VersionErrorSummaryEntity{HasErrors: true},
+			expected:     true,
+		},
+		{
+			// The version's documents are fine, but the changes it publishes cannot be trusted.
+			name:         "errors in the changelog the version declares",
+			errorSummary: &entity.VersionErrorSummaryEntity{ChangelogHasErrors: true},
+			expected:     true,
+		},
+		{
+			// A dashboard owns no documents, so its own flags say nothing about its references.
+			name:              "dashboard referencing a version with errors",
+			errorSummary:      &entity.VersionErrorSummaryEntity{},
+			erroredReferences: true,
+			expected:          true,
+		},
+		{
+			// Nothing to judge: an absent version cannot block anything, and the caller reports it missing.
+			name:         "version does not exist",
+			errorSummary: nil,
+			expected:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &errorSummaryRepoStub{errorSummary: tt.errorSummary, erroredReferences: tt.erroredReferences}
+			hasErrors, err := VersionHasAnyErrors(repo, "QS.PKG", "2026.1", 3)
+			if err != nil {
+				t.Fatalf("expected the predicate to answer, but it failed: %v", err)
+			}
+			if hasErrors != tt.expected {
+				t.Fatalf("expected hasErrors=%v, got %v", tt.expected, hasErrors)
+			}
+		})
+	}
+}
+
+// The references lookup is the second query, so a version whose own flags already report errors must not pay for it.
+func TestVersionHasAnyErrorsSkipsReferencesWhenVersionAlreadyHasErrors(t *testing.T) {
+	repo := &errorSummaryRepoStub{errorSummary: &entity.VersionErrorSummaryEntity{HasErrors: true}}
+
+	if _, err := VersionHasAnyErrors(repo, "QS.PKG", "2026.1", 3); err != nil {
+		t.Fatalf("expected the predicate to answer, but it failed: %v", err)
+	}
+	if repo.referencesLookupDone {
+		t.Fatal("expected the references lookup to be skipped for a version that already has errors")
+	}
+}
+
+type failingErrorSummaryRepoStub struct {
+	repository.PublishedRepository
+}
+
+var errErrorSummaryLookup = errors.New("version error summary lookup failed")
+
+func (failingErrorSummaryRepoStub) GetVersionErrorSummary(string, string, int) (*entity.VersionErrorSummaryEntity, error) {
+	return nil, errErrorSummaryLookup
+}
+
+// A failed lookup must not read as "no errors": the refusals would silently let a version with errors through.
+func TestVersionHasAnyErrorsPropagatesLookupFailure(t *testing.T) {
+	_, err := VersionHasAnyErrors(failingErrorSummaryRepoStub{}, "QS.PKG", "2026.1", 3)
+	if !errors.Is(err, errErrorSummaryLookup) {
+		t.Fatalf("expected the lookup failure to propagate, got %v", err)
 	}
 }

@@ -37,3 +37,6 @@ apm_modules/
 
 # apm pack output
 agent-packages/**/build/
+
+
+.claude/settings.local.json

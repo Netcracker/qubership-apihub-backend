@@ -38,7 +38,7 @@ type PublishedService interface {
 	GetPublishedVersionBuildConfig(packageId string, versionName string) (*view.BuildConfig, error)
 	GetLatestContentDataBySlug(packageId string, versionName string, slug string) (*view.PublishedContent, *view.ContentData, error)
 	VersionPublished(packageId string, versionName string) (bool, error)
-	GetVersionStatus(packageId string, versionName string) (status string, found bool, err error)
+	GetVersionStatus(packageId string, versionName string) (status string, hasErrors bool, found bool, err error)
 	CheckNoReleaseDependentVersions(ctx context.SecurityContext, packageId string, version string) error
 	DeleteVersion(ctx context.SecurityContext, packageId string, versionName string) error
 
@@ -321,20 +321,39 @@ func (p publishedServiceImpl) VersionPublished(packageId string, versionName str
 	return ent != nil, nil
 }
 
-func (p publishedServiceImpl) GetVersionStatus(packageId string, versionName string) (string, bool, error) {
+func VersionHasAnyErrors(publishedRepo repository.PublishedRepository, packageId string, version string, revision int) (bool, error) {
+	errorSummary, err := publishedRepo.GetVersionErrorSummary(packageId, version, revision)
+	if err != nil {
+		return false, err
+	}
+	if errorSummary == nil {
+		return false, nil
+	}
+	if errorSummary.HasAnyErrors() {
+		return true, nil
+	}
+	// A package with no references answers false, so the kind of the package does not have to be resolved first.
+	return publishedRepo.VersionHasErroredReferences(packageId, version, revision)
+}
+
+func (p publishedServiceImpl) GetVersionStatus(packageId string, versionName string) (status string, hasErrors bool, found bool, err error) {
 	version, _, err := SplitVersionRevision(versionName)
 	if err != nil {
-		return "", false, err
+		return "", false, false, err
 	}
 
 	latestEnt, err := p.publishedRepo.GetVersion(packageId, version)
 	if err != nil {
-		return "", false, err
+		return "", false, false, err
 	}
 	if latestEnt == nil {
-		return "", false, nil
+		return "", false, false, nil
 	}
-	return latestEnt.Status, true, nil
+	hasErrors, err = VersionHasAnyErrors(p.publishedRepo, latestEnt.PackageId, latestEnt.Version, latestEnt.Revision)
+	if err != nil {
+		return "", false, false, err
+	}
+	return latestEnt.Status, hasErrors, true, nil
 }
 
 func (p publishedServiceImpl) CheckNoReleaseDependentVersions(ctx context.SecurityContext, packageId string, version string) error {
@@ -422,7 +441,11 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 	if err != nil {
 		return err
 	}
-	err = buildArc.ReadBuilderNotifications(false)
+	err = buildArc.ReadBuildNotifications(false)
+	if err != nil {
+		return err
+	}
+	err = buildArc.ReadComparisonNotifications(false)
 	if err != nil {
 		return err
 	}
@@ -454,6 +477,18 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 	}
 	log.Debugf("Publishing package with packageId: %v; version: %v", buildArc.PackageInfo.PackageId, buildArc.PackageInfo.Version)
 	if err = validation.ValidatePublishBuildResult(buildArc); err != nil {
+		return err
+	}
+	if err = p.publishedValidator.ValidateBuildNotifications(buildArc); err != nil {
+		return err
+	}
+	if err = p.publishedValidator.ValidateComparisonNotifications(buildArc); err != nil {
+		return err
+	}
+	if err = p.publishedValidator.ValidateErroredVersionNotPublishedAsRelease(buildArc); err != nil {
+		return err
+	}
+	if err = p.publishedValidator.ValidateErroredVersionNotUsedAsPrevious(buildArc); err != nil {
 		return err
 	}
 
@@ -524,7 +559,7 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 
 	buildArcEntitiesReader := archive.NewBuildResultToEntitiesReader(buildArc)
 
-	fileEntities, fileDataEntities, err := buildArcEntitiesReader.ReadDocumentsToEntities()
+	fileEntities, fileDataEntities, err := buildArcEntitiesReader.ReadDocumentsToEntities(buildConfig)
 	if err != nil {
 		return err
 	}
@@ -619,7 +654,15 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 		}
 	}
 
-	builderNotificationsEntities := buildArcEntitiesReader.ReadBuilderNotificationsToEntities(buildSrcEnt.BuildId)
+	versionNotificationEntities, err := buildArcEntitiesReader.ReadBuildNotificationsToEntities()
+	if err != nil {
+		return err
+	}
+
+	comparisonNotificationEntities, err := buildArcEntitiesReader.ReadComparisonNotificationsToEntities()
+	if err != nil {
+		return err
+	}
 
 	versionInternalDocEntities, versionInternalDocDataEntities, err := buildArcEntitiesReader.ReadVersionInternalDocumentsToEntities()
 	if err != nil {
@@ -725,6 +768,9 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 	if buildArc.PackageInfo.CurrentVersionBuilderVersion != "" {
 		versionMetadata.SetCurrentVersionBuilderVersion(buildArc.PackageInfo.CurrentVersionBuilderVersion)
 	}
+	if buildArc.PackageInfo.HasErrors {
+		versionMetadata.SetHasErrors(true)
+	}
 
 	publishedAt := time.Now()
 	if buildArc.PackageInfo.MigrationBuild && buildArc.PackageInfo.PublishedAt != nil &&
@@ -782,7 +828,8 @@ func (p publishedServiceImpl) PublishPackage(buildArc *archive.BuildResultArchiv
 		operationEntities,
 		operationDataEntities,
 		changedOperationEntities,
-		builderNotificationsEntities,
+		versionNotificationEntities,
+		comparisonNotificationEntities,
 		operationsComparisonEntities,
 		newServiceName,
 		existingPackage,
@@ -966,10 +1013,19 @@ func (p publishedServiceImpl) reCalculateChangelogs(packageInfo view.PackageInfo
 
 func (p publishedServiceImpl) PublishChanges(buildArc *archive.BuildResultArchive, publishId string) error {
 	var err error
-	if err = buildArc.ReadPackageComparisons(false); err != nil {
+	err = buildArc.ReadPackageComparisons(false)
+	if err != nil {
+		return err
+	}
+	err = buildArc.ReadPackageDdlContractComparisons(false)
+	if err != nil {
 		return err
 	}
 	err = buildArc.ReadComparisonInternalDocuments(false)
+	if err != nil {
+		return err
+	}
+	err = buildArc.ReadComparisonNotifications(false)
 	if err != nil {
 		return err
 	}
@@ -990,6 +1046,9 @@ func (p publishedServiceImpl) PublishChanges(buildArc *archive.BuildResultArchiv
 	if err := p.publishedValidator.ValidateChanges(buildArc); err != nil {
 		return err
 	}
+	if err := p.publishedValidator.ValidateComparisonNotifications(buildArc); err != nil {
+		return err
+	}
 	if len(buildArc.PackageComparisons.Comparisons) == 0 {
 		return nil
 	}
@@ -1003,8 +1062,12 @@ func (p publishedServiceImpl) PublishChanges(buildArc *archive.BuildResultArchiv
 	if err != nil {
 		return err
 	}
+	comparisonNotificationEntities, err := buildArcEntitiesReader.ReadComparisonNotificationsToEntities()
+	if err != nil {
+		return err
+	}
 
-	err = p.publishedRepo.SaveVersionChanges(buildArc.PackageInfo, publishId, operationComparisonEntities, versionComparisonEntities, versionComparisonsFromCache, comparisonInternalDocEntities, comparisonInternalDocDataEntities)
+	err = p.publishedRepo.SaveVersionChanges(buildArc.PackageInfo, publishId, operationComparisonEntities, versionComparisonEntities, versionComparisonsFromCache, comparisonInternalDocEntities, comparisonInternalDocDataEntities, comparisonNotificationEntities)
 	if err != nil {
 		return err
 	}

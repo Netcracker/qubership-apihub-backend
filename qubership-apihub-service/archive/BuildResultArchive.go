@@ -15,7 +15,8 @@ const (
 	DocumentsFilePath                   = "documents.json"
 	ComparisonsFilePath                 = "comparisons.json"
 	OperationsFilePath                  = "operations.json"
-	BuilderNotificationsFilePath        = "notifications.json"
+	BuildNotificationsFilePath          = "notifications.json"
+	ComparisonNotificationsFilePath     = "comparison-notifications.json"
 	ChangelogFilePath                   = "changelog.json"
 	VersionInternalDocumentsFilePath    = "version-internal-documents.json"
 	ComparisonInternalDocumentsFilePath = "comparison-internal-documents.json"
@@ -41,7 +42,8 @@ type BuildResultArchive struct {
 	DocumentsFile                   *zip.File
 	ComparisonsFile                 *zip.File
 	OperationsFile                  *zip.File
-	BuilderNotificationsFile        *zip.File
+	BuildNotificationsFile          *zip.File
+	ComparisonNotificationsFile     *zip.File
 	ChangelogFile                   *zip.File
 	VersionInternalDocumentsFile    *zip.File
 	ComparisonInternalDocumentsFile *zip.File
@@ -63,7 +65,8 @@ type BuildResultArchive struct {
 	PackageDocuments            view.PackageDocumentsFile
 	PackageOperations           view.PackageOperationsFile
 	PackageComparisons          view.PackageComparisonsFile
-	BuilderNotifications        view.BuilderNotificationsFile
+	BuildNotifications          view.BuildNotificationsFile
+	ComparisonNotifications     view.ComparisonNotificationsFile
 	VersionInternalDocuments    view.VersionInternalDocumentsFile
 	ComparisonInternalDocuments view.ComparisonInternalDocumentsFile
 	PackageDdlContracts         view.PackageDdlContractsFile
@@ -104,8 +107,12 @@ func (a *BuildResultArchive) ReadPackageComparisons(required bool) error {
 	return a.readFile(ComparisonsFilePath, a.ComparisonsFile, &a.PackageComparisons, required)
 }
 
-func (a *BuildResultArchive) ReadBuilderNotifications(required bool) error {
-	return a.readFile(BuilderNotificationsFilePath, a.BuilderNotificationsFile, &a.BuilderNotifications, required)
+func (a *BuildResultArchive) ReadBuildNotifications(required bool) error {
+	return a.readFile(BuildNotificationsFilePath, a.BuildNotificationsFile, &a.BuildNotifications, required)
+}
+
+func (a *BuildResultArchive) ReadComparisonNotifications(required bool) error {
+	return a.readFile(ComparisonNotificationsFilePath, a.ComparisonNotificationsFile, &a.ComparisonNotifications, required)
 }
 
 func (a *BuildResultArchive) ReadVersionInternalDocuments(required bool) error {
@@ -177,8 +184,10 @@ func (a *BuildResultArchive) splitFiles() {
 			a.OperationsFile = zipFile
 		case ComparisonsFilePath:
 			a.ComparisonsFile = zipFile
-		case BuilderNotificationsFilePath:
-			a.BuilderNotificationsFile = zipFile
+		case BuildNotificationsFilePath:
+			a.BuildNotificationsFile = zipFile
+		case ComparisonNotificationsFilePath:
+			a.ComparisonNotificationsFile = zipFile
 		case ChangelogFilePath:
 			a.ChangelogFile = zipFile
 		case VersionInternalDocumentsFilePath:

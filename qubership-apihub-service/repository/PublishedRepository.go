@@ -22,6 +22,12 @@ type PublishedRepository interface {
 	GetVersionRevisionsList(searchQuery entity.PackageVersionSearchQueryEntity) ([]entity.PackageVersionRevisionEntity, error)
 	GetLatestContentBySlug(packageId string, versionName string, slug string) (*entity.PublishedContentEntity, error)
 	GetRevisionContentBySlug(packageId string, versionName string, slug string, revision int) (*entity.PublishedContentEntity, error)
+	GetVersionDocumentErrorSummary(packageId string, versionName string, revision int, showOnlyDeleted bool) ([]entity.DocumentErrorSummaryEntity, error)
+	GetVersionNotifications(packageId string, version string, revision int, filter view.NotificationsFilter) ([]entity.PublishedVersionNotificationEntity, error)
+	GetComparisonNotifications(comparisonId string, filter view.NotificationsFilter) ([]entity.VersionComparisonNotificationEntity, error)
+	GetVersionsWithErroredReferences(packageId string) (map[entity.PublishedVersionKeyEntity]struct{}, error)
+	GetVersionErrorSummary(packageId string, version string, revision int) (*entity.VersionErrorSummaryEntity, error)
+	VersionHasErroredReferences(packageId string, version string, revision int) (bool, error)
 
 	GetVersionSources(packageId string, versionName string, revision int) (*entity.PublishedSrcArchiveEntity, error)
 	GetPublishedVersionSourceDataConfig(packageId string, versionName string, revision int) (*entity.PublishedSrcDataConfigEntity, error)
@@ -30,7 +36,8 @@ type PublishedRepository interface {
 	CreateVersionWithData(packageInfo view.PackageInfoFile, publishId string, version *entity.PublishedVersionEntity, content []*entity.PublishedContentEntity,
 		data []*entity.PublishedContentDataEntity, refs []*entity.PublishedReferenceEntity, src *entity.PublishedSrcEntity, srcArchive *entity.PublishedSrcArchiveEntity,
 		operations []*entity.OperationEntity, operationsData []*entity.OperationDataEntity,
-		operationComparisons []*entity.OperationComparisonEntity, builderNotifications []*entity.BuilderNotificationsEntity,
+		operationComparisons []*entity.OperationComparisonEntity, versionNotifications []*entity.PublishedVersionNotificationEntity,
+		comparisonNotifications []*entity.VersionComparisonNotificationEntity,
 		versionComparisonEntities []*entity.VersionComparisonEntity, serviceName string, pkg *entity.PackageEntity, versionComparisonsFromCache []string,
 		versionInternalDocEntities []*entity.VersionInternalDocumentEntity, versionInternalDocDataEntities []*entity.VersionInternalDocumentDataEntity,
 		comparisonInternalDocEntities []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocDataEntities []*entity.ComparisonInternalDocumentDataEntity,
@@ -79,7 +86,7 @@ type PublishedRepository interface {
 	GetVersionRefsComparisons(comparisonId string) ([]entity.VersionComparisonEntity, error)
 	GetVersionComparisonsCleanupCandidates(ctx context.Context, limit int, offset int) ([]entity.VersionComparisonCleanupCandidateEntity, error)
 	DeleteVersionComparison(ctx context.Context, comparisonId string) (bool, error)
-	SaveVersionChanges(packageInfo view.PackageInfoFile, publishId string, operationComparisons []*entity.OperationComparisonEntity, versionComparisons []*entity.VersionComparisonEntity, versionComparisonsFromCache []string, comparisonInternalDocEntities []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocDataEntities []*entity.ComparisonInternalDocumentDataEntity) error
+	SaveVersionChanges(packageInfo view.PackageInfoFile, publishId string, operationComparisons []*entity.OperationComparisonEntity, versionComparisons []*entity.VersionComparisonEntity, versionComparisonsFromCache []string, comparisonInternalDocEntities []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocDataEntities []*entity.ComparisonInternalDocumentDataEntity, comparisonNotifications []*entity.VersionComparisonNotificationEntity) error
 	GetLatestRevision(packageId, version string) (int, error)
 	GetDeletedPackageLatestRevision(packageId, version string) (int, error)
 

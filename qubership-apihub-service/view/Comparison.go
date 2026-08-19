@@ -6,6 +6,7 @@ type VersionComparisonSummary struct {
 	Packages       *map[string]PackageVersionRef `json:"packages,omitempty"`
 	NoContent      bool                          `json:"noContent,omitempty"`
 	Contracts      *ContractsSummary             `json:"contractsChangesSummary,omitempty"`
+	HasErrors      bool                          `json:"hasErrors"`
 }
 
 type ContractsSummary struct {
@@ -22,4 +23,5 @@ type RefComparison struct {
 	PreviousPackageRef string          `json:"previousPackageRef,omitempty"`
 	OperationTypes     []OperationType `json:"operationTypes"`
 	NoContent          bool            `json:"noContent,omitempty"`
+	HasErrors          bool            `json:"hasErrors"`
 }

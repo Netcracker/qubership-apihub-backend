@@ -11,12 +11,17 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/repository"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
+	log "github.com/sirupsen/logrus"
 )
 
 type PublishedValidator interface {
 	ValidatePackage(buildArc *archive.BuildResultArchive, buildConfig *view.BuildConfig) error
 	ValidateBuildResultAgainstConfig(buildArc *archive.BuildResultArchive, buildConfig *view.BuildConfig) error //TODO remove and merge logic with ValidatePackage
-	ValidateChanges(buildArc *archive.BuildResultArchive) error                                                 //TODO remove and merge logic with ValidatePackage
+	ValidateBuildNotifications(buildArc *archive.BuildResultArchive) error
+	ValidateComparisonNotifications(buildArc *archive.BuildResultArchive) error
+	ValidateErroredVersionNotPublishedAsRelease(buildArc *archive.BuildResultArchive) error
+	ValidateErroredVersionNotUsedAsPrevious(buildArc *archive.BuildResultArchive) error
+	ValidateChanges(buildArc *archive.BuildResultArchive) error //TODO remove and merge logic with ValidatePackage
 }
 
 func NewPublishedValidator(publishedRepo repository.PublishedRepository) PublishedValidator {
@@ -43,10 +48,6 @@ func (p publishedValidatorImpl) ValidatePackage(buildArc *archive.BuildResultArc
 	}
 
 	if err := p.validatePackageComparisons(buildArc, buildConfig); err != nil {
-		return err
-	}
-
-	if err := p.validatePackageBuilderNotifications(buildArc, buildConfig); err != nil {
 		return err
 	}
 
@@ -183,6 +184,60 @@ func (p publishedValidatorImpl) ValidateBuildResultAgainstConfig(buildArc *archi
 	}
 
 	return nil
+}
+
+func (p publishedValidatorImpl) ValidateErroredVersionNotPublishedAsRelease(buildArc *archive.BuildResultArchive) error {
+	info := buildArc.PackageInfo
+	if info.Status != string(view.Release) {
+		return nil
+	}
+	if !info.HasErrors && !buildResultComparisonHasErrors(buildArc) {
+		return nil
+	}
+	return &exception.CustomError{
+		Status:  http.StatusBadRequest,
+		Code:    exception.VersionHasErrors,
+		Message: exception.ReleasePublishWithErrorsMsg,
+		Params:  map[string]interface{}{"packageId": info.PackageId, "version": info.Version},
+	}
+}
+
+func (p publishedValidatorImpl) ValidateErroredVersionNotUsedAsPrevious(buildArc *archive.BuildResultArchive) error {
+	if !buildArc.PackageInfo.HasErrors && !buildResultComparisonHasErrors(buildArc) {
+		return nil
+	}
+	packageId := buildArc.PackageInfo.PackageId
+	// A migration build carries the version in the "version@revision" form, while the previous version of a
+	// dependent version is stored as a plain version name.
+	version, _, err := repository.SplitVersionRevision(buildArc.PackageInfo.Version)
+	if err != nil {
+		return err
+	}
+
+	dependents, err := p.publishedRepo.GetVersionsByPreviousVersion(packageId, version)
+	if err != nil {
+		return err
+	}
+	if len(dependents) == 0 {
+		return nil
+	}
+	dependentKeys := make([]entity.PublishedVersionKeyEntity, 0, len(dependents))
+	for _, dependent := range dependents {
+		dependentKeys = append(dependentKeys, entity.PublishedVersionKeyEntity{
+			PackageId: dependent.PackageId,
+			Version:   dependent.Version,
+			Revision:  dependent.Revision,
+		})
+	}
+	log.Warnf("Refusing publication of %v@%v: the build produced errors and the version is referenced as a previous version by %s",
+		packageId, version, entity.FormatVersionKeys(dependentKeys))
+
+	return &exception.CustomError{
+		Status:  http.StatusBadRequest,
+		Code:    exception.VersionHasErrors,
+		Message: exception.ErroredVersionUsedAsPreviousMsg, //TODO: name the dependent versions in the message.
+		Params:  map[string]interface{}{"packageId": packageId, "version": version},
+	}
 }
 
 func (p publishedValidatorImpl) ValidateChanges(buildArc *archive.BuildResultArchive) error {
@@ -499,7 +554,7 @@ func (p publishedValidatorImpl) validatePackageOperations(buildArc *archive.Buil
 					},
 				}
 			}
-			case view.GraphqlApiType:
+		case view.GraphqlApiType:
 			if operationMetadata.GetType() == "" {
 				return &exception.CustomError{
 					Status:  http.StatusBadRequest,
@@ -813,16 +868,114 @@ func (p publishedValidatorImpl) validatePackageComparisons(buildArc *archive.Bui
 	return nil
 }
 
-func (p publishedValidatorImpl) validatePackageBuilderNotifications(buildArc *archive.BuildResultArchive, buildConfig *view.BuildConfig) error {
-	if err := utils.ValidateObject(buildArc.BuilderNotifications); err != nil {
-		return &exception.CustomError{
-			Status:  http.StatusBadRequest,
-			Code:    exception.InvalidPackagedFile,
-			Message: exception.InvalidPackagedFileMsg,
-			Params:  map[string]interface{}{"file": "notifications", "error": err.Error()},
+func (p publishedValidatorImpl) ValidateBuildNotifications(buildArc *archive.BuildResultArchive) error {
+	if err := utils.ValidateObject(buildArc.BuildNotifications); err != nil {
+		return invalidNotificationsFile(archive.BuildNotificationsFilePath, err.Error())
+	}
+	for i, notification := range buildArc.BuildNotifications.Notifications {
+		if err := validateNotification(notification); err != nil {
+			return invalidNotificationsFile(archive.BuildNotificationsFilePath, fmt.Sprintf("notifications[%v]: %v", i, err.Error()))
 		}
 	}
 	return nil
+}
+
+func (p publishedValidatorImpl) ValidateComparisonNotifications(buildArc *archive.BuildResultArchive) error {
+	if err := utils.ValidateObject(buildArc.ComparisonNotifications); err != nil {
+		return invalidNotificationsFile(archive.ComparisonNotificationsFilePath, err.Error())
+	}
+	if len(buildArc.ComparisonNotifications.Comparisons) == 0 {
+		return nil
+	}
+
+	// Only comparisons the build calculated are eligible. A comparison reused from the backend creates no
+	// version_comparison row here, so an entry for it would have nothing to be stored against - and it would
+	// clear the notifications recorded when that comparison was really calculated.
+	calculatedComparisons := make(map[view.ComparisonKey]struct{})
+	for _, comparison := range buildArc.PackageComparisons.Comparisons {
+		if comparison.FromCache {
+			continue
+		}
+		key := view.ComparisonKey{
+			PackageId:                comparison.PackageId,
+			Version:                  comparison.Version,
+			Revision:                 comparison.Revision,
+			PreviousVersionPackageId: comparison.PreviousVersionPackageId,
+			PreviousVersion:          comparison.PreviousVersion,
+			PreviousVersionRevision:  comparison.PreviousVersionRevision,
+		}
+		calculatedComparisons[key] = struct{}{}
+	}
+	for _, comparison := range buildArc.PackageDdlComparisons.Comparisons {
+		if comparison.FromCache {
+			continue
+		}
+		key := view.ComparisonKey{
+			PackageId:                comparison.PackageId,
+			Version:                  comparison.Version,
+			Revision:                 comparison.Revision,
+			PreviousVersionPackageId: comparison.PreviousVersionPackageId,
+			PreviousVersion:          comparison.PreviousVersion,
+			PreviousVersionRevision:  comparison.PreviousVersionRevision,
+		}
+		calculatedComparisons[key] = struct{}{}
+	}
+
+	for i, comparison := range buildArc.ComparisonNotifications.Comparisons {
+		key := view.ComparisonKey{
+			PackageId:                comparison.PackageId,
+			Version:                  comparison.Version,
+			Revision:                 comparison.Revision,
+			PreviousVersionPackageId: comparison.PreviousVersionPackageId,
+			PreviousVersion:          comparison.PreviousVersion,
+			PreviousVersionRevision:  comparison.PreviousVersionRevision,
+		}
+		if _, exists := calculatedComparisons[key]; !exists {
+			return invalidNotificationsFile(archive.ComparisonNotificationsFilePath, fmt.Sprintf(
+				"comparisons[%v]: %v@%v vs %v@%v does not match any comparison calculated by this build",
+				i, comparison.PackageId, comparison.Version, comparison.PreviousVersionPackageId, comparison.PreviousVersion))
+		}
+		for j, notification := range comparison.Notifications {
+			if err := validateNotification(notification); err != nil {
+				return invalidNotificationsFile(archive.ComparisonNotificationsFilePath,
+					fmt.Sprintf("comparisons[%v].notifications[%v]: %v", i, j, err.Error()))
+			}
+		}
+	}
+	return nil
+}
+
+func buildResultComparisonHasErrors(buildArc *archive.BuildResultArchive) bool {
+	for _, comparison := range buildArc.PackageComparisons.Comparisons {
+		if comparison.HasErrors {
+			return true
+		}
+	}
+	for _, comparison := range buildArc.PackageDdlComparisons.Comparisons {
+		if comparison.HasErrors {
+			return true
+		}
+	}
+	return false
+}
+
+func validateNotification(notification view.BuilderNotification) error {
+	if _, err := view.NotificationSeverityFromBuilder(notification.Severity); err != nil {
+		return err
+	}
+	if notification.Message == "" {
+		return fmt.Errorf("message is required")
+	}
+	return nil
+}
+
+func invalidNotificationsFile(filePath string, errText string) error {
+	return &exception.CustomError{
+		Status:  http.StatusBadRequest,
+		Code:    exception.InvalidPackagedFile,
+		Message: exception.InvalidPackagedFileMsg,
+		Params:  map[string]interface{}{"file": filePath, "error": errText},
+	}
 }
 
 func (p publishedValidatorImpl) validateVersionInternalDocuments(buildArc *archive.BuildResultArchive) error {

@@ -36,6 +36,7 @@ type PublishedDocument struct {
 	Operations   []interface{} `json:"operations,omitempty"`
 	Filename     string        `json:"filename"`
 	Tags         []interface{} `json:"tags"`
+	HasErrors    bool          `json:"hasErrors"`
 }
 
 type PublishedDocumentRefView struct {
@@ -51,6 +52,7 @@ type PublishedDocumentRefView struct {
 	Filename             string   `json:"filename"`
 	PackageRef           string   `json:"packageRef"`
 	IncludedOperationIds []string `json:"includedOperationIds"`
+	HasErrors            bool     `json:"hasErrors"`
 }
 
 type DocumentsForTransformationView struct {

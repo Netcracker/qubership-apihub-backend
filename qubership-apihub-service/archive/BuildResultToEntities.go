@@ -27,10 +27,20 @@ func NewBuildResultToEntitiesReader(buildArc *BuildResultArchive) *BuildResultTo
 	}
 }
 
-func (a *BuildResultToEntitiesReader) ReadDocumentsToEntities() ([]*entity.PublishedContentEntity, []*entity.PublishedContentDataEntity, error) {
+func (a *BuildResultToEntitiesReader) ReadDocumentsToEntities(buildConfig *view.BuildConfig) ([]*entity.PublishedContentEntity, []*entity.PublishedContentDataEntity, error) {
 	filesFromZipReadStart := time.Now()
 	fileEntities := make([]*entity.PublishedContentEntity, 0)
 	fileDataEntities := make([]*entity.PublishedContentDataEntity, 0)
+	mcpEndpoints := make(map[string]string)
+	if buildConfig != nil {
+		// The endpoint is taken from the config rather than from the built document, because a document that failed to process
+		// publishes no MCP entities and its endpoint would otherwise be lost.
+		for _, file := range buildConfig.Files {
+			if mcpEndpoint, ok := file.Metadata["mcpEndpoint"].(string); ok && mcpEndpoint != "" {
+				mcpEndpoints[file.FileId] = mcpEndpoint
+			}
+		}
+	}
 
 	for i, document := range a.PackageDocuments.Documents {
 		if fileHeader, exists := a.DocumentsHeaders[document.Filename]; exists {
@@ -85,6 +95,12 @@ func (a *BuildResultToEntitiesReader) ReadDocumentsToEntities() ([]*entity.Publi
 				if tags != nil {
 					fileEntMetadata.SetDocTags(tags)
 				}
+			}
+			if document.HasErrors {
+				fileEntMetadata.SetHasErrors(true)
+			}
+			if mcpEndpoint, exists := mcpEndpoints[document.FileId]; exists {
+				fileEntMetadata.SetMcpEndpoint(mcpEndpoint)
 			}
 			index := i
 			if a.PackageInfo.MigrationBuild {
@@ -387,27 +403,16 @@ func (a *BuildResultToEntitiesReader) ReadOperationComparisonsToEntities(publish
 	mainVersionRefs := make([]string, 0)
 	for _, comparison := range a.PackageComparisons.Comparisons {
 		versionComparisonEnt := &entity.VersionComparisonEntity{}
-		mainVersion := false
-		if comparison.Version != "" {
-			//check if comparison's current version is a version that is being published
-			if (a.PackageInfo.Revision == comparison.Revision || comparison.Revision == 0) &&
-				a.PackageInfo.Version == comparison.Version &&
-				a.PackageInfo.PackageId == comparison.PackageId {
-				mainVersion = true
-				mainVersionComparison = versionComparisonEnt
-				versionComparisonEnt.PackageId = comparison.PackageId
-				versionComparisonEnt.Version = a.PackageInfo.Version
-				versionComparisonEnt.Revision = a.PackageInfo.Revision
-			} else {
-				versionComparisonEnt.PackageId = comparison.PackageId
-				versionComparisonEnt.Version = comparison.Version
-				versionComparisonEnt.Revision = comparison.Revision
-			}
-		}
-		if comparison.PreviousVersion != "" {
-			versionComparisonEnt.PreviousPackageId = comparison.PreviousVersionPackageId
-			versionComparisonEnt.PreviousVersion = comparison.PreviousVersion
-			versionComparisonEnt.PreviousRevision = comparison.PreviousVersionRevision
+		comparisonKey, mainVersion := a.comparisonKey(comparison.PackageId, comparison.Version, comparison.Revision,
+			comparison.PreviousVersionPackageId, comparison.PreviousVersion, comparison.PreviousVersionRevision)
+		versionComparisonEnt.PackageId = comparisonKey.PackageId
+		versionComparisonEnt.Version = comparisonKey.Version
+		versionComparisonEnt.Revision = comparisonKey.Revision
+		versionComparisonEnt.PreviousPackageId = comparisonKey.PreviousVersionPackageId
+		versionComparisonEnt.PreviousVersion = comparisonKey.PreviousVersion
+		versionComparisonEnt.PreviousRevision = comparisonKey.PreviousVersionRevision
+		if mainVersion {
+			mainVersionComparison = versionComparisonEnt
 		}
 		versionComparisonEnt.NoContent = false
 		versionComparisonEnt.LastActive = time.Now()
@@ -429,6 +434,9 @@ func (a *BuildResultToEntitiesReader) ReadOperationComparisonsToEntities(publish
 		}
 		if a.PackageInfo.CurrentVersionBuilderVersion != "" {
 			versionComparisonEnt.Metadata.SetCurrentVersionBuilderVersion(a.PackageInfo.CurrentVersionBuilderVersion)
+		}
+		if comparison.HasErrors {
+			versionComparisonEnt.Metadata.SetHasErrors(true)
 		}
 		if !mainVersion {
 			mainVersionRefs = append(mainVersionRefs, versionComparisonEnt.ComparisonId)
@@ -578,6 +586,33 @@ func (a *BuildResultToEntitiesReader) ReadOperationComparisonsToEntities(publish
 	return versionComparisonEntities, operationComparisonEntities, versionComparisonsFromCache, comparisonFileIdToKeyMap, nil
 }
 
+func (a *BuildResultToEntitiesReader) comparisonKey(packageId string, version string, revision int,
+	previousVersionPackageId string, previousVersion string, previousVersionRevision int) (view.ComparisonKey, bool) {
+	key := view.ComparisonKey{}
+	mainVersion := false
+	if version != "" {
+		//check if comparison's current version is a version that is being published
+		if (a.PackageInfo.Revision == revision || revision == 0) &&
+			a.PackageInfo.Version == version &&
+			a.PackageInfo.PackageId == packageId {
+			mainVersion = true
+			key.PackageId = packageId
+			key.Version = a.PackageInfo.Version
+			key.Revision = a.PackageInfo.Revision
+		} else {
+			key.PackageId = packageId
+			key.Version = version
+			key.Revision = revision
+		}
+	}
+	if previousVersion != "" {
+		key.PreviousVersionPackageId = previousVersionPackageId
+		key.PreviousVersion = previousVersion
+		key.PreviousVersionRevision = previousVersionRevision
+	}
+	return key, mainVersion
+}
+
 func validateOperationComparison(oc view.OperationComparison, dataHash string, previousDataHash string) error {
 	oidIsEmpty := false
 	if oc.OperationId == "" {
@@ -605,18 +640,71 @@ func validateOperationComparison(oc view.OperationComparison, dataHash string, p
 	return nil
 }
 
-func (a *BuildResultToEntitiesReader) ReadBuilderNotificationsToEntities(publishId string) []*entity.BuilderNotificationsEntity {
-	builderNotificationsEntities := make([]*entity.BuilderNotificationsEntity, 0)
-	for _, builderNotifications := range a.BuilderNotifications.Notifications {
-		builderNotificationsEntities = append(builderNotificationsEntities,
-			&entity.BuilderNotificationsEntity{
-				BuildId:  publishId,
-				Severity: builderNotifications.Severity,
-				Message:  builderNotifications.Message,
-				FileId:   builderNotifications.FileId,
+func (a *BuildResultToEntitiesReader) ReadBuildNotificationsToEntities() ([]*entity.PublishedVersionNotificationEntity, error) {
+	notificationEntities := make([]*entity.PublishedVersionNotificationEntity, 0)
+	for _, notification := range a.BuildNotifications.Notifications {
+		severity, err := view.NotificationSeverityFromBuilder(notification.Severity)
+		if err != nil {
+			return nil, &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.InvalidPackagedFile,
+				Message: exception.InvalidPackagedFileMsg,
+				Params:  map[string]interface{}{"file": BuildNotificationsFilePath, "error": err.Error()},
+			}
+		}
+		notificationEntities = append(notificationEntities,
+			&entity.PublishedVersionNotificationEntity{
+				PackageId:  a.PackageInfo.PackageId,
+				Version:    a.PackageInfo.Version,
+				Revision:   a.PackageInfo.Revision,
+				Severity:   severity,
+				Category:   notification.Category,
+				Message:    notification.Message,
+				DocumentId: notification.DocumentId,
 			})
 	}
-	return builderNotificationsEntities
+	return notificationEntities, nil
+}
+
+func (a *BuildResultToEntitiesReader) ReadComparisonNotificationsToEntities() ([]*entity.VersionComparisonNotificationEntity, error) {
+	notificationEntities := make([]*entity.VersionComparisonNotificationEntity, 0)
+	for _, comparison := range a.ComparisonNotifications.Comparisons {
+		comparisonKey, _ := a.comparisonKey(comparison.PackageId, comparison.Version, comparison.Revision,
+			comparison.PreviousVersionPackageId, comparison.PreviousVersion, comparison.PreviousVersionRevision)
+		comparisonId := view.MakeVersionComparisonId(
+			comparisonKey.PackageId,
+			comparisonKey.Version,
+			comparisonKey.Revision,
+			comparisonKey.PreviousVersionPackageId,
+			comparisonKey.PreviousVersion,
+			comparisonKey.PreviousVersionRevision)
+		for _, notification := range comparison.Notifications {
+			severity, err := view.NotificationSeverityFromBuilder(notification.Severity)
+			if err != nil {
+				return nil, &exception.CustomError{
+					Status:  http.StatusBadRequest,
+					Code:    exception.InvalidPackagedFile,
+					Message: exception.InvalidPackagedFileMsg,
+					Params:  map[string]interface{}{"file": ComparisonNotificationsFilePath, "error": err.Error()},
+				}
+			}
+			notificationEntities = append(notificationEntities,
+				&entity.VersionComparisonNotificationEntity{
+					PackageId:                comparisonKey.PackageId,
+					Version:                  comparisonKey.Version,
+					Revision:                 comparisonKey.Revision,
+					PreviousVersionPackageId: comparisonKey.PreviousVersionPackageId,
+					PreviousVersion:          comparisonKey.PreviousVersion,
+					PreviousVersionRevision:  comparisonKey.PreviousVersionRevision,
+					ComparisonId:             comparisonId,
+					Severity:                 severity,
+					Category:                 notification.Category,
+					Message:                  notification.Message,
+					DocumentId:               notification.DocumentId,
+				})
+		}
+	}
+	return notificationEntities, nil
 }
 
 func (a *BuildResultToEntitiesReader) ReadVersionInternalDocumentsToEntities() ([]*entity.VersionInternalDocumentEntity, []*entity.VersionInternalDocumentDataEntity, error) {
@@ -808,26 +896,16 @@ func (a *BuildResultToEntitiesReader) ReadDdlContractComparisonsToEntities(publi
 
 	for _, comparison := range a.PackageDdlComparisons.Comparisons {
 		versionComparisonEnt := &entity.VersionComparisonEntity{}
-		mainVersion := false
-		if comparison.Version != "" {
-			if (a.PackageInfo.Revision == comparison.Revision || comparison.Revision == 0) &&
-				a.PackageInfo.Version == comparison.Version &&
-				a.PackageInfo.PackageId == comparison.PackageId {
-				mainVersion = true
-				mainVersionComparison = versionComparisonEnt
-				versionComparisonEnt.PackageId = comparison.PackageId
-				versionComparisonEnt.Version = a.PackageInfo.Version
-				versionComparisonEnt.Revision = a.PackageInfo.Revision
-			} else {
-				versionComparisonEnt.PackageId = comparison.PackageId
-				versionComparisonEnt.Version = comparison.Version
-				versionComparisonEnt.Revision = comparison.Revision
-			}
-		}
-		if comparison.PreviousVersion != "" {
-			versionComparisonEnt.PreviousPackageId = comparison.PreviousVersionPackageId
-			versionComparisonEnt.PreviousVersion = comparison.PreviousVersion
-			versionComparisonEnt.PreviousRevision = comparison.PreviousVersionRevision
+		comparisonKey, mainVersion := a.comparisonKey(comparison.PackageId, comparison.Version, comparison.Revision,
+			comparison.PreviousVersionPackageId, comparison.PreviousVersion, comparison.PreviousVersionRevision)
+		versionComparisonEnt.PackageId = comparisonKey.PackageId
+		versionComparisonEnt.Version = comparisonKey.Version
+		versionComparisonEnt.Revision = comparisonKey.Revision
+		versionComparisonEnt.PreviousPackageId = comparisonKey.PreviousVersionPackageId
+		versionComparisonEnt.PreviousVersion = comparisonKey.PreviousVersion
+		versionComparisonEnt.PreviousRevision = comparisonKey.PreviousVersionRevision
+		if mainVersion {
+			mainVersionComparison = versionComparisonEnt
 		}
 		versionComparisonEnt.NoContent = false
 		versionComparisonEnt.LastActive = time.Now()
@@ -843,6 +921,9 @@ func (a *BuildResultToEntitiesReader) ReadDdlContractComparisonsToEntities(publi
 		versionComparisonEnt.Metadata = entity.Metadata{}
 		if a.PackageInfo.MigrationBuild {
 			versionComparisonEnt.Metadata.SetMigrationId(a.PackageInfo.MigrationId)
+		}
+		if comparison.HasErrors {
+			versionComparisonEnt.Metadata.SetHasErrors(true)
 		}
 		if !mainVersion {
 			mainVersionRefs = append(mainVersionRefs, versionComparisonEnt.ComparisonId)

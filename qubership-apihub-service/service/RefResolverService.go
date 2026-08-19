@@ -103,6 +103,18 @@ func (r *refResolverServiceImpl) CalculateBuildConfigRefs(refs []view.BCRef, res
 				Params:  map[string]interface{}{"package": ref.RefId, "version": ref.Version},
 			}
 		}
+		refHasErrors, err := VersionHasAnyErrors(r.publishedRepo, versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
+		if err != nil {
+			return nil, err
+		}
+		if refHasErrors {
+			return nil, &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.VersionHasErrors,
+				Message: exception.ReferencedVersionHasErrorsMsg,
+				Params:  map[string]interface{}{"packageId": ref.RefId, "version": ref.Version},
+			}
+		}
 		if ref.ParentRefId != "" {
 			parentVersionEnt, err := r.publishedRepo.GetVersion(ref.ParentRefId, ref.ParentVersion)
 			if err != nil {

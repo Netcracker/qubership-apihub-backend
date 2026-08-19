@@ -108,6 +108,7 @@ func (c comparisonServiceImpl) GetComparisonResult(packageId string, version str
 		}
 	}
 	result := new(view.VersionComparisonSummary)
+	result.HasErrors = comparisonEnt.Metadata.GetHasErrors()
 
 	if packageEnt.Kind == entity.KIND_PACKAGE {
 		result.NoContent = comparisonEnt.NoContent

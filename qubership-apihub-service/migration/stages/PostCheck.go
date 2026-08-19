@@ -5,9 +5,16 @@ import (
 	"time"
 
 	mEntity "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/migration/entity"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	"github.com/go-pg/pg/v10"
 	"github.com/go-pg/pg/v10/orm"
 	log "github.com/sirupsen/logrus"
+)
+
+const (
+	skipReasonPreviousVersionHasErrors   = "previous version has errors"
+	skipReasonReferenceHasErrors         = "referenced version has errors"
+	skipReasonPreviousVersionNotMigrated = "previous version not migrated"
 )
 
 // StagePostCheck check that migration affected all required versions and comparisons!
@@ -102,10 +109,78 @@ func makeNotMigratedVersionsQuery(packageIds []string, versionsIn []string, migr
 	wherePackageIn, whereVersionIn := appendScopeFilters(&params, packageIds, versionsIn)
 
 	query := fmt.Sprintf(`
-		select v.package_id, v.version, v.revision, v.previous_version, v.previous_version_package_id from published_version v
+		select v.package_id, v.version, v.revision, v.previous_version, v.previous_version_package_id,
+		/* why the migration left this version as it was */
+		case
+			when exists (
+				select 1 from published_version prev_ver
+				/* the changelog of the previous version, calculated against the latest revision of its own previous version */
+				left join lateral (
+					select max(pp.revision) as revision from published_version pp
+					where pp.package_id = coalesce(nullif(prev_ver.previous_version_package_id, ''), prev_ver.package_id)
+						and pp.version = prev_ver.previous_version
+						and pp.deleted_at is null
+				) prev_ver_prev on true
+				left join version_comparison prev_ver_changelog
+					on prev_ver_changelog.package_id = prev_ver.package_id
+					and prev_ver_changelog.version = prev_ver.version
+					and prev_ver_changelog.revision = prev_ver.revision
+					and prev_ver_changelog.previous_package_id = coalesce(nullif(prev_ver.previous_version_package_id, ''), prev_ver.package_id)
+					and prev_ver_changelog.previous_version = prev_ver.previous_version
+					and prev_ver_changelog.previous_revision = prev_ver_prev.revision
+				where prev_ver.package_id = coalesce(nullif(v.previous_version_package_id, ''), v.package_id)
+					and prev_ver.version = v.previous_version
+					and prev_ver.deleted_at is null
+					and prev_ver.revision = (
+						select max(pr.revision) from published_version pr
+						where pr.package_id = prev_ver.package_id and pr.version = prev_ver.version and pr.deleted_at is null
+					)
+					and (coalesce((prev_ver.metadata ->> 'has_errors')::boolean, false)
+						or coalesce((prev_ver_changelog.metadata ->> 'has_errors')::boolean, false))
+			) then '%s'
+			when exists (
+				select 1 from published_version_reference ref_src
+				inner join published_version ref_ver
+					on ref_ver.package_id = ref_src.reference_id
+					and ref_ver.version = ref_src.reference_version
+					and ref_ver.revision = ref_src.reference_revision
+					and ref_ver.deleted_at is null
+				/* the changelog of the referenced version, calculated against the latest revision of its previous version */
+				left join lateral (
+					select max(rp.revision) as revision from published_version rp
+					where rp.package_id = coalesce(nullif(ref_ver.previous_version_package_id, ''), ref_ver.package_id)
+						and rp.version = ref_ver.previous_version
+						and rp.deleted_at is null
+				) ref_ver_prev on true
+				left join version_comparison ref_ver_changelog
+					on ref_ver_changelog.package_id = ref_ver.package_id
+					and ref_ver_changelog.version = ref_ver.version
+					and ref_ver_changelog.revision = ref_ver.revision
+					and ref_ver_changelog.previous_package_id = coalesce(nullif(ref_ver.previous_version_package_id, ''), ref_ver.package_id)
+					and ref_ver_changelog.previous_version = ref_ver.previous_version
+					and ref_ver_changelog.previous_revision = ref_ver_prev.revision
+				where ref_src.package_id = v.package_id
+					and ref_src.version = v.version
+					and ref_src.revision = v.revision
+					and ref_src.excluded = false
+					and (coalesce((ref_ver.metadata ->> 'has_errors')::boolean, false)
+						or coalesce((ref_ver_changelog.metadata ->> 'has_errors')::boolean, false))
+			) then '%s'
+			when v.previous_version is not null and not exists (
+				select 1 from build b
+				where b.package_id = coalesce(nullif(v.previous_version_package_id, ''), v.package_id)
+					and b.version like v.previous_version || '@%%'
+					and b.metadata->>'build_type' = 'build'
+					and b.metadata->>'migration_id' = '%s'
+					and b.status = '%s'
+			) then '%s'
+			else ''
+		end as skip_reason from published_version v
 		inner join package_group pkg on v.package_id = pkg.id
 		where v.deleted_at is null and pkg.deleted_at is null
 		and (v.metadata is null or not (v.metadata \? 'migration_id') or v.metadata->>'migration_id' is distinct from ?)%s%s%s`,
+		skipReasonPreviousVersionHasErrors, skipReasonReferenceHasErrors,
+		migrationId, view.StatusComplete, skipReasonPreviousVersionNotMigrated,
 		relaxClause, wherePackageIn, whereVersionIn)
 	return query, params
 }
@@ -123,14 +198,41 @@ func makeNotMigratedComparisonsQuery(packageIds []string, versionsIn []string, m
 	wherePackageIn, whereVersionIn := appendScopeFilters(&params, packageIds, versionsIn)
 
 	query := fmt.Sprintf(`
-		select v.package_id, v.version, v.revision, v.previous_package_id, v.previous_version, v.previous_revision from version_comparison v
+		select v.package_id, v.version, v.revision, v.previous_package_id, v.previous_version, v.previous_revision,
+		/* why the migration left this comparison as it was */
+		case
+			when exists (
+				select 1 from published_version prev_ver
+				/* the changelog of the previous version, calculated against the latest revision of its own previous version */
+				left join lateral (
+					select max(pp.revision) as revision from published_version pp
+					where pp.package_id = coalesce(nullif(prev_ver.previous_version_package_id, ''), prev_ver.package_id)
+						and pp.version = prev_ver.previous_version
+						and pp.deleted_at is null
+				) prev_ver_prev on true
+				left join version_comparison prev_ver_changelog
+					on prev_ver_changelog.package_id = prev_ver.package_id
+					and prev_ver_changelog.version = prev_ver.version
+					and prev_ver_changelog.revision = prev_ver.revision
+					and prev_ver_changelog.previous_package_id = coalesce(nullif(prev_ver.previous_version_package_id, ''), prev_ver.package_id)
+					and prev_ver_changelog.previous_version = prev_ver.previous_version
+					and prev_ver_changelog.previous_revision = prev_ver_prev.revision
+				/* the comparison row pins the revision of the previous version */
+				where prev_ver.package_id = v.previous_package_id
+					and prev_ver.version = v.previous_version
+					and prev_ver.revision = v.previous_revision
+					and (coalesce((prev_ver.metadata ->> 'has_errors')::boolean, false)
+						or coalesce((prev_ver_changelog.metadata ->> 'has_errors')::boolean, false))
+			) then '%s'
+			else ''
+		end as skip_reason from version_comparison v
 		inner join published_version pv1 on v.package_id=pv1.package_id and v.version=pv1.version and v.revision=pv1.revision
 		inner join published_version pv2 on v.previous_package_id=pv2.package_id and v.previous_version=pv2.version and v.previous_revision=pv2.revision
 		inner join package_group pg1 on v.package_id=pg1.id
 		inner join package_group pg2 on v.previous_package_id=pg2.id
 		where pv1.deleted_at is null and pv2.deleted_at is null and pg1.deleted_at is null and pg2.deleted_at is null
 		  and (v.metadata is null or not (v.metadata \? 'migration_id') or v.metadata->>'migration_id' is distinct from ?)%s%s%s`,
-		relaxClause, wherePackageIn, whereVersionIn)
+		skipReasonPreviousVersionHasErrors, relaxClause, wherePackageIn, whereVersionIn)
 	return query, params
 }
 

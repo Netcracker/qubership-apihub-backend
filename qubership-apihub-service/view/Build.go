@@ -150,6 +150,7 @@ type PublishStatusResponse struct {
 	PublishId string `json:"publishId"`
 	Status    string `json:"status"`
 	Message   string `json:"message"`
+	HasErrors bool   `json:"hasErrors"`
 }
 
 type BuildsStatusRequest struct {
@@ -213,9 +214,9 @@ type ExtendedBuilds struct {
 type ExtendedBuildFilter struct {
 	PackageId string
 	Version   string
-	BuildIds []string
-	Offset   int
-	Limit    int
+	BuildIds  []string
+	Offset    int
+	Limit     int
 }
 
 type PublishedVersionSourceDataConfig struct {

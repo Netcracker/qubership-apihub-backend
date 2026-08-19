@@ -1200,7 +1200,8 @@ func (p publishedRepositoryImpl) getOperationComparisonsChanges(tx *pg.Tx, packa
 func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageInfoFile, buildId string, version *entity.PublishedVersionEntity, content []*entity.PublishedContentEntity,
 	data []*entity.PublishedContentDataEntity, refs []*entity.PublishedReferenceEntity, src *entity.PublishedSrcEntity, srcArchive *entity.PublishedSrcArchiveEntity,
 	operations []*entity.OperationEntity, operationsData []*entity.OperationDataEntity,
-	operationComparisons []*entity.OperationComparisonEntity, builderNotifications []*entity.BuilderNotificationsEntity,
+	operationComparisons []*entity.OperationComparisonEntity, versionNotifications []*entity.PublishedVersionNotificationEntity,
+	comparisonNotifications []*entity.VersionComparisonNotificationEntity,
 	versionComparisons []*entity.VersionComparisonEntity, serviceName string, pkg *entity.PackageEntity, versionComparisonsFromCache []string,
 	versionInternalDocEntities []*entity.VersionInternalDocumentEntity, versionInternalDocDataEntities []*entity.VersionInternalDocumentDataEntity,
 	comparisonInternalDocEntities []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocDataEntities []*entity.ComparisonInternalDocumentDataEntity,
@@ -1480,14 +1481,27 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 			}
 			utils.PerfLog(time.Since(start).Milliseconds(), 50, "CreateVersionWithData: versionComparisons insert")
 		}
-		if len(builderNotifications) != 0 {
-			start = time.Now()
-			_, err := tx.Model(&builderNotifications).Insert()
+		start = time.Now()
+		if packageInfo.MigrationBuild {
+			_, err = tx.Model(&entity.PublishedVersionNotificationEntity{}).
+				Where("package_id = ?", version.PackageId).
+				Where("version = ?", version.Version).
+				Where("revision = ?", version.Revision).
+				Delete()
 			if err != nil {
-				return fmt.Errorf("failed to insert builder notifications %+v: %w", builderNotifications, err)
+				return fmt.Errorf("failed to delete existing published version notifications: %w", err)
 			}
-			utils.PerfLog(time.Since(start).Milliseconds(), 50, "CreateVersionWithData: builderNotifications insert")
 		}
+		if len(versionNotifications) != 0 {
+			_, err = tx.Model(&versionNotifications).Insert()
+			if err != nil {
+				return fmt.Errorf("failed to insert published version notifications: %w", err)
+			}
+		}
+		if err = p.saveComparisonNotificationsTx(tx, comparisonNotifications, versionComparisons); err != nil {
+			return err
+		}
+		utils.PerfLog(time.Since(start).Milliseconds(), 50, "CreateVersionWithData: notifications insert")
 
 		start = time.Now()
 		for _, d := range versionInternalDocDataEntities {
@@ -1792,11 +1806,17 @@ func (p publishedRepositoryImpl) CreateVersionWithData(packageInfo view.PackageI
 		}
 
 		start = time.Now()
+		buildMetadata := build.Metadata
+		if buildMetadata == nil {
+			buildMetadata = map[string]interface{}{}
+		}
+		buildMetadata[entity.HAS_ERRORS_KEY] = version.Metadata.GetHasErrors()
 		var ent entity.BuildEntity
 		query := tx.Model(&ent).
 			Where("build_id = ?", buildId).
 			Set("status = ?", view.StatusComplete).
 			Set("details = ?", "").
+			Set("metadata = ?", buildMetadata).
 			Set("last_active = now()")
 		_, err = query.Update()
 		if err != nil {
@@ -1984,7 +2004,7 @@ func (p publishedRepositoryImpl) validateChangelogMigrationResult(tx *pg.Tx, pac
 	return nil
 }
 
-func (p publishedRepositoryImpl) SaveVersionChanges(packageInfo view.PackageInfoFile, publishId string, operationComparisons []*entity.OperationComparisonEntity, versionComparisons []*entity.VersionComparisonEntity, versionComparisonsFromCache []string, comparisonInternalDocEntities []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocDataEntities []*entity.ComparisonInternalDocumentDataEntity) error {
+func (p publishedRepositoryImpl) SaveVersionChanges(packageInfo view.PackageInfoFile, publishId string, operationComparisons []*entity.OperationComparisonEntity, versionComparisons []*entity.VersionComparisonEntity, versionComparisonsFromCache []string, comparisonInternalDocEntities []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocDataEntities []*entity.ComparisonInternalDocumentDataEntity, comparisonNotifications []*entity.VersionComparisonNotificationEntity) error {
 	ctx := context.Background()
 	return p.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
 		var ents []entity.BuildEntity
@@ -2017,6 +2037,10 @@ func (p publishedRepositoryImpl) SaveVersionChanges(packageInfo view.PackageInfo
 
 		err = p.saveComparisonInternalDocumentsTx(tx, comparisonInternalDocEntities, comparisonInternalDocDataEntities, packageInfo.MigrationBuild, versionComparisons)
 		if err != nil {
+			return err
+		}
+
+		if err = p.saveComparisonNotificationsTx(tx, comparisonNotifications, versionComparisons); err != nil {
 			return err
 		}
 
@@ -2062,6 +2086,26 @@ func (p publishedRepositoryImpl) saveVersionChangesTx(tx *pg.Tx, operationCompar
 		_, err = tx.Model(&operationComparisons).Insert()
 		if err != nil {
 			return fmt.Errorf("failed to insert operation changes %+v: %w", operationComparisons, err)
+		}
+	}
+	return nil
+}
+
+func (p publishedRepositoryImpl) saveComparisonNotificationsTx(tx *pg.Tx, comparisonNotifications []*entity.VersionComparisonNotificationEntity, versionComparisons []*entity.VersionComparisonEntity) error {
+	deleteNotificationsForComparisonQuery := `
+		delete from version_comparison_notification
+		where comparison_id = ?comparison_id
+		`
+	for _, comparisonEnt := range versionComparisons {
+		_, err := tx.Model(comparisonEnt).Exec(deleteNotificationsForComparisonQuery)
+		if err != nil {
+			return fmt.Errorf("failed to delete old comparison notifications for comparison %+v: %w", *comparisonEnt, err)
+		}
+	}
+	if len(comparisonNotifications) != 0 {
+		_, err := tx.Model(&comparisonNotifications).Insert()
+		if err != nil {
+			return fmt.Errorf("failed to insert comparison notifications: %w", err)
 		}
 	}
 	return nil
@@ -2136,6 +2180,55 @@ func (p publishedRepositoryImpl) GetRevisionContent(packageId string, versionNam
 		return nil, err
 	}
 	return ents, err
+}
+
+func (p publishedRepositoryImpl) GetVersionNotifications(packageId string, version string, revision int, filter view.NotificationsFilter) ([]entity.PublishedVersionNotificationEntity, error) {
+	ents := make([]entity.PublishedVersionNotificationEntity, 0)
+	query := p.cp.GetConnection().Model(&ents).
+		Where("package_id = ?", packageId).
+		Where("version = ?", version).
+		Where("revision = ?", revision)
+	if filter.DocumentId != "" {
+		query.Where("document_id = ?", filter.DocumentId)
+	}
+	if len(filter.Severities) > 0 {
+		query.Where("severity in (?)", pg.In(filter.Severities))
+	}
+	if len(filter.Categories) > 0 {
+		query.Where("category in (?)", pg.In(filter.Categories))
+	}
+
+	err := query.Order("id").Limit(filter.Limit).Offset(filter.Offset).Select()
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return ents, nil
+		}
+		return nil, err
+	}
+	return ents, nil
+}
+
+func (p publishedRepositoryImpl) GetComparisonNotifications(comparisonId string, filter view.NotificationsFilter) ([]entity.VersionComparisonNotificationEntity, error) {
+	ents := make([]entity.VersionComparisonNotificationEntity, 0)
+	query := p.cp.GetConnection().Model(&ents).
+		Where("comparison_id = ?", comparisonId)
+	if filter.DocumentId != "" {
+		query.Where("document_id = ?", filter.DocumentId)
+	}
+	if len(filter.Severities) > 0 {
+		query.Where("severity in (?)", pg.In(filter.Severities))
+	}
+	if len(filter.Categories) > 0 {
+		query.Where("category in (?)", pg.In(filter.Categories))
+	}
+	err := query.Order("id").Limit(filter.Limit).Offset(filter.Offset).Select()
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return ents, nil
+		}
+		return nil, err
+	}
+	return ents, nil
 }
 
 func (p publishedRepositoryImpl) GetLatestContentBySlug(packageId string, versionName string, slug string) (*entity.PublishedContentEntity, error) {
@@ -2289,12 +2382,12 @@ func (p publishedRepositoryImpl) GetVersionsByPreviousVersion(previousPackageId 
 				on pv.package_id = mx.package_id
 				and pv.version = mx.version
 				and pv.revision = mx.revision
-			where (pv.previous_version_package_id = ? or (pv.package_id = ? and pv.previous_version_package_id is null))
+			where coalesce(nullif(pv.previous_version_package_id, ''), pv.package_id) = ?
 			and pv.previous_version = ?
 			and pv.deleted_at is null
 			order by pv.published_at desc
 	`
-	_, err = p.cp.GetConnection().Query(&ents, query, previousPackageId, previousPackageId, previousVersion)
+	_, err = p.cp.GetConnection().Query(&ents, query, previousPackageId, previousVersion)
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return nil, nil
@@ -2560,6 +2653,175 @@ func (p publishedRepositoryImpl) GetRevisionContentWithLimit(packageId string, v
 		return nil, err
 	}
 	return ents, err
+}
+
+func (p publishedRepositoryImpl) GetVersionDocumentErrorSummary(packageId string, versionName string, revision int, showOnlyDeleted bool) ([]entity.DocumentErrorSummaryEntity, error) {
+	var result []entity.DocumentErrorSummaryEntity
+	notCondition := ""
+	if showOnlyDeleted {
+		notCondition = "not"
+	}
+
+	// The join to the documents is a left join, so a referenced version that has errors of its own without having failed documents
+	query := fmt.Sprintf(`
+	with versions as (
+		select s.reference_id as package_id,
+			s.reference_version as version,
+			s.reference_revision as revision,
+			coalesce((pv.metadata ->> 'has_errors')::boolean, false) as referenced_version_has_errors,
+			false as own_document
+		from published_version_reference s
+		inner join published_version pv
+			on pv.package_id = s.reference_id
+			and pv.version = s.reference_version
+			and pv.revision = s.reference_revision
+			and pv.deleted_at is %s null
+		where s.package_id = ?
+			and s.version = ?
+			and s.revision = ?
+			and s.excluded = false
+		union
+		select ? as package_id,
+			? as version,
+			? as revision,
+			false as referenced_version_has_errors,
+			true as own_document
+	)
+	select coalesce(c.data_type, '') as data_type,
+		coalesce(c.metadata ->> 'mcp_endpoint', '') as mcp_endpoint,
+		v.own_document,
+		coalesce(bool_or((c.metadata ->> 'has_errors')::boolean), false) as has_errors,
+		bool_or(v.referenced_version_has_errors) as referenced_version_has_errors
+	from versions v
+	left join published_version_revision_content c
+		on c.package_id = v.package_id
+		and c.version = v.version
+		and c.revision = v.revision
+	group by 1, 2, 3`, notCondition)
+
+	_, err := p.cp.GetConnection().Query(&result, query,
+		packageId, versionName, revision,
+		packageId, versionName, revision)
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return result, nil
+}
+
+func (p publishedRepositoryImpl) GetVersionErrorSummary(packageId string, version string, revision int) (*entity.VersionErrorSummaryEntity, error) {
+	result := new(entity.VersionErrorSummaryEntity)
+	query := `
+	select coalesce((pv.metadata ->> 'has_errors')::boolean, false) as has_errors,
+		coalesce((vc.metadata ->> 'has_errors')::boolean, false) as changelog_has_errors
+	from published_version pv
+	left join lateral (
+		select max(pvr.revision) as revision
+		from published_version pvr
+		where pvr.package_id = coalesce(nullif(pv.previous_version_package_id, ''), pv.package_id)
+			and pvr.version = pv.previous_version
+			and pvr.deleted_at is null
+	) prev on true
+	left join version_comparison vc
+		on vc.package_id = pv.package_id
+		and vc.version = pv.version
+		and vc.revision = pv.revision
+		and vc.previous_package_id = coalesce(nullif(pv.previous_version_package_id, ''), pv.package_id)
+		and vc.previous_version = pv.previous_version
+		and vc.previous_revision = prev.revision
+	where pv.package_id = ? and pv.version = ? and pv.revision = ?`
+
+	_, err := p.cp.GetConnection().QueryOne(result, query, packageId, version, revision)
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return result, nil
+}
+
+func (p publishedRepositoryImpl) VersionHasErroredReferences(packageId string, version string, revision int) (bool, error) {
+	var hasErroredReferences bool
+	query := `
+	select exists (
+		select 1
+		from published_version_reference s
+		inner join published_version rv
+			on rv.package_id = s.reference_id
+			and rv.version = s.reference_version
+			and rv.revision = s.reference_revision
+			and rv.deleted_at is null
+		left join lateral (
+			select max(pvr.revision) as revision
+			from published_version pvr
+			where pvr.package_id = coalesce(nullif(rv.previous_version_package_id, ''), rv.package_id)
+				and pvr.version = rv.previous_version
+				and pvr.deleted_at is null
+		) rprev on true
+		left join version_comparison rvc
+			on rvc.package_id = rv.package_id
+			and rvc.version = rv.version
+			and rvc.revision = rv.revision
+			and rvc.previous_package_id = coalesce(nullif(rv.previous_version_package_id, ''), rv.package_id)
+			and rvc.previous_version = rv.previous_version
+			and rvc.previous_revision = rprev.revision
+		where s.package_id = ?
+			and s.version = ?
+			and s.revision = ?
+			and s.excluded = false
+			and (coalesce((rv.metadata ->> 'has_errors')::boolean, false) or coalesce((rvc.metadata ->> 'has_errors')::boolean, false))
+	)`
+
+	_, err := p.cp.GetConnection().QueryOne(pg.Scan(&hasErroredReferences), query, packageId, version, revision)
+	if err != nil {
+		if err == pg.ErrNoRows {
+			return false, nil
+		}
+		return false, err
+	}
+	return hasErroredReferences, nil
+}
+
+func (p publishedRepositoryImpl) GetVersionsWithErroredReferences(packageId string) (map[entity.PublishedVersionKeyEntity]struct{}, error) {
+	var ents []entity.PublishedVersionKeyEntity
+	query := `
+	select distinct s.package_id, s.version, s.revision
+	from published_version_reference s
+	inner join published_version rv
+		on rv.package_id = s.reference_id
+		and rv.version = s.reference_version
+		and rv.revision = s.reference_revision
+		and rv.deleted_at is null
+	left join lateral (
+		select max(pvr.revision) as revision
+		from published_version pvr
+		where pvr.package_id = coalesce(nullif(rv.previous_version_package_id, ''), rv.package_id)
+			and pvr.version = rv.previous_version
+			and pvr.deleted_at is null
+	) rprev on true
+	left join version_comparison rvc
+		on rvc.package_id = rv.package_id
+		and rvc.version = rv.version
+		and rvc.revision = rv.revision
+		and rvc.previous_package_id = coalesce(nullif(rv.previous_version_package_id, ''), rv.package_id)
+		and rvc.previous_version = rv.previous_version
+		and rvc.previous_revision = rprev.revision
+	where s.package_id = ?
+		and s.excluded = false
+		and (coalesce((rv.metadata ->> 'has_errors')::boolean, false) or coalesce((rvc.metadata ->> 'has_errors')::boolean, false))`
+
+	_, err := p.cp.GetConnection().Query(&ents, query, packageId)
+	if err != nil && err != pg.ErrNoRows {
+		return nil, err
+	}
+	result := make(map[entity.PublishedVersionKeyEntity]struct{}, len(ents))
+	for _, ent := range ents {
+		result[ent] = struct{}{}
+	}
+	return result, nil
 }
 
 func (p publishedRepositoryImpl) GetDefaultVersion(packageId string, status string) (*entity.PublishedVersionEntity, error) {
@@ -4444,7 +4706,6 @@ func (p publishedRepositoryImpl) countRelatedDataForPackagesTx(ctx context.Conte
 		stats.BuildDepends = 0
 		stats.BuildResults = 0
 		stats.BuildSources = 0
-		stats.BuilderNotifications = 0
 	} else {
 		_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.BuildDepends),
 			`SELECT COUNT(*) FROM build_depends WHERE build_id IN (?) or depend_id IN (?)`, pg.In(buildIds), pg.In(buildIds))
@@ -4458,11 +4719,6 @@ func (p publishedRepositoryImpl) countRelatedDataForPackagesTx(ctx context.Conte
 		}
 		_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.BuildSources),
 			`SELECT COUNT(*) FROM build_src WHERE build_id IN (?)`, pg.In(buildIds))
-		if err != nil {
-			return err
-		}
-		_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.BuilderNotifications),
-			`SELECT COUNT(*) FROM builder_notifications WHERE build_id IN (?)`, pg.In(buildIds))
 		if err != nil {
 			return err
 		}
@@ -4538,6 +4794,12 @@ func (p publishedRepositoryImpl) countRelatedDataForPackagesTx(ctx context.Conte
 
 	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.PublishedVersionOpenCounts),
 		`SELECT COUNT(*) FROM published_version_open_count WHERE package_id IN (?)`, pg.In(packageIds))
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.PublishedVersionNotifications),
+		`SELECT COUNT(*) FROM published_version_notification WHERE package_id IN (?)`, pg.In(packageIds))
 	if err != nil {
 		return err
 	}
@@ -4619,6 +4881,12 @@ func (p publishedRepositoryImpl) countRelatedDataForPackageRevisionsTx(ctx conte
 
 	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.OperationGroups),
 		`SELECT COUNT(*) FROM operation_group WHERE (package_id, version, revision) IN (`+valuesClause+`)`, args...)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.QueryOneContext(ctx, pg.Scan(&stats.PublishedVersionNotifications),
+		`SELECT COUNT(*) FROM published_version_notification WHERE (package_id, version, revision) IN (`+valuesClause+`)`, args...)
 	if err != nil {
 		return err
 	}

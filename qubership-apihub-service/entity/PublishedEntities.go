@@ -187,6 +187,23 @@ type PublishedContentEntity struct {
 	Shareability string   `pg:"shareability_status, type:varchar"`
 }
 
+type DocumentErrorSummaryEntity struct {
+	DataType                   string `pg:"data_type, type:varchar, use_zero"`
+	McpEndpoint                string `pg:"mcp_endpoint, type:varchar, use_zero"`
+	OwnDocument                bool   `pg:"own_document, type:boolean, use_zero"` //TODO: should be remove when DDL and MCP will be supported for dashboards
+	HasErrors                  bool   `pg:"has_errors, type:boolean, use_zero"`
+	ReferencedVersionHasErrors bool   `pg:"referenced_version_has_errors, type:boolean, use_zero"`
+}
+
+type VersionErrorSummaryEntity struct {
+	HasErrors          bool `pg:"has_errors, type:boolean, use_zero"`
+	ChangelogHasErrors bool `pg:"changelog_has_errors, type:boolean, use_zero"`
+}
+
+func (v VersionErrorSummaryEntity) HasAnyErrors() bool {
+	return v.HasErrors || v.ChangelogHasErrors
+}
+
 type PublishedContentWithDataEntity struct {
 	tableName struct{} `pg:"published_version_revision_content, alias:published_version_revision_content"`
 	// both PublishedContentEntity and PublishedContentDataEntity have PackageId field, so go-pg mapping works incorrect(randomly). ContentPackageId is required to fix the issue.
@@ -314,6 +331,7 @@ func MakeReadonlyPublishedVersionListView2(versionEnt *PackageVersionRevisionEnt
 		VersionLabels:            versionEnt.Labels,
 		PreviousVersionPackageId: versionEnt.PreviousVersionPackageId,
 		ApiProcessorVersion:      versionEnt.Metadata.GetBuilderVersion(),
+		HasErrors:                versionEnt.Metadata.GetHasErrors(),
 	}
 	return &item
 }
@@ -363,6 +381,7 @@ func MakePublishedDocumentView(ent *PublishedContentEntity) *view.PublishedDocum
 		Title:        ent.Title,
 		Filename:     ent.Filename,
 		Tags:         ent.Metadata.GetDocTags(),
+		HasErrors:    ent.Metadata.GetHasErrors(),
 	}
 }
 
@@ -397,6 +416,7 @@ func MakePublishedDocumentRefView2(ent *PublishedContentEntity) *view.PublishedD
 		Title:        ent.Title,
 		Filename:     ent.Filename,
 		PackageRef:   view.MakePackageRefKey(ent.PackageId, ent.Version, ent.Revision),
+		HasErrors:    ent.Metadata.GetHasErrors(),
 	}
 }
 

@@ -34,9 +34,9 @@ type BuildRepository interface {
 type ExtendedBuildFilter struct {
 	PackageId string
 	Version   string
-	BuildIds []string
-	Offset   int
-	Limit    int
+	BuildIds  []string
+	Offset    int
+	Limit     int
 }
 
 func NewBuildRepositoryPG(cp db.ConnectionProvider) (BuildRepository, error) {

@@ -177,7 +177,6 @@ The cleanup job affects the following database tables:
 - **build_depends** – related to `build`, all related records are automatically removed via cascade deletion
 - **build_result** – related to `build`, all related records are automatically removed via cascade deletion
 - **build_src** – related to `build`, all related records are automatically removed via cascade deletion
-- **builder_notifications** – related to `build`, all related records are automatically removed via cascade deletion
 - **favorite_packages** – related to `package_group`, all related records are automatically removed via cascade deletion
 - **operation** – related to `published_version`, all related records are automatically removed via cascade deletion
 - **operation_group** – related to `published_version`, all related records are automatically removed via cascade
@@ -200,6 +199,8 @@ The cleanup job affects the following database tables:
   deletion
 - **published_version_open_count** – related to `package_group`, all related records are automatically removed via
   cascade deletion
+- **published_version_notification** – related to `published_version`, all related records are automatically removed via
+  cascade deletion
 - **published_version_reference** – related to `published_version`, all related records are automatically removed via
   cascade deletion
 - **published_version_revision_content** – related to `published_version` and `published_data`, all related records are
@@ -209,6 +210,8 @@ The cleanup job affects the following database tables:
 - **shared_url_info** – related to `package_group`, all related records are automatically removed via cascade deletion
 - **transformed_content_data** – related to `operation_group`, all related records are automatically removed via cascade
   deletion
+- **version_comparison_notification** – related to `version_comparison`, all related records are automatically removed
+  via cascade deletion
 
 **Note**: cascade deletion is a database feature that automatically deletes related records in other tables when a
 primary record is deleted.
