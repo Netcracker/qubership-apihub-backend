@@ -357,15 +357,29 @@ func (a *BuildResultToEntitiesReader) ReadOperationsToEntities() ([]*entity.Oper
 				}
 			}
 		}
-
+		
 		if len(searchTextData) > 0 {
-			searchDataHash := utils.GetEncodedXXHash128(append(searchTextData, []byte(operation.Title)...))
+			metadataJson, marshalErr := json.Marshal(metadata)
+			if marshalErr != nil {
+				return nil, nil, nil, nil, &exception.CustomError{
+					Status:  http.StatusBadRequest,
+					Code:    exception.InvalidPackagedFile,
+					Message: exception.InvalidPackagedFileMsg,
+					Params: map[string]interface{}{"file": "operations.json",
+						"error": fmt.Sprintf("Unable to serialize metadata of operation %s: %s", operation.OperationId, marshalErr.Error())},
+				}
+			}
+			searchText := make([]byte, 0, len(searchTextData)+len(metadataJson)+1)
+			searchText = append(searchText, searchTextData...)
+			searchText = append(searchText, ' ')
+			searchText = append(searchText, metadataJson...)
+
 			operationSearchTexts = append(operationSearchTexts, &entity.OperationSearchTextEntity{
 				OperationId:    operation.OperationId,
 				ApiType:        operation.ApiType,
 				Title:          operation.Title,
-				SearchTextData: searchTextData,
-				SearchDataHash: searchDataHash,
+				SearchTextData: searchText,
+				SearchDataHash: utils.GetEncodedXXHash128(searchText, []byte(operation.Title)),
 			})
 		}
 
