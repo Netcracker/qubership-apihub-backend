@@ -86,6 +86,10 @@ type VersionDetails struct {
 	NotLatestRevision bool           `json:"notLatestRevision,omitempty"`
 	Summary           *ChangeSummary `json:"summary,omitempty"`
 }
+
+// AllPackagesParentId is the parent package id that asks for packages anywhere in the tree.
+const AllPackagesParentId = "*"
+
 type PackageListReq struct {
 	Kind                      []string
 	Limit                     int
@@ -188,8 +192,10 @@ type PackageComparisonsFile struct {
 
 // --- Contract archive types ---
 
+const DdlEntityKindTable = "table"
+
 type PackageDdlContractsFile struct {
-	Tables []PackageDdlContract `json:"tables"`
+	Tables []PackageDdlContract `json:"tables" validate:"dive,required"`
 }
 
 type DdlContractSearch struct {
@@ -197,20 +203,20 @@ type DdlContractSearch struct {
 }
 
 type PackageDdlContract struct {
-	DdlEntityId               string                 `json:"ddlEntityId"`
-	Kind                      string                 `json:"kind"`
-	SchemaName                string                 `json:"schemaName,omitempty"`
-	Name                      string                 `json:"name,omitempty"`
+	DdlEntityId               string                 `json:"ddlEntityId" validate:"required"`
+	Kind                      string                 `json:"kind" validate:"required"`
+	SchemaName                string                 `json:"schemaName,omitempty" validate:"required"`
+	Name                      string                 `json:"name,omitempty" validate:"required"`
 	Description               string                 `json:"description,omitempty"`
 	Search                    *DdlContractSearch     `json:"search,omitempty"`
 	Metadata                  map[string]interface{} `json:"metadata,omitempty"`
-	DocumentId                string                 `json:"documentId,omitempty"`
-	VersionInternalDocumentId string                 `json:"versionInternalDocumentId,omitempty"`
+	DocumentId                string                 `json:"documentId,omitempty" validate:"required"`
+	VersionInternalDocumentId string                 `json:"versionInternalDocumentId,omitempty" validate:"required"`
 }
 
 // PackageDdlComparisonsFile models the ddl-comparisons.json index (sibling of comparisons.json).
 type PackageDdlComparisonsFile struct {
-	Comparisons []DdlVersionComparison `json:"comparisons"`
+	Comparisons []DdlVersionComparison `json:"comparisons" validate:"dive,required"`
 }
 
 type DdlVersionComparison struct {
@@ -281,11 +287,18 @@ type DdlEntity struct {
 	Description string `json:"description"`
 }
 
+const (
+	McpEntityKindInit     = "init"
+	McpEntityKindTool     = "tool"
+	McpEntityKindPrompt   = "prompt"
+	McpEntityKindResource = "resource"
+)
+
 type PackageMcpContractsFile struct {
-	Inits     []PackageMcpContract `json:"inits"`
-	Tools     []PackageMcpContract `json:"tools"`
-	Resources []PackageMcpContract `json:"resources"`
-	Prompts   []PackageMcpContract `json:"prompts"`
+	Inits     []PackageMcpContract `json:"inits" validate:"dive,required"`
+	Tools     []PackageMcpContract `json:"tools" validate:"dive,required"`
+	Resources []PackageMcpContract `json:"resources" validate:"dive,required"`
+	Prompts   []PackageMcpContract `json:"prompts" validate:"dive,required"`
 }
 
 type McpContractSearch struct {
@@ -293,14 +306,14 @@ type McpContractSearch struct {
 }
 
 type PackageMcpContract struct {
-	McpEntityId               string                 `json:"mcpEntityId"`
-	Kind                      string                 `json:"kind"`
-	Title                     string                 `json:"title,omitempty"`
+	McpEntityId               string                 `json:"mcpEntityId" validate:"required"`
+	Kind                      string                 `json:"kind" validate:"required"`
+	Title                     string                 `json:"title,omitempty" validate:"required"`
 	Description               string                 `json:"description,omitempty"`
-	McpEndpoint               string                 `json:"mcpEndpoint"`
+	McpEndpoint               string                 `json:"mcpEndpoint" validate:"required"`
 	Search                    *McpContractSearch     `json:"search,omitempty"`
 	Metadata                  map[string]interface{} `json:"metadata,omitempty"`
-	DocumentId                string                 `json:"documentId,omitempty"`
+	DocumentId                string                 `json:"documentId,omitempty" validate:"required"`
 	VersionInternalDocumentId string                 `json:"versionInternalDocumentId,omitempty"`
 	DataHash                  string                 `json:"dataHash,omitempty"`
 }
