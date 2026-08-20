@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -9,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/metrics"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
@@ -43,7 +44,7 @@ type searchControllerImpl struct {
 	roleService        service.RoleService
 }
 
-func (s searchControllerImpl) applyVisibility(ctx context.SecurityContext, workspace string, packageIds []string) (visible []string, invisible []string, err error) {
+func (s searchControllerImpl) applyVisibility(ctx context.Context, workspace string, packageIds []string) (visible []string, invisible []string, err error) {
 	roots, err := s.roleService.GetWorkspacePackageVisibilityRoots(ctx, workspace)
 	if err != nil {
 		return nil, nil, err
@@ -136,11 +137,8 @@ func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
 	//// metrics
 	s.monitoringService.AddEndpointCall(getTemplatePath(r), view.SearchEndpointOpts{SearchLevel: searchLevel, ApiType: searchQuery.ApiType})
 
-	ctx := context.Create(r)
-	user := ctx.GetUserId()
-	if user == "" {
-		user = ctx.GetApiKeyId()
-	}
+	ctx := secctx.MakeUserContext(r)
+	user := secctx.GetUserId(ctx)
 	pkgPostfix := "-" + searchQuery.Workspace //TODO: should we count metric per package ?
 	s.monitoringService.IncreaseBusinessMetricCounter(user, metrics.GlobalSearchCalled, searchLevel+pkgPostfix)
 
@@ -155,7 +153,7 @@ func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
 
 	visible, invisible, err := s.applyVisibility(ctx, searchQuery.Workspace, searchQuery.PackageIds)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to resolve package visibility for search", err)
+		utils.RespondWithError(w, r, "Failed to resolve package visibility for search", err)
 		return
 	}
 	searchQuery.VisiblePackageRoots = visible
@@ -172,9 +170,9 @@ func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			result, err := s.operationService.GlobalSearchForOperations(r.Context(), searchQuery)
+			result, err := s.operationService.GlobalSearchForOperations(ctx, searchQuery)
 			if err != nil {
-				utils.RespondWithError(w, "Failed to perform search for operations", err)
+				utils.RespondWithError(w, r, "Failed to perform search for operations", err)
 				return
 			}
 			utils.RespondWithJson(w, http.StatusOK, result)
@@ -190,9 +188,9 @@ func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			result, err := s.versionService.SearchForPackages(searchQueryReq)
+			result, err := s.versionService.SearchForPackages(ctx, searchQueryReq)
 			if err != nil {
-				utils.RespondWithError(w, "Failed to perform search for packages", err)
+				utils.RespondWithError(w, r, "Failed to perform search for packages", err)
 				return
 			}
 			utils.RespondWithJson(w, http.StatusOK, result)
@@ -208,9 +206,9 @@ func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			result, err := s.versionService.SearchForDocuments(searchQueryReq)
+			result, err := s.versionService.SearchForDocuments(ctx, searchQueryReq)
 			if err != nil {
-				utils.RespondWithError(w, "Failed to perform search for documents", err)
+				utils.RespondWithError(w, r, "Failed to perform search for documents", err)
 				return
 			}
 			utils.RespondWithJson(w, http.StatusOK, result)
@@ -235,9 +233,9 @@ func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
 				})
 				return
 			}
-			result, err := s.ddlContractService.GlobalSearchForDDL(searchQuery)
+			result, err := s.ddlContractService.GlobalSearchForDDL(ctx, searchQuery)
 			if err != nil {
-				utils.RespondWithError(w, "Failed to perform search for DDL contracts", err)
+				utils.RespondWithError(w, r, "Failed to perform search for DDL contracts", err)
 				return
 			}
 			utils.RespondWithJson(w, http.StatusOK, result)
@@ -262,9 +260,9 @@ func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
 				})
 				return
 			}
-			result, err := s.mcpContractService.GlobalSearchForMCP(searchQuery)
+			result, err := s.mcpContractService.GlobalSearchForMCP(ctx, searchQuery)
 			if err != nil {
-				utils.RespondWithError(w, "Failed to perform search for MCP contracts", err)
+				utils.RespondWithError(w, r, "Failed to perform search for MCP contracts", err)
 				return
 			}
 			utils.RespondWithJson(w, http.StatusOK, result)
@@ -347,11 +345,8 @@ func (s searchControllerImpl) Search_deprecated(w http.ResponseWriter, r *http.R
 	//// metrics
 	s.monitoringService.AddEndpointCall(getTemplatePath(r), view.MakeSearchEndpointOptions(searchLevel, searchQuery.OperationSearchParams))
 
-	ctx := context.Create(r)
-	user := ctx.GetUserId()
-	if user == "" {
-		user = ctx.GetApiKeyId()
-	}
+	ctx := secctx.MakeUserContext(r)
+	user := secctx.GetUserId(ctx)
 	pkgPostfix := ""
 	if len(searchQuery.PackageIds) > 0 {
 		pkgPostfix += "-" + searchQuery.PackageIds[0] // enrich the search level with pkg id (workspace, group, package). Currently only one item supported in the array.
@@ -370,7 +365,7 @@ func (s searchControllerImpl) Search_deprecated(w http.ResponseWriter, r *http.R
 
 	visible, invisible, err := s.applyVisibility(ctx, searchQuery.Workspace, searchQuery.PackageIds)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to resolve package visibility for search", err)
+		utils.RespondWithError(w, r, "Failed to resolve package visibility for search", err)
 		return
 	}
 	searchQuery.VisiblePackageRoots = visible
@@ -380,27 +375,27 @@ func (s searchControllerImpl) Search_deprecated(w http.ResponseWriter, r *http.R
 	case view.SearchLevelOperations:
 		{
 			searchQueryReq := view.MakeSearchQueryReq(searchQuery)
-			result, err := s.operationService.GlobalSearchForOperations(r.Context(), searchQueryReq)
+			result, err := s.operationService.GlobalSearchForOperations(ctx, searchQueryReq)
 			if err != nil {
-				utils.RespondWithError(w, "Failed to perform search for operations", err)
+				utils.RespondWithError(w, r, "Failed to perform search for operations", err)
 				return
 			}
 			utils.RespondWithJson(w, http.StatusOK, result)
 		}
 	case view.SearchLevelPackages:
 		{
-			result, err := s.versionService.SearchForPackages(searchQuery)
+			result, err := s.versionService.SearchForPackages(ctx, searchQuery)
 			if err != nil {
-				utils.RespondWithError(w, "Failed to perform search for packages", err)
+				utils.RespondWithError(w, r, "Failed to perform search for packages", err)
 				return
 			}
 			utils.RespondWithJson(w, http.StatusOK, result)
 		}
 	case view.SearchLevelDocuments:
 		{
-			result, err := s.versionService.SearchForDocuments(searchQuery)
+			result, err := s.versionService.SearchForDocuments(ctx, searchQuery)
 			if err != nil {
-				utils.RespondWithError(w, "Failed to perform search for documents", err)
+				utils.RespondWithError(w, r, "Failed to perform search for documents", err)
 				return
 			}
 			utils.RespondWithJson(w, http.StatusOK, result)

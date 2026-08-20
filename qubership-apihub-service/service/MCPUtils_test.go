@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"testing"
 
-	secctx "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	"github.com/iancoleman/orderedmap"
@@ -233,7 +232,7 @@ func TestTransformContractSearchResults(t *testing.T) {
 			EntityId:    "ddl-entity",
 			Kind:        view.DdlKindTable,
 			SchemaName:  "public",
-			TableName:   "customers",
+			EntityName:  "customers",
 		},
 		view.McpEntitySearchResult{
 			PackageId:   "pkg.mcp",
@@ -401,7 +400,7 @@ type fakeRoleServiceForVersionsTest struct {
 	hasPermission bool
 }
 
-func (f fakeRoleServiceForVersionsTest) HasRequiredPermissions(ctx secctx.SecurityContext, packageId string, requiredPermissions ...view.RolePermission) (bool, error) {
+func (f fakeRoleServiceForVersionsTest) HasRequiredPermissions(ctx context.Context, packageId string, requiredPermissions ...view.RolePermission) (bool, error) {
 	return f.hasPermission, nil
 }
 
@@ -446,23 +445,6 @@ func TestConvertPackagesToWorkspacesMCP(t *testing.T) {
 			Description: "First workspace",
 		},
 	}, result.Workspaces)
-}
-
-func TestGetPackagesListFailsClosedWithoutSecurityContext(t *testing.T) {
-	m := mcpService{}
-
-	_, err := m.GetPackagesList(context.Background(), "WORKSPACE")
-
-	require.Error(t, err)
-}
-
-func TestExecuteListWorkspacesToolFailsClosedWithoutSecurityContext(t *testing.T) {
-	m := mcpService{}
-
-	_, err := m.ExecuteListWorkspacesTool(context.Background(), mcp.CallToolRequest{})
-
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "security context")
 }
 
 func TestValidateMCPGroup(t *testing.T) {

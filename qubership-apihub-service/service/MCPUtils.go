@@ -183,7 +183,7 @@ func transformContractEntity(item interface{}) (view.TransformedContractEntity, 
 			PackageName:  e.PackageName,
 			Version:      e.Version,
 			SchemaName:   e.SchemaName,
-			TableName:    e.TableName,
+			TableName:    e.EntityName,
 		}, true
 	case view.McpEntitySearchResult:
 		return view.TransformedContractEntity{
