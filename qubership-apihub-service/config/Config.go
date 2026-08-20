@@ -87,24 +87,26 @@ type ZeroDayConfig struct {
 }
 
 type TechnicalParameters struct {
-	InstanceId                  string
-	BasePath                    string
-	BackendVersion              string
-	ListenAddress               string `validate:"required"`
-	MetricsGetterSchedule       string
-	ApiSpecDirectory            string
-	MigrationLockMaxWaitMinutes int
-	EphemeralFileDirectory      string
+	InstanceId                   string
+	BasePath                     string
+	BackendVersion               string
+	ListenAddress                string `validate:"required"`
+	MetricsGetterSchedule        string
+	ApiSpecDirectory             string
+	MigrationLockMaxWaitMinutes  int
+	EphemeralFileDirectory       string
+	RequestTimeoutSec            int `validate:"gte=0,lte=590"` // The upper bound must stay < 600s nginx generic tier so the app's own error response wins. 0 disables the timeout.
+	TransitionMoveTimeoutMinutes int `validate:"gt=0"`
 }
 
 type BusinessParameters struct {
 	ExternalLinks                 []string
 	DefaultWorkspaceId            string
 	ReleaseVersionPattern         string
-	PublishArchiveSizeLimitMb     int `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
-	PublishFileSizeLimitMb        int `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
-	TemplateSizeLimitMb           int `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
-	ShareabilityReportSizeLimitMb int `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
+	PublishArchiveSizeLimitMb     int    `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
+	PublishFileSizeLimitMb        int    `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
+	TemplateSizeLimitMb           int    `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
+	ShareabilityReportSizeLimitMb int    `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
 	SystemNotification            string //TODO: replace with db impl
 	FailBuildOnBrokenRefs         bool
 	EphemeralFileMaxSizeMb        int `validate:"gt=0,lte=8796093022207"` //validation was added based on security scan results to avoid integer overflow, 8796093022207 * 1048576 is safely below MaxInt64
@@ -123,12 +125,25 @@ type S3Config struct {
 	Crt                  string
 	BucketName           string
 	StoreOnlyBuildResult bool
+	MigrationTimeouts    S3MigrationTimeoutsConfig
+}
+
+type S3MigrationTimeoutsConfig struct {
+	// Upper bounds keep the seconds-to-Duration conversion from overflowing into a negative deadline.
+	S3OperationSec       int `validate:"gt=0,lte=86400"`
+	DatabaseOperationSec int `validate:"gt=0,lte=86400"`
+	BulkDeleteMinutes    int `validate:"gt=0,lte=1440"`
 }
 
 type OlricConfig struct {
 	DiscoveryMode string
 	ReplicaCount  int
 	Namespace     string
+	// BindPort and MemberlistPort are the local-mode Olric ports; if busy, a random free port
+	// is used instead. Override to run multiple local instances of the service side by side
+	// (e.g. for manual testing).
+	BindPort       int
+	MemberlistPort int
 }
 
 type CleanupConfig struct {
@@ -184,28 +199,34 @@ type RevisionsCleanupConfig struct {
 
 type ComparisonsCleanupConfig struct {
 	Schedule       string
-	TimeoutMinutes int
+	TimeoutMinutes int `validate:"gt=0"`
 	TTLDays        int
 }
 
 type SoftDeletedDataCleanupConfig struct {
 	Schedule       string
-	TimeoutMinutes int
+	TimeoutMinutes int `validate:"gt=0"`
 	TTLDays        int
 }
 
 type UnreferencedDataCleanupConfig struct {
 	Schedule       string
-	TimeoutMinutes int
+	TimeoutMinutes int `validate:"gt=0"`
 }
 
 type BuildsCleanupConfig struct {
-	Schedule string
+	Schedule       string
+	TimeoutMinutes int `validate:"gt=0"`
+	ExpiredS3Files ExpiredS3FilesCleanupConfig
 }
 
 type MaintenanceVacuumCleanupConfig struct {
 	Schedule       string
-	TimeoutMinutes int
+	TimeoutMinutes int `validate:"gt=0"`
+}
+
+type ExpiredS3FilesCleanupConfig struct {
+	TimeoutMinutes int `validate:"gt=0"`
 }
 
 type FeatureFlagsConfig struct {
