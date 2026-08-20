@@ -2672,9 +2672,9 @@ func (p publishedRepositoryImpl) GetRevisionContent(ctx context.Context, package
 	return ents, err
 }
 
-func (p publishedRepositoryImpl) GetVersionNotifications(packageId string, version string, revision int, filter view.NotificationsFilter) ([]entity.PublishedVersionNotificationEntity, error) {
+func (p publishedRepositoryImpl) GetVersionNotifications(ctx context.Context, packageId string, version string, revision int, filter view.NotificationsFilter) ([]entity.PublishedVersionNotificationEntity, error) {
 	ents := make([]entity.PublishedVersionNotificationEntity, 0)
-	query := p.cp.GetConnection().Model(&ents).
+	query := p.cp.GetConnection().WithContext(ctx).Model(&ents).
 		Where("package_id = ?", packageId).
 		Where("version = ?", version).
 		Where("revision = ?", revision)
@@ -2698,9 +2698,9 @@ func (p publishedRepositoryImpl) GetVersionNotifications(packageId string, versi
 	return ents, nil
 }
 
-func (p publishedRepositoryImpl) GetComparisonNotifications(comparisonId string, filter view.NotificationsFilter) ([]entity.VersionComparisonNotificationEntity, error) {
+func (p publishedRepositoryImpl) GetComparisonNotifications(ctx context.Context, comparisonId string, filter view.NotificationsFilter) ([]entity.VersionComparisonNotificationEntity, error) {
 	ents := make([]entity.VersionComparisonNotificationEntity, 0)
-	query := p.cp.GetConnection().Model(&ents).
+	query := p.cp.GetConnection().WithContext(ctx).Model(&ents).
 		Where("comparison_id = ?", comparisonId)
 	if filter.DocumentId != "" {
 		query.Where("document_id = ?", filter.DocumentId)
@@ -3099,7 +3099,7 @@ func (p publishedRepositoryImpl) GetRevisionContentWithLimit(ctx context.Context
 	return ents, err
 }
 
-func (p publishedRepositoryImpl) GetVersionDocumentErrorSummary(packageId string, versionName string, revision int, showOnlyDeleted bool) ([]entity.DocumentErrorSummaryEntity, error) {
+func (p publishedRepositoryImpl) GetVersionDocumentErrorSummary(ctx context.Context, packageId string, versionName string, revision int, showOnlyDeleted bool) ([]entity.DocumentErrorSummaryEntity, error) {
 	var result []entity.DocumentErrorSummaryEntity
 	notCondition := ""
 	if showOnlyDeleted {
@@ -3143,7 +3143,7 @@ func (p publishedRepositoryImpl) GetVersionDocumentErrorSummary(packageId string
 		and c.revision = v.revision
 	group by 1, 2, 3`, notCondition)
 
-	_, err := p.cp.GetConnection().Query(&result, query,
+	_, err := p.cp.GetConnection().WithContext(ctx).Query(&result, query,
 		packageId, versionName, revision,
 		packageId, versionName, revision)
 	if err != nil {
@@ -3155,7 +3155,7 @@ func (p publishedRepositoryImpl) GetVersionDocumentErrorSummary(packageId string
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) GetVersionErrorSummary(packageId string, version string, revision int) (*entity.VersionErrorSummaryEntity, error) {
+func (p publishedRepositoryImpl) GetVersionErrorSummary(ctx context.Context, packageId string, version string, revision int) (*entity.VersionErrorSummaryEntity, error) {
 	result := new(entity.VersionErrorSummaryEntity)
 	query := `
 	select coalesce((pv.metadata ->> 'has_errors')::boolean, false) as has_errors,
@@ -3177,7 +3177,7 @@ func (p publishedRepositoryImpl) GetVersionErrorSummary(packageId string, versio
 		and vc.previous_revision = prev.revision
 	where pv.package_id = ? and pv.version = ? and pv.revision = ?`
 
-	_, err := p.cp.GetConnection().QueryOne(result, query, packageId, version, revision)
+	_, err := p.cp.GetConnection().WithContext(ctx).QueryOne(result, query, packageId, version, revision)
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return nil, nil
@@ -3187,7 +3187,7 @@ func (p publishedRepositoryImpl) GetVersionErrorSummary(packageId string, versio
 	return result, nil
 }
 
-func (p publishedRepositoryImpl) VersionHasErroredReferences(packageId string, version string, revision int) (bool, error) {
+func (p publishedRepositoryImpl) VersionHasErroredReferences(ctx context.Context, packageId string, version string, revision int) (bool, error) {
 	var hasErroredReferences bool
 	query := `
 	select exists (
@@ -3219,7 +3219,7 @@ func (p publishedRepositoryImpl) VersionHasErroredReferences(packageId string, v
 			and (coalesce((rv.metadata ->> 'has_errors')::boolean, false) or coalesce((rvc.metadata ->> 'has_errors')::boolean, false))
 	)`
 
-	_, err := p.cp.GetConnection().QueryOne(pg.Scan(&hasErroredReferences), query, packageId, version, revision)
+	_, err := p.cp.GetConnection().WithContext(ctx).QueryOne(pg.Scan(&hasErroredReferences), query, packageId, version, revision)
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return false, nil
@@ -3229,7 +3229,7 @@ func (p publishedRepositoryImpl) VersionHasErroredReferences(packageId string, v
 	return hasErroredReferences, nil
 }
 
-func (p publishedRepositoryImpl) GetVersionsWithErroredReferences(packageId string) (map[entity.PublishedVersionKeyEntity]struct{}, error) {
+func (p publishedRepositoryImpl) GetVersionsWithErroredReferences(ctx context.Context, packageId string) (map[entity.PublishedVersionKeyEntity]struct{}, error) {
 	var ents []entity.PublishedVersionKeyEntity
 	query := `
 	select distinct s.package_id, s.version, s.revision
@@ -3257,7 +3257,7 @@ func (p publishedRepositoryImpl) GetVersionsWithErroredReferences(packageId stri
 		and s.excluded = false
 		and (coalesce((rv.metadata ->> 'has_errors')::boolean, false) or coalesce((rvc.metadata ->> 'has_errors')::boolean, false))`
 
-	_, err := p.cp.GetConnection().Query(&ents, query, packageId)
+	_, err := p.cp.GetConnection().WithContext(ctx).Query(&ents, query, packageId)
 	if err != nil && err != pg.ErrNoRows {
 		return nil, err
 	}

@@ -64,8 +64,8 @@ type VersionService interface {
 	UpdateDocumentShareability(ctx context.Context, packageId string, versionName string, slug string, shareability string) error
 	BulkUpdateDocumentShareability(ctx context.Context, rows []view.ShareabilityReportRow) error
 	GetVersionDocumentsMetadata(ctx context.Context, packageId string, versionName string) (docs []entity.PublishedContentEntity, found bool, err error)
-	GetVersionNotifications(packageId string, versionName string, filter view.NotificationsFilter) (*view.Notifications, error)
-	GetComparisonNotifications(packageId string, versionName string, previousVersionPackageId string, previousVersion string, filter view.NotificationsFilter) (*view.Notifications, error)
+	GetVersionNotifications(ctx context.Context, packageId string, versionName string, filter view.NotificationsFilter) (*view.Notifications, error)
+	GetComparisonNotifications(ctx context.Context, packageId string, versionName string, previousVersionPackageId string, previousVersion string, filter view.NotificationsFilter) (*view.Notifications, error)
 }
 
 func NewVersionService(favoritesRepo repository.FavoritesRepository,
@@ -506,7 +506,7 @@ func (v versionServiceImpl) PatchVersion(ctx context.Context, packageId string, 
 	if status != nil {
 		newStatus := *status
 		if newStatus == string(view.Release) {
-			hasErrors, err := VersionHasAnyErrors(v.publishedRepo, versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
+			hasErrors, err := VersionHasAnyErrors(ctx, v.publishedRepo, versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
 			if err != nil {
 				return nil, err
 			}
@@ -699,7 +699,7 @@ func (v versionServiceImpl) GetPackageVersionsView(ctx context.Context, req view
 	}
 
 	if packageEnt.Kind == entity.KIND_DASHBOARD {
-		versionsWithErroredReferences, err := v.publishedRepo.GetVersionsWithErroredReferences(req.PackageId)
+		versionsWithErroredReferences, err := v.publishedRepo.GetVersionsWithErroredReferences(ctx, req.PackageId)
 		if err != nil {
 			return nil, err
 		}
@@ -750,7 +750,7 @@ func (v versionServiceImpl) GetPackageVersionContent(ctx context.Context, packag
 		}
 	}
 
-	documentErrorEnts, err := v.publishedRepo.GetVersionDocumentErrorSummary(versionEnt.PackageId, versionEnt.Version, versionEnt.Revision, showOnlyDeleted)
+	documentErrorEnts, err := v.publishedRepo.GetVersionDocumentErrorSummary(ctx, versionEnt.PackageId, versionEnt.Version, versionEnt.Revision, showOnlyDeleted)
 	if err != nil {
 		return nil, err
 	}
@@ -813,7 +813,7 @@ func (v versionServiceImpl) GetPackageVersionContent(ctx context.Context, packag
 	versionContent.OperationTypes = versionOperationTypes
 
 	if includeSummary {
-		versionContent.ChangelogHasErrors, err = v.getVersionChangelogHasErrors(versionEnt)
+		versionContent.ChangelogHasErrors, err = v.getVersionChangelogHasErrors(ctx, versionEnt)
 		if err != nil {
 			return nil, err
 		}
@@ -1111,8 +1111,8 @@ func (v versionServiceImpl) getVersionOperationGroups(ctx context.Context, versi
 	return versionOperationGroups, nil
 }
 
-func (v versionServiceImpl) getVersionChangelogHasErrors(versionEnt *entity.PackageVersionRevisionEntity) (bool, error) {
-	errorSummary, err := v.publishedRepo.GetVersionErrorSummary(versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
+func (v versionServiceImpl) getVersionChangelogHasErrors(ctx context.Context, versionEnt *entity.PackageVersionRevisionEntity) (bool, error) {
+	errorSummary, err := v.publishedRepo.GetVersionErrorSummary(ctx, versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
 	if err != nil {
 		return false, err
 	}
@@ -1975,7 +1975,7 @@ func (v versionServiceImpl) StartPublishFromCSV(ctx context.Context, req view.Pu
 					Params:  map[string]interface{}{"packageId": previousVersionPackageId, "version": req.PreviousVersion},
 				}
 			}
-			previousVersionHasErrors, err = VersionHasAnyErrors(v.publishedRepo, prevVersion.PackageId, prevVersion.Version, prevVersion.Revision)
+			previousVersionHasErrors, err = VersionHasAnyErrors(ctx, v.publishedRepo, prevVersion.PackageId, prevVersion.Version, prevVersion.Revision)
 			if err != nil {
 				return "", err
 			}
@@ -2451,8 +2451,8 @@ func (v versionServiceImpl) GetVersionDocumentsMetadata(ctx context.Context, pac
 	return docs, true, nil
 }
 
-func (v versionServiceImpl) GetVersionNotifications(packageId string, versionName string, filter view.NotificationsFilter) (*view.Notifications, error) {
-	versionEnt, err := v.publishedRepo.GetVersion(packageId, versionName)
+func (v versionServiceImpl) GetVersionNotifications(ctx context.Context, packageId string, versionName string, filter view.NotificationsFilter) (*view.Notifications, error) {
+	versionEnt, err := v.publishedRepo.GetVersion(ctx, packageId, versionName)
 	if err != nil {
 		return nil, err
 	}
@@ -2465,7 +2465,7 @@ func (v versionServiceImpl) GetVersionNotifications(packageId string, versionNam
 		}
 	}
 
-	ents, err := v.publishedRepo.GetVersionNotifications(packageId, versionEnt.Version, versionEnt.Revision, filter)
+	ents, err := v.publishedRepo.GetVersionNotifications(ctx, packageId, versionEnt.Version, versionEnt.Revision, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -2477,8 +2477,8 @@ func (v versionServiceImpl) GetVersionNotifications(packageId string, versionNam
 	return &view.Notifications{Notifications: notifications}, nil
 }
 
-func (v versionServiceImpl) GetComparisonNotifications(packageId string, versionName string, previousVersionPackageId string, previousVersion string, filter view.NotificationsFilter) (*view.Notifications, error) {
-	versionEnt, err := v.publishedRepo.GetVersion(packageId, versionName)
+func (v versionServiceImpl) GetComparisonNotifications(ctx context.Context, packageId string, versionName string, previousVersionPackageId string, previousVersion string, filter view.NotificationsFilter) (*view.Notifications, error) {
+	versionEnt, err := v.publishedRepo.GetVersion(ctx, packageId, versionName)
 	if err != nil {
 		return nil, err
 	}
@@ -2508,7 +2508,7 @@ func (v versionServiceImpl) GetComparisonNotifications(packageId string, version
 		}
 	}
 
-	previousVersionEnt, err := v.publishedRepo.GetVersion(previousVersionPackageId, previousVersion)
+	previousVersionEnt, err := v.publishedRepo.GetVersion(ctx, previousVersionPackageId, previousVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -2525,7 +2525,7 @@ func (v versionServiceImpl) GetComparisonNotifications(packageId string, version
 		versionEnt.PackageId, versionEnt.Version, versionEnt.Revision,
 		previousVersionEnt.PackageId, previousVersionEnt.Version, previousVersionEnt.Revision,
 	)
-	versionComparison, err := v.publishedRepo.GetVersionComparison(comparisonId)
+	versionComparison, err := v.publishedRepo.GetVersionComparison(ctx, comparisonId)
 	if err != nil {
 		return nil, err
 	}
@@ -2546,7 +2546,7 @@ func (v versionServiceImpl) GetComparisonNotifications(packageId string, version
 		}
 	}
 
-	ents, err := v.publishedRepo.GetComparisonNotifications(comparisonId, filter)
+	ents, err := v.publishedRepo.GetComparisonNotifications(ctx, comparisonId, filter)
 	if err != nil {
 		return nil, err
 	}

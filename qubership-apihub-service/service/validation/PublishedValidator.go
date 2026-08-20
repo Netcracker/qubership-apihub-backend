@@ -22,7 +22,7 @@ type PublishedValidator interface {
 	ValidateBuildNotifications(buildArc *archive.BuildResultArchive) error
 	ValidateComparisonNotifications(buildArc *archive.BuildResultArchive) error
 	ValidateErroredVersionNotPublishedAsRelease(buildArc *archive.BuildResultArchive) error
-	ValidateErroredVersionNotUsedAsPrevious(buildArc *archive.BuildResultArchive) error
+	ValidateErroredVersionNotUsedAsPrevious(ctx context.Context, buildArc *archive.BuildResultArchive) error
 }
 
 func NewPublishedValidator(publishedRepo repository.PublishedRepository) PublishedValidator {
@@ -211,7 +211,7 @@ func (p publishedValidatorImpl) ValidateErroredVersionNotPublishedAsRelease(buil
 	}
 }
 
-func (p publishedValidatorImpl) ValidateErroredVersionNotUsedAsPrevious(buildArc *archive.BuildResultArchive) error {
+func (p publishedValidatorImpl) ValidateErroredVersionNotUsedAsPrevious(ctx context.Context, buildArc *archive.BuildResultArchive) error {
 	if !buildArc.PackageInfo.HasErrors && !buildResultComparisonHasErrors(buildArc) {
 		return nil
 	}
@@ -223,7 +223,7 @@ func (p publishedValidatorImpl) ValidateErroredVersionNotUsedAsPrevious(buildArc
 		return err
 	}
 
-	dependents, err := p.publishedRepo.GetVersionsByPreviousVersion(packageId, version)
+	dependents, err := p.publishedRepo.GetVersionsByPreviousVersion(ctx, packageId, version)
 	if err != nil {
 		return err
 	}

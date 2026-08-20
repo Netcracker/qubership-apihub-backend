@@ -1,12 +1,13 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"testing"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/repository"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 )
 
 func pv(version string, revision int, previousVersion string) entity.PackageVersionRevisionEntity {
@@ -242,11 +243,11 @@ type errorSummaryRepoStub struct {
 	referencesLookupDone bool
 }
 
-func (s *errorSummaryRepoStub) GetVersionErrorSummary(string, string, int) (*entity.VersionErrorSummaryEntity, error) {
+func (s *errorSummaryRepoStub) GetVersionErrorSummary(context.Context, string, string, int) (*entity.VersionErrorSummaryEntity, error) {
 	return s.errorSummary, nil
 }
 
-func (s *errorSummaryRepoStub) VersionHasErroredReferences(string, string, int) (bool, error) {
+func (s *errorSummaryRepoStub) VersionHasErroredReferences(context.Context, string, string, int) (bool, error) {
 	s.referencesLookupDone = true
 	return s.erroredReferences, nil
 }
@@ -292,7 +293,7 @@ func TestVersionHasAnyErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			repo := &errorSummaryRepoStub{errorSummary: tt.errorSummary, erroredReferences: tt.erroredReferences}
-			hasErrors, err := VersionHasAnyErrors(repo, "QS.PKG", "2026.1", 3)
+			hasErrors, err := VersionHasAnyErrors(context.Background(), repo, "QS.PKG", "2026.1", 3)
 			if err != nil {
 				t.Fatalf("expected the predicate to answer, but it failed: %v", err)
 			}
@@ -307,7 +308,7 @@ func TestVersionHasAnyErrors(t *testing.T) {
 func TestVersionHasAnyErrorsSkipsReferencesWhenVersionAlreadyHasErrors(t *testing.T) {
 	repo := &errorSummaryRepoStub{errorSummary: &entity.VersionErrorSummaryEntity{HasErrors: true}}
 
-	if _, err := VersionHasAnyErrors(repo, "QS.PKG", "2026.1", 3); err != nil {
+	if _, err := VersionHasAnyErrors(context.Background(), repo, "QS.PKG", "2026.1", 3); err != nil {
 		t.Fatalf("expected the predicate to answer, but it failed: %v", err)
 	}
 	if repo.referencesLookupDone {
@@ -321,13 +322,13 @@ type failingErrorSummaryRepoStub struct {
 
 var errErrorSummaryLookup = errors.New("version error summary lookup failed")
 
-func (failingErrorSummaryRepoStub) GetVersionErrorSummary(string, string, int) (*entity.VersionErrorSummaryEntity, error) {
+func (failingErrorSummaryRepoStub) GetVersionErrorSummary(context.Context, string, string, int) (*entity.VersionErrorSummaryEntity, error) {
 	return nil, errErrorSummaryLookup
 }
 
 // A failed lookup must not read as "no errors": the refusals would silently let a version with errors through.
 func TestVersionHasAnyErrorsPropagatesLookupFailure(t *testing.T) {
-	_, err := VersionHasAnyErrors(failingErrorSummaryRepoStub{}, "QS.PKG", "2026.1", 3)
+	_, err := VersionHasAnyErrors(context.Background(), failingErrorSummaryRepoStub{}, "QS.PKG", "2026.1", 3)
 	if !errors.Is(err, errErrorSummaryLookup) {
 		t.Fatalf("expected the lookup failure to propagate, got %v", err)
 	}

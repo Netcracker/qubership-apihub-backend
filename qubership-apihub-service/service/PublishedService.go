@@ -321,8 +321,8 @@ func (p publishedServiceImpl) VersionPublished(ctx context.Context, packageId st
 	return ent != nil, nil
 }
 
-func VersionHasAnyErrors(publishedRepo repository.PublishedRepository, packageId string, version string, revision int) (bool, error) {
-	errorSummary, err := publishedRepo.GetVersionErrorSummary(packageId, version, revision)
+func VersionHasAnyErrors(ctx context.Context, publishedRepo repository.PublishedRepository, packageId string, version string, revision int) (bool, error) {
+	errorSummary, err := publishedRepo.GetVersionErrorSummary(ctx, packageId, version, revision)
 	if err != nil {
 		return false, err
 	}
@@ -333,7 +333,7 @@ func VersionHasAnyErrors(publishedRepo repository.PublishedRepository, packageId
 		return true, nil
 	}
 	// A package with no references answers false, so the kind of the package does not have to be resolved first.
-	return publishedRepo.VersionHasErroredReferences(packageId, version, revision)
+	return publishedRepo.VersionHasErroredReferences(ctx, packageId, version, revision)
 }
 
 func (p publishedServiceImpl) GetVersionStatus(ctx context.Context, packageId string, versionName string) (status string, hasErrors bool, found bool, err error) {
@@ -349,7 +349,7 @@ func (p publishedServiceImpl) GetVersionStatus(ctx context.Context, packageId st
 	if latestEnt == nil {
 		return "", false, false, nil
 	}
-	hasErrors, err = VersionHasAnyErrors(p.publishedRepo, latestEnt.PackageId, latestEnt.Version, latestEnt.Revision)
+	hasErrors, err = VersionHasAnyErrors(ctx, p.publishedRepo, latestEnt.PackageId, latestEnt.Version, latestEnt.Revision)
 	if err != nil {
 		return "", false, false, err
 	}
@@ -488,7 +488,7 @@ func (p publishedServiceImpl) PublishPackage(ctx context.Context, buildArc *arch
 	if err = p.publishedValidator.ValidateErroredVersionNotPublishedAsRelease(buildArc); err != nil {
 		return err
 	}
-	if err = p.publishedValidator.ValidateErroredVersionNotUsedAsPrevious(buildArc); err != nil {
+	if err = p.publishedValidator.ValidateErroredVersionNotUsedAsPrevious(ctx, buildArc); err != nil {
 		return err
 	}
 

@@ -178,7 +178,7 @@ func (v versionControllerImpl) GetVersionedDocument(w http.ResponseWriter, r *ht
 
 func (v versionControllerImpl) GetVersionNotifications(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := v.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, v.ptHandler, packageId, "Failed to check user privileges", err)
@@ -230,7 +230,7 @@ func (v versionControllerImpl) GetVersionNotifications(w http.ResponseWriter, r 
 		return
 	}
 
-	notifications, err := v.versionService.GetVersionNotifications(packageId, versionName, *filter)
+	notifications, err := v.versionService.GetVersionNotifications(ctx, packageId, versionName, *filter)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, v.ptHandler, packageId, "Failed to get version notifications", err)
 		return
@@ -240,7 +240,7 @@ func (v versionControllerImpl) GetVersionNotifications(w http.ResponseWriter, r 
 
 func (v versionControllerImpl) GetComparisonNotifications(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := v.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, v.ptHandler, packageId, "Failed to check user privileges", err)
@@ -304,7 +304,7 @@ func (v versionControllerImpl) GetComparisonNotifications(w http.ResponseWriter,
 		return
 	}
 
-	notifications, err := v.versionService.GetComparisonNotifications(packageId, versionName, previousVersionPackageId, previousVersion, *filter)
+	notifications, err := v.versionService.GetComparisonNotifications(ctx, packageId, versionName, previousVersionPackageId, previousVersion, *filter)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, v.ptHandler, packageId, "Failed to get comparison notifications", err)
 		return

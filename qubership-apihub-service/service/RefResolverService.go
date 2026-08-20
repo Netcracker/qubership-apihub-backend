@@ -104,7 +104,7 @@ func (r *refResolverServiceImpl) CalculateBuildConfigRefs(ctx context.Context, r
 				Params:  map[string]interface{}{"package": ref.RefId, "version": ref.Version},
 			}
 		}
-		refHasErrors, err := VersionHasAnyErrors(r.publishedRepo, versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
+		refHasErrors, err := VersionHasAnyErrors(ctx, r.publishedRepo, versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
 		if err != nil {
 			return nil, err
 		}

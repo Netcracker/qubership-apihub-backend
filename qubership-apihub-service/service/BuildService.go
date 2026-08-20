@@ -290,7 +290,7 @@ func (b *buildServiceImpl) CreateChangelogBuild(ctx context.Context, config view
 		if config.PreviousVersionPackageId != "" {
 			previousVersionPackageId = config.PreviousVersionPackageId
 		}
-		_, previousVersionHasErrors, _, err := b.publishService.GetVersionStatus(previousVersionPackageId, config.PreviousVersion)
+		_, previousVersionHasErrors, _, err := b.publishService.GetVersionStatus(ctx, previousVersionPackageId, config.PreviousVersion)
 		if err != nil {
 			return "", config, err
 		}
