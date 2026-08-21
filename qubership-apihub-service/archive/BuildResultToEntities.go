@@ -108,7 +108,7 @@ func (a *BuildResultToEntitiesReader) ReadDocumentsToEntities() ([]*entity.Publi
 				OperationIds: document.OperationIds,
 				Filename:     document.Filename,
 				Shareability: view.ShareabilityUnknown,
-				ApiKind:      view.ApiKindOrDefault(document.ApiKind),
+				ApiKind:      document.ApiKind,
 			})
 			fileDataEntities = append(fileDataEntities, &entity.PublishedContentDataEntity{
 				PackageId: a.PackageInfo.PackageId,
@@ -136,7 +136,6 @@ func (a *BuildResultToEntitiesReader) ReadTransformedDocumentsToEntity() (*entit
 				},
 			}
 		}
-		a.PackageDocuments.Documents[0].ApiKind = view.ApiKindOrDefault(a.PackageDocuments.Documents[0].ApiKind)
 		document := a.PackageDocuments.Documents[0]
 		if fileHeader, exists := a.DocumentsHeaders[document.Filename]; exists {
 			fileData, err := ReadZipFile(fileHeader)
@@ -153,9 +152,7 @@ func (a *BuildResultToEntitiesReader) ReadTransformedDocumentsToEntity() (*entit
 	} else {
 		zipBuf := bytes.Buffer{}
 		zw := zip.NewWriter(&zipBuf)
-		for i := range a.PackageDocuments.Documents {
-			a.PackageDocuments.Documents[i].ApiKind = view.ApiKindOrDefault(a.PackageDocuments.Documents[i].ApiKind)
-			document := a.PackageDocuments.Documents[i]
+		for _, document := range a.PackageDocuments.Documents {
 			if fileHeader, exists := a.DocumentsHeaders[document.Filename]; exists {
 				fileData, err := ReadZipFile(fileHeader)
 				if err != nil {
