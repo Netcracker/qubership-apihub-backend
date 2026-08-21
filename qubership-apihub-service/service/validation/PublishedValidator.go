@@ -12,7 +12,6 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/repository"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
-	log "github.com/sirupsen/logrus"
 )
 
 type PublishedValidator interface {
@@ -22,7 +21,6 @@ type PublishedValidator interface {
 	ValidateBuildNotifications(buildArc *archive.BuildResultArchive) error
 	ValidateComparisonNotifications(buildArc *archive.BuildResultArchive) error
 	ValidateErroredVersionNotPublishedAsRelease(buildArc *archive.BuildResultArchive) error
-	ValidateErroredVersionNotUsedAsPrevious(ctx context.Context, buildArc *archive.BuildResultArchive) error
 }
 
 func NewPublishedValidator(publishedRepo repository.PublishedRepository) PublishedValidator {
@@ -200,7 +198,7 @@ func (p publishedValidatorImpl) ValidateErroredVersionNotPublishedAsRelease(buil
 	if info.Status != string(view.Release) {
 		return nil
 	}
-	if !info.HasErrors && !buildResultComparisonHasErrors(buildArc) {
+	if !info.HasErrors && !BuildResultComparisonHasErrors(buildArc) {
 		return nil
 	}
 	return &exception.CustomError{
@@ -208,44 +206,6 @@ func (p publishedValidatorImpl) ValidateErroredVersionNotPublishedAsRelease(buil
 		Code:    exception.VersionHasErrors,
 		Message: exception.ReleasePublishWithErrorsMsg,
 		Params:  map[string]interface{}{"packageId": info.PackageId, "version": info.Version},
-	}
-}
-
-func (p publishedValidatorImpl) ValidateErroredVersionNotUsedAsPrevious(ctx context.Context, buildArc *archive.BuildResultArchive) error {
-	if !buildArc.PackageInfo.HasErrors && !buildResultComparisonHasErrors(buildArc) {
-		return nil
-	}
-	packageId := buildArc.PackageInfo.PackageId
-	// A migration build carries the version in the "version@revision" form, while the previous version of a
-	// dependent version is stored as a plain version name.
-	version, _, err := repository.SplitVersionRevision(buildArc.PackageInfo.Version)
-	if err != nil {
-		return err
-	}
-
-	dependents, err := p.publishedRepo.GetVersionsByPreviousVersion(ctx, packageId, version)
-	if err != nil {
-		return err
-	}
-	if len(dependents) == 0 {
-		return nil
-	}
-	dependentKeys := make([]entity.PublishedVersionKeyEntity, 0, len(dependents))
-	for _, dependent := range dependents {
-		dependentKeys = append(dependentKeys, entity.PublishedVersionKeyEntity{
-			PackageId: dependent.PackageId,
-			Version:   dependent.Version,
-			Revision:  dependent.Revision,
-		})
-	}
-	log.Warnf("Refusing publication of %v@%v: the build produced errors and the version is referenced as a previous version by %s",
-		packageId, version, entity.FormatVersionKeys(dependentKeys))
-
-	return &exception.CustomError{
-		Status:  http.StatusBadRequest,
-		Code:    exception.VersionHasErrors,
-		Message: exception.ErroredVersionUsedAsPreviousMsg, //TODO: name the dependent versions in the message.
-		Params:  map[string]interface{}{"packageId": packageId, "version": version},
 	}
 }
 
@@ -1149,7 +1109,7 @@ func (p publishedValidatorImpl) ValidateComparisonNotifications(buildArc *archiv
 	return nil
 }
 
-func buildResultComparisonHasErrors(buildArc *archive.BuildResultArchive) bool {
+func BuildResultComparisonHasErrors(buildArc *archive.BuildResultArchive) bool {
 	for _, comparison := range buildArc.PackageComparisons.Comparisons {
 		if comparison.HasErrors {
 			return true

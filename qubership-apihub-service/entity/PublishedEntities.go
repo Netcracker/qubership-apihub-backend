@@ -210,7 +210,6 @@ type PublishedContentEntity struct {
 type DocumentErrorSummaryEntity struct {
 	DataType                   string `pg:"data_type, type:varchar, use_zero"`
 	McpEndpoint                string `pg:"mcp_endpoint, type:varchar, use_zero"`
-	OwnDocument                bool   `pg:"own_document, type:boolean, use_zero"` //TODO: should be remove when DDL and MCP will be supported for dashboards
 	HasErrors                  bool   `pg:"has_errors, type:boolean, use_zero"`
 	ReferencedVersionHasErrors bool   `pg:"referenced_version_has_errors, type:boolean, use_zero"`
 }

@@ -768,16 +768,10 @@ func (v versionServiceImpl) GetPackageVersionContent(ctx context.Context, packag
 		if apiType := view.GetApiTypeForDocumentType(ent.DataType); apiType != "" {
 			apiTypeHasErrors[apiType] = true
 		}
-		//TODO: should be remove when DDL and MCP will be supported for dashboards
-		if !ent.OwnDocument {
-			continue
-		}
 		switch view.GetContractTypeForDocumentType(ent.DataType) {
 		case view.ContractTypeDdl:
 			ddlHasErrors = true
 		case view.ContractTypeMcp:
-			// A document that failed before its endpoint was known belongs to no endpoint. The version flag
-			// still reports it, and the notifications of the document explain it.
 			if ent.McpEndpoint != "" {
 				mcpEndpointHasErrors[ent.McpEndpoint] = true
 			}
@@ -827,8 +821,7 @@ func (v versionServiceImpl) GetPackageVersionContent(ctx context.Context, packag
 		if err != nil {
 			return nil, err
 		}
-		//TODO: the two flags below cover the version's own documents only, matching the entity counts they
-		//accompany. Widen them to the referenced documents once dashboards support DDL and MCP entities.
+		// A failed document produces no entities, so the counts above can miss a contract type entirely
 		if ddlHasErrors {
 			if ddlSummary == nil {
 				ddlSummary = &view.DdlVersionContractSummary{}

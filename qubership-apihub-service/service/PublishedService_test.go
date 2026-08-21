@@ -5,6 +5,9 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/archive"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/repository"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -236,6 +239,80 @@ func TestMergeVersionComparisons(t *testing.T) {
 	}
 }
 
+// Only the DDL reader records errors found in DDL contracts. The merged row is the only one stored,
+// so a changelog whose REST side is clean and whose DDL side has errors must still come out flagged.
+func TestMergeVersionComparisonsUnionsHasErrors(t *testing.T) {
+	sharedId := view.MakeVersionComparisonId("p1", "v2", 1, "p1", "v1", 1)
+	ddlOnlyId := view.MakeVersionComparisonId("p2", "v2", 1, "p2", "v1", 1)
+
+	errored := func(id string) *entity.VersionComparisonEntity {
+		metadata := entity.Metadata{}
+		metadata.SetHasErrors(true)
+		return &entity.VersionComparisonEntity{ComparisonId: id, Metadata: metadata}
+	}
+
+	for _, tc := range []struct {
+		name          string
+		operationSide *entity.VersionComparisonEntity
+		ddlSide       *entity.VersionComparisonEntity
+		wantHasErrors bool
+	}{
+		{
+			name:          "errors only on the ddl side",
+			operationSide: &entity.VersionComparisonEntity{ComparisonId: sharedId, Metadata: entity.Metadata{}},
+			ddlSide:       errored(sharedId),
+			wantHasErrors: true,
+		},
+		{
+			name:          "errors only on the operation side",
+			operationSide: errored(sharedId),
+			ddlSide:       &entity.VersionComparisonEntity{ComparisonId: sharedId, Metadata: entity.Metadata{}},
+			wantHasErrors: true,
+		},
+		{
+			name:          "errors on both sides",
+			operationSide: errored(sharedId),
+			ddlSide:       errored(sharedId),
+			wantHasErrors: true,
+		},
+		{
+			name:          "no errors on either side",
+			operationSide: &entity.VersionComparisonEntity{ComparisonId: sharedId, Metadata: entity.Metadata{}},
+			ddlSide:       &entity.VersionComparisonEntity{ComparisonId: sharedId, Metadata: entity.Metadata{}},
+			wantHasErrors: false,
+		},
+		{
+			// The readers always initialise the map, but a nil one must not panic the publish path.
+			name:          "nil metadata on the operation side",
+			operationSide: &entity.VersionComparisonEntity{ComparisonId: sharedId},
+			ddlSide:       errored(sharedId),
+			wantHasErrors: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			merged := mergeVersionComparisons(
+				[]*entity.VersionComparisonEntity{tc.operationSide},
+				[]*entity.VersionComparisonEntity{tc.ddlSide})
+			if len(merged) != 1 {
+				t.Fatalf("merged %d comparisons, want 1", len(merged))
+			}
+			if got := merged[0].Metadata.GetHasErrors(); got != tc.wantHasErrors {
+				t.Errorf("merged has_errors = %v, want %v", got, tc.wantHasErrors)
+			}
+		})
+	}
+
+	t.Run("ddl-only comparison keeps its own errors", func(t *testing.T) {
+		merged := mergeVersionComparisons(nil, []*entity.VersionComparisonEntity{errored(ddlOnlyId)})
+		if len(merged) != 1 {
+			t.Fatalf("merged %d comparisons, want 1", len(merged))
+		}
+		if !merged[0].Metadata.GetHasErrors() {
+			t.Errorf("ddl-only comparison must keep the error flag it was read with")
+		}
+	})
+}
+
 type errorSummaryRepoStub struct {
 	repository.PublishedRepository
 	errorSummary         *entity.VersionErrorSummaryEntity
@@ -331,5 +408,158 @@ func TestVersionHasAnyErrorsPropagatesLookupFailure(t *testing.T) {
 	_, err := VersionHasAnyErrors(context.Background(), failingErrorSummaryRepoStub{}, "QS.PKG", "2026.1", 3)
 	if !errors.Is(err, errErrorSummaryLookup) {
 		t.Fatalf("expected the lookup failure to propagate, got %v", err)
+	}
+}
+
+type dependentVersionsRepoStub struct {
+	repository.PublishedRepository
+	dependents []entity.PublishedVersionEntity
+	err        error
+}
+
+func (s dependentVersionsRepoStub) GetVersionsByPreviousVersion(context.Context, string, string) ([]entity.PublishedVersionEntity, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.dependents, nil
+}
+
+type publisherAccessRoleServiceStub struct {
+	RoleService
+	accessible  []entity.PublishedVersionKeyEntity
+	hidden      int
+	err         error
+	publisherId string
+}
+
+func (s *publisherAccessRoleServiceStub) FilterVersionsByPublisherReadAccess(_ context.Context, publisherId string, _ []entity.PublishedVersionKeyEntity) ([]entity.PublishedVersionKeyEntity, int, error) {
+	s.publisherId = publisherId
+	if s.err != nil {
+		return nil, 0, s.err
+	}
+	return s.accessible, s.hidden, nil
+}
+
+func dependentVersion(packageId string, version string, revision int) entity.PublishedVersionEntity {
+	return entity.PublishedVersionEntity{PackageId: packageId, Version: version, Revision: revision}
+}
+
+func dependentKey(packageId string, version string, revision int) entity.PublishedVersionKeyEntity {
+	return entity.PublishedVersionKeyEntity{PackageId: packageId, Version: version, Revision: revision}
+}
+
+const testPublisherId = "publisher-id"
+
+func erroredBuildArchive(hasErrors bool) *archive.BuildResultArchive {
+	return &archive.BuildResultArchive{
+		PackageInfo: view.PackageInfoFile{PackageId: "QS.PKG", Version: "2026.1", CreatedBy: testPublisherId, HasErrors: hasErrors},
+	}
+}
+
+func TestCheckNoDependentVersionsForErroredVersion(t *testing.T) {
+	tests := []struct {
+		name            string
+		hasErrors       bool
+		dependents      []entity.PublishedVersionEntity
+		accessible      []entity.PublishedVersionKeyEntity
+		hidden          int
+		expectedListing string
+	}{
+		{
+			// Nothing to protect: the dependents' changelogs stay trustworthy.
+			name:       "build without errors publishes",
+			hasErrors:  false,
+			dependents: []entity.PublishedVersionEntity{dependentVersion("QS.DEP", "1.0", 1)},
+		},
+		{
+			name:      "errored build with no dependents publishes",
+			hasErrors: true,
+		},
+		{
+			name:            "every dependent is readable",
+			hasErrors:       true,
+			dependents:      []entity.PublishedVersionEntity{dependentVersion("QS.DEP", "1.0", 1), dependentVersion("QS.OTHER", "2.0", 3)},
+			accessible:      []entity.PublishedVersionKeyEntity{dependentKey("QS.DEP", "1.0", 1), dependentKey("QS.OTHER", "2.0", 3)},
+			expectedListing: "QS.DEP|1.0@1, QS.OTHER|2.0@3",
+		},
+		{
+			name:            "some dependents are hidden",
+			hasErrors:       true,
+			dependents:      []entity.PublishedVersionEntity{dependentVersion("QS.DEP", "1.0", 1), dependentVersion("QS.SECRET", "2.0", 3)},
+			accessible:      []entity.PublishedVersionKeyEntity{dependentKey("QS.DEP", "1.0", 1)},
+			hidden:          1,
+			expectedListing: "QS.DEP|1.0@1, and 1 more package version you cannot access (contact system administrator)",
+		},
+		{
+			// The publisher still learns why the publication was refused, without learning what they may not see.
+			name:            "no dependent is readable",
+			hasErrors:       true,
+			dependents:      []entity.PublishedVersionEntity{dependentVersion("QS.SECRET", "2.0", 3), dependentVersion("QS.OTHER", "1.0", 1)},
+			hidden:          2,
+			expectedListing: "2 package versions you cannot access (contact system administrator)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			roleService := &publisherAccessRoleServiceStub{accessible: tt.accessible, hidden: tt.hidden}
+			service := publishedServiceImpl{
+				publishedRepo: dependentVersionsRepoStub{dependents: tt.dependents},
+				roleService:   roleService,
+			}
+
+			err := service.checkNoDependentVersionsForErroredVersion(context.Background(), erroredBuildArchive(tt.hasErrors))
+
+			if tt.expectedListing == "" {
+				if err != nil {
+					t.Fatalf("expected the publication to be allowed, got %v", err)
+				}
+				return
+			}
+
+			customErr, ok := err.(*exception.CustomError)
+			if !ok {
+				t.Fatalf("expected a CustomError, got %T: %v", err, err)
+			}
+			if customErr.Code != exception.VersionHasErrors {
+				t.Fatalf("expected code %v, got %v", exception.VersionHasErrors, customErr.Code)
+			}
+			if customErr.Params["dependentVersions"] != tt.expectedListing {
+				t.Fatalf("expected dependentVersions %q, got %q", tt.expectedListing, customErr.Params["dependentVersions"])
+			}
+			if roleService.publisherId != testPublisherId {
+				t.Fatalf("expected the filter to run for the publisher, got %q", roleService.publisherId)
+			}
+		})
+	}
+}
+
+var errDependentsLookup = errors.New("dependent versions lookup failed")
+
+// A failed lookup must not read as "no dependents": the publication would go through and break their changelogs.
+func TestCheckNoDependentVersionsForErroredVersionPropagatesLookupFailure(t *testing.T) {
+	service := publishedServiceImpl{
+		publishedRepo: dependentVersionsRepoStub{err: errDependentsLookup},
+		roleService:   &publisherAccessRoleServiceStub{},
+	}
+
+	err := service.checkNoDependentVersionsForErroredVersion(context.Background(), erroredBuildArchive(true))
+	if !errors.Is(err, errDependentsLookup) {
+		t.Fatalf("expected the lookup failure to propagate, got %v", err)
+	}
+}
+
+var errReadAccessFilter = errors.New("read access filtering failed")
+
+// The same reasoning: a filtering failure must refuse the publication, not allow it.
+func TestCheckNoDependentVersionsForErroredVersionPropagatesFilterFailure(t *testing.T) {
+	service := publishedServiceImpl{
+		publishedRepo: dependentVersionsRepoStub{dependents: []entity.PublishedVersionEntity{dependentVersion("QS.DEP", "1.0", 1)}},
+		roleService:   &publisherAccessRoleServiceStub{err: errReadAccessFilter},
+	}
+
+	err := service.checkNoDependentVersionsForErroredVersion(context.Background(), erroredBuildArchive(true))
+	if !errors.Is(err, errReadAccessFilter) {
+		t.Fatalf("expected the filtering failure to propagate, got %v", err)
 	}
 }

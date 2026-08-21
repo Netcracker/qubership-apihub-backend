@@ -388,6 +388,52 @@ func (p publishedServiceImpl) CheckNoReleaseDependentVersions(ctx context.Contex
 	return nil
 }
 
+func (p publishedServiceImpl) checkNoDependentVersionsForErroredVersion(ctx context.Context, buildArc *archive.BuildResultArchive) error {
+	if !buildArc.PackageInfo.HasErrors && !validation.BuildResultComparisonHasErrors(buildArc) {
+		return nil
+	}
+	packageId := buildArc.PackageInfo.PackageId
+	// A migration build carries the version in the "version@revision" form, while the previous version of a
+	// dependent version is stored as a plain version name.
+	version, _, err := SplitVersionRevision(buildArc.PackageInfo.Version)
+	if err != nil {
+		return err
+	}
+
+	dependents, err := p.publishedRepo.GetVersionsByPreviousVersion(ctx, packageId, version)
+	if err != nil {
+		return err
+	}
+	if len(dependents) == 0 {
+		return nil
+	}
+	dependentKeys := make([]entity.PublishedVersionKeyEntity, 0, len(dependents))
+	for _, dependent := range dependents {
+		dependentKeys = append(dependentKeys, entity.PublishedVersionKeyEntity{
+			PackageId: dependent.PackageId,
+			Version:   dependent.Version,
+			Revision:  dependent.Revision,
+		})
+	}
+	accessible, hiddenCount, err := p.roleService.FilterVersionsByPublisherReadAccess(ctx, buildArc.PackageInfo.CreatedBy, dependentKeys)
+	if err != nil {
+		return err
+	}
+	log.Warnf("Refusing publication of %v@%v requested by %v: the build produced errors and the version is referenced as a previous version by %s",
+		packageId, version, buildArc.PackageInfo.CreatedBy, entity.FormatVersionKeys(dependentKeys))
+
+	return &exception.CustomError{
+		Status:  http.StatusBadRequest,
+		Code:    exception.VersionHasErrors,
+		Message: exception.ErroredVersionUsedAsPreviousMsg,
+		Params: map[string]interface{}{
+			"packageId":         packageId,
+			"version":           version,
+			"dependentVersions": entity.FormatVersionKeysWithHidden(accessible, hiddenCount, "package version"),
+		},
+	}
+}
+
 func readZipFile(zf *zip.File) ([]byte, error) {
 	f, err := zf.Open()
 	if err != nil {
@@ -488,7 +534,7 @@ func (p publishedServiceImpl) PublishPackage(ctx context.Context, buildArc *arch
 	if err = p.publishedValidator.ValidateErroredVersionNotPublishedAsRelease(buildArc); err != nil {
 		return err
 	}
-	if err = p.publishedValidator.ValidateErroredVersionNotUsedAsPrevious(ctx, buildArc); err != nil {
+	if err = p.checkNoDependentVersionsForErroredVersion(ctx, buildArc); err != nil {
 		return err
 	}
 
@@ -985,7 +1031,8 @@ func makePublishedReferenceUniqueKey(entity *entity.PublishedReferenceEntity) st
 
 // mergeVersionComparisons combines the operation and DDL version_comparison rows of one build by
 // comparison_id so a single row carries both operation and contract types. DDL-only pairs are
-// appended so the ddl_comparison FK is satisfied for pure DDL changelogs.
+// appended so the ddl_comparison FK is satisfied for pure DDL changelogs. The error flag is a
+// union: the changelog has errors when either side reports them.
 func mergeVersionComparisons(operationComparisons []*entity.VersionComparisonEntity, ddlComparisons []*entity.VersionComparisonEntity) []*entity.VersionComparisonEntity {
 	versionComparisonByComparisonId := make(map[string]*entity.VersionComparisonEntity, len(operationComparisons))
 	for _, comparison := range operationComparisons {
@@ -998,6 +1045,12 @@ func mergeVersionComparisons(operationComparisons []*entity.VersionComparisonEnt
 			// DDL changes; each side's reader only records refs for the comparisons it produced, so
 			// the merged row must carry both, or the DDL-only referenced comparison is never fetched.
 			existing.Refs = mergeUniqueStrings(existing.Refs, ddlComparison.Refs)
+			if ddlComparison.Metadata.GetHasErrors() {
+				if existing.Metadata == nil {
+					existing.Metadata = entity.Metadata{}
+				}
+				existing.Metadata.SetHasErrors(true)
+			}
 		} else {
 			operationComparisons = append(operationComparisons, ddlComparison)
 			versionComparisonByComparisonId[ddlComparison.ComparisonId] = ddlComparison

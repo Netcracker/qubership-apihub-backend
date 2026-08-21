@@ -11,6 +11,11 @@ func (s Metadata) GetChanges(t Metadata) map[string]interface{} {
 		if key == BUILDER_VERSION_KEY {
 			continue
 		}
+		//this loop walks the keys of the old row only, so a flag set by the rebuild but absent from the old row
+		// would never be reported, and a missing key must read as false rather than as a removal
+		if key == HAS_ERRORS_KEY {
+			continue
+		}
 		tVal, exists := t[key]
 		if !exists {
 			changes[key] = map[string]interface{}{
@@ -95,6 +100,12 @@ func (s PublishedVersionEntity) GetChanges(t PublishedVersionEntity) map[string]
 	if metadataChanges := s.Metadata.GetChanges(t.Metadata); len(metadataChanges) > 0 {
 		changes["Metadata"] = metadataChanges
 	}
+	if s.Metadata.GetHasErrors() != t.Metadata.GetHasErrors() {
+		changes["HasErrors"] = map[string]interface{}{
+			"old": s.Metadata.GetHasErrors(),
+			"new": t.Metadata.GetHasErrors(),
+		}
+	}
 	if (len(s.Labels) != 0 || len(t.Labels) != 0) &&
 		!reflect.DeepEqual(s.Labels, t.Labels) {
 		changes["Labels"] = map[string]interface{}{
@@ -163,6 +174,12 @@ func (s PublishedContentEntity) GetChanges(t PublishedContentEntity) map[string]
 	}
 	if metadataChanges := s.Metadata.GetChanges(t.Metadata); len(metadataChanges) > 0 {
 		changes["Metadata"] = metadataChanges
+	}
+	if s.Metadata.GetHasErrors() != t.Metadata.GetHasErrors() {
+		changes["HasErrors"] = map[string]interface{}{
+			"old": s.Metadata.GetHasErrors(),
+			"new": t.Metadata.GetHasErrors(),
+		}
 	}
 	if (len(s.OperationIds) != 0 || len(t.OperationIds) != 0) &&
 		!reflect.DeepEqual(s.OperationIds, t.OperationIds) {
@@ -300,6 +317,12 @@ func (s OperationSearchTextEntity) GetChanges(t OperationSearchTextEntity) map[s
 
 func (s VersionComparisonEntity) GetChanges(t VersionComparisonEntity) map[string]interface{} {
 	changes := make(map[string]interface{}, 0)
+	if s.Metadata.GetHasErrors() != t.Metadata.GetHasErrors() {
+		changes["HasErrors"] = map[string]interface{}{
+			"old": s.Metadata.GetHasErrors(),
+			"new": t.Metadata.GetHasErrors(),
+		}
+	}
 	if (len(s.Refs) != 0 || len(t.Refs) != 0) &&
 		!reflect.DeepEqual(s.Refs, t.Refs) {
 		changes["Refs"] = map[string]interface{}{

@@ -1593,6 +1593,7 @@ func (p publishedRepositoryImpl) CreateVersionWithData(ctx context.Context, pack
 		}
 
 		start = time.Now()
+		//TODO: why do we insert data before migration build validation?
 		_, err = tx.Model(version).OnConflict("(package_id, version, revision) DO UPDATE").Insert()
 		if err != nil {
 			return fmt.Errorf("failed to insert published_version %+v: %w", version, err)
@@ -3106,14 +3107,14 @@ func (p publishedRepositoryImpl) GetVersionDocumentErrorSummary(ctx context.Cont
 		notCondition = "not"
 	}
 
-	// The join to the documents is a left join, so a referenced version that has errors of its own without having failed documents
+	// The documents are joined with a left join, so a referenced version whose errors are version-level still
+	// produces one row. That row carries referenced_version_has_errors with an empty data_type.
 	query := fmt.Sprintf(`
 	with versions as (
 		select s.reference_id as package_id,
 			s.reference_version as version,
 			s.reference_revision as revision,
-			coalesce((pv.metadata ->> 'has_errors')::boolean, false) as referenced_version_has_errors,
-			false as own_document
+			coalesce((pv.metadata ->> 'has_errors')::boolean, false) as referenced_version_has_errors
 		from published_version_reference s
 		inner join published_version pv
 			on pv.package_id = s.reference_id
@@ -3128,12 +3129,10 @@ func (p publishedRepositoryImpl) GetVersionDocumentErrorSummary(ctx context.Cont
 		select ? as package_id,
 			? as version,
 			? as revision,
-			false as referenced_version_has_errors,
-			true as own_document
+			false as referenced_version_has_errors
 	)
 	select coalesce(c.data_type, '') as data_type,
 		coalesce(c.metadata ->> 'mcp_endpoint', '') as mcp_endpoint,
-		v.own_document,
 		coalesce(bool_or((c.metadata ->> 'has_errors')::boolean), false) as has_errors,
 		bool_or(v.referenced_version_has_errors) as referenced_version_has_errors
 	from versions v
@@ -3141,7 +3140,7 @@ func (p publishedRepositoryImpl) GetVersionDocumentErrorSummary(ctx context.Cont
 		on c.package_id = v.package_id
 		and c.version = v.version
 		and c.revision = v.revision
-	group by 1, 2, 3`, notCondition)
+	group by 1, 2`, notCondition)
 
 	_, err := p.cp.GetConnection().WithContext(ctx).Query(&result, query,
 		packageId, versionName, revision,

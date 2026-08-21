@@ -39,4 +39,3 @@ apm_modules/
 agent-packages/**/build/
 
 
-.claude/settings.local.json

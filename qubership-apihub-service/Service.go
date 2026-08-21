@@ -250,7 +250,7 @@ func main() {
 	packageVersionEnrichmentService := service.NewPackageVersionEnrichmentService(publishedRepository)
 	activityTrackingService := service.NewActivityTrackingService(activityTrackingRepository, publishedRepository, userService)
 	operationService := service.NewOperationService(operationRepository, publishedRepository, packageVersionEnrichmentService)
-	roleService := service.NewRoleService(roleRepository, userService, activityTrackingService, publishedRepository)
+	roleService := service.NewRoleService(roleRepository, userService, activityTrackingService, publishedRepository, apihubApiKeyRepository)
 	ptHandler := service.NewPackageTransitionHandler(transitionRepository)
 	publishNotificationService := service.NewPublishNotificationService(olricProvider)
 	publishedService := service.NewPublishedService(publishedRepository, buildRepository, favoritesRepository, operationRepository, ddlContractRepository, activityTrackingService, monitoringService, minioStorageService, systemInfoService, publishNotificationService, roleService)
