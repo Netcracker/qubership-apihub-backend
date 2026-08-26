@@ -46,7 +46,7 @@ type SecurityConfig struct {
 
 type JwtConfig struct {
 	PrivateKey              Base64DecodedString `validate:"required,min=1" sensitive:"true"`
-	AccessTokenDurationSec  int                 `validate:"gt=600"`
+	AccessTokenDurationSec  int                 `validate:"gt=5"`
 	RefreshTokenDurationSec int                 `validate:"gtfield=AccessTokenDurationSec"`
 }
 
