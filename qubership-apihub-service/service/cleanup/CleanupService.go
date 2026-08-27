@@ -88,12 +88,6 @@ func (c cleanupServiceImpl) ClearTestData(ctx context.Context, testId string) er
 			}
 			logStep("delete version_comparison by previous_package_id")
 
-			_, err = tx.ExecContext(ctx, `DELETE FROM operation_open_count WHERE package_id IN (?)`, pg.In(packageIds))
-			if err != nil {
-				return err
-			}
-			logStep("delete operation_open_count")
-
 			_, err = tx.ModelContext(ctx, (*entity.ApihubApiKeyEntity)(nil)).
 				Where("package_id IN (?)", pg.In(packageIds)).
 				ForceDelete()
