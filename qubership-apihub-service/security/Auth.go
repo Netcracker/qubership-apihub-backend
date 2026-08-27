@@ -98,15 +98,15 @@ type UserView struct {
 	User        view.User `json:"user"`
 }
 
-func CreateLocalUserToken_deprecated(w http.ResponseWriter, r *http.Request) {
+func (a *AuthHandler) CreateLocalUserToken_deprecated(w http.ResponseWriter, r *http.Request) {
 	user, err := authenticateUser(r)
 	if err != nil {
-		respondWithAuthFailedError(w, err)
+		a.respondWithAuthFailedError(w, err)
 		return
 	}
 	userView, err := CreateTokenForUser_deprecated(*user)
 	if err != nil {
-		respondWithAuthFailedError(w, err)
+		a.respondWithAuthFailedError(w, err)
 		return
 	}
 
@@ -126,15 +126,15 @@ func CreateTokenForUser_deprecated(dbUser view.User) (*UserView, error) {
 	return &userView, nil
 }
 
-func CreateLocalUserToken(w http.ResponseWriter, r *http.Request) {
+func (a *AuthHandler) CreateLocalUserToken(w http.ResponseWriter, r *http.Request) {
 	user, err := authenticateUser(r)
 	if err != nil {
-		respondWithAuthFailedError(w, err)
+		a.respondWithAuthFailedError(w, err)
 		return
 	}
 
 	if err = SetAuthTokenCookies(w, user, LocalRefreshPath); err != nil {
-		respondWithAuthFailedError(w, err)
+		a.respondWithAuthFailedError(w, err)
 		return
 	}
 

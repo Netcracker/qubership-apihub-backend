@@ -22,7 +22,7 @@ import (
 	"time"
 )
 
-func NewIDPManager(authConfig idp.AuthConfig, allowedHosts []string, productionMode bool, userService service.UserService) (idp.Manager, error) {
+func NewIDPManager(authConfig idp.AuthConfig, allowedHosts []string, productionMode bool, userService service.UserService, responder *utils.Responder) (idp.Manager, error) {
 	idpManager := idpManagerImpl{
 		config:    authConfig,
 		providers: make(map[string]idp.Provider),
@@ -33,7 +33,7 @@ func NewIDPManager(authConfig idp.AuthConfig, allowedHosts []string, productionM
 				log.Debugf("SAML provider with id %s already exists", provider.Id)
 				continue
 			}
-			samlProvider, err := idpManager.createSAMLProvider(provider, userService)
+			samlProvider, err := idpManager.createSAMLProvider(provider, userService, responder)
 			if err != nil {
 				return nil, err
 			}
@@ -43,7 +43,7 @@ func NewIDPManager(authConfig idp.AuthConfig, allowedHosts []string, productionM
 				log.Debugf("OIDC provider with id %s already exists", provider.Id)
 				continue
 			}
-			oidcProvider, err := idpManager.createOIDCProvider(provider, userService, allowedHosts, productionMode)
+			oidcProvider, err := idpManager.createOIDCProvider(provider, userService, allowedHosts, productionMode, responder)
 			if err != nil {
 				return nil, err
 			}
@@ -71,16 +71,16 @@ func (i *idpManagerImpl) IsSSOIntegrationEnabled() bool {
 	return len(i.config.Providers) > 0
 }
 
-func (i *idpManagerImpl) createSAMLProvider(idpConfig idp.IDP, userService service.UserService) (idp.Provider, error) {
+func (i *idpManagerImpl) createSAMLProvider(idpConfig idp.IDP, userService service.UserService, responder *utils.Responder) (idp.Provider, error) {
 	samlInstance, err := CreateSAMLInstance(idpConfig.Id, idpConfig.SAMLConfiguration)
 	if err != nil {
 		return nil, err
 	}
 	rootURL, _ := url.Parse(idpConfig.SAMLConfiguration.RootURL)
-	return newSAMLProvider(samlInstance, idpConfig, userService, rootURL.Hostname()), nil
+	return newSAMLProvider(samlInstance, idpConfig, userService, rootURL.Hostname(), responder), nil
 }
 
-func (i *idpManagerImpl) createOIDCProvider(idpConfig idp.IDP, userService service.UserService, allowedHosts []string, productionMode bool) (idp.Provider, error) {
+func (i *idpManagerImpl) createOIDCProvider(idpConfig idp.IDP, userService service.UserService, allowedHosts []string, productionMode bool, responder *utils.Responder) (idp.Provider, error) {
 	if idpConfig.OIDCConfiguration == nil {
 		log.Error("OIDC configuration is invalid")
 		return nil, fmt.Errorf("OIDC configuration is invalid")
@@ -114,7 +114,7 @@ func (i *idpManagerImpl) createOIDCProvider(idpConfig idp.IDP, userService servi
 	}
 
 	verifier := provider.Verifier(&oidc.Config{ClientID: idpConfig.OIDCConfiguration.ClientID})
-	return newOIDCProvider(idpConfig, provider, verifier, oidcConfig, userService, allowedHosts, rootURL.Hostname(), productionMode), nil
+	return newOIDCProvider(idpConfig, provider, verifier, oidcConfig, userService, allowedHosts, rootURL.Hostname(), productionMode, responder), nil
 }
 
 func CreateSAMLInstance(idpId string, samlConfig *idp.SAMLConfiguration) (*samlsp.Middleware, error) {

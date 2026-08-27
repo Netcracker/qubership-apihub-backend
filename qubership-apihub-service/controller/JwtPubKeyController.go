@@ -11,17 +11,18 @@ type JwtPubKeyController interface {
 	GetRsaPublicKey(w http.ResponseWriter, r *http.Request)
 }
 
-func NewJwtPubKeyController() JwtPubKeyController {
-	return &jwtPubKeyControllerImpl{}
+func NewJwtPubKeyController(responder *utils.Responder) JwtPubKeyController {
+	return &jwtPubKeyControllerImpl{responder: responder}
 }
 
 type jwtPubKeyControllerImpl struct {
+	responder *utils.Responder
 }
 
 func (t jwtPubKeyControllerImpl) GetRsaPublicKey(w http.ResponseWriter, r *http.Request) {
 	key := security.GetPublicKey()
 	if key == nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		t.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusNotFound,
 			Message: "public key not found",
 		})

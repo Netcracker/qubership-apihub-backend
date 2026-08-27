@@ -12,7 +12,7 @@ type LogoutController interface {
 	Logout(http.ResponseWriter, *http.Request)
 }
 
-func NewLogoutController(tokenRevocationService service.TokenRevocationService, systemInfoService service.SystemInfoService) LogoutController {
+func NewLogoutController(tokenRevocationService service.TokenRevocationService, systemInfoService service.SystemInfoService, responder *utils.Responder) LogoutController {
 	authConfig := systemInfoService.GetAuthConfig()
 	var refreshTokenPaths []string
 	for _, idp := range authConfig.Providers {
@@ -23,20 +23,21 @@ func NewLogoutController(tokenRevocationService service.TokenRevocationService, 
 		}
 	}
 
-	return &logoutControllerImpl{tokenRevocationService: tokenRevocationService, refreshTokenPaths: refreshTokenPaths, productionMode: systemInfoService.IsProductionMode()}
+	return &logoutControllerImpl{tokenRevocationService: tokenRevocationService, refreshTokenPaths: refreshTokenPaths, productionMode: systemInfoService.IsProductionMode(), responder: responder}
 }
 
 type logoutControllerImpl struct {
 	tokenRevocationService service.TokenRevocationService
 	refreshTokenPaths      []string
 	productionMode         bool
+	responder              *utils.Responder
 }
 
 func (l *logoutControllerImpl) Logout(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Create(r)
 	err := l.tokenRevocationService.RevokeUserTokens(ctx.GetUserId())
 	if err != nil {
-		utils.RespondWithError(w, "Failed to perform user logout", err)
+		l.responder.RespondWithError(w, "Failed to perform user logout", err)
 		return
 	}
 

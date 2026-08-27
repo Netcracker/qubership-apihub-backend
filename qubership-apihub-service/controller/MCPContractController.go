@@ -19,11 +19,12 @@ type MCPContractController interface {
 
 func NewMCPContractController(roleService service.RoleService,
 	mcpContractService service.MCPContractService,
-	ptHandler service.PackageTransitionHandler) MCPContractController {
+	ptHandler service.PackageTransitionHandler, responder *utils.Responder) MCPContractController {
 	return &mcpContractControllerImpl{
 		roleService:        roleService,
 		mcpContractService: mcpContractService,
 		ptHandler:          ptHandler,
+		responder:          responder,
 	}
 }
 
@@ -31,17 +32,18 @@ type mcpContractControllerImpl struct {
 	roleService        service.RoleService
 	mcpContractService service.MCPContractService
 	ptHandler          service.PackageTransitionHandler
+	responder          *utils.Responder
 }
 
 func (c *mcpContractControllerImpl) checkReadAccess(w http.ResponseWriter, r *http.Request, packageId string) bool {
 	ctx := context.Create(r)
 	ok, err := c.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, c.ptHandler, packageId, "Failed to check user privileges", err)
+		handlePkgRedirectOrRespondWithError(w, r, c.responder, c.ptHandler, packageId, "Failed to check user privileges", err)
 		return false
 	}
 	if !ok {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -58,7 +60,7 @@ func (c *mcpContractControllerImpl) ListMcpEntities(w http.ResponseWriter, r *ht
 	}
 	versionName, err := getUnescapedStringParam(r, "version")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -70,7 +72,7 @@ func (c *mcpContractControllerImpl) ListMcpEntities(w http.ResponseWriter, r *ht
 	entitySegment := getStringParam(r, "entity")
 	kind, ok := view.McpEntitySegmentToKind[entitySegment]
 	if !ok {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidParameterValue,
 			Message: exception.InvalidParameterValueMsg,
@@ -82,7 +84,7 @@ func (c *mcpContractControllerImpl) ListMcpEntities(w http.ResponseWriter, r *ht
 	textFilter, _ := url.QueryUnescape(r.URL.Query().Get("textFilter"))
 	limit, limErr := getLimitQueryParam(r)
 	if limErr != nil {
-		utils.RespondWithCustomError(w, limErr)
+		c.responder.RespondWithCustomError(w, limErr)
 		return
 	}
 	offset := 0
@@ -91,10 +93,10 @@ func (c *mcpContractControllerImpl) ListMcpEntities(w http.ResponseWriter, r *ht
 	}
 	result, svcErr := c.mcpContractService.ListMcpEntities(packageId, versionName, kind, mcpEndpoint, textFilter, limit, offset)
 	if svcErr != nil {
-		handlePkgRedirectOrRespondWithError(w, r, c.ptHandler, packageId, "Failed to list MCP entities", svcErr)
+		handlePkgRedirectOrRespondWithError(w, r, c.responder, c.ptHandler, packageId, "Failed to list MCP entities", svcErr)
 		return
 	}
-	utils.RespondWithJson(w, http.StatusOK, result)
+	c.responder.RespondWithJson(w, http.StatusOK, result)
 }
 
 func (c *mcpContractControllerImpl) GetMcpEntity(w http.ResponseWriter, r *http.Request) {
@@ -104,7 +106,7 @@ func (c *mcpContractControllerImpl) GetMcpEntity(w http.ResponseWriter, r *http.
 	}
 	versionName, err := getUnescapedStringParam(r, "version")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -115,7 +117,7 @@ func (c *mcpContractControllerImpl) GetMcpEntity(w http.ResponseWriter, r *http.
 	}
 	mcpEntityId, err := getUnescapedStringParam(r, "mcpEntityId")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -129,7 +131,7 @@ func (c *mcpContractControllerImpl) GetMcpEntity(w http.ResponseWriter, r *http.
 	if r.URL.Query().Get("includeData") != "" {
 		includeData, err = strconv.ParseBool(r.URL.Query().Get("includeData"))
 		if err != nil {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			c.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -142,8 +144,8 @@ func (c *mcpContractControllerImpl) GetMcpEntity(w http.ResponseWriter, r *http.
 
 	result, svcErr := c.mcpContractService.GetMcpEntity(packageId, versionName, mcpEntityId, includeData)
 	if svcErr != nil {
-		handlePkgRedirectOrRespondWithError(w, r, c.ptHandler, packageId, "Failed to get MCP entity", svcErr)
+		handlePkgRedirectOrRespondWithError(w, r, c.responder, c.ptHandler, packageId, "Failed to get MCP entity", svcErr)
 		return
 	}
-	utils.RespondWithJson(w, http.StatusOK, result)
+	c.responder.RespondWithJson(w, http.StatusOK, result)
 }

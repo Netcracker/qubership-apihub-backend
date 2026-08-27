@@ -31,13 +31,14 @@ type OperationGroupController interface {
 	GetOperationGroupPublishStatus(w http.ResponseWriter, r *http.Request)
 }
 
-func NewOperationGroupController(roleService service.RoleService, operationGroupService service.OperationGroupService, versionService service.VersionService, systemInfoService service.SystemInfoService, packageService service.PackageService) OperationGroupController {
+func NewOperationGroupController(roleService service.RoleService, operationGroupService service.OperationGroupService, versionService service.VersionService, systemInfoService service.SystemInfoService, packageService service.PackageService, responder *utils.Responder) OperationGroupController {
 	return &operationGroupControllerImpl{
 		roleService:           roleService,
 		operationGroupService: operationGroupService,
 		versionService:        versionService,
 		packageService:        packageService,
 		templateSizeLimit:     systemInfoService.GetTemplateSizeLimitMB(),
+		responder:             responder,
 	}
 }
 
@@ -47,6 +48,7 @@ type operationGroupControllerImpl struct {
 	versionService        service.VersionService
 	packageService        service.PackageService
 	templateSizeLimit     int64
+	responder             *utils.Responder
 }
 
 func (o operationGroupControllerImpl) GetGroupedOperations(w http.ResponseWriter, r *http.Request) {
@@ -54,11 +56,11 @@ func (o operationGroupControllerImpl) GetGroupedOperations(w http.ResponseWriter
 	ctx := context.Create(r)
 	sufficientPrivileges, err := o.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		o.responder.RespondWithError(w, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -67,7 +69,7 @@ func (o operationGroupControllerImpl) GetGroupedOperations(w http.ResponseWriter
 	}
 	versionName, err := getUnescapedStringParam(r, "version")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -78,7 +80,7 @@ func (o operationGroupControllerImpl) GetGroupedOperations(w http.ResponseWriter
 	}
 	apiType, err := getUnescapedStringParam(r, "apiType")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -89,7 +91,7 @@ func (o operationGroupControllerImpl) GetGroupedOperations(w http.ResponseWriter
 	}
 	_, err = view.ParseApiType(apiType)
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidParameterValue,
 			Message: exception.InvalidParameterValueMsg,
@@ -100,7 +102,7 @@ func (o operationGroupControllerImpl) GetGroupedOperations(w http.ResponseWriter
 	}
 	groupName, err := getUnescapedStringParam(r, "groupName")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -112,7 +114,7 @@ func (o operationGroupControllerImpl) GetGroupedOperations(w http.ResponseWriter
 
 	textFilter, err := url.QueryUnescape(r.URL.Query().Get("textFilter"))
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -124,7 +126,7 @@ func (o operationGroupControllerImpl) GetGroupedOperations(w http.ResponseWriter
 
 	kind, err := url.QueryUnescape(r.URL.Query().Get("kind"))
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -138,7 +140,7 @@ func (o operationGroupControllerImpl) GetGroupedOperations(w http.ResponseWriter
 		apiAudience = ""
 	}
 	if apiAudience != "" && !view.ValidApiAudience(apiAudience) {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidParameterValue,
 			Message: exception.InvalidParameterValueMsg,
@@ -148,7 +150,7 @@ func (o operationGroupControllerImpl) GetGroupedOperations(w http.ResponseWriter
 	}
 	tag, err := url.QueryUnescape(r.URL.Query().Get("tag"))
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -160,7 +162,7 @@ func (o operationGroupControllerImpl) GetGroupedOperations(w http.ResponseWriter
 
 	limit, customError := getLimitQueryParamWithIncreasedMax(r)
 	if customError != nil {
-		utils.RespondWithCustomError(w, customError)
+		o.responder.RespondWithCustomError(w, customError)
 		return
 	}
 
@@ -168,7 +170,7 @@ func (o operationGroupControllerImpl) GetGroupedOperations(w http.ResponseWriter
 	if r.URL.Query().Get("page") != "" {
 		page, err = strconv.Atoi(r.URL.Query().Get("page"))
 		if err != nil {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			o.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -191,7 +193,7 @@ func (o operationGroupControllerImpl) GetGroupedOperations(w http.ResponseWriter
 	if r.URL.Query().Get("emptyTag") != "" {
 		emptyTag, err = strconv.ParseBool(r.URL.Query().Get("emptyTag"))
 		if err != nil {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			o.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -207,7 +209,7 @@ func (o operationGroupControllerImpl) GetGroupedOperations(w http.ResponseWriter
 
 	documentSlug, err := url.QueryUnescape(r.URL.Query().Get("documentSlug"))
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -219,7 +221,7 @@ func (o operationGroupControllerImpl) GetGroupedOperations(w http.ResponseWriter
 
 	refPackageId, err := url.QueryUnescape(r.URL.Query().Get("refPackageId"))
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -232,7 +234,7 @@ func (o operationGroupControllerImpl) GetGroupedOperations(w http.ResponseWriter
 	if r.URL.Query().Get("onlyAddable") != "" {
 		onlyAddable, err = strconv.ParseBool(r.URL.Query().Get("onlyAddable"))
 		if err != nil {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			o.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -245,7 +247,7 @@ func (o operationGroupControllerImpl) GetGroupedOperations(w http.ResponseWriter
 
 	asyncapiChannel, err := url.QueryUnescape(r.URL.Query().Get("asyncapiChannel"))
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -256,7 +258,7 @@ func (o operationGroupControllerImpl) GetGroupedOperations(w http.ResponseWriter
 	}
 	asyncapiProtocol, err := url.QueryUnescape(r.URL.Query().Get("asyncapiProtocol"))
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -285,10 +287,10 @@ func (o operationGroupControllerImpl) GetGroupedOperations(w http.ResponseWriter
 
 	groupedOperations, err := o.operationGroupService.GetGroupedOperations(packageId, versionName, apiType, groupName, groupedOperationListReq)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get operations from group", err)
+		o.responder.RespondWithError(w, "Failed to get operations from group", err)
 		return
 	}
-	utils.RespondWithJson(w, http.StatusOK, groupedOperations)
+	o.responder.RespondWithJson(w, http.StatusOK, groupedOperations)
 }
 
 func (o operationGroupControllerImpl) CreateOperationGroup(w http.ResponseWriter, r *http.Request) {
@@ -296,7 +298,7 @@ func (o operationGroupControllerImpl) CreateOperationGroup(w http.ResponseWriter
 	ctx := context.Create(r)
 	versionName, err := getUnescapedStringParam(r, "version")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -307,7 +309,7 @@ func (o operationGroupControllerImpl) CreateOperationGroup(w http.ResponseWriter
 	}
 	apiType, err := getUnescapedStringParam(r, "apiType")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -318,7 +320,7 @@ func (o operationGroupControllerImpl) CreateOperationGroup(w http.ResponseWriter
 	}
 	_, err = view.ParseApiType(apiType)
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidParameterValue,
 			Message: exception.InvalidParameterValueMsg,
@@ -330,16 +332,16 @@ func (o operationGroupControllerImpl) CreateOperationGroup(w http.ResponseWriter
 
 	versionStatus, err := o.versionService.GetVersionStatus(packageId, versionName)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		o.responder.RespondWithError(w, "Failed to check user privileges", err)
 		return
 	}
 	sufficientPrivileges, err := o.roleService.HasManageVersionPermission(ctx, packageId, versionStatus)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		o.responder.RespondWithError(w, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -352,14 +354,14 @@ func (o operationGroupControllerImpl) CreateOperationGroup(w http.ResponseWriter
 	err = r.ParseMultipartForm(0)
 	if err != nil {
 		if strings.Contains(err.Error(), "http: request body too large") {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			o.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusRequestEntityTooLarge,
 				Code:    exception.TemplateSizeExceeded,
 				Message: exception.TemplateSizeExceededMsg,
 				Params:  map[string]interface{}{"size": fmt.Sprintf("%dMB", o.templateSizeLimit/1048576)},
 			})
 		} else {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			o.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.BadRequestBody,
 				Message: exception.BadRequestBodyMsg,
@@ -380,7 +382,7 @@ func (o operationGroupControllerImpl) CreateOperationGroup(w http.ResponseWriter
 	template, templateFileHeader, err := r.FormFile("template")
 	if err != http.ErrMissingFile {
 		if err != nil {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			o.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectMultipartFile,
 				Message: exception.IncorrectMultipartFileMsg,
@@ -393,7 +395,7 @@ func (o operationGroupControllerImpl) CreateOperationGroup(w http.ResponseWriter
 			log.Debugf("failed to close temporal file: %+v", err)
 		}
 		if err != nil {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			o.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectMultipartFile,
 				Message: exception.IncorrectMultipartFileMsg,
@@ -404,7 +406,7 @@ func (o operationGroupControllerImpl) CreateOperationGroup(w http.ResponseWriter
 		if strings.EqualFold(encoding, "base64") {
 			n, decodeErr := base64.StdEncoding.Decode(templateData, templateData)
 			if decodeErr != nil {
-				utils.RespondWithCustomError(w, &exception.CustomError{
+				o.responder.RespondWithCustomError(w, &exception.CustomError{
 					Status:  http.StatusBadRequest,
 					Code:    exception.IncorrectMultipartFile,
 					Message: exception.IncorrectMultipartFileMsg,
@@ -414,7 +416,7 @@ func (o operationGroupControllerImpl) CreateOperationGroup(w http.ResponseWriter
 			templateData = templateData[:n]
 		}
 		if int64(len(templateData)) > o.templateSizeLimit {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			o.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusRequestEntityTooLarge,
 				Code:    exception.TemplateSizeExceeded,
 				Message: exception.TemplateSizeExceededMsg,
@@ -423,13 +425,13 @@ func (o operationGroupControllerImpl) CreateOperationGroup(w http.ResponseWriter
 			return
 		}
 		if validationErr := o.validateTemplateFile(templateFileHeader.Filename, templateData); validationErr != nil {
-			utils.RespondWithCustomError(w, validationErr)
+			o.responder.RespondWithCustomError(w, validationErr)
 			return
 		}
 		createOperationGroupReq.Template = templateData
 		createOperationGroupReq.TemplateFilename = utils.SanitizeFilename(templateFileHeader.Filename, "template")
 	} else if r.FormValue("template") != "" {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidGroupExportTemplateType,
 			Message: exception.InvalidGroupExportTemplateTypeMsg,
@@ -438,7 +440,7 @@ func (o operationGroupControllerImpl) CreateOperationGroup(w http.ResponseWriter
 	}
 
 	if apiType != string(view.RestApiType) && createOperationGroupReq.TemplateFilename != "" {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.OperationGroupTemplateNotSupported,
 			Message: exception.OperationGroupTemplateNotSupportedMsg,
@@ -450,14 +452,14 @@ func (o operationGroupControllerImpl) CreateOperationGroup(w http.ResponseWriter
 	validationErr := utils.ValidateObject(createOperationGroupReq)
 	if validationErr != nil {
 		if customError, ok := validationErr.(*exception.CustomError); ok {
-			utils.RespondWithCustomError(w, customError)
+			o.responder.RespondWithCustomError(w, customError)
 			return
 		}
 	}
 
 	err = o.operationGroupService.CreateOperationGroup(ctx, packageId, versionName, apiType, createOperationGroupReq)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to create operation group", err)
+		o.responder.RespondWithError(w, "Failed to create operation group", err)
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
@@ -468,7 +470,7 @@ func (o operationGroupControllerImpl) DeleteOperationGroup(w http.ResponseWriter
 	ctx := context.Create(r)
 	versionName, err := getUnescapedStringParam(r, "version")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -479,7 +481,7 @@ func (o operationGroupControllerImpl) DeleteOperationGroup(w http.ResponseWriter
 	}
 	apiType, err := getUnescapedStringParam(r, "apiType")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -490,7 +492,7 @@ func (o operationGroupControllerImpl) DeleteOperationGroup(w http.ResponseWriter
 	}
 	_, err = view.ParseApiType(apiType)
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidParameterValue,
 			Message: exception.InvalidParameterValueMsg,
@@ -501,7 +503,7 @@ func (o operationGroupControllerImpl) DeleteOperationGroup(w http.ResponseWriter
 	}
 	groupName, err := getUnescapedStringParam(r, "groupName")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -513,16 +515,16 @@ func (o operationGroupControllerImpl) DeleteOperationGroup(w http.ResponseWriter
 
 	versionStatus, err := o.versionService.GetVersionStatus(packageId, versionName)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		o.responder.RespondWithError(w, "Failed to check user privileges", err)
 		return
 	}
 	sufficientPrivileges, err := o.roleService.HasManageVersionPermission(ctx, packageId, versionStatus)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		o.responder.RespondWithError(w, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -532,7 +534,7 @@ func (o operationGroupControllerImpl) DeleteOperationGroup(w http.ResponseWriter
 
 	err = o.operationGroupService.DeleteOperationGroup(ctx, packageId, versionName, apiType, groupName)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to delete operation group", err)
+		o.responder.RespondWithError(w, "Failed to delete operation group", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -543,7 +545,7 @@ func (o operationGroupControllerImpl) UpdateOperationGroup(w http.ResponseWriter
 	ctx := context.Create(r)
 	versionName, err := getUnescapedStringParam(r, "version")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -554,7 +556,7 @@ func (o operationGroupControllerImpl) UpdateOperationGroup(w http.ResponseWriter
 	}
 	apiType, err := getUnescapedStringParam(r, "apiType")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -565,7 +567,7 @@ func (o operationGroupControllerImpl) UpdateOperationGroup(w http.ResponseWriter
 	}
 	_, err = view.ParseApiType(apiType)
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidParameterValue,
 			Message: exception.InvalidParameterValueMsg,
@@ -576,7 +578,7 @@ func (o operationGroupControllerImpl) UpdateOperationGroup(w http.ResponseWriter
 	}
 	groupName, err := getUnescapedStringParam(r, "groupName")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -588,16 +590,16 @@ func (o operationGroupControllerImpl) UpdateOperationGroup(w http.ResponseWriter
 
 	versionStatus, err := o.versionService.GetVersionStatus(packageId, versionName)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		o.responder.RespondWithError(w, "Failed to check user privileges", err)
 		return
 	}
 	sufficientPrivileges, err := o.roleService.HasManageVersionPermission(ctx, packageId, versionStatus)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		o.responder.RespondWithError(w, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -610,14 +612,14 @@ func (o operationGroupControllerImpl) UpdateOperationGroup(w http.ResponseWriter
 	err = r.ParseMultipartForm(0)
 	if err != nil {
 		if strings.Contains(err.Error(), "http: request body too large") {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			o.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusRequestEntityTooLarge,
 				Code:    exception.TemplateSizeExceeded,
 				Message: exception.TemplateSizeExceededMsg,
 				Params:  map[string]interface{}{"size": fmt.Sprintf("%dMB", o.templateSizeLimit/1048576)},
 			})
 		} else {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			o.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.BadRequestBody,
 				Message: exception.BadRequestBodyMsg,
@@ -644,7 +646,7 @@ func (o operationGroupControllerImpl) UpdateOperationGroup(w http.ResponseWriter
 	template, templateFileHeader, err := r.FormFile("template")
 	if err != http.ErrMissingFile {
 		if err != nil {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			o.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectMultipartFile,
 				Message: exception.IncorrectMultipartFileMsg,
@@ -657,7 +659,7 @@ func (o operationGroupControllerImpl) UpdateOperationGroup(w http.ResponseWriter
 			log.Debugf("failed to close temporal file: %+v", err)
 		}
 		if err != nil {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			o.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectMultipartFile,
 				Message: exception.IncorrectMultipartFileMsg,
@@ -668,7 +670,7 @@ func (o operationGroupControllerImpl) UpdateOperationGroup(w http.ResponseWriter
 		if strings.EqualFold(encoding, "base64") {
 			n, decodeErr := base64.StdEncoding.Decode(templateData, templateData)
 			if decodeErr != nil {
-				utils.RespondWithCustomError(w, &exception.CustomError{
+				o.responder.RespondWithCustomError(w, &exception.CustomError{
 					Status:  http.StatusBadRequest,
 					Code:    exception.IncorrectMultipartFile,
 					Message: exception.IncorrectMultipartFileMsg,
@@ -678,7 +680,7 @@ func (o operationGroupControllerImpl) UpdateOperationGroup(w http.ResponseWriter
 			templateData = templateData[:n]
 		}
 		if int64(len(templateData)) > o.templateSizeLimit {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			o.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusRequestEntityTooLarge,
 				Code:    exception.TemplateSizeExceeded,
 				Message: exception.TemplateSizeExceededMsg,
@@ -687,7 +689,7 @@ func (o operationGroupControllerImpl) UpdateOperationGroup(w http.ResponseWriter
 			return
 		}
 		if validationErr := o.validateTemplateFile(templateFileHeader.Filename, templateData); validationErr != nil {
-			utils.RespondWithCustomError(w, validationErr)
+			o.responder.RespondWithCustomError(w, validationErr)
 			return
 		}
 		updateOperationGroupReq.Template = &view.OperationGroupTemplate{
@@ -696,7 +698,7 @@ func (o operationGroupControllerImpl) UpdateOperationGroup(w http.ResponseWriter
 		}
 	} else if r.Form.Has("template") {
 		if r.FormValue("template") != "" {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			o.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.InvalidGroupExportTemplateType,
 				Message: exception.InvalidGroupExportTemplateTypeMsg,
@@ -710,7 +712,7 @@ func (o operationGroupControllerImpl) UpdateOperationGroup(w http.ResponseWriter
 	}
 
 	if apiType != string(view.RestApiType) && updateOperationGroupReq.Template != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.OperationGroupTemplateNotSupported,
 			Message: exception.OperationGroupTemplateNotSupportedMsg,
@@ -724,7 +726,7 @@ func (o operationGroupControllerImpl) UpdateOperationGroup(w http.ResponseWriter
 		var operations []view.GroupOperations
 		err = json.Unmarshal([]byte(operationsArrStr), &operations)
 		if err != nil {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			o.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.BadRequestBody,
 				Message: exception.BadRequestBodyMsg,
@@ -737,14 +739,14 @@ func (o operationGroupControllerImpl) UpdateOperationGroup(w http.ResponseWriter
 	validationErr := utils.ValidateObject(updateOperationGroupReq)
 	if validationErr != nil {
 		if customError, ok := validationErr.(*exception.CustomError); ok {
-			utils.RespondWithCustomError(w, customError)
+			o.responder.RespondWithCustomError(w, customError)
 			return
 		}
 	}
 
 	err = o.operationGroupService.UpdateOperationGroup(ctx, packageId, versionName, apiType, groupName, updateOperationGroupReq)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to update operation group", err)
+		o.responder.RespondWithError(w, "Failed to update operation group", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -755,7 +757,7 @@ func (o operationGroupControllerImpl) GetGroupExportTemplate(w http.ResponseWrit
 	ctx := context.Create(r)
 	versionName, err := getUnescapedStringParam(r, "version")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -766,7 +768,7 @@ func (o operationGroupControllerImpl) GetGroupExportTemplate(w http.ResponseWrit
 	}
 	apiType, err := getUnescapedStringParam(r, "apiType")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -777,7 +779,7 @@ func (o operationGroupControllerImpl) GetGroupExportTemplate(w http.ResponseWrit
 	}
 	_, err = view.ParseApiType(apiType)
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidParameterValue,
 			Message: exception.InvalidParameterValueMsg,
@@ -787,7 +789,7 @@ func (o operationGroupControllerImpl) GetGroupExportTemplate(w http.ResponseWrit
 		return
 	}
 	if apiType != string(view.RestApiType) {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.OperationGroupTemplateNotSupported,
 			Message: exception.OperationGroupTemplateNotSupportedMsg,
@@ -797,7 +799,7 @@ func (o operationGroupControllerImpl) GetGroupExportTemplate(w http.ResponseWrit
 	}
 	groupName, err := getUnescapedStringParam(r, "groupName")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -809,11 +811,11 @@ func (o operationGroupControllerImpl) GetGroupExportTemplate(w http.ResponseWrit
 
 	sufficientPrivileges, err := o.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		o.responder.RespondWithError(w, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -823,7 +825,7 @@ func (o operationGroupControllerImpl) GetGroupExportTemplate(w http.ResponseWrit
 
 	template, templateFilename, err := o.operationGroupService.GetOperationGroupExportTemplate(packageId, versionName, apiType, groupName)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get group export template", err)
+		o.responder.RespondWithError(w, "Failed to get group export template", err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/octet-stream")
@@ -836,7 +838,7 @@ func (o operationGroupControllerImpl) StartOperationGroupPublish(w http.Response
 	packageId := getStringParam(r, "packageId")
 	version, err := getUnescapedStringParam(r, "version")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -847,7 +849,7 @@ func (o operationGroupControllerImpl) StartOperationGroupPublish(w http.Response
 	}
 	apiType, err := getUnescapedStringParam(r, "apiType")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -857,7 +859,7 @@ func (o operationGroupControllerImpl) StartOperationGroupPublish(w http.Response
 		return
 	}
 	if apiType != string(view.RestApiType) && apiType != string(view.GraphqlApiType) && apiType != string(view.AsyncapiApiType) {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.UnsupportedApiType,
 			Message: exception.UnsupportedApiTypeMsg,
@@ -868,7 +870,7 @@ func (o operationGroupControllerImpl) StartOperationGroupPublish(w http.Response
 
 	groupName, err := getUnescapedStringParam(r, "groupName")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -880,11 +882,11 @@ func (o operationGroupControllerImpl) StartOperationGroupPublish(w http.Response
 	ctx := context.Create(r)
 	sufficientPrivileges, err := o.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		o.responder.RespondWithError(w, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -895,7 +897,7 @@ func (o operationGroupControllerImpl) StartOperationGroupPublish(w http.Response
 	defer r.Body.Close()
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.BadRequestBody,
 			Message: exception.BadRequestBodyMsg,
@@ -906,7 +908,7 @@ func (o operationGroupControllerImpl) StartOperationGroupPublish(w http.Response
 	var req view.OperationGroupPublishReq
 	err = json.Unmarshal(body, &req)
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.BadRequestBody,
 			Message: exception.BadRequestBodyMsg,
@@ -917,25 +919,25 @@ func (o operationGroupControllerImpl) StartOperationGroupPublish(w http.Response
 	validationErr := utils.ValidateObject(req)
 	if validationErr != nil {
 		if customError, ok := validationErr.(*exception.CustomError); ok {
-			utils.RespondWithCustomError(w, customError)
+			o.responder.RespondWithCustomError(w, customError)
 			return
 		}
 	}
 
 	packageKind, err := o.packageService.GetPackageKind(req.PackageId)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get package info", err)
+		o.responder.RespondWithError(w, "Failed to get package info", err)
 		return
 	}
 
 	if validationErr := validatePublishPackageKind(packageKind, []string{entity.KIND_PACKAGE}); validationErr != nil {
-		utils.RespondWithCustomError(w, validationErr)
+		o.responder.RespondWithCustomError(w, validationErr)
 		return
 	}
 
 	_, err = view.ParseVersionStatus(req.Status)
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidParameter,
 			Message: err.Error(),
@@ -944,11 +946,11 @@ func (o operationGroupControllerImpl) StartOperationGroupPublish(w http.Response
 	}
 	sufficientPrivileges, err = o.roleService.HasManageVersionPermission(ctx, req.PackageId, req.Status)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		o.responder.RespondWithError(w, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -958,10 +960,10 @@ func (o operationGroupControllerImpl) StartOperationGroupPublish(w http.Response
 
 	publishId, err := o.operationGroupService.StartOperationGroupPublish(ctx, packageId, version, apiType, groupName, req)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to start operation group publish process", err)
+		o.responder.RespondWithError(w, "Failed to start operation group publish process", err)
 		return
 	}
-	utils.RespondWithJson(w, http.StatusAccepted, view.OperationGroupPublishResp{PublishId: publishId})
+	o.responder.RespondWithJson(w, http.StatusAccepted, view.OperationGroupPublishResp{PublishId: publishId})
 }
 
 func (o operationGroupControllerImpl) GetOperationGroupPublishStatus(w http.ResponseWriter, r *http.Request) {
@@ -970,11 +972,11 @@ func (o operationGroupControllerImpl) GetOperationGroupPublishStatus(w http.Resp
 	ctx := context.Create(r)
 	sufficientPrivileges, err := o.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		o.responder.RespondWithError(w, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		o.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -984,10 +986,10 @@ func (o operationGroupControllerImpl) GetOperationGroupPublishStatus(w http.Resp
 
 	publishStatus, err := o.operationGroupService.GetOperationGroupPublishStatus(publishId)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get operation group publish status", err)
+		o.responder.RespondWithError(w, "Failed to get operation group publish status", err)
 		return
 	}
-	utils.RespondWithJson(w, http.StatusOK, publishStatus)
+	o.responder.RespondWithJson(w, http.StatusOK, publishStatus)
 }
 
 func (o operationGroupControllerImpl) validateTemplateFile(filename string, data []byte) *exception.CustomError {

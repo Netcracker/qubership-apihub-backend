@@ -14,20 +14,22 @@ type CleanupController interface {
 	ClearTestData(w http.ResponseWriter, r *http.Request)
 }
 
-func NewCleanupController(cleanupService cleanup.CleanupService) CleanupController {
+func NewCleanupController(cleanupService cleanup.CleanupService, responder *utils.Responder) CleanupController {
 	return &cleanupControllerImpl{
 		cleanupService: cleanupService,
+		responder:      responder,
 	}
 }
 
 type cleanupControllerImpl struct {
 	cleanupService cleanup.CleanupService
+	responder      *utils.Responder
 }
 
 func (c cleanupControllerImpl) ClearTestData(w http.ResponseWriter, r *http.Request) {
 	testId, err := getUnescapedStringParam(r, "testId")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -40,9 +42,9 @@ func (c cleanupControllerImpl) ClearTestData(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		log.Error("Failed to clear test data: ", err.Error())
 		if customError, ok := err.(*exception.CustomError); ok {
-			utils.RespondWithCustomError(w, customError)
+			c.responder.RespondWithCustomError(w, customError)
 		} else {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			c.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusInternalServerError,
 				Message: "Failed to clear test data",
 				Debug:   err.Error()})

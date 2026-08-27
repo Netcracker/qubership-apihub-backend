@@ -18,16 +18,18 @@ type InternalDocumentController interface {
 	GetComparisonInternalDocumentData(w http.ResponseWriter, r *http.Request)
 }
 
-func NewInternalDocumentController(publishedService service.PublishedService, roleService service.RoleService) InternalDocumentController {
+func NewInternalDocumentController(publishedService service.PublishedService, roleService service.RoleService, responder *utils.Responder) InternalDocumentController {
 	return &internalDocumentControllerImpl{
 		publishedService: publishedService,
 		roleService:      roleService,
+		responder:        responder,
 	}
 }
 
 type internalDocumentControllerImpl struct {
 	publishedService service.PublishedService
 	roleService      service.RoleService
+	responder        *utils.Responder
 }
 
 func (c *internalDocumentControllerImpl) GetVersionInternalDocuments(w http.ResponseWriter, r *http.Request) {
@@ -36,11 +38,11 @@ func (c *internalDocumentControllerImpl) GetVersionInternalDocuments(w http.Resp
 	ctx := context.Create(r)
 	sufficientPrivileges, err := c.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		c.responder.RespondWithError(w, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -49,7 +51,7 @@ func (c *internalDocumentControllerImpl) GetVersionInternalDocuments(w http.Resp
 	}
 	version, err := getUnescapedStringParam(r, "version")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -61,11 +63,11 @@ func (c *internalDocumentControllerImpl) GetVersionInternalDocuments(w http.Resp
 
 	response, err := c.publishedService.GetVersionInternalDocuments(packageId, version)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get internal documents for version", err)
+		c.responder.RespondWithError(w, "Failed to get internal documents for version", err)
 		return
 	}
 
-	utils.RespondWithJson(w, http.StatusOK, response)
+	c.responder.RespondWithJson(w, http.StatusOK, response)
 }
 
 func (c *internalDocumentControllerImpl) GetVersionInternalDocumentData(w http.ResponseWriter, r *http.Request) {
@@ -73,7 +75,7 @@ func (c *internalDocumentControllerImpl) GetVersionInternalDocumentData(w http.R
 
 	data, filename, err := c.publishedService.GetVersionInternalDocumentData(hash)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get internal document data", err)
+		c.responder.RespondWithError(w, "Failed to get internal document data", err)
 		return
 	}
 
@@ -89,11 +91,11 @@ func (c *internalDocumentControllerImpl) GetComparisonInternalDocuments(w http.R
 	ctx := context.Create(r)
 	sufficientPrivileges, err := c.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to check user privileges", err)
+		c.responder.RespondWithError(w, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -102,7 +104,7 @@ func (c *internalDocumentControllerImpl) GetComparisonInternalDocuments(w http.R
 	}
 	version, err := getUnescapedStringParam(r, "version")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -117,11 +119,11 @@ func (c *internalDocumentControllerImpl) GetComparisonInternalDocuments(w http.R
 
 	response, err := c.publishedService.GetComparisonInternalDocuments(packageId, version, previousVersionPackageId, previousVersion, refPackageId)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get internal documents for comparison", err)
+		c.responder.RespondWithError(w, "Failed to get internal documents for comparison", err)
 		return
 	}
 
-	utils.RespondWithJson(w, http.StatusOK, response)
+	c.responder.RespondWithJson(w, http.StatusOK, response)
 }
 
 func (c *internalDocumentControllerImpl) GetComparisonInternalDocumentData(w http.ResponseWriter, r *http.Request) {
@@ -129,7 +131,7 @@ func (c *internalDocumentControllerImpl) GetComparisonInternalDocumentData(w htt
 
 	data, filename, err := c.publishedService.GetComparisonInternalDocumentData(hash)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get internal document data", err)
+		c.responder.RespondWithError(w, "Failed to get internal document data", err)
 		return
 	}
 

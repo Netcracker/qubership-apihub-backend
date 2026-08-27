@@ -19,21 +19,23 @@ type PersonalAccessTokenController interface {
 	GetPatByPat(w http.ResponseWriter, r *http.Request)
 }
 
-func NewPersonalAccessTokenController(svc service.PersonalAccessTokenService) PersonalAccessTokenController {
+func NewPersonalAccessTokenController(svc service.PersonalAccessTokenService, responder *utils.Responder) PersonalAccessTokenController {
 	return &PersonalAccessTokenControllerImpl{
-		svc: svc,
+		svc:       svc,
+		responder: responder,
 	}
 }
 
 type PersonalAccessTokenControllerImpl struct {
-	svc service.PersonalAccessTokenService
+	svc       service.PersonalAccessTokenService
+	responder *utils.Responder
 }
 
 func (u PersonalAccessTokenControllerImpl) CreatePAT(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		u.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.BadRequestBody,
 			Message: exception.BadRequestBodyMsg,
@@ -44,7 +46,7 @@ func (u PersonalAccessTokenControllerImpl) CreatePAT(w http.ResponseWriter, r *h
 	var req view.PersonalAccessTokenCreateRequest
 	err = json.Unmarshal(body, &req)
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		u.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.BadRequestBody,
 			Message: exception.BadRequestBodyMsg,
@@ -56,7 +58,7 @@ func (u PersonalAccessTokenControllerImpl) CreatePAT(w http.ResponseWriter, r *h
 	if validationErr != nil {
 		var customError *exception.CustomError
 		if errors.As(validationErr, &customError) {
-			utils.RespondWithCustomError(w, customError)
+			u.responder.RespondWithCustomError(w, customError)
 			return
 		}
 	}
@@ -65,22 +67,22 @@ func (u PersonalAccessTokenControllerImpl) CreatePAT(w http.ResponseWriter, r *h
 
 	resp, err := u.svc.CreatePAT(ctx, req)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to create personal access token", err)
+		u.responder.RespondWithError(w, "Failed to create personal access token", err)
 		return
 	}
 	// TODO: do we need business metric for PATs?
 
-	utils.RespondWithJson(w, http.StatusCreated, resp)
+	u.responder.RespondWithJson(w, http.StatusCreated, resp)
 }
 
 func (u PersonalAccessTokenControllerImpl) ListPATs(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Create(r)
 	result, err := u.svc.ListPATs(ctx.GetUserId())
 	if err != nil {
-		utils.RespondWithError(w, "Failed to list personal access tokens", err)
+		u.responder.RespondWithError(w, "Failed to list personal access tokens", err)
 		return
 	}
-	utils.RespondWithJson(w, http.StatusOK, result)
+	u.responder.RespondWithJson(w, http.StatusOK, result)
 }
 
 func (u PersonalAccessTokenControllerImpl) DeletePAT(w http.ResponseWriter, r *http.Request) {
@@ -88,7 +90,7 @@ func (u PersonalAccessTokenControllerImpl) DeletePAT(w http.ResponseWriter, r *h
 	ctx := context.Create(r)
 	err := u.svc.DeletePAT(ctx, id)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to delete personal access token", err)
+		u.responder.RespondWithError(w, "Failed to delete personal access token", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -97,7 +99,7 @@ func (u PersonalAccessTokenControllerImpl) DeletePAT(w http.ResponseWriter, r *h
 func (u PersonalAccessTokenControllerImpl) GetPatByPat(w http.ResponseWriter, r *http.Request) {
 	patHeader := r.Header.Get("X-Personal-Access-Token")
 	if patHeader == "" {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		u.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.PersonalAccessTokenHeaderIsEmpty,
 			Message: exception.PersonalAccessTokenHeaderIsEmptyMsg,
@@ -107,11 +109,11 @@ func (u PersonalAccessTokenControllerImpl) GetPatByPat(w http.ResponseWriter, r 
 
 	token, user, systemRole, err := u.svc.GetPATByToken(patHeader)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get personal access token", err)
+		u.responder.RespondWithError(w, "Failed to get personal access token", err)
 		return
 	}
 	if token == nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		u.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusUnauthorized,
 			Code:    exception.PersonalAccessTokenNotValid,
 			Message: exception.PersonalAccessTokenNotValidMsg,
@@ -120,7 +122,7 @@ func (u PersonalAccessTokenControllerImpl) GetPatByPat(w http.ResponseWriter, r 
 		return
 	}
 	if token.Status != view.PersonaAccessTokenActive {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		u.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusUnauthorized,
 			Code:    exception.PersonalAccessTokenNotValid,
 			Message: exception.PersonalAccessTokenNotValidMsg,
@@ -129,7 +131,7 @@ func (u PersonalAccessTokenControllerImpl) GetPatByPat(w http.ResponseWriter, r 
 		return
 	}
 	if user == nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		u.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusUnauthorized,
 			Code:    exception.PersonalAccessTokenNotValid,
 			Message: exception.PersonalAccessTokenNotValidMsg,
@@ -149,5 +151,5 @@ func (u PersonalAccessTokenControllerImpl) GetPatByPat(w http.ResponseWriter, r 
 		SystemRoles: systemRoles,
 	}
 
-	utils.RespondWithJson(w, http.StatusOK, result)
+	u.responder.RespondWithJson(w, http.StatusOK, result)
 }

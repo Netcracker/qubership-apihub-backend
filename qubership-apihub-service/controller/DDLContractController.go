@@ -22,11 +22,12 @@ type DDLContractController interface {
 
 func NewDDLContractController(roleService service.RoleService,
 	ddlService service.DDLContractService,
-	ptHandler service.PackageTransitionHandler) DDLContractController {
+	ptHandler service.PackageTransitionHandler, responder *utils.Responder) DDLContractController {
 	return &ddlContractControllerImpl{
 		roleService: roleService,
 		ddlService:  ddlService,
 		ptHandler:   ptHandler,
+		responder:   responder,
 	}
 }
 
@@ -34,17 +35,18 @@ type ddlContractControllerImpl struct {
 	roleService service.RoleService
 	ddlService  service.DDLContractService
 	ptHandler   service.PackageTransitionHandler
+	responder   *utils.Responder
 }
 
 func (c *ddlContractControllerImpl) checkReadAccess(w http.ResponseWriter, r *http.Request, packageId string) bool {
 	ctx := context.Create(r)
 	ok, err := c.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, c.ptHandler, packageId, "Failed to check user privileges", err)
+		handlePkgRedirectOrRespondWithError(w, r, c.responder, c.ptHandler, packageId, "Failed to check user privileges", err)
 		return false
 	}
 	if !ok {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -61,7 +63,7 @@ func (c *ddlContractControllerImpl) ListDdlEntities(w http.ResponseWriter, r *ht
 	}
 	versionName, err := getUnescapedStringParam(r, "version")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -73,7 +75,7 @@ func (c *ddlContractControllerImpl) ListDdlEntities(w http.ResponseWriter, r *ht
 	textFilter, _ := url.QueryUnescape(r.URL.Query().Get("textFilter"))
 	limit, limErr := getLimitQueryParam(r)
 	if limErr != nil {
-		utils.RespondWithCustomError(w, limErr)
+		c.responder.RespondWithCustomError(w, limErr)
 		return
 	}
 	offset := 0
@@ -82,10 +84,10 @@ func (c *ddlContractControllerImpl) ListDdlEntities(w http.ResponseWriter, r *ht
 	}
 	result, svcErr := c.ddlService.ListDdlEntities(packageId, versionName, textFilter, limit, offset)
 	if svcErr != nil {
-		handlePkgRedirectOrRespondWithError(w, r, c.ptHandler, packageId, "Failed to list DDL entities", svcErr)
+		handlePkgRedirectOrRespondWithError(w, r, c.responder, c.ptHandler, packageId, "Failed to list DDL entities", svcErr)
 		return
 	}
-	utils.RespondWithJson(w, http.StatusOK, result)
+	c.responder.RespondWithJson(w, http.StatusOK, result)
 }
 
 func (c *ddlContractControllerImpl) GetDdlEntity(w http.ResponseWriter, r *http.Request) {
@@ -95,7 +97,7 @@ func (c *ddlContractControllerImpl) GetDdlEntity(w http.ResponseWriter, r *http.
 	}
 	versionName, err := getUnescapedStringParam(r, "version")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -106,7 +108,7 @@ func (c *ddlContractControllerImpl) GetDdlEntity(w http.ResponseWriter, r *http.
 	}
 	ddlEntityId, err := getUnescapedStringParam(r, "ddlEntityId")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -120,7 +122,7 @@ func (c *ddlContractControllerImpl) GetDdlEntity(w http.ResponseWriter, r *http.
 	if r.URL.Query().Get("includeData") != "" {
 		includeData, err = strconv.ParseBool(r.URL.Query().Get("includeData"))
 		if err != nil {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			c.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -133,10 +135,10 @@ func (c *ddlContractControllerImpl) GetDdlEntity(w http.ResponseWriter, r *http.
 
 	result, svcErr := c.ddlService.GetDdlEntity(packageId, versionName, ddlEntityId, includeData)
 	if svcErr != nil {
-		handlePkgRedirectOrRespondWithError(w, r, c.ptHandler, packageId, "Failed to get DDL entity", svcErr)
+		handlePkgRedirectOrRespondWithError(w, r, c.responder, c.ptHandler, packageId, "Failed to get DDL entity", svcErr)
 		return
 	}
-	utils.RespondWithJson(w, http.StatusOK, result)
+	c.responder.RespondWithJson(w, http.StatusOK, result)
 }
 
 func (c *ddlContractControllerImpl) GetDdlEntityChanges(w http.ResponseWriter, r *http.Request) {
@@ -146,7 +148,7 @@ func (c *ddlContractControllerImpl) GetDdlEntityChanges(w http.ResponseWriter, r
 	}
 	versionName, err := getUnescapedStringParam(r, "version")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -157,7 +159,7 @@ func (c *ddlContractControllerImpl) GetDdlEntityChanges(w http.ResponseWriter, r
 	}
 	ddlEntityId, err := getUnescapedStringParam(r, "ddlEntityId")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -170,12 +172,12 @@ func (c *ddlContractControllerImpl) GetDdlEntityChanges(w http.ResponseWriter, r
 	previousVersionPackageId := r.URL.Query().Get("previousVersionPackageId")
 	severities, customErr := getListFromParam(r, "severity")
 	if customErr != nil {
-		utils.RespondWithCustomError(w, customErr)
+		c.responder.RespondWithCustomError(w, customErr)
 		return
 	}
 	for _, severity := range severities {
 		if !view.ValidSeverity(severity) {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			c.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.InvalidParameterValue,
 				Message: exception.InvalidParameterValueMsg,
@@ -186,10 +188,10 @@ func (c *ddlContractControllerImpl) GetDdlEntityChanges(w http.ResponseWriter, r
 	}
 	result, svcErr := c.ddlService.GetDdlEntityChanges(packageId, versionName, ddlEntityId, previousVersion, previousVersionPackageId, severities)
 	if svcErr != nil {
-		handlePkgRedirectOrRespondWithError(w, r, c.ptHandler, packageId, "Failed to get DDL entity changes", svcErr)
+		handlePkgRedirectOrRespondWithError(w, r, c.responder, c.ptHandler, packageId, "Failed to get DDL entity changes", svcErr)
 		return
 	}
-	utils.RespondWithJson(w, http.StatusOK, result)
+	c.responder.RespondWithJson(w, http.StatusOK, result)
 }
 
 func (c *ddlContractControllerImpl) GetChangedDdlEntities(w http.ResponseWriter, r *http.Request) {
@@ -199,7 +201,7 @@ func (c *ddlContractControllerImpl) GetChangedDdlEntities(w http.ResponseWriter,
 	}
 	versionName, err := getUnescapedStringParam(r, "version")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -214,7 +216,7 @@ func (c *ddlContractControllerImpl) GetChangedDdlEntities(w http.ResponseWriter,
 	refPackageId := r.URL.Query().Get("refPackageId")
 	limit, limErr := getLimitQueryParam(r)
 	if limErr != nil {
-		utils.RespondWithCustomError(w, limErr)
+		c.responder.RespondWithCustomError(w, limErr)
 		return
 	}
 	page := 0
@@ -223,12 +225,12 @@ func (c *ddlContractControllerImpl) GetChangedDdlEntities(w http.ResponseWriter,
 	}
 	severities, customErr := getListFromParam(r, "severity")
 	if customErr != nil {
-		utils.RespondWithCustomError(w, customErr)
+		c.responder.RespondWithCustomError(w, customErr)
 		return
 	}
 	for _, severity := range severities {
 		if !view.ValidSeverity(severity) {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			c.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.InvalidParameterValue,
 				Message: exception.InvalidParameterValueMsg,
@@ -247,10 +249,10 @@ func (c *ddlContractControllerImpl) GetChangedDdlEntities(w http.ResponseWriter,
 		Offset:                   limit * page,
 	})
 	if svcErr != nil {
-		handlePkgRedirectOrRespondWithError(w, r, c.ptHandler, packageId, "Failed to get changed DDL entities", svcErr)
+		handlePkgRedirectOrRespondWithError(w, r, c.responder, c.ptHandler, packageId, "Failed to get changed DDL entities", svcErr)
 		return
 	}
-	utils.RespondWithJson(w, http.StatusOK, result)
+	c.responder.RespondWithJson(w, http.StatusOK, result)
 }
 
 func (c *ddlContractControllerImpl) GetDdlEntityChangesSummary(w http.ResponseWriter, r *http.Request) {
@@ -260,7 +262,7 @@ func (c *ddlContractControllerImpl) GetDdlEntityChangesSummary(w http.ResponseWr
 	}
 	versionName, err := getUnescapedStringParam(r, "version")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -271,7 +273,7 @@ func (c *ddlContractControllerImpl) GetDdlEntityChangesSummary(w http.ResponseWr
 	}
 	ddlEntityId, err := getUnescapedStringParam(r, "ddlEntityId")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -284,8 +286,8 @@ func (c *ddlContractControllerImpl) GetDdlEntityChangesSummary(w http.ResponseWr
 	previousVersionPackageId := r.URL.Query().Get("previousVersionPackageId")
 	result, svcErr := c.ddlService.GetDdlEntityChangesSummary(packageId, versionName, ddlEntityId, previousVersion, previousVersionPackageId)
 	if svcErr != nil {
-		handlePkgRedirectOrRespondWithError(w, r, c.ptHandler, packageId, "Failed to get DDL entity changes summary", svcErr)
+		handlePkgRedirectOrRespondWithError(w, r, c.responder, c.ptHandler, packageId, "Failed to get DDL entity changes summary", svcErr)
 		return
 	}
-	utils.RespondWithJson(w, http.StatusOK, result)
+	c.responder.RespondWithJson(w, http.StatusOK, result)
 }

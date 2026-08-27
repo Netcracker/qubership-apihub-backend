@@ -20,22 +20,24 @@ type TransitionController interface {
 	ListPackageTransitions(w http.ResponseWriter, r *http.Request)
 }
 
-func NewTransitionController(tService service.TransitionService, isSysadmFunc func(context.SecurityContext) bool) TransitionController {
+func NewTransitionController(tService service.TransitionService, isSysadmFunc func(context.SecurityContext) bool, responder *utils.Responder) TransitionController {
 	return &transitionControllerImpl{
 		tService:     tService,
 		isSysadmFunc: isSysadmFunc,
+		responder:    responder,
 	}
 }
 
 type transitionControllerImpl struct {
 	tService     service.TransitionService
 	isSysadmFunc func(context.SecurityContext) bool
+	responder    *utils.Responder
 }
 
 func (t transitionControllerImpl) MoveOrRenamePackage(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Create(r)
 	if !t.isSysadmFunc(ctx) {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		t.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -45,7 +47,7 @@ func (t transitionControllerImpl) MoveOrRenamePackage(w http.ResponseWriter, r *
 	defer r.Body.Close()
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		t.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.BadRequestBody,
 			Message: exception.BadRequestBodyMsg,
@@ -57,7 +59,7 @@ func (t transitionControllerImpl) MoveOrRenamePackage(w http.ResponseWriter, r *
 	var transitionReq view.TransitionRequest
 	err = json.Unmarshal(body, &transitionReq)
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		t.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.BadRequestBody,
 			Message: exception.BadRequestBodyMsg,
@@ -68,25 +70,25 @@ func (t transitionControllerImpl) MoveOrRenamePackage(w http.ResponseWriter, r *
 	validationErr := utils.ValidateObject(transitionReq)
 	if validationErr != nil {
 		if customError, ok := validationErr.(*exception.CustomError); ok {
-			utils.RespondWithCustomError(w, customError)
+			t.responder.RespondWithCustomError(w, customError)
 			return
 		}
 	}
 
 	id, err := t.tService.MoveOrRenamePackage(ctx, transitionReq.From, transitionReq.To, transitionReq.OverwriteHistory)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to move or rename package", err)
+		t.responder.RespondWithError(w, "Failed to move or rename package", err)
 		return
 	}
 	result := map[string]interface{}{}
 	result["id"] = id
-	utils.RespondWithJson(w, http.StatusOK, result)
+	t.responder.RespondWithJson(w, http.StatusOK, result)
 }
 
 func (t transitionControllerImpl) GetMoveStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Create(r)
 	if !t.isSysadmFunc(ctx) {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		t.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -98,16 +100,16 @@ func (t transitionControllerImpl) GetMoveStatus(w http.ResponseWriter, r *http.R
 
 	status, err := t.tService.GetMoveStatus(id)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get transition status", err)
+		t.responder.RespondWithError(w, "Failed to get transition status", err)
 		return
 	}
-	utils.RespondWithJson(w, http.StatusOK, status)
+	t.responder.RespondWithJson(w, http.StatusOK, status)
 }
 
 func (t transitionControllerImpl) ListActivities(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Create(r)
 	if !t.isSysadmFunc(ctx) {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		t.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -119,7 +121,7 @@ func (t transitionControllerImpl) ListActivities(w http.ResponseWriter, r *http.
 		var err error
 		offset, err = strconv.Atoi(r.URL.Query().Get("offset"))
 		if err != nil {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			t.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -128,7 +130,7 @@ func (t transitionControllerImpl) ListActivities(w http.ResponseWriter, r *http.
 			})
 		}
 		if offset < 0 {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			t.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.InvalidParameterValue,
 				Message: exception.InvalidParameterValueMsg,
@@ -139,22 +141,22 @@ func (t transitionControllerImpl) ListActivities(w http.ResponseWriter, r *http.
 
 	limit, customErr := getLimitQueryParam(r)
 	if customErr != nil {
-		utils.RespondWithCustomError(w, customErr)
+		t.responder.RespondWithCustomError(w, customErr)
 		return
 	}
 
 	list, err := t.tService.ListCompletedActivities(offset, limit)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to list transition activities", err)
+		t.responder.RespondWithError(w, "Failed to list transition activities", err)
 		return
 	}
-	utils.RespondWithJson(w, http.StatusOK, list)
+	t.responder.RespondWithJson(w, http.StatusOK, list)
 }
 
 func (t transitionControllerImpl) ListPackageTransitions(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Create(r)
 	if !t.isSysadmFunc(ctx) {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		t.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -163,8 +165,8 @@ func (t transitionControllerImpl) ListPackageTransitions(w http.ResponseWriter, 
 	}
 	list, err := t.tService.ListPackageTransitions()
 	if err != nil {
-		utils.RespondWithError(w, "Failed to list package transitions", err)
+		t.responder.RespondWithError(w, "Failed to list package transitions", err)
 		return
 	}
-	utils.RespondWithJson(w, http.StatusOK, list)
+	t.responder.RespondWithJson(w, http.StatusOK, list)
 }

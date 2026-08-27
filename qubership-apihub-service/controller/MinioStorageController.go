@@ -16,11 +16,12 @@ type MinioStorageController interface {
 	DownloadFilesFromMinioToDatabase(w http.ResponseWriter, r *http.Request)
 }
 
-func NewMinioStorageController(minioCreds *view.MinioStorageCreds, minioStorageService service.MinioStorageService, roleService service.RoleService) MinioStorageController {
+func NewMinioStorageController(minioCreds *view.MinioStorageCreds, minioStorageService service.MinioStorageService, roleService service.RoleService, responder *utils.Responder) MinioStorageController {
 	return &minioStorageControllerImpl{
 		minioStorageService: minioStorageService,
 		roleService:         roleService,
 		minioCreds:          minioCreds,
+		responder:           responder,
 	}
 }
 
@@ -28,13 +29,14 @@ type minioStorageControllerImpl struct {
 	minioStorageService service.MinioStorageService
 	roleService         service.RoleService
 	minioCreds          *view.MinioStorageCreds
+	responder           *utils.Responder
 }
 
 func (m minioStorageControllerImpl) DownloadFilesFromMinioToDatabase(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Create(r)
 	sufficientPrivileges := m.roleService.IsSysadm(ctx)
 	if !sufficientPrivileges {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		m.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -42,7 +44,7 @@ func (m minioStorageControllerImpl) DownloadFilesFromMinioToDatabase(w http.Resp
 		return
 	}
 	if !m.minioCreds.IsActive {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		m.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusMethodNotAllowed,
 			Message: "Minio integration is inactive. Please check envs for configuration"})
 		return
@@ -51,9 +53,9 @@ func (m minioStorageControllerImpl) DownloadFilesFromMinioToDatabase(w http.Resp
 	if err != nil {
 		log.Error("Failed to download data from minio: ", err.Error())
 		if customError, ok := err.(*exception.CustomError); ok {
-			utils.RespondWithCustomError(w, customError)
+			m.responder.RespondWithCustomError(w, customError)
 		} else {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			m.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusInternalServerError,
 				Message: "Failed to download data from minio",
 				Debug:   err.Error()})
