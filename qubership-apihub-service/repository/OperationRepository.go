@@ -24,34 +24,34 @@ const globalSearchPrivacyJoinPlaceholder = "/*privacy_join*/"
 const globalSearchPrivacyWherePlaceholder = "/*privacy_where*/"
 
 type OperationRepository interface {
-	GetOperationsByIds(packageId string, version string, revision int, operationIds []string) ([]entity.OperationEntity, error)
-	GetOperations(packageId string, version string, revision int, operationType string, skipRefs bool, searchReq view.OperationListReq) ([]entity.OperationRichEntity, error)
-	GetOperationById(packageId string, version string, revision int, operationType string, operationId string, includeData bool) (*entity.OperationRichEntity, error)
-	GetOperationsTags(searchQuery entity.OperationTagsSearchQueryEntity, skipRefs bool) ([]string, error)
-	GetOperationChanges(comparisonId string, operationId string, severities []string) (*entity.OperationComparisonEntity, error)
-	GetOperationChangesSummary(comparisonId string, operationId string, refPackageId string) (*entity.OperationComparisonSummaryEntity, error)
-	GetChangelog(searchQuery entity.ChangelogSearchQueryEntity) ([]entity.OperationComparisonChangelogEntity, error)
+	GetOperationsByIds(ctx context.Context, packageId string, version string, revision int, operationIds []string) ([]entity.OperationEntity, error)
+	GetOperations(ctx context.Context, packageId string, version string, revision int, operationType string, skipRefs bool, searchReq view.OperationListReq) ([]entity.OperationRichEntity, error)
+	GetOperationById(ctx context.Context, packageId string, version string, revision int, operationType string, operationId string, includeData bool) (*entity.OperationRichEntity, error)
+	GetOperationsTags(ctx context.Context, searchQuery entity.OperationTagsSearchQueryEntity, skipRefs bool) ([]string, error)
+	GetOperationChanges(ctx context.Context, comparisonId string, operationId string, severities []string) (*entity.OperationComparisonEntity, error)
+	GetOperationChangesSummary(ctx context.Context, comparisonId string, operationId string, refPackageId string) (*entity.OperationComparisonSummaryEntity, error)
+	GetChangelog(ctx context.Context, searchQuery entity.ChangelogSearchQueryEntity) ([]entity.OperationComparisonChangelogEntity, error)
 	GlobalSearchForOperations(ctx context.Context, searchQuery *entity.GlobalOperationSearchQuery) ([]entity.OperationSearchResult, error)
-	GetOperationsTypeCount(packageId string, version string, revision int, showOnlyDeleted bool) ([]entity.OperationsTypeCountEntity, error)
-	GetOperationsTypes(packageId string, version string, revision int) ([]entity.OperationsTypeEntity, error)
-	GetOperationsInfo(packageId string, version string, revision int) (entity.OperationsInfoEntity, error)
-	GetOperationDeprecatedItems(packageId string, version string, revision int, operationType string, operationId string) (*entity.OperationRichEntity, error)
-	GetDeprecatedOperationsSummary(packageId string, version string, revision int) ([]entity.DeprecatedOperationsSummaryEntity, error)
-	GetDeprecatedOperationsRefsSummary(packageId string, version string, revision int) ([]entity.DeprecatedOperationsSummaryEntity, error)
-	GetDeprecatedOperations(packageId string, version string, revision int, operationType string, searchReq view.DeprecatedOperationListReq) ([]entity.OperationRichEntity, error)
+	GetOperationsTypeCount(ctx context.Context, packageId string, version string, revision int, showOnlyDeleted bool) ([]entity.OperationsTypeCountEntity, error)
+	GetOperationsTypes(ctx context.Context, packageId string, version string, revision int) ([]entity.OperationsTypeEntity, error)
+	GetOperationsInfo(ctx context.Context, packageId string, version string, revision int) (entity.OperationsInfoEntity, error)
+	GetOperationDeprecatedItems(ctx context.Context, packageId string, version string, revision int, operationType string, operationId string) (*entity.OperationRichEntity, error)
+	GetDeprecatedOperationsSummary(ctx context.Context, packageId string, version string, revision int) ([]entity.DeprecatedOperationsSummaryEntity, error)
+	GetDeprecatedOperationsRefsSummary(ctx context.Context, packageId string, version string, revision int) ([]entity.DeprecatedOperationsSummaryEntity, error)
+	GetDeprecatedOperations(ctx context.Context, packageId string, version string, revision int, operationType string, searchReq view.DeprecatedOperationListReq) ([]entity.OperationRichEntity, error)
 
-	AddOperationGroupHistory(ent *entity.OperationGroupHistoryEntity) error
-	CreateOperationGroup(ent *entity.OperationGroupEntity, templateEntity *entity.OperationGroupTemplateEntity) error
-	DeleteOperationGroup(ent *entity.OperationGroupEntity) error
-	UpdateOperationGroup(oldGroupEntity *entity.OperationGroupEntity, newGroupEntity *entity.OperationGroupEntity, newTemplateEntity *entity.OperationGroupTemplateEntity, newGroupedOperations *[]entity.GroupedOperationEntity) error
-	GetOperationGroup(packageId string, version string, revision int, apiType string, groupName string) (*entity.OperationGroupEntity, error)
-	GetOperationGroupTemplateFile(packageId string, version string, revision int, apiType string, groupName string) (*entity.OperationGroupTemplateFileEntity, error)
-	CalculateOperationGroups(packageId string, version string, revision int, groupingPrefix string) ([]string, error)
-	GetVersionOperationGroups(packageId string, version string, revision int) ([]entity.OperationGroupCountEntity, error)
-	GetGroupedOperations(packageId string, version string, revision int, operationType string, groupName string, searchReq view.OperationListReq) ([]entity.OperationRichEntity, error)
-	GetOperationsByModelHash(packageId string, version string, revision int, apiType string, modelHash string) ([]entity.OperationModelsEntity, error)
-	GetRESTOperationsByPathAndMethod(packageId string, version string, revision int, path string, method string) ([]string, error)
-	GetGQLOperationsByTypeAndMethod(packageId string, version string, revision int, operationType string, method string) ([]string, error)
+	AddOperationGroupHistory(ctx context.Context, ent *entity.OperationGroupHistoryEntity) error
+	CreateOperationGroup(ctx context.Context, ent *entity.OperationGroupEntity, templateEntity *entity.OperationGroupTemplateEntity) error
+	DeleteOperationGroup(ctx context.Context, ent *entity.OperationGroupEntity) error
+	UpdateOperationGroup(ctx context.Context, oldGroupEntity *entity.OperationGroupEntity, newGroupEntity *entity.OperationGroupEntity, newTemplateEntity *entity.OperationGroupTemplateEntity, newGroupedOperations *[]entity.GroupedOperationEntity) error
+	GetOperationGroup(ctx context.Context, packageId string, version string, revision int, apiType string, groupName string) (*entity.OperationGroupEntity, error)
+	GetOperationGroupTemplateFile(ctx context.Context, packageId string, version string, revision int, apiType string, groupName string) (*entity.OperationGroupTemplateFileEntity, error)
+	CalculateOperationGroups(ctx context.Context, packageId string, version string, revision int, groupingPrefix string) ([]string, error)
+	GetVersionOperationGroups(ctx context.Context, packageId string, version string, revision int) ([]entity.OperationGroupCountEntity, error)
+	GetGroupedOperations(ctx context.Context, packageId string, version string, revision int, operationType string, groupName string, searchReq view.OperationListReq) ([]entity.OperationRichEntity, error)
+	GetOperationsByModelHash(ctx context.Context, packageId string, version string, revision int, apiType string, modelHash string) ([]entity.OperationModelsEntity, error)
+	GetRESTOperationsByPathAndMethod(ctx context.Context, packageId string, version string, revision int, path string, method string) ([]string, error)
+	GetGQLOperationsByTypeAndMethod(ctx context.Context, packageId string, version string, revision int, operationType string, method string) ([]string, error)
 }
 
 func NewOperationRepository(cp db.ConnectionProvider) OperationRepository {
@@ -62,12 +62,12 @@ type operationRepositoryImpl struct {
 	cp db.ConnectionProvider
 }
 
-func (o operationRepositoryImpl) GetOperationsByIds(packageId string, version string, revision int, operationIds []string) ([]entity.OperationEntity, error) {
+func (o operationRepositoryImpl) GetOperationsByIds(ctx context.Context, packageId string, version string, revision int, operationIds []string) ([]entity.OperationEntity, error) {
 	if len(operationIds) == 0 {
 		return nil, nil
 	}
 	var result []entity.OperationEntity
-	err := o.cp.GetConnection().Model(&result).
+	err := o.cp.GetConnection().WithContext(ctx).Model(&result).
 		Where("package_id = ?", packageId).
 		Where("version = ?", version).
 		Where("revision = ?", revision).
@@ -82,9 +82,9 @@ func (o operationRepositoryImpl) GetOperationsByIds(packageId string, version st
 	return result, nil
 }
 
-func (o operationRepositoryImpl) GetOperationById(packageId string, version string, revision int, operationType string, operationId string, includeData bool) (*entity.OperationRichEntity, error) {
+func (o operationRepositoryImpl) GetOperationById(ctx context.Context, packageId string, version string, revision int, operationType string, operationId string, includeData bool) (*entity.OperationRichEntity, error) {
 	result := new(entity.OperationRichEntity)
-	query := o.cp.GetConnection().Model(result).
+	query := o.cp.GetConnection().WithContext(ctx).Model(result).
 		ColumnExpr("operation.*").
 		Where("package_id = ?", packageId).
 		Where("version = ?", version).
@@ -108,9 +108,9 @@ func (o operationRepositoryImpl) GetOperationById(packageId string, version stri
 	return result, nil
 }
 
-func (o operationRepositoryImpl) GetOperationDeprecatedItems(packageId string, version string, revision int, operationType string, operationId string) (*entity.OperationRichEntity, error) {
+func (o operationRepositoryImpl) GetOperationDeprecatedItems(ctx context.Context, packageId string, version string, revision int, operationType string, operationId string) (*entity.OperationRichEntity, error) {
 	result := new(entity.OperationRichEntity)
-	err := o.cp.GetConnection().Model(result).
+	err := o.cp.GetConnection().WithContext(ctx).Model(result).
 		ColumnExpr("operation.deprecated_items").
 		Where("package_id = ?", packageId).
 		Where("version = ?", version).
@@ -127,9 +127,9 @@ func (o operationRepositoryImpl) GetOperationDeprecatedItems(packageId string, v
 	return result, nil
 }
 
-func (o operationRepositoryImpl) GetOperations(packageId string, version string, revision int, operationType string, skipRefs bool, searchReq view.OperationListReq) ([]entity.OperationRichEntity, error) {
+func (o operationRepositoryImpl) GetOperations(ctx context.Context, packageId string, version string, revision int, operationType string, skipRefs bool, searchReq view.OperationListReq) ([]entity.OperationRichEntity, error) {
 	var result []entity.OperationRichEntity
-	query := o.cp.GetConnection().Model(&result).
+	query := o.cp.GetConnection().WithContext(ctx).Model(&result).
 		ColumnExpr("operation.*")
 
 	if !skipRefs {
@@ -282,9 +282,9 @@ func (o operationRepositoryImpl) GetOperations(packageId string, version string,
 	return result, nil
 }
 
-func (o operationRepositoryImpl) GetDeprecatedOperations(packageId string, version string, revision int, operationType string, searchReq view.DeprecatedOperationListReq) ([]entity.OperationRichEntity, error) {
+func (o operationRepositoryImpl) GetDeprecatedOperations(ctx context.Context, packageId string, version string, revision int, operationType string, searchReq view.DeprecatedOperationListReq) ([]entity.OperationRichEntity, error) {
 	var result []entity.OperationRichEntity
-	query := o.cp.GetConnection().Model(&result).
+	query := o.cp.GetConnection().WithContext(ctx).Model(&result).
 		ColumnExpr("operation.*")
 
 	query.Join(`inner join
@@ -418,7 +418,7 @@ func (o operationRepositoryImpl) GetDeprecatedOperations(packageId string, versi
 	return result, nil
 }
 
-func (o operationRepositoryImpl) GetOperationsTags(searchQuery entity.OperationTagsSearchQueryEntity, skipRefs bool) ([]string, error) {
+func (o operationRepositoryImpl) GetOperationsTags(ctx context.Context, searchQuery entity.OperationTagsSearchQueryEntity, skipRefs bool) ([]string, error) {
 	type Tag struct {
 		Tag string `pg:"tag"`
 	}
@@ -506,7 +506,7 @@ func (o operationRepositoryImpl) GetOperationsTags(searchQuery entity.OperationT
 		searchQuery.TextFilter = "%" + utils.LikeEscaped(searchQuery.TextFilter) + "%"
 	}
 
-	_, err := o.cp.GetConnection().Model(&searchQuery).Query(&tags, query)
+	_, err := o.cp.GetConnection().WithContext(ctx).Model(&searchQuery).Query(&tags, query)
 	if err != nil {
 		return nil, err
 	}
@@ -519,9 +519,9 @@ func (o operationRepositoryImpl) GetOperationsTags(searchQuery entity.OperationT
 	return result, nil
 }
 
-func (o operationRepositoryImpl) GetOperationChanges(comparisonId string, operationId string, severities []string) (*entity.OperationComparisonEntity, error) {
+func (o operationRepositoryImpl) GetOperationChanges(ctx context.Context, comparisonId string, operationId string, severities []string) (*entity.OperationComparisonEntity, error) {
 	result := new(entity.OperationComparisonEntity)
-	err := o.cp.GetConnection().Model(result).
+	err := o.cp.GetConnection().WithContext(ctx).Model(result).
 		Where("comparison_id = ?", comparisonId).
 		Where("operation_id = ?", operationId).
 		OrderExpr("data_hash, previous_data_hash").
@@ -536,9 +536,9 @@ func (o operationRepositoryImpl) GetOperationChanges(comparisonId string, operat
 	return result, nil
 }
 
-func (o operationRepositoryImpl) GetOperationChangesSummary(comparisonId string, operationId string, refPackageId string) (*entity.OperationComparisonSummaryEntity, error) {
+func (o operationRepositoryImpl) GetOperationChangesSummary(ctx context.Context, comparisonId string, operationId string, refPackageId string) (*entity.OperationComparisonSummaryEntity, error) {
 	result := new(entity.OperationComparisonSummaryEntity)
-	err := o.cp.GetConnection().Model(result).
+	err := o.cp.GetConnection().WithContext(ctx).Model(result).
 		Where(`comparison_id in (
 			select unnest(array_append(refs, ?)) id from version_comparison where (comparison_id = ?)
 		)`, comparisonId, comparisonId).
@@ -558,11 +558,11 @@ func (o operationRepositoryImpl) GetOperationChangesSummary(comparisonId string,
 	return result, nil
 }
 
-func (o operationRepositoryImpl) GetChangelog(searchQuery entity.ChangelogSearchQueryEntity) ([]entity.OperationComparisonChangelogEntity, error) {
+func (o operationRepositoryImpl) GetChangelog(ctx context.Context, searchQuery entity.ChangelogSearchQueryEntity) ([]entity.OperationComparisonChangelogEntity, error) {
 	var result []entity.OperationComparisonChangelogEntity
 
 	// select current or previous operation(based on operation_id presence) as a main source for filtration and data like 'type'
-	comparisonsQuery := o.cp.GetConnection().Model(&entity.OperationComparisonChangelogEntity{}).
+	comparisonsQuery := o.cp.GetConnection().WithContext(ctx).Model(&entity.OperationComparisonChangelogEntity{}).
 		TableExpr("operation_comparison").
 		ColumnExpr("case when operation_id is null then previous_package_id else package_id end selected_package_id").
 		ColumnExpr("case when operation_id is null then previous_version else version end selected_version").
@@ -574,7 +574,7 @@ func (o operationRepositoryImpl) GetChangelog(searchQuery entity.ChangelogSearch
 			)`, searchQuery.ComparisonId, searchQuery.ComparisonId).
 		Where(`(? = '' or package_id = ? or previous_package_id = ?)`, searchQuery.RefPackageId, searchQuery.RefPackageId, searchQuery.RefPackageId)
 
-	query := o.cp.GetConnection().Model(&result).With("comparisons", comparisonsQuery).
+	query := o.cp.GetConnection().WithContext(ctx).Model(&result).With("comparisons", comparisonsQuery).
 		TableExpr("comparisons").
 		ColumnExpr("operation_comparison.*").
 		ColumnExpr("curr_op.metadata").
@@ -710,7 +710,7 @@ func (o operationRepositoryImpl) GetChangelog(searchQuery entity.ChangelogSearch
 	return result, nil
 }
 
-func (o operationRepositoryImpl) GetOperationsTypeCount(packageId string, version string, revision int, showOnlyDeleted bool) ([]entity.OperationsTypeCountEntity, error) {
+func (o operationRepositoryImpl) GetOperationsTypeCount(ctx context.Context, packageId string, version string, revision int, showOnlyDeleted bool) ([]entity.OperationsTypeCountEntity, error) {
 	var result []entity.OperationsTypeCountEntity
 	notCondition := ""
 	if showOnlyDeleted {
@@ -781,7 +781,7 @@ func (o operationRepositoryImpl) GetOperationsTypeCount(packageId string, versio
 	on oc.type = uoc.type
 	and uoc.api_audience = ?;
 	`
-	_, err := o.cp.GetConnection().Query(&result,
+	_, err := o.cp.GetConnection().WithContext(ctx).Query(&result,
 		fmt.Sprintf(operationsTypeCountQuery, notCondition),
 		packageId, version, revision,
 		packageId, version, revision,
@@ -798,7 +798,7 @@ func (o operationRepositoryImpl) GetOperationsTypeCount(packageId string, versio
 	return result, nil
 }
 
-func (o operationRepositoryImpl) GetOperationsTypes(packageId string, version string, revision int) ([]entity.OperationsTypeEntity, error) {
+func (o operationRepositoryImpl) GetOperationsTypes(ctx context.Context, packageId string, version string, revision int) ([]entity.OperationsTypeEntity, error) {
 	var result []entity.OperationsTypeEntity
 	operationsTypesQuery := `
 		select distinct type
@@ -808,7 +808,7 @@ func (o operationRepositoryImpl) GetOperationsTypes(packageId string, version st
 		and revision = ?
 		order by type;
 	`
-	_, err := o.cp.GetConnection().Query(&result,
+	_, err := o.cp.GetConnection().WithContext(ctx).Query(&result,
 		operationsTypesQuery,
 		packageId, version, revision,
 	)
@@ -822,7 +822,7 @@ func (o operationRepositoryImpl) GetOperationsTypes(packageId string, version st
 	return result, nil
 }
 
-func (o operationRepositoryImpl) GetOperationsInfo(packageId string, version string, revision int) (entity.OperationsInfoEntity, error) {
+func (o operationRepositoryImpl) GetOperationsInfo(ctx context.Context, packageId string, version string, revision int) (entity.OperationsInfoEntity, error) {
 	var result entity.OperationsInfoEntity
 	operationsInfoQuery := `
 		select json_object_agg(
@@ -834,7 +834,7 @@ func (o operationRepositoryImpl) GetOperationsInfo(packageId string, version str
 		and version = ?
 		and revision = ?;
 	`
-	_, err := o.cp.GetConnection().Query(&result,
+	_, err := o.cp.GetConnection().WithContext(ctx).Query(&result,
 		operationsInfoQuery,
 		packageId, version, revision,
 	)
@@ -848,7 +848,7 @@ func (o operationRepositoryImpl) GetOperationsInfo(packageId string, version str
 	return result, nil
 }
 
-func (o operationRepositoryImpl) GetDeprecatedOperationsSummary(packageId string, version string, revision int) ([]entity.DeprecatedOperationsSummaryEntity, error) {
+func (o operationRepositoryImpl) GetDeprecatedOperationsSummary(ctx context.Context, packageId string, version string, revision int) ([]entity.DeprecatedOperationsSummaryEntity, error) {
 	var result []entity.DeprecatedOperationsSummaryEntity
 	deprecatedOperationsSummaryQuery := `
 	with depr_count as (
@@ -874,7 +874,7 @@ func (o operationRepositoryImpl) GetDeprecatedOperationsSummary(packageId string
 	full outer join tagss tg
 	on dc.type = tg.type;
 	`
-	_, err := o.cp.GetConnection().Query(&result,
+	_, err := o.cp.GetConnection().WithContext(ctx).Query(&result,
 		deprecatedOperationsSummaryQuery,
 		packageId, version, revision,
 		packageId, version, revision)
@@ -887,7 +887,7 @@ func (o operationRepositoryImpl) GetDeprecatedOperationsSummary(packageId string
 
 	return result, nil
 }
-func (o operationRepositoryImpl) GetDeprecatedOperationsRefsSummary(packageId string, version string, revision int) ([]entity.DeprecatedOperationsSummaryEntity, error) {
+func (o operationRepositoryImpl) GetDeprecatedOperationsRefsSummary(ctx context.Context, packageId string, version string, revision int) ([]entity.DeprecatedOperationsSummaryEntity, error) {
 	var result []entity.DeprecatedOperationsSummaryEntity
 	deprecatedOperationsSummaryQuery := `
 	with refss as (
@@ -930,7 +930,7 @@ func (o operationRepositoryImpl) GetDeprecatedOperationsRefsSummary(packageId st
 	full outer join tagss tg
 	on dc.type = tg.type and dc.package_id = tg.package_id and dc.version = tg.version and dc.revision = tg.revision;
 	`
-	_, err := o.cp.GetConnection().Query(&result,
+	_, err := o.cp.GetConnection().WithContext(ctx).Query(&result,
 		deprecatedOperationsSummaryQuery,
 		packageId, version, revision)
 	if err != nil {
@@ -943,9 +943,9 @@ func (o operationRepositoryImpl) GetDeprecatedOperationsRefsSummary(packageId st
 	return result, nil
 }
 
-func (o operationRepositoryImpl) GetOperationGroup(packageId string, version string, revision int, apiType string, groupName string) (*entity.OperationGroupEntity, error) {
+func (o operationRepositoryImpl) GetOperationGroup(ctx context.Context, packageId string, version string, revision int, apiType string, groupName string) (*entity.OperationGroupEntity, error) {
 	result := new(entity.OperationGroupEntity)
-	err := o.cp.GetConnection().Model(result).
+	err := o.cp.GetConnection().WithContext(ctx).Model(result).
 		Where("package_id = ?", packageId).
 		Where("version = ?", version).
 		Where("revision = ?", revision).
@@ -961,9 +961,9 @@ func (o operationRepositoryImpl) GetOperationGroup(packageId string, version str
 	return result, nil
 }
 
-func (o operationRepositoryImpl) GetOperationGroupTemplateFile(packageId string, version string, revision int, apiType string, groupName string) (*entity.OperationGroupTemplateFileEntity, error) {
+func (o operationRepositoryImpl) GetOperationGroupTemplateFile(ctx context.Context, packageId string, version string, revision int, apiType string, groupName string) (*entity.OperationGroupTemplateFileEntity, error) {
 	result := new(entity.OperationGroupTemplateFileEntity)
-	err := o.cp.GetConnection().Model(result).
+	err := o.cp.GetConnection().WithContext(ctx).Model(result).
 		ColumnExpr("og.template_filename, operation_group_template.template").
 		Join("inner join operation_group og").
 		JoinOn("og.package_id = ?", packageId).
@@ -982,16 +982,15 @@ func (o operationRepositoryImpl) GetOperationGroupTemplateFile(packageId string,
 	return result, nil
 }
 
-func (o operationRepositoryImpl) AddOperationGroupHistory(ent *entity.OperationGroupHistoryEntity) error {
-	_, err := o.cp.GetConnection().Model(ent).Insert()
+func (o operationRepositoryImpl) AddOperationGroupHistory(ctx context.Context, ent *entity.OperationGroupHistoryEntity) error {
+	_, err := o.cp.GetConnection().WithContext(ctx).Model(ent).Insert()
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (o operationRepositoryImpl) CreateOperationGroup(ent *entity.OperationGroupEntity, templateEntity *entity.OperationGroupTemplateEntity) error {
-	ctx := context.Background()
+func (o operationRepositoryImpl) CreateOperationGroup(ctx context.Context, ent *entity.OperationGroupEntity, templateEntity *entity.OperationGroupTemplateEntity) error {
 	return o.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
 		_, err := tx.Model(ent).Insert()
 		if err != nil {
@@ -1001,8 +1000,7 @@ func (o operationRepositoryImpl) CreateOperationGroup(ent *entity.OperationGroup
 	})
 }
 
-func (o operationRepositoryImpl) DeleteOperationGroup(ent *entity.OperationGroupEntity) error {
-	ctx := context.Background()
+func (o operationRepositoryImpl) DeleteOperationGroup(ctx context.Context, ent *entity.OperationGroupEntity) error {
 	return o.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
 		_, err := tx.Model(ent).WherePK().Delete()
 		if err != nil {
@@ -1012,8 +1010,7 @@ func (o operationRepositoryImpl) DeleteOperationGroup(ent *entity.OperationGroup
 	})
 }
 
-func (o operationRepositoryImpl) UpdateOperationGroup(oldGroupEntity *entity.OperationGroupEntity, newGroupEntity *entity.OperationGroupEntity, newTemplateEntity *entity.OperationGroupTemplateEntity, newGroupedOperations *[]entity.GroupedOperationEntity) error {
-	ctx := context.Background()
+func (o operationRepositoryImpl) UpdateOperationGroup(ctx context.Context, oldGroupEntity *entity.OperationGroupEntity, newGroupEntity *entity.OperationGroupEntity, newTemplateEntity *entity.OperationGroupTemplateEntity, newGroupedOperations *[]entity.GroupedOperationEntity) error {
 	return o.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
 		//update to operation_group.group_id also updates grouped_operation.group_id
 		_, err := tx.Model(newGroupEntity).
@@ -1077,7 +1074,7 @@ func (o operationRepositoryImpl) cleanupOperationGroupTemplate(tx *pg.Tx, templa
 	return nil
 }
 
-func (o operationRepositoryImpl) CalculateOperationGroups(packageId string, version string, revision int, groupingPrefix string) ([]string, error) {
+func (o operationRepositoryImpl) CalculateOperationGroups(ctx context.Context, packageId string, version string, revision int, groupingPrefix string) ([]string, error) {
 	if groupingPrefix == "" {
 		return []string{}, nil
 	}
@@ -1096,7 +1093,7 @@ func (o operationRepositoryImpl) CalculateOperationGroups(packageId string, vers
 		and type = 'rest'
 	) groups
 	`
-	_, err := o.cp.GetConnection().Query(&groups,
+	_, err := o.cp.GetConnection().WithContext(ctx).Query(&groups,
 		operationGroupsQuery,
 		groupingPrefix, groupingPrefix,
 		packageId,
@@ -1112,7 +1109,7 @@ func (o operationRepositoryImpl) CalculateOperationGroups(packageId string, vers
 	return operationGroups, nil
 }
 
-func (o operationRepositoryImpl) GetVersionOperationGroups(packageId string, version string, revision int) ([]entity.OperationGroupCountEntity, error) {
+func (o operationRepositoryImpl) GetVersionOperationGroups(ctx context.Context, packageId string, version string, revision int) ([]entity.OperationGroupCountEntity, error) {
 	var result []entity.OperationGroupCountEntity
 	operationGroupCountQuery := `
 	select og.package_id, og.version, og.revision, og.api_type, og.group_name, og.autogenerated, og.description,
@@ -1122,7 +1119,7 @@ func (o operationRepositoryImpl) GetVersionOperationGroups(packageId string, ver
 	where package_id = ?
 	and version = ?
 	and revision = ?`
-	_, err := o.cp.GetConnection().Query(&result, operationGroupCountQuery, packageId, version, revision)
+	_, err := o.cp.GetConnection().WithContext(ctx).Query(&result, operationGroupCountQuery, packageId, version, revision)
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return nil, nil
@@ -1132,9 +1129,9 @@ func (o operationRepositoryImpl) GetVersionOperationGroups(packageId string, ver
 	return result, nil
 }
 
-func (o operationRepositoryImpl) GetGroupedOperations(packageId string, version string, revision int, operationType string, groupName string, searchReq view.OperationListReq) ([]entity.OperationRichEntity, error) {
+func (o operationRepositoryImpl) GetGroupedOperations(ctx context.Context, packageId string, version string, revision int, operationType string, groupName string, searchReq view.OperationListReq) ([]entity.OperationRichEntity, error) {
 	var result []entity.OperationRichEntity
-	query := o.cp.GetConnection().Model(&result).
+	query := o.cp.GetConnection().WithContext(ctx).Model(&result).
 		ColumnExpr("operation.*")
 
 	query.Join(`inner join
@@ -1275,7 +1272,7 @@ func (o operationRepositoryImpl) GetGroupedOperations(packageId string, version 
 	return result, nil
 }
 
-func (o operationRepositoryImpl) GetOperationsByModelHash(packageId string, version string, revision int, apiType string, modelHash string) ([]entity.OperationModelsEntity, error) {
+func (o operationRepositoryImpl) GetOperationsByModelHash(ctx context.Context, packageId string, version string, revision int, apiType string, modelHash string) ([]entity.OperationModelsEntity, error) {
 	var result []entity.OperationModelsEntity
 	operationsByModelHashQuery := `
 	with operation_model as(
@@ -1292,7 +1289,7 @@ func (o operationRepositoryImpl) GetOperationsByModelHash(packageId string, vers
 	group by m.operation_id
 	order by m.operation_id;
 	`
-	_, err := o.cp.GetConnection().Query(&result, operationsByModelHashQuery, packageId, version, revision, apiType, modelHash)
+	_, err := o.cp.GetConnection().WithContext(ctx).Query(&result, operationsByModelHashQuery, packageId, version, revision, apiType, modelHash)
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return nil, nil
@@ -1315,20 +1312,20 @@ func (o operationRepositoryImpl) GlobalSearchForOperations(ctx context.Context, 
 	// Deprecated: public.fts_operation_search_text is dual-written but no longer used for global search reads.
 	operationsSearchQuery := `
 select
-    o.package_id,
-    pg.name,
-    o.version,
-    o.revision,
-    all_ts.status,
-    o.operation_id,
-    o.title,
-    o.data_hash,
-    o.deprecated,
-    o.kind,
-    o.type,
-    o.metadata,
-    o.document_id,
-    parent_package_names(o.package_id) parent_names
+	o.package_id,
+	pg.name,
+	o.version,
+	o.revision,
+	all_ts.status,
+	o.operation_id,
+	o.title,
+	o.data_hash,
+	o.deprecated,
+	o.kind,
+	o.type,
+	o.metadata,
+	o.document_id,
+	parent_package_names(o.package_id) parent_names
 from operation o
     inner join (
         SELECT DISTINCT ON (rank, package_id, operation_id)
@@ -1375,9 +1372,9 @@ limit ?limit;
 	packagesSearchScopeJoin := ""
 	if len(searchQuery.Packages) != 0 {
 		packagesSearchScopeJoin = `
-            inner join unnest(?packages::text[]) as scope_pkg(parent)
-                on ts.package_id = scope_pkg.parent
-                or (ts.package_id ~>=~ (scope_pkg.parent || '.') and ts.package_id ~<~ (scope_pkg.parent || '/'))`
+			inner join unnest(?packages::text[]) as scope_pkg(parent)
+				on ts.package_id = scope_pkg.parent
+				or (ts.package_id ~>=~ (scope_pkg.parent || '.') and ts.package_id ~<~ (scope_pkg.parent || '/'))`
 	}
 	privacyJoin := `
             inner join unnest(?visible_roots::text[]) as vis(parent)
@@ -1415,7 +1412,7 @@ limit ?limit;
 	return result, nil
 }
 
-func (o operationRepositoryImpl) GetRESTOperationsByPathAndMethod(packageId string, version string, revision int, path string, method string) ([]string, error) {
+func (o operationRepositoryImpl) GetRESTOperationsByPathAndMethod(ctx context.Context, packageId string, version string, revision int, path string, method string) ([]string, error) {
 	type OperationId struct {
 		OperationId string `pg:"operation_id"`
 	}
@@ -1431,7 +1428,7 @@ func (o operationRepositoryImpl) GetRESTOperationsByPathAndMethod(packageId stri
 		and metadata ->> 'path' ilike ?
 		and metadata ->> 'method' ilike ?
 	`
-	_, err := o.cp.GetConnection().Query(&operationIds, operationsByPathAndMethod, packageId, version, revision, string(view.RestApiType), path, method)
+	_, err := o.cp.GetConnection().WithContext(ctx).Query(&operationIds, operationsByPathAndMethod, packageId, version, revision, string(view.RestApiType), path, method)
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return nil, nil
@@ -1447,7 +1444,7 @@ func (o operationRepositoryImpl) GetRESTOperationsByPathAndMethod(packageId stri
 	return result, nil
 }
 
-func (o operationRepositoryImpl) GetGQLOperationsByTypeAndMethod(packageId string, version string, revision int, operationType string, method string) ([]string, error) {
+func (o operationRepositoryImpl) GetGQLOperationsByTypeAndMethod(ctx context.Context, packageId string, version string, revision int, operationType string, method string) ([]string, error) {
 	type OperationId struct {
 		OperationId string `pg:"operation_id"`
 	}
@@ -1463,7 +1460,7 @@ func (o operationRepositoryImpl) GetGQLOperationsByTypeAndMethod(packageId strin
 		and metadata ->> 'type' = ?
 		and metadata ->> 'method' = ?
 	`
-	_, err := o.cp.GetConnection().Query(&operationIds, operationsByTypeAndMethod, packageId, version, revision, string(view.GraphqlApiType), operationType, method)
+	_, err := o.cp.GetConnection().WithContext(ctx).Query(&operationIds, operationsByTypeAndMethod, packageId, version, revision, string(view.GraphqlApiType), operationType, method)
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return nil, nil

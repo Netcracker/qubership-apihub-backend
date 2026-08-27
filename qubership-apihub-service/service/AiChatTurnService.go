@@ -16,6 +16,7 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/metrics"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/repository"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	"github.com/google/uuid"
@@ -25,10 +26,10 @@ import (
 
 const (
 	// Intentional hardcode — product decision, matches the FE limit; not operator-tunable.
-	MaxAiPinnedChatsPerUser = 3
-	MaxAiUserMessageRunes   = 32000
+	MaxAiPinnedChatsPerUser          = 3
+	MaxAiUserMessageRunes            = 32000
 	minRecentMessagesAfterCompaction = 8
-	maxToolLoopIterations   = 10
+	maxToolLoopIterations            = 10
 	maxCompactionSummaryPreviewRunes = 240
 )
 
@@ -63,8 +64,15 @@ func errAiPinLimit() *exception.CustomError {
 	}
 }
 
+func aiChatTurnTimedOut(ctx context.Context, err error) bool {
+	return errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded)
+}
+
 // aiChatStreamErrorPayload maps a turn failure to a single terminal SSE error frame.
-func aiChatStreamErrorPayload(err error) (code string, message string) {
+func aiChatStreamErrorPayload(ctx context.Context, err error) (code string, message string) {
+	if aiChatTurnTimedOut(ctx, err) {
+		return exception.AiChatTurnTimedOut, exception.AiChatTurnTimedOutMsg
+	}
 	var ce *exception.CustomError
 	if errors.As(err, &ce) && ce.Code != "" {
 		return ce.Code, ce.Error()
@@ -193,6 +201,8 @@ func NewAiChatTurnService(
 }
 
 func (s *aiChatTurnServiceImpl) SendMessage(ctx context.Context, userID, chatID string, req *view.AiChatSendMessageRequest) (*view.AiChatSendMessageResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, AiChatTurnTimeout)
+	defer cancel()
 	chat, err := mustGetAiChat(ctx, s.repo, userID, chatID)
 	if err != nil {
 		return nil, err
@@ -210,33 +220,51 @@ func (s *aiChatTurnServiceImpl) SendMessage(ctx context.Context, userID, chatID 
 	um, am, e := s.runTurn(ctx, userID, chat, req, nil)
 	s.observeTurn(AiChatTurnModeSync, started, e)
 	if e != nil {
+		if aiChatTurnTimedOut(ctx, e) {
+			return nil, &exception.CustomError{
+				Status:  http.StatusInternalServerError,
+				Code:    exception.AiChatTurnTimedOut,
+				Message: exception.AiChatTurnTimedOutMsg,
+			}
+		}
 		return nil, e
 	}
 	return &view.AiChatSendMessageResponse{UserMessage: *um, AssistantMessage: *am}, nil
 }
 
 func (s *aiChatTurnServiceImpl) SendMessageStream(ctx context.Context, userID, chatID string, req *view.AiChatSendMessageRequest) (<-chan AiChatStreamChunk, error) {
+	ctx, cancel := context.WithTimeout(ctx, AiChatTurnTimeout)
 	chat, err := mustGetAiChat(ctx, s.repo, userID, chatID)
 	if err != nil {
+		cancel()
 		return nil, err
 	}
 	if utf8.RuneCountInString(req.Content) > MaxAiUserMessageRunes {
+		cancel()
 		return nil, &exception.CustomError{Status: http.StatusBadRequest, Code: exception.AiChatValidationFailed, Message: exception.AiChatMessageTooLongMsg, Params: map[string]interface{}{"max": MaxAiUserMessageRunes}}
 	}
 
 	out := make(chan AiChatStreamChunk, AiChatStreamChannelBuffer)
 	go func() {
+		defer cancel()
 		defer close(out)
 		started := time.Now()
 		_, _, err := s.runTurn(ctx, userID, chat, req, out)
 		s.observeTurn(AiChatTurnModeStream, started, err)
 		if err != nil {
-			code, message := aiChatStreamErrorPayload(err)
-			_ = s.emitStream(ctx, out, aiChatSSEError, map[string]interface{}{
+			// Decide which code and message the terminal error event carries.
+			code, message := aiChatStreamErrorPayload(ctx, err)
+			// ctx is often already cancelled here, and emitStream sends nothing on a cancelled context.
+			// emitCtx ignores the cancellation so the error still reaches the client.
+			emitCtx, emitCancel := context.WithTimeout(context.WithoutCancel(ctx), AiChatStreamTerminalEmitTimeout)
+			defer emitCancel()
+			if emitErr := s.emitStream(emitCtx, out, aiChatSSEError, map[string]interface{}{
 				aiChatSSEFieldType: aiChatSSEError,
 				"code":             code,
 				"message":          message,
-			})
+			}); emitErr != nil {
+				log.Warnf("ai-chat: terminal SSE error frame (code=%s) not delivered: %v", code, emitErr)
+			}
 		}
 	}()
 	return out, nil
@@ -365,10 +393,10 @@ func (s *aiChatTurnServiceImpl) runLLMTurn(ctx context.Context, userID string, c
 			OnToolCompleted: func(rec toolCallRecord) {
 				_ = s.emitStream(ctx, stream, aiChatSSEToolCompleted, map[string]interface{}{
 					aiChatSSEFieldType: aiChatSSEToolCompleted,
-					"toolCallId": rec.ToolCallID,
-					"name":       rec.Inv.Name,
-					"status":     rec.Inv.Status,
-					"durationMs": rec.Inv.DurationMs,
+					"toolCallId":       rec.ToolCallID,
+					"name":             rec.Inv.Name,
+					"status":           rec.Inv.Status,
+					"durationMs":       rec.Inv.DurationMs,
 				})
 			},
 		}
@@ -757,10 +785,10 @@ func (s *aiChatTurnServiceImpl) maybeCompactBefore(ctx context.Context, chat *en
 	}
 	return true, map[string]interface{}{
 		aiChatSSEFieldType: aiChatSSEContextCompacted,
-		"compactedUpTo":   boundary.UTC().Format(time.RFC3339),
-		"summaryPreview":  truncateRunes(summary, maxCompactionSummaryPreviewRunes),
-		"messagesBefore":  len(hist),
-		"messagesKeptRaw": keep,
+		"compactedUpTo":    boundary.UTC().Format(time.RFC3339),
+		"summaryPreview":   truncateRunes(summary, maxCompactionSummaryPreviewRunes),
+		"messagesBefore":   len(hist),
+		"messagesKeptRaw":  keep,
 	}
 }
 
@@ -770,7 +798,7 @@ func (s *aiChatTurnServiceImpl) buildSystemMessage(ctx context.Context) string {
 		return systemMessageBaseContent
 	}
 
-	cacheKey := UserIDFromMCPCtx(ctx)
+	cacheKey := secctx.GetUserId(ctx)
 
 	s.packagesListCache.mu.RLock()
 	entry, cached := s.packagesListCache.entries[cacheKey]

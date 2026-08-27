@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"testing"
 
-	secctx "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	"github.com/iancoleman/orderedmap"
@@ -294,7 +293,7 @@ type fakeRoleServiceForVersionsTest struct {
 	hasPermission bool
 }
 
-func (f fakeRoleServiceForVersionsTest) HasRequiredPermissions(ctx secctx.SecurityContext, packageId string, requiredPermissions ...view.RolePermission) (bool, error) {
+func (f fakeRoleServiceForVersionsTest) HasRequiredPermissions(ctx context.Context, packageId string, requiredPermissions ...view.RolePermission) (bool, error) {
 	return f.hasPermission, nil
 }
 
