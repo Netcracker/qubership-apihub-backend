@@ -37,7 +37,7 @@ type transitionServiceImpl struct {
 // runTransitionMove runs a transition move under a safety-net bound, then persists the terminal
 // status on an independent short-lived context so a timed-out move can't leave the transition
 // stuck at 'running'
-func (p transitionServiceImpl) runTransitionMove(ctx context.Context, id string, move func(ctx context.Context) (int, error)) {
+func (p transitionServiceImpl) runTransitionMove(ctx context.Context, id string, move func(ctx context.Context) (int, error), onSuccess func()) {
 	bgCtx, cancel := context.WithTimeout(secctx.Detach(ctx), p.systemInfoService.GetTransitionMoveTimeout())
 	defer cancel()
 	objAffected, err := move(bgCtx)
@@ -50,6 +50,9 @@ func (p transitionServiceImpl) runTransitionMove(ctx context.Context, id string,
 			log.Errorf("failed to track transition action: %s", terr)
 		}
 		return
+	}
+	if onSuccess != nil {
+		onSuccess()
 	}
 	if terr := p.transRepo.TrackTransitionCompleted(finCtx, id, objAffected); terr != nil {
 		log.Errorf("failed to track transition action: %s", terr)
@@ -193,15 +196,17 @@ func (p transitionServiceImpl) MoveOrRenamePackage(ctx context.Context, fromId s
 		}
 		// TODO: implement async job that will take non-finished transition tasks from DB instead of a direct call
 		utils.SafeAsync(func() {
-			p.runTransitionMove(ctx, id, func(ctx context.Context) (int, error) {
-				objAffected, err := p.transRepo.MoveGroupingPackage(ctx, fromId, toId)
-				if err == nil && toWorkspace {
+			var onSuccess func()
+			if toWorkspace {
+				onSuccess = func() {
 					if renameErr := p.globalSearchPartitionService.RenameWorkspacePartitions(fromId, toId); renameErr != nil {
 						log.Errorf("failed to rename global_search partitions from %s to %s: %s", fromId, toId, renameErr)
 					}
 				}
-				return objAffected, err
-			})
+			}
+			p.runTransitionMove(ctx, id, func(ctx context.Context) (int, error) {
+				return p.transRepo.MoveGroupingPackage(ctx, fromId, toId)
+			}, onSuccess)
 		})
 		return id, nil
 	case entity.KIND_PACKAGE:
@@ -223,7 +228,7 @@ func (p transitionServiceImpl) MoveOrRenamePackage(ctx context.Context, fromId s
 			utils.SafeAsync(func() {
 				p.runTransitionMove(ctx, id, func(ctx context.Context) (int, error) {
 					return p.transRepo.MovePackage(ctx, fromId, toId, overwriteHistory)
-				})
+				}, nil)
 			})
 			return id, nil
 		}
@@ -247,7 +252,7 @@ func (p transitionServiceImpl) MoveOrRenamePackage(ctx context.Context, fromId s
 		utils.SafeAsync(func() {
 			p.runTransitionMove(ctx, id, func(ctx context.Context) (int, error) {
 				return p.transRepo.MoveGroupingPackage(ctx, fromId, toId)
-			})
+			}, nil)
 		})
 		return id, nil
 	case entity.KIND_DASHBOARD:
@@ -269,7 +274,7 @@ func (p transitionServiceImpl) MoveOrRenamePackage(ctx context.Context, fromId s
 			utils.SafeAsync(func() {
 				p.runTransitionMove(ctx, id, func(ctx context.Context) (int, error) {
 					return p.transRepo.MovePackage(ctx, fromId, toId, overwriteHistory)
-				})
+				}, nil)
 			})
 			return id, nil
 		}

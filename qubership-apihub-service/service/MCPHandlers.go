@@ -307,6 +307,8 @@ func (m mcpService) ExecuteListWorkspacesTool(ctx context.Context, req mcp.CallT
 
 // ExecuteListWorkspacePackagesTool executes the list_workspace_packages tool
 func (m mcpService) ExecuteListWorkspacePackagesTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, MCPToolCallTimeout)
+	defer cancel()
 	workspace, err := req.RequireString("workspace")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -343,6 +345,8 @@ func (m mcpService) ExecuteListWorkspacePackagesTool(ctx context.Context, req mc
 
 // ExecuteListPackageVersionsTool executes the list_package_versions tool
 func (m mcpService) ExecuteListPackageVersionsTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, MCPToolCallTimeout)
+	defer cancel()
 	packageId, err := req.RequireString("packageId")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil

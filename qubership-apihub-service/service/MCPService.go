@@ -226,6 +226,10 @@ func (m mcpService) GetPackagesList(ctx context.Context, workspaceId string) ([]
 	defer cancel()
 	log.Infof("Getting packages list for workspace: %s", workspaceId)
 
+	if secctx.GetUserId(ctx) == "" {
+		return nil, fmt.Errorf("missing security context for api-packages-list request")
+	}
+
 	packageListReq := view.PackageListReq{
 		Kind:               []string{entity.KIND_PACKAGE}, // As specified: kind=package
 		ShowAllDescendants: true,
