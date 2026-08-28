@@ -12606,6 +12606,19 @@ components:
             Use `GET /api/v2/packages/{packageId}/versions/{version}/notifications` to get the details.
           type: boolean
           default: false
+        changelogHasErrors:
+          description: |
+            Flag showing that the changelog calculation between this version and its previousVersion produced
+            at least one critical problem, i.e. the comparison may be incomplete or inaccurate. Returned when
+            the version has a previous version.
+
+            The flag describes the comparison only, it does not mean that the version itself has problems -
+            see hasErrors for that.
+
+            Use `GET /api/v2/packages/{packageId}/versions/{version}/changes/notifications` to get the
+            details.
+          type: boolean
+          default: false
     PackageVersionContent:
       description: Published package version content
       type: object
