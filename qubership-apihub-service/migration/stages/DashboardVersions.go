@@ -149,7 +149,7 @@ func makeDashboardVersionsQuery(packageIds []string, versionsIn []string, migrat
 			where prev_ver.package_id = coalesce(nullif(pv.previous_version_package_id, ''), pv.package_id)
 				and prev_ver.version = pv.previous_version
 				and prev_ver.deleted_at is null
-				/* the build resolves the previous version to its latest revision, like GetVersion does */
+				/* the build resolves the previous version to its latest revision */
 				and prev_ver.revision = (
 					select max(pr.revision) from published_version pr
 					where pr.package_id = prev_ver.package_id and pr.version = prev_ver.version and pr.deleted_at is null

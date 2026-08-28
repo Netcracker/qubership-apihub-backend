@@ -15,6 +15,11 @@ const (
 	skipReasonPreviousVersionHasErrors   = "previous version has errors"
 	skipReasonReferenceHasErrors         = "referenced version has errors"
 	skipReasonPreviousVersionNotMigrated = "previous version not migrated"
+	skipReasonVersionNotMigrated         = "version not migrated"
+	skipReasonReferenceNotMigrated       = "referenced version not migrated"
+	skipReasonVersionBuildFailed         = "version build failed"
+	skipReasonChangelogBuildFailed       = "changelog build failed"
+	skipReasonUnknown                    = "unknown"
 )
 
 // StagePostCheck check that migration affected all required versions and comparisons!
@@ -44,7 +49,7 @@ func (d OpsMigration) StagePostCheck() error {
 		}
 	}
 
-	cQuery, cParams := makeNotMigratedComparisonsQuery(d.ent.PackageIds, d.ent.Versions, d.ent.Id, d.ent.StartedAt, actualBuilderVersion)
+	cQuery, cParams := makeNotMigratedComparisonsQuery(d.ent.PackageIds, d.ent.Versions, d.ent.Id, d.ent.StartedAt, actualBuilderVersion, d.ent.IsRebuildChangelogOnly)
 	_, err = withDBRetry(d, func() (orm.Result, error) {
 		return d.cp.GetConnection().QueryContext(d.migrationCtx, &postCheckResult.NotMigratedComparisons, cQuery, cParams...)
 	})
@@ -167,25 +172,52 @@ func makeNotMigratedVersionsQuery(packageIds []string, versionsIn []string, migr
 						or coalesce((ref_ver_changelog.metadata ->> 'has_errors')::boolean, false))
 			) then '%s'
 			when v.previous_version is not null and not exists (
+				select 1 from published_version prev_ver
+				where prev_ver.package_id = coalesce(nullif(v.previous_version_package_id, ''), v.package_id)
+					and prev_ver.version = v.previous_version
+					and prev_ver.deleted_at is null
+					and prev_ver.revision = (
+						select max(pr.revision) from published_version pr
+						where pr.package_id = prev_ver.package_id and pr.version = prev_ver.version and pr.deleted_at is null
+					)
+					and prev_ver.metadata->>'migration_id' = '%s'
+			) then '%s'
+			when exists (
+				select 1 from published_version_reference pvr
+				inner join package_group ref_pkg on pvr.reference_id = ref_pkg.id
+				inner join published_version ref_pv on pvr.reference_id = ref_pv.package_id
+					and pvr.reference_version = ref_pv.version
+					and pvr.reference_revision = ref_pv.revision
+				where pvr.package_id = v.package_id
+					and pvr.version = v.version
+					and pvr.revision = v.revision
+					and ref_pkg.deleted_at is null
+					and ref_pv.deleted_at is null
+					and ref_pv.metadata->>'migration_id' is distinct from '%s'
+			) then '%s'
+			when exists (
 				select 1 from build b
-				where b.package_id = coalesce(nullif(v.previous_version_package_id, ''), v.package_id)
-					and b.version like v.previous_version || '@%%'
-					and b.metadata->>'build_type' = 'build'
+				where b.package_id = v.package_id
+					and b.version = concat(v.version, '@', v.revision)
+					and b.metadata->>'build_type' = '%s'
 					and b.metadata->>'migration_id' = '%s'
 					and b.status = '%s'
 			) then '%s'
-			else ''
+			else '%s'
 		end as skip_reason from published_version v
 		inner join package_group pkg on v.package_id = pkg.id
 		where v.deleted_at is null and pkg.deleted_at is null
 		and (v.metadata is null or not (v.metadata \? 'migration_id') or v.metadata->>'migration_id' is distinct from ?)%s%s%s`,
 		skipReasonPreviousVersionHasErrors, skipReasonReferenceHasErrors,
-		migrationId, view.StatusComplete, skipReasonPreviousVersionNotMigrated,
+		migrationId, skipReasonPreviousVersionNotMigrated,
+		migrationId, skipReasonReferenceNotMigrated,
+		view.PublishType, migrationId, view.StatusError, skipReasonVersionBuildFailed,
+		skipReasonUnknown,
 		relaxClause, wherePackageIn, whereVersionIn)
 	return query, params
 }
 
-func makeNotMigratedComparisonsQuery(packageIds []string, versionsIn []string, migrationId string, startedAt time.Time, actualBuilderVersion string) (string, []interface{}) {
+func makeNotMigratedComparisonsQuery(packageIds []string, versionsIn []string, migrationId string, startedAt time.Time, actualBuilderVersion string, isRebuildChangelogOnly bool) (string, []interface{}) {
 	params := make([]interface{}, 0)
 	params = append(params, migrationId)
 
@@ -196,6 +228,15 @@ func makeNotMigratedComparisonsQuery(packageIds []string, versionsIn []string, m
 	}
 
 	wherePackageIn, whereVersionIn := appendScopeFilters(&params, packageIds, versionsIn)
+
+	versionsNotMigratedCases := ""
+	if !isRebuildChangelogOnly {
+		versionsNotMigratedCases = fmt.Sprintf(`
+			when pv2.metadata->>'migration_id' is distinct from '%s' then '%s'
+			when pv1.metadata->>'migration_id' is distinct from '%s' then '%s'`,
+			migrationId, skipReasonPreviousVersionNotMigrated,
+			migrationId, skipReasonVersionNotMigrated)
+	}
 
 	query := fmt.Sprintf(`
 		select v.package_id, v.version, v.revision, v.previous_package_id, v.previous_version, v.previous_revision,
@@ -223,8 +264,18 @@ func makeNotMigratedComparisonsQuery(packageIds []string, versionsIn []string, m
 					and prev_ver.revision = v.previous_revision
 					and (coalesce((prev_ver.metadata ->> 'has_errors')::boolean, false)
 						or coalesce((prev_ver_changelog.metadata ->> 'has_errors')::boolean, false))
+			) then '%s'%s
+			when exists (
+				select 1 from build b
+				where b.package_id = v.package_id
+					and b.version = concat(v.version, '@', v.revision)
+					and b.metadata->>'build_type' = '%s'
+					and b.metadata->>'migration_id' = '%s'
+					and b.metadata->>'previous_version' = concat(v.previous_version, '@', v.previous_revision)
+					and b.metadata->>'previous_version_package_id' = v.previous_package_id
+					and b.status = '%s'
 			) then '%s'
-			else ''
+			else '%s'
 		end as skip_reason from version_comparison v
 		inner join published_version pv1 on v.package_id=pv1.package_id and v.version=pv1.version and v.revision=pv1.revision
 		inner join published_version pv2 on v.previous_package_id=pv2.package_id and v.previous_version=pv2.version and v.previous_revision=pv2.revision
@@ -232,7 +283,10 @@ func makeNotMigratedComparisonsQuery(packageIds []string, versionsIn []string, m
 		inner join package_group pg2 on v.previous_package_id=pg2.id
 		where pv1.deleted_at is null and pv2.deleted_at is null and pg1.deleted_at is null and pg2.deleted_at is null
 		  and (v.metadata is null or not (v.metadata \? 'migration_id') or v.metadata->>'migration_id' is distinct from ?)%s%s%s`,
-		skipReasonPreviousVersionHasErrors, relaxClause, wherePackageIn, whereVersionIn)
+		skipReasonPreviousVersionHasErrors, versionsNotMigratedCases,
+		view.ChangelogType, migrationId, view.StatusError, skipReasonChangelogBuildFailed,
+		skipReasonUnknown,
+		relaxClause, wherePackageIn, whereVersionIn)
 	return query, params
 }
 

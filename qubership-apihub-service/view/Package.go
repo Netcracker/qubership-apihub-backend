@@ -241,10 +241,7 @@ type ContractTypeSummary struct {
 
 // ToContractTypes converts the builder map format to the internal []ContractType slice.
 func (d DdlVersionComparison) ToContractTypes() []ContractType {
-	if len(d.ContractsChangesSummary) == 0 {
-		return nil
-	}
-	result := make([]ContractType, 0, len(d.ContractsChangesSummary))
+	result := make([]ContractType, 0, len(d.ContractsChangesSummary)) // return empty slice rather than nil - that is how the DDL side of a version_comparison row is told apart from a side that was never calculated.
 	for typeName, summary := range d.ContractsChangesSummary {
 		result = append(result, ContractType{
 			ContractType:             typeName,

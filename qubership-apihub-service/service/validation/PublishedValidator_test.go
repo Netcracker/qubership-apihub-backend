@@ -5,7 +5,9 @@ import (
 	"testing"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/archive"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/repository"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	"github.com/stretchr/testify/assert"
 )
@@ -589,6 +591,89 @@ func TestValidateChanges(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 			}
+		})
+	}
+}
+
+type versionComparisonRepoStub struct {
+	repository.PublishedRepository
+	comparison *entity.VersionComparisonEntity
+}
+
+func (s versionComparisonRepoStub) GetVersionComparison(context.Context, string) (*entity.VersionComparisonEntity, error) {
+	return s.comparison, nil
+}
+
+func TestValidateCachedComparisonChanges(t *testing.T) {
+	operationTypes := []view.OperationType{{ApiType: "rest"}}
+	contractTypes := []view.ContractType{{ContractType: view.ContractTypeDdl}}
+
+	tests := []struct {
+		name        string
+		ddl         bool
+		comparison  *entity.VersionComparisonEntity
+		wantCode    string
+		wantMessage string
+	}{
+		{
+			name:        "comparison row does not exist",
+			comparison:  nil,
+			wantCode:    exception.ComparisonNotFound,
+			wantMessage: exception.ComparisonNotFoundMsg,
+		},
+		{
+			name:        "ddl changes were never calculated",
+			ddl:         true,
+			comparison:  &entity.VersionComparisonEntity{OperationTypes: operationTypes},
+			wantCode:    exception.ComparisonChangesNotCalculated,
+			wantMessage: exception.ComparisonChangesNotCalculatedMsg,
+		},
+		{
+			name:       "ddl changes were calculated without contract changes",
+			ddl:        true,
+			comparison: &entity.VersionComparisonEntity{OperationTypes: operationTypes, ContractTypes: []view.ContractType{}},
+		},
+		{
+			name:       "ddl changes were calculated with contract changes",
+			ddl:        true,
+			comparison: &entity.VersionComparisonEntity{ContractTypes: contractTypes},
+		},
+		{
+			name:        "operation changes were never calculated",
+			comparison:  &entity.VersionComparisonEntity{ContractTypes: contractTypes},
+			wantCode:    exception.ComparisonChangesNotCalculated,
+			wantMessage: exception.ComparisonChangesNotCalculatedMsg,
+		},
+		{
+			name:       "operation changes were calculated",
+			comparison: &entity.VersionComparisonEntity{OperationTypes: operationTypes, ContractTypes: contractTypes},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := publishedValidatorImpl{publishedRepo: versionComparisonRepoStub{comparison: tt.comparison}}
+			entry := comparisonEntry{
+				ComparisonKey: view.ComparisonKey{
+					PackageId:                comparisonPackageId,
+					Version:                  comparisonVersion,
+					Revision:                 comparisonRevision,
+					PreviousVersionPackageId: comparisonPackageId,
+					PreviousVersion:          previousVersionName,
+					PreviousVersionRevision:  1,
+				},
+				FromCache: true,
+				Ddl:       tt.ddl,
+			}
+			err := p.validateCachedComparisonChanges(context.Background(), entry)
+			if tt.wantMessage == "" {
+				assert.NoError(t, err)
+				return
+			}
+			customErr, ok := err.(*exception.CustomError)
+			assert.True(t, ok, "expected *exception.CustomError, got %T", err)
+			assert.Equal(t, tt.wantCode, customErr.Code)
+			assert.Equal(t, tt.wantMessage, customErr.Message)
 		})
 	}
 }

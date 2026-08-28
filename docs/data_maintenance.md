@@ -134,7 +134,8 @@ The comparisons cleanup job performs the following steps:
     - It is an outdated changelog comparison, meaning it does not point to the latest revision of the previous version.
     - It is a comparison for a revision that no longer exists.
 4. Deletes eligible version comparisons and related operation comparisons.
-5. Performs VACUUM FULL on affected `version_comparison` and `operation_comparison` tables to optimize database size.
+5. Performs VACUUM FULL on affected `version_comparison`, `operation_comparison` and `version_comparison_notification`
+   tables to optimize database size.
 
 ## Soft Deleted Data TTL
 

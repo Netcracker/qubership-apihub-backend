@@ -35,6 +35,7 @@ const ASYNC_OPERATION_ID_KEY = "asyncOperationId"
 const MESSAGE_ID_KEY = "messageId"
 const OPERATION_ID_V1 = "operationIdV1"
 const HAS_ERRORS_KEY = "has_errors"
+const CHANGELOG_HAS_ERRORS_KEY = "changelog_has_errors"
 const MCP_ENDPOINT_KEY = "mcp_endpoint"
 
 type Metadata map[string]interface{}
@@ -435,6 +436,14 @@ func (m Metadata) SetHasErrors(hasErrors bool) {
 
 func (m Metadata) GetHasErrors() bool {
 	return m.GetBoolValue(HAS_ERRORS_KEY)
+}
+
+func (m Metadata) SetChangelogHasErrors(changelogHasErrors bool) {
+	m[CHANGELOG_HAS_ERRORS_KEY] = changelogHasErrors
+}
+
+func (m Metadata) GetChangelogHasErrors() bool {
+	return m.GetBoolValue(CHANGELOG_HAS_ERRORS_KEY)
 }
 
 func (m Metadata) SetMcpEndpoint(mcpEndpoint string) {

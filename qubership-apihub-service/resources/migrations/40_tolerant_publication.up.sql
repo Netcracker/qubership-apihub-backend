@@ -1,11 +1,11 @@
 CREATE TABLE IF NOT EXISTS published_version_notification
 (
-    id          bigserial,
+    id          bigint GENERATED ALWAYS AS IDENTITY,
     package_id  varchar NOT NULL,
     version     varchar NOT NULL,
     revision    integer NOT NULL,
     severity    varchar NOT NULL,
-    category    varchar,
+    category    varchar NOT NULL,
     message     varchar NOT NULL,
     document_id varchar,
     CONSTRAINT pk_published_version_notification PRIMARY KEY (id),
@@ -20,7 +20,7 @@ CREATE INDEX IF NOT EXISTS published_version_notification_version_idx
 
 CREATE TABLE IF NOT EXISTS version_comparison_notification
 (
-    id                  bigserial,
+    id                  bigint GENERATED ALWAYS AS IDENTITY,
     package_id          varchar NOT NULL,
     version             varchar NOT NULL,
     revision            integer NOT NULL,
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS version_comparison_notification
     previous_revision   integer NOT NULL,
     comparison_id       varchar NOT NULL,
     severity            varchar NOT NULL,
-    category            varchar,
+    category            varchar NOT NULL,
     message             varchar NOT NULL,
     document_id         varchar,
     CONSTRAINT pk_version_comparison_notification PRIMARY KEY (id),
@@ -42,4 +42,4 @@ CREATE TABLE IF NOT EXISTS version_comparison_notification
 CREATE INDEX IF NOT EXISTS version_comparison_notification_comparison_id_idx
     ON version_comparison_notification (comparison_id);
 
-DROP TABLE IF EXISTS builder_notifications CASCADE;
+DROP TABLE IF EXISTS builder_notifications;

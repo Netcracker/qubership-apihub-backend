@@ -203,7 +203,7 @@ func (v versionControllerImpl) GetVersionNotifications(w http.ResponseWriter, r 
 		})
 		return
 	}
-	severities, customError := getListFromParam(r, "severity")
+	severities, customError := getRepeatedListFromParam(r, "severity")
 	if customError != nil {
 		utils.RespondWithCustomError(w, customError)
 		return
@@ -219,7 +219,7 @@ func (v versionControllerImpl) GetVersionNotifications(w http.ResponseWriter, r 
 			return
 		}
 	}
-	categories, customError := getListFromParam(r, "category")
+	categories, customError := getRepeatedListFromParam(r, "category")
 	if customError != nil {
 		utils.RespondWithCustomError(w, customError)
 		return
@@ -276,8 +276,18 @@ func (v versionControllerImpl) GetComparisonNotifications(w http.ResponseWriter,
 		})
 		return
 	}
-	previousVersionPackageId := r.URL.Query().Get("previousVersionPackageId")
-	severities, customError := getListFromParam(r, "severity")
+	previousVersionPackageId, err := url.QueryUnescape(r.URL.Query().Get("previousVersionPackageId"))
+	if err != nil {
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidURLEscape,
+			Message: exception.InvalidURLEscapeMsg,
+			Params:  map[string]interface{}{"param": "previousVersionPackageId"},
+			Debug:   err.Error(),
+		})
+		return
+	}
+	severities, customError := getRepeatedListFromParam(r, "severity")
 	if customError != nil {
 		utils.RespondWithCustomError(w, customError)
 		return
@@ -293,7 +303,7 @@ func (v versionControllerImpl) GetComparisonNotifications(w http.ResponseWriter,
 			return
 		}
 	}
-	categories, customError := getListFromParam(r, "category")
+	categories, customError := getRepeatedListFromParam(r, "category")
 	if customError != nil {
 		utils.RespondWithCustomError(w, customError)
 		return
@@ -327,6 +337,14 @@ func getNotificationsFilter(r *http.Request, severities []string, categories []s
 				Message: exception.IncorrectParamTypeMsg,
 				Params:  map[string]interface{}{"param": "page", "type": "int"},
 				Debug:   err.Error(),
+			}
+		}
+		if parsedPage < 0 {
+			return nil, &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.InvalidParameterValue,
+				Message: exception.InvalidParameterValueMsg,
+				Params:  map[string]interface{}{"param": "page", "value": parsedPage},
 			}
 		}
 		page = parsedPage

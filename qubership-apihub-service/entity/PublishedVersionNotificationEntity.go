@@ -7,7 +7,7 @@ import (
 type PublishedVersionNotificationEntity struct {
 	tableName struct{} `pg:"published_version_notification"`
 
-	Id         int64  `pg:"id, type:bigserial"`
+	Id         int64  `pg:"id, type:bigint"`
 	PackageId  string `pg:"package_id, type:varchar"`
 	Version    string `pg:"version, type:varchar"`
 	Revision   int    `pg:"revision, type:integer"`

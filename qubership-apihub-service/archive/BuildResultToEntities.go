@@ -35,7 +35,7 @@ func (a *BuildResultToEntitiesReader) ReadDocumentsToEntities(buildConfig *view.
 	mcpEndpoints := make(map[string]string)
 	if buildConfig != nil {
 		// The endpoint is taken from the config rather than from the built document, because a document that failed to process
-		// publishes no MCP entities and its endpoint would otherwise be lost.
+		// can publish no MCP entities and its endpoint would otherwise be lost.
 		for _, file := range buildConfig.Files {
 			if mcpEndpoint, ok := file.Metadata["mcpEndpoint"].(string); ok && mcpEndpoint != "" {
 				mcpEndpoints[file.FileId] = mcpEndpoint
@@ -102,6 +102,11 @@ func (a *BuildResultToEntitiesReader) ReadDocumentsToEntities(buildConfig *view.
 			}
 			if mcpEndpoint, exists := mcpEndpoints[document.FileId]; exists {
 				fileEntMetadata.SetMcpEndpoint(mcpEndpoint)
+			} else if document.HasErrors && view.GetContractTypeForDocumentType(document.Type) == view.ContractTypeMcp {
+				//without an endpoint the failure cannot be attributed to one, so contractsSummary.mcp will
+				//not report it and the version flag is the only signal the publisher gets
+				log.Warnf("MCP document %v of %v@%v of package %v failed to build and its build config names no mcpEndpoint, so the failure is reported on the version only",
+					document.Slug, a.PackageInfo.Version, a.PackageInfo.Revision, a.PackageInfo.PackageId)
 			}
 			index := i
 			if a.PackageInfo.MigrationBuild {
@@ -395,10 +400,10 @@ func (a *BuildResultToEntitiesReader) ReadOperationsToEntities() ([]*entity.Oper
 	return operationEntities, operationDataEntities, operationSearchTexts, operationsInfo, nil
 }
 
-func (a *BuildResultToEntitiesReader) ReadOperationComparisonsToEntities(ctx context.Context, publishingOperationsInfo map[string]entity.OperationInfo, operationRepository repository.OperationRepository) ([]*entity.VersionComparisonEntity, []*entity.OperationComparisonEntity, []string, map[string]view.ComparisonKey, error) {
+func (a *BuildResultToEntitiesReader) ReadOperationComparisonsToEntities(ctx context.Context, publishingOperationsInfo map[string]entity.OperationInfo, operationRepository repository.OperationRepository) ([]*entity.VersionComparisonEntity, []*entity.OperationComparisonEntity, []*entity.VersionComparisonEntity, map[string]view.ComparisonKey, error) {
 	versionComparisonEntities := make([]*entity.VersionComparisonEntity, 0)
 	operationComparisonEntities := make([]*entity.OperationComparisonEntity, 0)
-	versionComparisonsFromCache := make([]string, 0)
+	versionComparisonsFromCache := make([]*entity.VersionComparisonEntity, 0)
 	comparisonFileIdToKeyMap := make(map[string]view.ComparisonKey)
 	var mainVersionComparison *entity.VersionComparisonEntity
 	mainVersionRefs := make([]string, 0)
@@ -453,7 +458,7 @@ func (a *BuildResultToEntitiesReader) ReadOperationComparisonsToEntities(ctx con
 			}
 		}
 		if comparison.FromCache {
-			versionComparisonsFromCache = append(versionComparisonsFromCache, versionComparisonEnt.ComparisonId)
+			versionComparisonsFromCache = append(versionComparisonsFromCache, versionComparisonEnt)
 			continue
 		}
 		versionComparisonEntities = append(versionComparisonEntities, versionComparisonEnt)
@@ -869,11 +874,12 @@ func (a *BuildResultToEntitiesReader) ReadDdlContractsToEntities() ([]*entity.DD
 // ReadDdlContractComparisonsToEntities reads the two-level DDL comparison structure:
 // the ddl-comparisons.json index (creating version_comparison rows carrying contractTypes) and
 // the per-pair ddl-comparisons/<comparisonFileId> files (creating ddl_comparison rows). It mirrors
-// ReadOperationComparisonsToEntities so DDL-only changelogs still produce their version_comparison row.
-func (a *BuildResultToEntitiesReader) ReadDdlContractComparisonsToEntities(ctx context.Context, publishingDdlDataHashes map[string]string, ddlRepository repository.DDLContractRepository) ([]*entity.VersionComparisonEntity, []*entity.DDLContractComparisonEntity, []string, map[string]view.ComparisonKey, error) {
+// ReadOperationComparisonsToEntities so DDL-only changelogs still produce their version_comparison row,
+// and returns the comparisons taken from cache as entities for the same reason it does.
+func (a *BuildResultToEntitiesReader) ReadDdlContractComparisonsToEntities(ctx context.Context, publishingDdlDataHashes map[string]string, ddlRepository repository.DDLContractRepository) ([]*entity.VersionComparisonEntity, []*entity.DDLContractComparisonEntity, []*entity.VersionComparisonEntity, map[string]view.ComparisonKey, error) {
 	versionComparisonEntities := make([]*entity.VersionComparisonEntity, 0)
 	ddlComparisonEntities := make([]*entity.DDLContractComparisonEntity, 0)
-	ddlComparisonsFromCache := make([]string, 0)
+	ddlComparisonsFromCache := make([]*entity.VersionComparisonEntity, 0)
 	comparisonFileIdToKeyMap := make(map[string]view.ComparisonKey)
 	var mainVersionComparison *entity.VersionComparisonEntity
 	mainVersionRefs := make([]string, 0)
@@ -949,7 +955,7 @@ func (a *BuildResultToEntitiesReader) ReadDdlContractComparisonsToEntities(ctx c
 			}
 		}
 		if comparison.FromCache {
-			ddlComparisonsFromCache = append(ddlComparisonsFromCache, versionComparisonEnt.ComparisonId)
+			ddlComparisonsFromCache = append(ddlComparisonsFromCache, versionComparisonEnt)
 			continue
 		}
 		versionComparisonEntities = append(versionComparisonEntities, versionComparisonEnt)

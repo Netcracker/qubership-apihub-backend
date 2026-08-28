@@ -135,6 +135,20 @@ func (a *BuildResultArchive) ReadPackageMcpContracts(required bool) error {
 	return a.readFile(ContractsMcpFilePath, a.ContractsMcpFile, &a.PackageMcpContracts, required)
 }
 
+func (a *BuildResultArchive) ComparisonsHaveErrors() bool {
+	for _, comparison := range a.PackageComparisons.Comparisons {
+		if comparison.HasErrors {
+			return true
+		}
+	}
+	for _, comparison := range a.PackageDdlComparisons.Comparisons {
+		if comparison.HasErrors {
+			return true
+		}
+	}
+	return false
+}
+
 func (a *BuildResultArchive) readFile(filePath string, file *zip.File, v interface{}, required bool) error {
 	if file == nil {
 		if required {

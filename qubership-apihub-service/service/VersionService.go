@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -693,25 +694,30 @@ func (v versionServiceImpl) GetPackageVersionsView(ctx context.Context, req view
 	if err != nil {
 		return nil, err
 	}
+	versionKeys := make([]entity.PublishedVersionKeyEntity, 0, len(ents))
 	for _, ent := range ents {
 		version := entity.MakeReadonlyPublishedVersionListView2(&ent)
 		versions = append(versions, *version)
+		versionKeys = append(versionKeys, entity.PublishedVersionKeyEntity{
+			PackageId: ent.PackageId,
+			Version:   ent.Version,
+			Revision:  ent.Revision,
+		})
 	}
 
-	if packageEnt.Kind == entity.KIND_DASHBOARD {
-		versionsWithErroredReferences, err := v.publishedRepo.GetVersionsWithErroredReferences(ctx, req.PackageId)
-		if err != nil {
-			return nil, err
+	errorSummaries, err := v.publishedRepo.GetVersionsErrorSummary(ctx, versionKeys, showOnlyDeleted)
+	if err != nil {
+		return nil, err
+	}
+	for i, key := range versionKeys {
+		errorSummary, exists := errorSummaries[key]
+		if !exists {
+			continue
 		}
-		for i, ent := range ents {
-			key := entity.PublishedVersionKeyEntity{
-				PackageId: ent.PackageId,
-				Version:   ent.Version,
-				Revision:  ent.Revision,
-			}
-			if _, exists := versionsWithErroredReferences[key]; exists {
-				versions[i].HasErrors = true
-			}
+		versions[i].HasErrors = errorSummary.ContentHasErrors()
+		if ents[i].PreviousVersion != "" {
+			changelogHasErrors := errorSummary.ChangelogHasAnyErrors()
+			versions[i].ChangelogHasErrors = &changelogHasErrors
 		}
 	}
 	return &view.PublishedVersionsView{Versions: versions}, nil
@@ -754,14 +760,10 @@ func (v versionServiceImpl) GetPackageVersionContent(ctx context.Context, packag
 	if err != nil {
 		return nil, err
 	}
-	erroredReferences := false
 	apiTypeHasErrors := make(map[string]bool)
 	ddlHasErrors := false
 	mcpEndpointHasErrors := make(map[string]bool)
 	for _, ent := range documentErrorEnts {
-		if ent.ReferencedVersionHasErrors {
-			erroredReferences = true
-		}
 		if !ent.HasErrors {
 			continue
 		}
@@ -778,6 +780,14 @@ func (v versionServiceImpl) GetPackageVersionContent(ctx context.Context, packag
 		}
 	}
 
+	errorSummary, err := v.publishedRepo.GetVersionErrorSummary(ctx, versionEnt.PackageId, versionEnt.Version, versionEnt.Revision, showOnlyDeleted)
+	if err != nil {
+		return nil, err
+	}
+	if errorSummary == nil {
+		errorSummary = &entity.VersionErrorSummaryEntity{}
+	}
+
 	versionContent := &view.VersionContent{
 		PublishedAt:              versionEnt.PublishedAt,
 		PublishedBy:              *entity.MakePrincipalView(&versionEnt.PrincipalEntity),
@@ -790,7 +800,7 @@ func (v versionServiceImpl) GetPackageVersionContent(ctx context.Context, packag
 		Version:                  view.MakeVersionRefKey(versionEnt.Version, versionEnt.Revision),
 		RevisionsCount:           latestRevision,
 		ApiProcessorVersion:      versionEnt.Metadata.GetBuilderVersion(),
-		HasErrors:                versionEnt.Metadata.GetHasErrors() || erroredReferences, // a dashboard owns no documents, so its stored flag never reports the errors of a referenced version.
+		HasErrors:                errorSummary.ContentHasErrors(),
 	}
 
 	versionOperationTypes, err := v.getVersionOperationTypes(ctx, versionEnt, includeSummary, includeOperations, showOnlyDeleted, apiTypeHasErrors)
@@ -807,9 +817,9 @@ func (v versionServiceImpl) GetPackageVersionContent(ctx context.Context, packag
 	versionContent.OperationTypes = versionOperationTypes
 
 	if includeSummary {
-		versionContent.ChangelogHasErrors, err = v.getVersionChangelogHasErrors(ctx, versionEnt)
-		if err != nil {
-			return nil, err
+		if versionEnt.PreviousVersion != "" {
+			changelogHasErrors := errorSummary.ChangelogHasAnyErrors()
+			versionContent.ChangelogHasErrors = &changelogHasErrors
 		}
 
 		versionRefKey := view.MakeVersionRefKey(versionEnt.Version, versionEnt.Revision)
@@ -821,7 +831,6 @@ func (v versionServiceImpl) GetPackageVersionContent(ctx context.Context, packag
 		if err != nil {
 			return nil, err
 		}
-		// A failed document produces no entities, so the counts above can miss a contract type entirely
 		if ddlHasErrors {
 			if ddlSummary == nil {
 				ddlSummary = &view.DdlVersionContractSummary{}
@@ -1068,10 +1077,16 @@ func (v versionServiceImpl) getVersionOperationTypes(ctx context.Context, versio
 		}
 		versionOperationTypes = append(versionOperationTypes, newOpType)
 	}
+	erroredApiTypesWithoutOperations := make([]string, 0, len(apiTypeHasErrors))
 	for apiType := range apiTypeHasErrors {
 		if _, exists := versionSummaryMap[apiType]; exists {
 			continue
 		}
+		erroredApiTypesWithoutOperations = append(erroredApiTypesWithoutOperations, apiType)
+	}
+	//map iteration order is not stable, so the entries are sorted to keep the response reproducible
+	sort.Strings(erroredApiTypesWithoutOperations)
+	for _, apiType := range erroredApiTypesWithoutOperations {
 		//in this case every document of the API type failed to process, so the version exposes no operations
 		//of that type, but the API type is still listed so that the failure is visible
 		newOpType := view.VersionOperationType{
@@ -1102,17 +1117,6 @@ func (v versionServiceImpl) getVersionOperationGroups(ctx context.Context, versi
 		versionOperationGroups = append(versionOperationGroups, entity.MakeVersionOperationGroupView(operationGroupEnt))
 	}
 	return versionOperationGroups, nil
-}
-
-func (v versionServiceImpl) getVersionChangelogHasErrors(ctx context.Context, versionEnt *entity.PackageVersionRevisionEntity) (bool, error) {
-	errorSummary, err := v.publishedRepo.GetVersionErrorSummary(ctx, versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
-	if err != nil {
-		return false, err
-	}
-	if errorSummary == nil {
-		return false, nil
-	}
-	return errorSummary.ChangelogHasErrors, nil
 }
 
 func (v versionServiceImpl) getVersionChangeSummary(ctx context.Context, packageId string, versionName string, revision int) (*view.ChangeSummary, error) {
@@ -2471,72 +2475,9 @@ func (v versionServiceImpl) GetVersionNotifications(ctx context.Context, package
 }
 
 func (v versionServiceImpl) GetComparisonNotifications(ctx context.Context, packageId string, versionName string, previousVersionPackageId string, previousVersion string, filter view.NotificationsFilter) (*view.Notifications, error) {
-	versionEnt, err := v.publishedRepo.GetVersion(ctx, packageId, versionName)
+	comparisonId, _, err := ResolveVersionComparison(ctx, v.publishedRepo, packageId, versionName, previousVersionPackageId, previousVersion)
 	if err != nil {
 		return nil, err
-	}
-	if versionEnt == nil {
-		return nil, &exception.CustomError{
-			Status:  http.StatusNotFound,
-			Code:    exception.PublishedVersionNotFound,
-			Message: exception.PublishedVersionNotFoundMsg,
-			Params:  map[string]interface{}{"version": versionName},
-		}
-	}
-
-	if previousVersion == "" || previousVersionPackageId == "" {
-		if versionEnt.PreviousVersion == "" {
-			return nil, &exception.CustomError{
-				Status:  http.StatusNotFound,
-				Code:    exception.NoPreviousVersion,
-				Message: exception.NoPreviousVersionMsg,
-				Params:  map[string]interface{}{"version": versionName},
-			}
-		}
-		previousVersion = versionEnt.PreviousVersion
-		if versionEnt.PreviousVersionPackageId != "" {
-			previousVersionPackageId = versionEnt.PreviousVersionPackageId
-		} else {
-			previousVersionPackageId = packageId
-		}
-	}
-
-	previousVersionEnt, err := v.publishedRepo.GetVersion(ctx, previousVersionPackageId, previousVersion)
-	if err != nil {
-		return nil, err
-	}
-	if previousVersionEnt == nil {
-		return nil, &exception.CustomError{
-			Status:  http.StatusNotFound,
-			Code:    exception.PublishedPackageVersionNotFound,
-			Message: exception.PublishedPackageVersionNotFoundMsg,
-			Params:  map[string]interface{}{"version": previousVersion, "packageId": previousVersionPackageId},
-		}
-	}
-
-	comparisonId := view.MakeVersionComparisonId(
-		versionEnt.PackageId, versionEnt.Version, versionEnt.Revision,
-		previousVersionEnt.PackageId, previousVersionEnt.Version, previousVersionEnt.Revision,
-	)
-	versionComparison, err := v.publishedRepo.GetVersionComparison(ctx, comparisonId)
-	if err != nil {
-		return nil, err
-	}
-	if versionComparison == nil {
-		return nil, &exception.CustomError{
-			Status:  http.StatusNotFound,
-			Code:    exception.ComparisonNotFound,
-			Message: exception.ComparisonNotFoundMsg,
-			Params: map[string]interface{}{
-				"comparisonId":      comparisonId,
-				"packageId":         versionEnt.PackageId,
-				"version":           versionEnt.Version,
-				"revision":          versionEnt.Revision,
-				"previousPackageId": previousVersionEnt.PackageId,
-				"previousVersion":   previousVersionEnt.Version,
-				"previousRevision":  previousVersionEnt.Revision,
-			},
-		}
 	}
 
 	ents, err := v.publishedRepo.GetComparisonNotifications(ctx, comparisonId, filter)

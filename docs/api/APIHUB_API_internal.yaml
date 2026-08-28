@@ -2533,7 +2533,12 @@ components:
         previousVersionRevision:
           type: number
         fromCache:
-          description: True if the changes were retrieved from BE (not calculated).
+          description: |
+            True if the changes were retrieved from BE (not calculated). The flag belongs to the index that
+            carries it, so the operation index and the DDL index may disagree for the same version pair: the
+            operation changes can be reused while the DDL changes are calculated, or the other way round.
+            Changes marked `fromCache` must already be stored in BE for that index; claiming cached changes
+            that were never calculated is rejected.
           type: boolean
     BuildResultComparisons:
       type: object

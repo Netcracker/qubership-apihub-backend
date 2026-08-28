@@ -62,7 +62,7 @@ type MigrationChangelogEntity struct {
 	PreviousPackageId string `pg:"previous_package_id, type:varchar" json:"previousPackageId"`
 	PreviousVersion   string `pg:"previous_version, type:varchar" json:"previousVersion"`
 	PreviousRevision  int    `pg:"previous_revision, type:integer" json:"previousRevision"`
-	SkipReason        string `pg:"skip_reason, type:varchar" json:"skipReason,omitempty"`
+	SkipReason        string `pg:"skip_reason, type:varchar" json:"skipReason"`
 }
 
 type SchemaMigrationEntity struct {

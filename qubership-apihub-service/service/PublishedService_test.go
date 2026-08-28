@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/archive"
@@ -204,7 +205,7 @@ func TestMergeVersionComparisons(t *testing.T) {
 		{ComparisonId: ddlOnlyId, ContractTypes: []view.ContractType{{ContractType: view.ContractTypeDdl}}},
 	}
 
-	merged := mergeVersionComparisons(operationComparisons, ddlComparisons)
+	merged := mergeVersionComparisons(operationComparisons, ddlComparisons, nil)
 
 	byId := make(map[string]*entity.VersionComparisonEntity, len(merged))
 	for _, comparison := range merged {
@@ -292,7 +293,8 @@ func TestMergeVersionComparisonsUnionsHasErrors(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			merged := mergeVersionComparisons(
 				[]*entity.VersionComparisonEntity{tc.operationSide},
-				[]*entity.VersionComparisonEntity{tc.ddlSide})
+				[]*entity.VersionComparisonEntity{tc.ddlSide},
+				nil)
 			if len(merged) != 1 {
 				t.Fatalf("merged %d comparisons, want 1", len(merged))
 			}
@@ -302,8 +304,46 @@ func TestMergeVersionComparisonsUnionsHasErrors(t *testing.T) {
 		})
 	}
 
+	t.Run("errors reported by a cached index are kept", func(t *testing.T) {
+		// The operation changes of a referenced comparison come from cache while its DDL changes are
+		// recalculated, so only the cached entry reports the errors found on the operation changes.
+		rebuiltDdl := &entity.VersionComparisonEntity{ComparisonId: sharedId, Metadata: entity.Metadata{}}
+		merged := mergeVersionComparisons(nil,
+			[]*entity.VersionComparisonEntity{rebuiltDdl},
+			[]*entity.VersionComparisonEntity{errored(sharedId)})
+		if len(merged) != 1 {
+			t.Fatalf("merged %d comparisons, want 1", len(merged))
+		}
+		if !merged[0].Metadata.GetHasErrors() {
+			t.Errorf("errors reported by the cached index must survive the merge")
+		}
+	})
+
+	t.Run("refs reported by a cached index are kept", func(t *testing.T) {
+		// The operation changes of the main comparison come from cache while its DDL changes are
+		// recalculated, so only the cached entry carries the refs collected from the operation index.
+		rebuiltDdl := &entity.VersionComparisonEntity{ComparisonId: sharedId, Metadata: entity.Metadata{}, Refs: []string{"ddl-ref"}}
+		cachedOperation := &entity.VersionComparisonEntity{ComparisonId: sharedId, Metadata: entity.Metadata{}, Refs: []string{"operation-ref"}}
+		merged := mergeVersionComparisons(nil,
+			[]*entity.VersionComparisonEntity{rebuiltDdl},
+			[]*entity.VersionComparisonEntity{cachedOperation})
+		if len(merged) != 1 {
+			t.Fatalf("merged %d comparisons, want 1", len(merged))
+		}
+		if !reflect.DeepEqual(merged[0].Refs, []string{"ddl-ref", "operation-ref"}) {
+			t.Errorf("merged refs = %v, want both indexes' refs", merged[0].Refs)
+		}
+	})
+
+	t.Run("a comparison cached in both indexes produces no row", func(t *testing.T) {
+		merged := mergeVersionComparisons(nil, nil, []*entity.VersionComparisonEntity{errored(ddlOnlyId)})
+		if len(merged) != 0 {
+			t.Errorf("merged %d comparisons, want 0", len(merged))
+		}
+	})
+
 	t.Run("ddl-only comparison keeps its own errors", func(t *testing.T) {
-		merged := mergeVersionComparisons(nil, []*entity.VersionComparisonEntity{errored(ddlOnlyId)})
+		merged := mergeVersionComparisons(nil, []*entity.VersionComparisonEntity{errored(ddlOnlyId)}, nil)
 		if len(merged) != 1 {
 			t.Fatalf("merged %d comparisons, want 1", len(merged))
 		}
@@ -315,26 +355,22 @@ func TestMergeVersionComparisonsUnionsHasErrors(t *testing.T) {
 
 type errorSummaryRepoStub struct {
 	repository.PublishedRepository
-	errorSummary         *entity.VersionErrorSummaryEntity
-	erroredReferences    bool
-	referencesLookupDone bool
+	errorSummary     *entity.VersionErrorSummaryEntity
+	queriedPackageId string
+	queriedRevision  int
 }
 
-func (s *errorSummaryRepoStub) GetVersionErrorSummary(context.Context, string, string, int) (*entity.VersionErrorSummaryEntity, error) {
+func (s *errorSummaryRepoStub) GetVersionErrorSummary(_ context.Context, packageId string, _ string, revision int, _ bool) (*entity.VersionErrorSummaryEntity, error) {
+	s.queriedPackageId = packageId
+	s.queriedRevision = revision
 	return s.errorSummary, nil
-}
-
-func (s *errorSummaryRepoStub) VersionHasErroredReferences(context.Context, string, string, int) (bool, error) {
-	s.referencesLookupDone = true
-	return s.erroredReferences, nil
 }
 
 func TestVersionHasAnyErrors(t *testing.T) {
 	tests := []struct {
-		name              string
-		errorSummary      *entity.VersionErrorSummaryEntity
-		erroredReferences bool
-		expected          bool
+		name         string
+		errorSummary *entity.VersionErrorSummaryEntity
+		expected     bool
 	}{
 		{
 			name:         "version without errors",
@@ -354,10 +390,22 @@ func TestVersionHasAnyErrors(t *testing.T) {
 		},
 		{
 			// A dashboard owns no documents, so its own flags say nothing about its references.
-			name:              "dashboard referencing a version with errors",
-			errorSummary:      &entity.VersionErrorSummaryEntity{},
-			erroredReferences: true,
-			expected:          true,
+			name:         "dashboard referencing a version with errored documents",
+			errorSummary: &entity.VersionErrorSummaryEntity{ReferencedVersionHasErrors: true},
+			expected:     true,
+		},
+		{
+			// This one reaches no public flag: it describes the reference, not the dashboard. The refusals
+			// are the only thing that sees it, which is what stops the reference being added.
+			name:         "dashboard referencing a version whose own changelog is unreliable",
+			errorSummary: &entity.VersionErrorSummaryEntity{ReferencedVersionChangelogHasErrors: true},
+			expected:     true,
+		},
+		{
+			// Part of this dashboard's own changelog failed, so the changelog as a whole is unreliable.
+			name:         "a reference comparison of the dashboard's changelog failed",
+			errorSummary: &entity.VersionErrorSummaryEntity{ComparisonRefsHaveErrors: true},
+			expected:     true,
 		},
 		{
 			// Nothing to judge: an absent version cannot block anything, and the caller reports it missing.
@@ -369,7 +417,7 @@ func TestVersionHasAnyErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo := &errorSummaryRepoStub{errorSummary: tt.errorSummary, erroredReferences: tt.erroredReferences}
+			repo := &errorSummaryRepoStub{errorSummary: tt.errorSummary}
 			hasErrors, err := VersionHasAnyErrors(context.Background(), repo, "QS.PKG", "2026.1", 3)
 			if err != nil {
 				t.Fatalf("expected the predicate to answer, but it failed: %v", err)
@@ -381,15 +429,60 @@ func TestVersionHasAnyErrors(t *testing.T) {
 	}
 }
 
-// The references lookup is the second query, so a version whose own flags already report errors must not pay for it.
-func TestVersionHasAnyErrorsSkipsReferencesWhenVersionAlreadyHasErrors(t *testing.T) {
-	repo := &errorSummaryRepoStub{errorSummary: &entity.VersionErrorSummaryEntity{HasErrors: true}}
-
-	if _, err := VersionHasAnyErrors(context.Background(), repo, "QS.PKG", "2026.1", 3); err != nil {
-		t.Fatalf("expected the predicate to answer, but it failed: %v", err)
+// The two public flags must stay apart: neither may report a fact that belongs to the other, and a
+// referenced version's own changelog must reach neither of them.
+func TestVersionErrorSummaryFlagsAreSplit(t *testing.T) {
+	tests := []struct {
+		name                   string
+		summary                entity.VersionErrorSummaryEntity
+		expectedContent        bool
+		expectedChangelog      bool
+		expectedVersionUnsound bool
+	}{
+		{
+			name:                   "the version's own documents failed",
+			summary:                entity.VersionErrorSummaryEntity{HasErrors: true},
+			expectedContent:        true,
+			expectedVersionUnsound: true,
+		},
+		{
+			name:                   "the version's own changelog failed",
+			summary:                entity.VersionErrorSummaryEntity{ChangelogHasErrors: true},
+			expectedChangelog:      true,
+			expectedVersionUnsound: true,
+		},
+		{
+			name:                   "a referenced version has errored documents",
+			summary:                entity.VersionErrorSummaryEntity{ReferencedVersionHasErrors: true},
+			expectedContent:        true,
+			expectedVersionUnsound: true,
+		},
+		{
+			name:                   "a reference comparison of this changelog failed",
+			summary:                entity.VersionErrorSummaryEntity{ComparisonRefsHaveErrors: true},
+			expectedChangelog:      true,
+			expectedVersionUnsound: true,
+		},
+		{
+			// The reference is unusable, but neither of this version's flags describes it.
+			name:                   "a referenced version's own changelog is unreliable",
+			summary:                entity.VersionErrorSummaryEntity{ReferencedVersionChangelogHasErrors: true},
+			expectedVersionUnsound: true,
+		},
 	}
-	if repo.referencesLookupDone {
-		t.Fatal("expected the references lookup to be skipped for a version that already has errors")
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.summary.ContentHasErrors(); got != tt.expectedContent {
+				t.Errorf("ContentHasErrors() = %v, want %v", got, tt.expectedContent)
+			}
+			if got := tt.summary.ChangelogHasAnyErrors(); got != tt.expectedChangelog {
+				t.Errorf("ChangelogHasAnyErrors() = %v, want %v", got, tt.expectedChangelog)
+			}
+			if got := tt.summary.HasAnyErrors(); got != tt.expectedVersionUnsound {
+				t.Errorf("HasAnyErrors() = %v, want %v", got, tt.expectedVersionUnsound)
+			}
+		})
 	}
 }
 
@@ -399,7 +492,7 @@ type failingErrorSummaryRepoStub struct {
 
 var errErrorSummaryLookup = errors.New("version error summary lookup failed")
 
-func (failingErrorSummaryRepoStub) GetVersionErrorSummary(context.Context, string, string, int) (*entity.VersionErrorSummaryEntity, error) {
+func (failingErrorSummaryRepoStub) GetVersionErrorSummary(context.Context, string, string, int, bool) (*entity.VersionErrorSummaryEntity, error) {
 	return nil, errErrorSummaryLookup
 }
 
@@ -413,11 +506,15 @@ func TestVersionHasAnyErrorsPropagatesLookupFailure(t *testing.T) {
 
 type dependentVersionsRepoStub struct {
 	repository.PublishedRepository
-	dependents []entity.PublishedVersionEntity
-	err        error
+	dependents         []entity.PublishedVersionKeyEntity
+	err                error
+	requestedPackageId string
+	requestedVersion   string
 }
 
-func (s dependentVersionsRepoStub) GetVersionsByPreviousVersion(context.Context, string, string) ([]entity.PublishedVersionEntity, error) {
+func (s *dependentVersionsRepoStub) GetVersionRevisionsByPreviousVersion(_ context.Context, previousPackageId string, previousVersionName string) ([]entity.PublishedVersionKeyEntity, error) {
+	s.requestedPackageId = previousPackageId
+	s.requestedVersion = previousVersionName
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -440,10 +537,6 @@ func (s *publisherAccessRoleServiceStub) FilterVersionsByPublisherReadAccess(_ c
 	return s.accessible, s.hidden, nil
 }
 
-func dependentVersion(packageId string, version string, revision int) entity.PublishedVersionEntity {
-	return entity.PublishedVersionEntity{PackageId: packageId, Version: version, Revision: revision}
-}
-
 func dependentKey(packageId string, version string, revision int) entity.PublishedVersionKeyEntity {
 	return entity.PublishedVersionKeyEntity{PackageId: packageId, Version: version, Revision: revision}
 }
@@ -451,8 +544,12 @@ func dependentKey(packageId string, version string, revision int) entity.Publish
 const testPublisherId = "publisher-id"
 
 func erroredBuildArchive(hasErrors bool) *archive.BuildResultArchive {
+	return erroredBuildArchiveForVersion("2026.1", hasErrors)
+}
+
+func erroredBuildArchiveForVersion(version string, hasErrors bool) *archive.BuildResultArchive {
 	return &archive.BuildResultArchive{
-		PackageInfo: view.PackageInfoFile{PackageId: "QS.PKG", Version: "2026.1", CreatedBy: testPublisherId, HasErrors: hasErrors},
+		PackageInfo: view.PackageInfoFile{PackageId: "QS.PKG", Version: version, CreatedBy: testPublisherId, HasErrors: hasErrors},
 	}
 }
 
@@ -460,7 +557,7 @@ func TestCheckNoDependentVersionsForErroredVersion(t *testing.T) {
 	tests := []struct {
 		name            string
 		hasErrors       bool
-		dependents      []entity.PublishedVersionEntity
+		dependents      []entity.PublishedVersionKeyEntity
 		accessible      []entity.PublishedVersionKeyEntity
 		hidden          int
 		expectedListing string
@@ -469,7 +566,7 @@ func TestCheckNoDependentVersionsForErroredVersion(t *testing.T) {
 			// Nothing to protect: the dependents' changelogs stay trustworthy.
 			name:       "build without errors publishes",
 			hasErrors:  false,
-			dependents: []entity.PublishedVersionEntity{dependentVersion("QS.DEP", "1.0", 1)},
+			dependents: []entity.PublishedVersionKeyEntity{dependentKey("QS.DEP", "1.0", 1)},
 		},
 		{
 			name:      "errored build with no dependents publishes",
@@ -478,14 +575,22 @@ func TestCheckNoDependentVersionsForErroredVersion(t *testing.T) {
 		{
 			name:            "every dependent is readable",
 			hasErrors:       true,
-			dependents:      []entity.PublishedVersionEntity{dependentVersion("QS.DEP", "1.0", 1), dependentVersion("QS.OTHER", "2.0", 3)},
+			dependents:      []entity.PublishedVersionKeyEntity{dependentKey("QS.DEP", "1.0", 1), dependentKey("QS.OTHER", "2.0", 3)},
 			accessible:      []entity.PublishedVersionKeyEntity{dependentKey("QS.DEP", "1.0", 1), dependentKey("QS.OTHER", "2.0", 3)},
 			expectedListing: "QS.DEP|1.0@1, QS.OTHER|2.0@3",
 		},
 		{
+			// An older revision of a version that has since been repointed elsewhere still depends on this baseline.
+			name:            "an older revision of a dependent still counts",
+			hasErrors:       true,
+			dependents:      []entity.PublishedVersionKeyEntity{dependentKey("QS.DEP", "1.0", 1), dependentKey("QS.DEP", "1.0", 2)},
+			accessible:      []entity.PublishedVersionKeyEntity{dependentKey("QS.DEP", "1.0", 1), dependentKey("QS.DEP", "1.0", 2)},
+			expectedListing: "QS.DEP|1.0@1, QS.DEP|1.0@2",
+		},
+		{
 			name:            "some dependents are hidden",
 			hasErrors:       true,
-			dependents:      []entity.PublishedVersionEntity{dependentVersion("QS.DEP", "1.0", 1), dependentVersion("QS.SECRET", "2.0", 3)},
+			dependents:      []entity.PublishedVersionKeyEntity{dependentKey("QS.DEP", "1.0", 1), dependentKey("QS.SECRET", "2.0", 3)},
 			accessible:      []entity.PublishedVersionKeyEntity{dependentKey("QS.DEP", "1.0", 1)},
 			hidden:          1,
 			expectedListing: "QS.DEP|1.0@1, and 1 more package version you cannot access (contact system administrator)",
@@ -494,7 +599,7 @@ func TestCheckNoDependentVersionsForErroredVersion(t *testing.T) {
 			// The publisher still learns why the publication was refused, without learning what they may not see.
 			name:            "no dependent is readable",
 			hasErrors:       true,
-			dependents:      []entity.PublishedVersionEntity{dependentVersion("QS.SECRET", "2.0", 3), dependentVersion("QS.OTHER", "1.0", 1)},
+			dependents:      []entity.PublishedVersionKeyEntity{dependentKey("QS.SECRET", "2.0", 3), dependentKey("QS.OTHER", "1.0", 1)},
 			hidden:          2,
 			expectedListing: "2 package versions you cannot access (contact system administrator)",
 		},
@@ -504,7 +609,7 @@ func TestCheckNoDependentVersionsForErroredVersion(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			roleService := &publisherAccessRoleServiceStub{accessible: tt.accessible, hidden: tt.hidden}
 			service := publishedServiceImpl{
-				publishedRepo: dependentVersionsRepoStub{dependents: tt.dependents},
+				publishedRepo: &dependentVersionsRepoStub{dependents: tt.dependents},
 				roleService:   roleService,
 			}
 
@@ -534,12 +639,29 @@ func TestCheckNoDependentVersionsForErroredVersion(t *testing.T) {
 	}
 }
 
+// A migration build names its version as "version@revision", while a dependent stores the baseline as a plain
+// version name, so the lookup has to be made with the name alone.
+func TestCheckNoDependentVersionsForErroredVersionLooksUpThePlainVersionName(t *testing.T) {
+	repo := &dependentVersionsRepoStub{}
+	service := publishedServiceImpl{
+		publishedRepo: repo,
+		roleService:   &publisherAccessRoleServiceStub{},
+	}
+
+	if err := service.checkNoDependentVersionsForErroredVersion(context.Background(), erroredBuildArchiveForVersion("2026.1@4", true)); err != nil {
+		t.Fatalf("expected the publication to be allowed, got %v", err)
+	}
+	if repo.requestedPackageId != "QS.PKG" || repo.requestedVersion != "2026.1" {
+		t.Fatalf("expected the lookup for QS.PKG/2026.1, got %q/%q", repo.requestedPackageId, repo.requestedVersion)
+	}
+}
+
 var errDependentsLookup = errors.New("dependent versions lookup failed")
 
 // A failed lookup must not read as "no dependents": the publication would go through and break their changelogs.
 func TestCheckNoDependentVersionsForErroredVersionPropagatesLookupFailure(t *testing.T) {
 	service := publishedServiceImpl{
-		publishedRepo: dependentVersionsRepoStub{err: errDependentsLookup},
+		publishedRepo: &dependentVersionsRepoStub{err: errDependentsLookup},
 		roleService:   &publisherAccessRoleServiceStub{},
 	}
 
@@ -554,12 +676,227 @@ var errReadAccessFilter = errors.New("read access filtering failed")
 // The same reasoning: a filtering failure must refuse the publication, not allow it.
 func TestCheckNoDependentVersionsForErroredVersionPropagatesFilterFailure(t *testing.T) {
 	service := publishedServiceImpl{
-		publishedRepo: dependentVersionsRepoStub{dependents: []entity.PublishedVersionEntity{dependentVersion("QS.DEP", "1.0", 1)}},
+		publishedRepo: &dependentVersionsRepoStub{dependents: []entity.PublishedVersionKeyEntity{dependentKey("QS.DEP", "1.0", 1)}},
 		roleService:   &publisherAccessRoleServiceStub{err: errReadAccessFilter},
 	}
 
 	err := service.checkNoDependentVersionsForErroredVersion(context.Background(), erroredBuildArchive(true))
 	if !errors.Is(err, errReadAccessFilter) {
 		t.Fatalf("expected the filtering failure to propagate, got %v", err)
+	}
+}
+
+func previousVersionInfo(previousVersionPackageId string, previousVersion string) view.PackageInfoFile {
+	return view.PackageInfoFile{
+		PackageId:                "QS.PKG",
+		Version:                  "2026.1",
+		CreatedBy:                testPublisherId,
+		PreviousVersionPackageId: previousVersionPackageId,
+		PreviousVersion:          previousVersion,
+	}
+}
+
+func TestCheckPreviousVersionHasNoErrors(t *testing.T) {
+	tests := []struct {
+		name            string
+		previousVersion string
+		errorSummary    *entity.VersionErrorSummaryEntity
+		refused         bool
+	}{
+		{
+			// Nothing to compare against, so there is no baseline to distrust.
+			name:         "no previous version",
+			errorSummary: &entity.VersionErrorSummaryEntity{HasErrors: true},
+		},
+		{
+			name:            "sound baseline",
+			previousVersion: "2025.4",
+			errorSummary:    &entity.VersionErrorSummaryEntity{},
+		},
+		{
+			name:            "baseline with errors of its own",
+			previousVersion: "2025.4",
+			errorSummary:    &entity.VersionErrorSummaryEntity{HasErrors: true},
+			refused:         true,
+		},
+		{
+			// The baseline's documents are fine, but the changes it publishes cannot be trusted, so neither
+			// can anything calculated on top of them.
+			name:            "baseline with an unreliable changelog",
+			previousVersion: "2025.4",
+			errorSummary:    &entity.VersionErrorSummaryEntity{ChangelogHasErrors: true},
+			refused:         true,
+		},
+		{
+			name:            "dashboard baseline referencing a version with errored documents",
+			previousVersion: "2025.4",
+			errorSummary:    &entity.VersionErrorSummaryEntity{ReferencedVersionHasErrors: true},
+			refused:         true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &errorSummaryRepoStub{errorSummary: tt.errorSummary}
+			service := publishedServiceImpl{publishedRepo: repo}
+
+			err := service.checkPreviousVersionHasNoErrors(context.Background(), previousVersionInfo("QS.PREV", tt.previousVersion), 7)
+
+			if !tt.refused {
+				if err != nil {
+					t.Fatalf("expected the publication to be allowed, got %v", err)
+				}
+				return
+			}
+			customErr, ok := err.(*exception.CustomError)
+			if !ok {
+				t.Fatalf("expected a CustomError, got %T: %v", err, err)
+			}
+			if customErr.Code != exception.VersionHasErrors {
+				t.Fatalf("expected code %v, got %v", exception.VersionHasErrors, customErr.Code)
+			}
+			if customErr.Message != exception.PreviousVersionHasErrorsMsg {
+				t.Fatalf("expected the previous version message, got %q", customErr.Message)
+			}
+			if customErr.Params["previousVersionPackageId"] != "QS.PREV" || customErr.Params["previousVersion"] != tt.previousVersion {
+				t.Fatalf("expected the baseline to be named in the params, got %v", customErr.Params)
+			}
+		})
+	}
+}
+
+// The build result leaves previousVersionPackageId empty when the baseline lives in the same package.
+func TestCheckPreviousVersionHasNoErrorsDefaultsToTheOwnPackage(t *testing.T) {
+	repo := &errorSummaryRepoStub{errorSummary: &entity.VersionErrorSummaryEntity{}}
+	service := publishedServiceImpl{publishedRepo: repo}
+
+	if err := service.checkPreviousVersionHasNoErrors(context.Background(), previousVersionInfo("", "2025.4"), 7); err != nil {
+		t.Fatalf("expected the publication to be allowed, got %v", err)
+	}
+	if repo.queriedPackageId != "QS.PKG" {
+		t.Fatalf("expected the baseline to be looked up in the published package, got %q", repo.queriedPackageId)
+	}
+	if repo.queriedRevision != 7 {
+		t.Fatalf("expected the resolved revision to be checked, got %v", repo.queriedRevision)
+	}
+}
+
+// A failed lookup must not read as "sound baseline": the changelog would be written against a version with errors.
+func TestCheckPreviousVersionHasNoErrorsPropagatesLookupFailure(t *testing.T) {
+	service := publishedServiceImpl{publishedRepo: failingErrorSummaryRepoStub{}}
+
+	err := service.checkPreviousVersionHasNoErrors(context.Background(), previousVersionInfo("QS.PREV", "2025.4"), 7)
+	if !errors.Is(err, errErrorSummaryLookup) {
+		t.Fatalf("expected the lookup failure to propagate, got %v", err)
+	}
+}
+
+type referencesRepoStub struct {
+	repository.PublishedRepository
+	versions          map[string]*entity.PublishedVersionEntity
+	erroredVersions   map[string]struct{}
+	errorSummaryCalls []string
+}
+
+func referenceKey(packageId string, version string) string {
+	return packageId + "|" + version
+}
+
+func (s *referencesRepoStub) GetVersionIncludingDeleted(_ context.Context, packageId string, version string) (*entity.PublishedVersionEntity, error) {
+	return s.versions[referenceKey(packageId, version)], nil
+}
+
+func (s *referencesRepoStub) GetVersion(_ context.Context, packageId string, version string) (*entity.PublishedVersionEntity, error) {
+	return s.versions[referenceKey(packageId, version)], nil
+}
+
+func (s *referencesRepoStub) GetVersionErrorSummary(_ context.Context, packageId string, version string, _ int, _ bool) (*entity.VersionErrorSummaryEntity, error) {
+	key := referenceKey(packageId, version)
+	s.errorSummaryCalls = append(s.errorSummaryCalls, key)
+	if _, errored := s.erroredVersions[key]; errored {
+		return &entity.VersionErrorSummaryEntity{HasErrors: true}, nil
+	}
+	return &entity.VersionErrorSummaryEntity{}, nil
+}
+
+func referencesRepo(erroredVersions ...string) *referencesRepoStub {
+	errored := make(map[string]struct{}, len(erroredVersions))
+	for _, version := range erroredVersions {
+		errored[referenceKey(version, "1.0")] = struct{}{}
+	}
+	return &referencesRepoStub{
+		versions: map[string]*entity.PublishedVersionEntity{
+			referenceKey("QS.SVC1", "1.0"): {PackageId: "QS.SVC1", Version: "1.0", Revision: 2},
+			referenceKey("QS.SVC2", "1.0"): {PackageId: "QS.SVC2", Version: "1.0", Revision: 1},
+		},
+		erroredVersions: errored,
+	}
+}
+
+var dashboardInfo = view.PackageInfoFile{PackageId: "QS.DASH", Version: "2026.1", Revision: 1}
+
+func dashboardRefs(excludedPackageIds ...string) []view.BCRef {
+	excluded := make(map[string]struct{}, len(excludedPackageIds))
+	for _, packageId := range excludedPackageIds {
+		excluded[packageId] = struct{}{}
+	}
+	refs := make([]view.BCRef, 0, 2)
+	for _, packageId := range []string{"QS.SVC1", "QS.SVC2"} {
+		_, isExcluded := excluded[packageId]
+		refs = append(refs, view.BCRef{RefId: packageId, Version: "1.0", Excluded: isExcluded})
+	}
+	return refs
+}
+
+func TestMakePublishedReferencesEntitiesRefusesReferenceWithErrors(t *testing.T) {
+	repo := referencesRepo("QS.SVC2")
+	service := publishedServiceImpl{publishedRepo: repo}
+
+	_, err := service.makePublishedReferencesEntities(context.Background(), dashboardInfo, dashboardRefs())
+
+	customErr, ok := err.(*exception.CustomError)
+	if !ok {
+		t.Fatalf("expected a CustomError, got %T: %v", err, err)
+	}
+	if customErr.Code != exception.VersionHasErrors {
+		t.Fatalf("expected code %v, got %v", exception.VersionHasErrors, customErr.Code)
+	}
+	if customErr.Message != exception.ReferencedVersionHasErrorsMsg {
+		t.Fatalf("expected the referenced version message, got %q", customErr.Message)
+	}
+	if customErr.Params["packageId"] != "QS.SVC2" || customErr.Params["version"] != "1.0" {
+		t.Fatalf("expected the reference to be named in the params, got %v", customErr.Params)
+	}
+}
+
+// An excluded reference contributes nothing to the dashboard, and the stored predicate ignores it as well.
+func TestMakePublishedReferencesEntitiesAllowsExcludedReferenceWithErrors(t *testing.T) {
+	repo := referencesRepo("QS.SVC2")
+	service := publishedServiceImpl{publishedRepo: repo}
+
+	refEntities, err := service.makePublishedReferencesEntities(context.Background(), dashboardInfo, dashboardRefs("QS.SVC2"))
+	if err != nil {
+		t.Fatalf("expected the publication to be allowed, got %v", err)
+	}
+	if len(refEntities) != 2 {
+		t.Fatalf("expected both references to be stored, got %d", len(refEntities))
+	}
+	if !reflect.DeepEqual(repo.errorSummaryCalls, []string{referenceKey("QS.SVC1", "1.0")}) {
+		t.Fatalf("expected only the included reference to be checked, got %v", repo.errorSummaryCalls)
+	}
+}
+
+func TestMakePublishedReferencesEntitiesAcceptsSoundReferences(t *testing.T) {
+	service := publishedServiceImpl{publishedRepo: referencesRepo()}
+
+	refEntities, err := service.makePublishedReferencesEntities(context.Background(), dashboardInfo, dashboardRefs())
+	if err != nil {
+		t.Fatalf("expected the publication to be allowed, got %v", err)
+	}
+	if len(refEntities) != 2 {
+		t.Fatalf("expected both references to be stored, got %d", len(refEntities))
+	}
+	if refEntities[0].RefPackageId != "QS.SVC1" || refEntities[0].RefRevision != 2 {
+		t.Fatalf("expected the reference to be resolved to its latest revision, got %+v", refEntities[0])
 	}
 }

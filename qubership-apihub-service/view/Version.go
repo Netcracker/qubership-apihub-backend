@@ -20,7 +20,7 @@ type VersionContent struct {
 	ApiProcessorVersion      string                  `json:"apiProcessorVersion"`
 	ContractsSummary         *ContractsSummaryView   `json:"contractsSummary,omitempty"`
 	HasErrors                bool                    `json:"hasErrors"`
-	ChangelogHasErrors       bool                    `json:"changelogHasErrors,omitempty"`
+	ChangelogHasErrors       *bool                   `json:"changelogHasErrors,omitempty"`
 }
 
 // ContractsSummaryView is an object keyed by contract type (ddl, mcp).
@@ -94,6 +94,7 @@ type PublishedVersionListView struct {
 	NotLatestRevision        bool                   `json:"notLatestRevision,omitempty"`
 	ApiProcessorVersion      string                 `json:"apiProcessorVersion"`
 	HasErrors                bool                   `json:"hasErrors"`
+	ChangelogHasErrors       *bool                  `json:"changelogHasErrors,omitempty"`
 }
 
 // PublishedVersionListMCPView is a compact view used in MCP resources.
