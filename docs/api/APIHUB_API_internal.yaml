@@ -1555,6 +1555,8 @@ components:
                   type: array
                   items:
                     $ref: "#/components/schemas/ComparisonInternalDocumentMetadata"
+            cached-comparisons.json:
+              $ref: "#/components/schemas/BuildResultCachedComparisons"
             comparisons.json:
               $ref: "#/components/schemas/BuildResultComparisons"
             comparisons/{comparisonFileId}:
@@ -1742,6 +1744,8 @@ components:
                       example: "cloudQSS-release2"
             comparison-internal-documents.json:
               $ref: "#/components/schemas/BuildResultInternalDocuments"
+            cached-comparisons.json:
+              $ref: "#/components/schemas/BuildResultCachedComparisons"
             comparisons.json:
               $ref: "#/components/schemas/BuildResultComparisons"
             comparisons/{comparisonFileId}:
@@ -2619,9 +2623,10 @@ components:
             Messages grouped by the version pair they were produced for.
 
             Contains an entry only for comparisons this build actually calculated. A comparison reused from
-            the backend (fromCache = true in comparisons.json) has no entry, because nothing was computed for
-            it - an empty entry would replace the notifications stored when that comparison was calculated.
-            Its hasErrors flag is still reported in comparisons.json, carried over from the stored comparison.
+            the backend (its version pair is listed in cached-comparisons.json) has no entry, because nothing
+            was computed for it - an empty entry would replace the notifications stored when that comparison
+            was calculated. Its hasErrors flag is still reported in comparisons.json, carried over from the
+            stored comparison.
           type: array
           items:
             allOf:
@@ -2640,6 +2645,8 @@ components:
         Common metadata for a single version-to-version comparison entry, shared by the operation comparison
         index (comparisons.json) and the DDL comparison index (ddl-comparisons.json). Each index extends this
         with its own change-summary field (`operationTypes` / `contractsChangesSummary`).
+
+        Reuse of a comparison is recorded per version pair in cached-comparisons.json.
       properties:
         comparisonFileId:
           type: string
@@ -2667,22 +2674,65 @@ components:
           example: "QS.CloudQSS.CPQ.Q-TMF"
         previousVersionRevision:
           type: number
-        fromCache:
-          description: True if the changes were retrieved from BE (not calculated).
-          type: boolean
         hasErrors:
           description: |
             Flag showing that the changelog calculation for this version pair produced at least one message
             with severity = 0 (Error), i.e. the comparison may be incomplete or inaccurate.
             See comparison-notifications.json for the details.
 
-            When fromCache = true the comparison was reused rather than calculated, so the flag is carried
-            over from the stored comparison and comparison-notifications.json holds no entry for it.
+            When the version pair is listed in cached-comparisons.json the comparison was reused rather than
+            calculated, so the flag is carried over from the stored comparison and comparison-notifications.json
+            holds no entry for it.
 
             The flag describes the comparison only. It does not mark the compared versions and does not
             prevent publication of a version in `release` status.
           type: boolean
           default: false
+    BuildResultCachedComparisons:
+      type: object
+      description: |
+        Content of cached-comparisons.json - the version pairs whose comparison the build reused from the backend instead of calculating.
+        An entry means the following for the pair it names:
+          - the stored comparison is kept, the archive carries no recalculated one;
+          - the archive carries no changes and no notifications for the pair;
+          - the pair keeps its entry in comparisons.json.
+        One entry covers both comparison indexes, comparisons.json and ddl-comparisons.json.
+        Only the references of a dashboard are reused. The pair the build was started for is always calculated and is never listed.
+        The file is present whenever comparisons.json is present. The list is empty when nothing was reused.
+      properties:
+        cachedComparisons:
+          description: |
+            Version pairs reused from the backend. Each is identified by the same six fields that identify a comparison entry and carries the same values as that entry.
+            revision and previousVersionRevision are 0 when the version carries no revision.
+          type: array
+          items:
+            type: object
+            required:
+              - packageId
+              - version
+              - previousVersionPackageId
+              - previousVersion
+            properties:
+              packageId:
+                description: Package unique string identifier (full alias).
+                type: string
+                example: "QS.CloudQSS.CPQ.Q-TMF"
+              version:
+                description: Version name for publication.
+                type: string
+                example: "2022.3"
+              revision:
+                type: number
+              previousVersionPackageId:
+                description: Previous release version package id.
+                type: string
+                example: "QS.CloudQSS.CPQ.Q-TMF"
+              previousVersion:
+                description: Name of the previous published version.
+                type: string
+                example: "2022.2"
+              previousVersionRevision:
+                type: number
     BuildResultComparisons:
       type: object
       properties:
