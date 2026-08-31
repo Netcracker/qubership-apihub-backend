@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp/providers"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service/cleanup"
 	"github.com/Netcracker/qubership-apihub-commons-go/api-spec-exposer/config"
@@ -78,7 +79,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	responder := utils.NewResponder(systemInfoService.ShowDebugInResponse())
+	responder := responder.NewResponder(systemInfoService.ShowDebugInResponse())
 	authHandler := security.NewAuthHandler(responder)
 	if err := utils.ValidateTLSAtStartup(); err != nil {
 		log.Fatalf("TLS configuration failed: %v", err)
