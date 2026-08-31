@@ -6,8 +6,8 @@ import (
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 )
 
@@ -18,7 +18,7 @@ type InternalDocumentController interface {
 	GetComparisonInternalDocumentData(w http.ResponseWriter, r *http.Request)
 }
 
-func NewInternalDocumentController(publishedService service.PublishedService, roleService service.RoleService, responder *utils.Responder) InternalDocumentController {
+func NewInternalDocumentController(publishedService service.PublishedService, roleService service.RoleService, responder *responder.Responder) InternalDocumentController {
 	return &internalDocumentControllerImpl{
 		publishedService: publishedService,
 		roleService:      roleService,
@@ -29,7 +29,7 @@ func NewInternalDocumentController(publishedService service.PublishedService, ro
 type internalDocumentControllerImpl struct {
 	publishedService service.PublishedService
 	roleService      service.RoleService
-	responder        *utils.Responder
+	responder        *responder.Responder
 }
 
 func (c *internalDocumentControllerImpl) GetVersionInternalDocuments(w http.ResponseWriter, r *http.Request) {

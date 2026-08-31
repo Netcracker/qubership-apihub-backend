@@ -8,19 +8,19 @@ import (
 	"unicode/utf8"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security"
 	aiservice "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/gorilla/mux"
 )
 
 // Download: resolve file row (404 if missing/expired) before JWT check, then ownership.
 type EphemeralFileController struct {
 	svc       aiservice.EphemeralFileService
-	responder *utils.Responder
+	responder *responder.Responder
 }
 
-func NewEphemeralFileController(svc aiservice.EphemeralFileService, responder *utils.Responder) *EphemeralFileController {
+func NewEphemeralFileController(svc aiservice.EphemeralFileService, responder *responder.Responder) *EphemeralFileController {
 	return &EphemeralFileController{svc: svc, responder: responder}
 }
 

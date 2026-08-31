@@ -6,10 +6,9 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
-
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 )
@@ -19,7 +18,7 @@ type ActivityTrackingController interface {
 	GetActivityHistoryForPackage(w http.ResponseWriter, r *http.Request)
 }
 
-func NewActivityTrackingController(activityTrackingService service.ActivityTrackingService, roleService service.RoleService, ptHandler service.PackageTransitionHandler, responder *utils.Responder) ActivityTrackingController {
+func NewActivityTrackingController(activityTrackingService service.ActivityTrackingService, roleService service.RoleService, ptHandler service.PackageTransitionHandler, responder *responder.Responder) ActivityTrackingController {
 	return &activityTrackingControllerImpl{activityTrackingService: activityTrackingService, roleService: roleService, ptHandler: ptHandler, responder: responder}
 }
 
@@ -27,7 +26,7 @@ type activityTrackingControllerImpl struct {
 	activityTrackingService service.ActivityTrackingService
 	roleService             service.RoleService
 	ptHandler               service.PackageTransitionHandler
-	responder               *utils.Responder
+	responder               *responder.Responder
 }
 
 func (a activityTrackingControllerImpl) GetActivityHistory(w http.ResponseWriter, r *http.Request) {

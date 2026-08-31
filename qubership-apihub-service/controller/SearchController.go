@@ -11,6 +11,7 @@ import (
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/metrics"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
@@ -23,7 +24,7 @@ type SearchController interface {
 	Search(w http.ResponseWriter, r *http.Request)
 }
 
-func NewSearchController(operationService service.OperationService, versionService service.VersionService, monitoringService service.MonitoringService, ddlContractService service.DDLContractService, mcpContractService service.MCPContractService, responder *utils.Responder) SearchController {
+func NewSearchController(operationService service.OperationService, versionService service.VersionService, monitoringService service.MonitoringService, ddlContractService service.DDLContractService, mcpContractService service.MCPContractService, responder *responder.Responder) SearchController {
 	return &searchControllerImpl{
 		operationService:   operationService,
 		versionService:     versionService,
@@ -40,7 +41,7 @@ type searchControllerImpl struct {
 	monitoringService  service.MonitoringService
 	ddlContractService service.DDLContractService
 	mcpContractService service.MCPContractService
-	responder          *utils.Responder
+	responder          *responder.Responder
 }
 
 func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {

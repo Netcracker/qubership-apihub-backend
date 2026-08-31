@@ -13,6 +13,7 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/metrics"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -47,7 +48,7 @@ type VersionController interface {
 }
 
 func NewVersionController(versionService service.VersionService, roleService service.RoleService, monitoringService service.MonitoringService,
-	ptHandler service.PackageTransitionHandler, isSysadm func(context.SecurityContext) bool, excelService service.ExcelService, shareabilityReportSizeLimit int64, responder *utils.Responder) VersionController {
+	ptHandler service.PackageTransitionHandler, isSysadm func(context.SecurityContext) bool, excelService service.ExcelService, shareabilityReportSizeLimit int64, responder *responder.Responder) VersionController {
 	return &versionControllerImpl{
 		versionService:              versionService,
 		roleService:                 roleService,
@@ -68,7 +69,7 @@ type versionControllerImpl struct {
 	isSysadm                    func(context.SecurityContext) bool
 	excelService                service.ExcelService
 	shareabilityReportSizeLimit int64
-	responder                   *utils.Responder
+	responder                   *responder.Responder
 }
 
 func (v versionControllerImpl) SharePublishedFile(w http.ResponseWriter, r *http.Request) {

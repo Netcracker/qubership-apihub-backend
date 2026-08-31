@@ -7,8 +7,8 @@ import (
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 )
 
@@ -19,7 +19,7 @@ type MCPContractController interface {
 
 func NewMCPContractController(roleService service.RoleService,
 	mcpContractService service.MCPContractService,
-	ptHandler service.PackageTransitionHandler, responder *utils.Responder) MCPContractController {
+	ptHandler service.PackageTransitionHandler, responder *responder.Responder) MCPContractController {
 	return &mcpContractControllerImpl{
 		roleService:        roleService,
 		mcpContractService: mcpContractService,
@@ -32,7 +32,7 @@ type mcpContractControllerImpl struct {
 	roleService        service.RoleService
 	mcpContractService service.MCPContractService
 	ptHandler          service.PackageTransitionHandler
-	responder          *utils.Responder
+	responder          *responder.Responder
 }
 
 func (c *mcpContractControllerImpl) checkReadAccess(w http.ResponseWriter, r *http.Request, packageId string) bool {

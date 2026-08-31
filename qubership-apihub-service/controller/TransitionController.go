@@ -8,6 +8,7 @@ import (
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -20,7 +21,7 @@ type TransitionController interface {
 	ListPackageTransitions(w http.ResponseWriter, r *http.Request)
 }
 
-func NewTransitionController(tService service.TransitionService, isSysadmFunc func(context.SecurityContext) bool, responder *utils.Responder) TransitionController {
+func NewTransitionController(tService service.TransitionService, isSysadmFunc func(context.SecurityContext) bool, responder *responder.Responder) TransitionController {
 	return &transitionControllerImpl{
 		tService:     tService,
 		isSysadmFunc: isSysadmFunc,
@@ -31,7 +32,7 @@ func NewTransitionController(tService service.TransitionService, isSysadmFunc fu
 type transitionControllerImpl struct {
 	tService     service.TransitionService
 	isSysadmFunc func(context.SecurityContext) bool
-	responder    *utils.Responder
+	responder    *responder.Responder
 }
 
 func (t transitionControllerImpl) MoveOrRenamePackage(w http.ResponseWriter, r *http.Request) {

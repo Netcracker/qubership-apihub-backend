@@ -7,6 +7,12 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"fmt"
+	"net/http"
+	"net/url"
+	"os"
+	"time"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
@@ -16,13 +22,9 @@ import (
 	dsig "github.com/russellhaering/goxmldsig"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"
-	"net/http"
-	"net/url"
-	"os"
-	"time"
 )
 
-func NewIDPManager(authConfig idp.AuthConfig, allowedHosts []string, productionMode bool, userService service.UserService, responder *utils.Responder) (idp.Manager, error) {
+func NewIDPManager(authConfig idp.AuthConfig, allowedHosts []string, productionMode bool, userService service.UserService, responder *responder.Responder) (idp.Manager, error) {
 	idpManager := idpManagerImpl{
 		config:    authConfig,
 		providers: make(map[string]idp.Provider),
@@ -71,7 +73,7 @@ func (i *idpManagerImpl) IsSSOIntegrationEnabled() bool {
 	return len(i.config.Providers) > 0
 }
 
-func (i *idpManagerImpl) createSAMLProvider(idpConfig idp.IDP, userService service.UserService, responder *utils.Responder) (idp.Provider, error) {
+func (i *idpManagerImpl) createSAMLProvider(idpConfig idp.IDP, userService service.UserService, responder *responder.Responder) (idp.Provider, error) {
 	samlInstance, err := CreateSAMLInstance(idpConfig.Id, idpConfig.SAMLConfiguration)
 	if err != nil {
 		return nil, err
@@ -80,7 +82,7 @@ func (i *idpManagerImpl) createSAMLProvider(idpConfig idp.IDP, userService servi
 	return newSAMLProvider(samlInstance, idpConfig, userService, rootURL.Hostname(), responder), nil
 }
 
-func (i *idpManagerImpl) createOIDCProvider(idpConfig idp.IDP, userService service.UserService, allowedHosts []string, productionMode bool, responder *utils.Responder) (idp.Provider, error) {
+func (i *idpManagerImpl) createOIDCProvider(idpConfig idp.IDP, userService service.UserService, allowedHosts []string, productionMode bool, responder *responder.Responder) (idp.Provider, error) {
 	if idpConfig.OIDCConfiguration == nil {
 		log.Error("OIDC configuration is invalid")
 		return nil, fmt.Errorf("OIDC configuration is invalid")

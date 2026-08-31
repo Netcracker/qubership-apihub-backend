@@ -7,6 +7,7 @@ import (
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -18,7 +19,7 @@ type SysAdminController interface {
 	DeleteSystemAdministrator(w http.ResponseWriter, r *http.Request)
 }
 
-func NewSysAdminController(roleService service.RoleService, responder *utils.Responder) SysAdminController {
+func NewSysAdminController(roleService service.RoleService, responder *responder.Responder) SysAdminController {
 	return &sysAdminControllerImpl{
 		roleService: roleService,
 		responder:   responder,
@@ -27,7 +28,7 @@ func NewSysAdminController(roleService service.RoleService, responder *utils.Res
 
 type sysAdminControllerImpl struct {
 	roleService service.RoleService
-	responder   *utils.Responder
+	responder   *responder.Responder
 }
 
 func (a sysAdminControllerImpl) GetSystemAdministrators(w http.ResponseWriter, r *http.Request) {

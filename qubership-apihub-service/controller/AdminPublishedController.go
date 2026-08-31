@@ -4,19 +4,19 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 )
 
 type AdminPublishedController interface {
 	ReplaceVersionSources(w http.ResponseWriter, r *http.Request)
 }
 
-func NewAdminPublishedController(publishedService service.PublishedService, isSysadm func(ctx context.SecurityContext) bool, publishArchiveSizeLimit int64, responder *utils.Responder) AdminPublishedController {
+func NewAdminPublishedController(publishedService service.PublishedService, isSysadm func(ctx context.SecurityContext) bool, publishArchiveSizeLimit int64, responder *responder.Responder) AdminPublishedController {
 	return &adminPublishedControllerImpl{
 		publishedService:        publishedService,
 		isSysadm:                isSysadm,
@@ -29,7 +29,7 @@ type adminPublishedControllerImpl struct {
 	publishedService        service.PublishedService
 	isSysadm                func(ctx context.SecurityContext) bool
 	publishArchiveSizeLimit int64
-	responder               *utils.Responder
+	responder               *responder.Responder
 }
 
 func (c adminPublishedControllerImpl) ReplaceVersionSources(w http.ResponseWriter, r *http.Request) {

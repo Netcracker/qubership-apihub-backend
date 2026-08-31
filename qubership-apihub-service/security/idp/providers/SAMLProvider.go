@@ -4,18 +4,19 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
+
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	"github.com/crewjam/saml"
 	"github.com/crewjam/saml/samlsp"
 	log "github.com/sirupsen/logrus"
-	"net/http"
-	"net/url"
-	"strings"
 )
 
 const (
@@ -31,10 +32,10 @@ type samlProvider struct {
 	config       idp.IDP
 	userService  service.UserService
 	apihubHost   string
-	responder    *utils.Responder
+	responder    *responder.Responder
 }
 
-func newSAMLProvider(samlInstance *samlsp.Middleware, config idp.IDP, userService service.UserService, apihubHost string, responder *utils.Responder) idp.Provider {
+func newSAMLProvider(samlInstance *samlsp.Middleware, config idp.IDP, userService service.UserService, apihubHost string, responder *responder.Responder) idp.Provider {
 	return &samlProvider{
 		samlInstance: samlInstance,
 		config:       config,
@@ -56,7 +57,7 @@ func (s samlProvider) ServeMetadata(w http.ResponseWriter, r *http.Request) {
 	ServeMetadata(w, r, s.responder, s.samlInstance)
 }
 
-func StartSAMLAuthentication(w http.ResponseWriter, r *http.Request, responder *utils.Responder, samlInstance *samlsp.Middleware, apihubHost string) {
+func StartSAMLAuthentication(w http.ResponseWriter, r *http.Request, responder *responder.Responder, samlInstance *samlsp.Middleware, apihubHost string) {
 	if samlInstance == nil {
 		log.Errorf("Cannot StartSamlAuthentication with nil samlInstance")
 		responder.RespondWithCustomError(w, &exception.CustomError{
@@ -103,7 +104,7 @@ func StartSAMLAuthentication(w http.ResponseWriter, r *http.Request, responder *
 	samlInstance.HandleStartAuthFlow(w, r)
 }
 
-func HandleAssertion(w http.ResponseWriter, r *http.Request, responder *utils.Responder, userService service.UserService, samlInstance *samlsp.Middleware, providerId string, apihubHost string, setAuthCookie func(w http.ResponseWriter, user *view.User, refreshTokenPath string) error) {
+func HandleAssertion(w http.ResponseWriter, r *http.Request, responder *responder.Responder, userService service.UserService, samlInstance *samlsp.Middleware, providerId string, apihubHost string, setAuthCookie func(w http.ResponseWriter, user *view.User, refreshTokenPath string) error) {
 	if samlInstance == nil {
 		log.Errorf("Cannot run AssertionConsumerHandler with nill samlInstanse")
 		responder.RespondWithCustomError(w, &exception.CustomError{
@@ -299,7 +300,7 @@ func getOrCreateUser(userService service.UserService, assertionAttributes map[st
 	return user, nil
 }
 
-func ServeMetadata(w http.ResponseWriter, r *http.Request, responder *utils.Responder, samlInstance *samlsp.Middleware) {
+func ServeMetadata(w http.ResponseWriter, r *http.Request, responder *responder.Responder, samlInstance *samlsp.Middleware) {
 	if samlInstance == nil {
 		log.Errorf("Cannot serveMetadata with nil samlInstanse")
 		responder.RespondWithCustomError(w, &exception.CustomError{

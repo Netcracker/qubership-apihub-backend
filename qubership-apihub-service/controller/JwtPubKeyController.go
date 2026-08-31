@@ -1,22 +1,23 @@
 package controller
 
 import (
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"net/http"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security"
 )
 
 type JwtPubKeyController interface {
 	GetRsaPublicKey(w http.ResponseWriter, r *http.Request)
 }
 
-func NewJwtPubKeyController(responder *utils.Responder) JwtPubKeyController {
+func NewJwtPubKeyController(responder *responder.Responder) JwtPubKeyController {
 	return &jwtPubKeyControllerImpl{responder: responder}
 }
 
 type jwtPubKeyControllerImpl struct {
-	responder *utils.Responder
+	responder *responder.Responder
 }
 
 func (t jwtPubKeyControllerImpl) GetRsaPublicKey(w http.ResponseWriter, r *http.Request) {

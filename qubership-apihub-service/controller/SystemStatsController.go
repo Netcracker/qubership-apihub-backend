@@ -5,15 +5,15 @@ import (
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 )
 
 type SystemStatsController interface {
 	GetSystemStats(w http.ResponseWriter, r *http.Request)
 }
 
-func NewSystemStatsController(statsService service.SystemStatsService, roleService service.RoleService, responder *utils.Responder) SystemStatsController {
+func NewSystemStatsController(statsService service.SystemStatsService, roleService service.RoleService, responder *responder.Responder) SystemStatsController {
 	return &systemStatsControllerImpl{
 		statsService: statsService,
 		roleService:  roleService,
@@ -24,7 +24,7 @@ func NewSystemStatsController(statsService service.SystemStatsService, roleServi
 type systemStatsControllerImpl struct {
 	statsService service.SystemStatsService
 	roleService  service.RoleService
-	responder    *utils.Responder
+	responder    *responder.Responder
 }
 
 func (s systemStatsControllerImpl) GetSystemStats(w http.ResponseWriter, r *http.Request) {

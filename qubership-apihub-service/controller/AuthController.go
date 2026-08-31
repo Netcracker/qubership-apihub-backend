@@ -1,13 +1,14 @@
 package controller
 
 import (
+	"net/http"
+
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	log "github.com/sirupsen/logrus"
-	"net/http"
 )
 
 type AuthController interface {
@@ -18,7 +19,7 @@ type AuthController interface {
 	GetSystemConfigurationInfo(w http.ResponseWriter, r *http.Request)
 }
 
-func NewAuthController(systemInfoService service.SystemInfoService, idpManager idp.Manager, responder *utils.Responder) AuthController {
+func NewAuthController(systemInfoService service.SystemInfoService, idpManager idp.Manager, responder *responder.Responder) AuthController {
 	return &authControllerImpl{
 		idpManager:        idpManager,
 		systemInfoService: systemInfoService,
@@ -29,7 +30,7 @@ func NewAuthController(systemInfoService service.SystemInfoService, idpManager i
 type authControllerImpl struct {
 	idpManager        idp.Manager
 	systemInfoService service.SystemInfoService
-	responder         *utils.Responder
+	responder         *responder.Responder
 }
 
 func (a *authControllerImpl) ServeMetadata(w http.ResponseWriter, r *http.Request) {

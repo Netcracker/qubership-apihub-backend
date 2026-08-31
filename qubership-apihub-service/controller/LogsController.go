@@ -3,9 +3,10 @@ package controller
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"io/ioutil"
 	"net/http"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	log "github.com/sirupsen/logrus"
@@ -20,7 +21,7 @@ type LogsController interface {
 	CheckLogLevel(w http.ResponseWriter, r *http.Request)
 }
 
-func NewLogsController(logsService service.LogsService, roleService service.RoleService, responder *utils.Responder) LogsController {
+func NewLogsController(logsService service.LogsService, roleService service.RoleService, responder *responder.Responder) LogsController {
 	return &logsControllerImpl{
 		logsService: logsService,
 		roleService: roleService,
@@ -31,7 +32,7 @@ func NewLogsController(logsService service.LogsService, roleService service.Role
 type logsControllerImpl struct {
 	logsService service.LogsService
 	roleService service.RoleService
-	responder   *utils.Responder
+	responder   *responder.Responder
 }
 
 func (l logsControllerImpl) StoreLogs(w http.ResponseWriter, r *http.Request) {

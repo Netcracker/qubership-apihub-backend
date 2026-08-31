@@ -6,17 +6,17 @@ import (
 	"runtime/debug"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/shaj13/go-guardian/v2/auth"
 	"github.com/shaj13/go-guardian/v2/auth/strategies/union"
 	log "github.com/sirupsen/logrus"
 )
 
 type AuthHandler struct {
-	responder *utils.Responder
+	responder *responder.Responder
 }
 
-func NewAuthHandler(responder *utils.Responder) *AuthHandler {
+func NewAuthHandler(responder *responder.Responder) *AuthHandler {
 	return &AuthHandler{responder: responder}
 }
 

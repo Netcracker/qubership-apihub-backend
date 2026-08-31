@@ -7,6 +7,7 @@ import (
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -20,7 +21,7 @@ type ApihubApiKeyController interface {
 	GetApiKeyById(w http.ResponseWriter, r *http.Request)
 }
 
-func NewApihubApiKeyController(apihubApiKeyService service.ApihubApiKeyService, roleService service.RoleService, responder *utils.Responder) ApihubApiKeyController {
+func NewApihubApiKeyController(apihubApiKeyService service.ApihubApiKeyService, roleService service.RoleService, responder *responder.Responder) ApihubApiKeyController {
 	return &ApihubApiKeyControllerImpl{
 		apihubApiKeyService: apihubApiKeyService,
 		roleService:         roleService,
@@ -31,7 +32,7 @@ func NewApihubApiKeyController(apihubApiKeyService service.ApihubApiKeyService, 
 type ApihubApiKeyControllerImpl struct {
 	apihubApiKeyService service.ApihubApiKeyService
 	roleService         service.RoleService
-	responder           *utils.Responder
+	responder           *responder.Responder
 }
 
 func (a ApihubApiKeyControllerImpl) CreateApiKey(w http.ResponseWriter, r *http.Request) {

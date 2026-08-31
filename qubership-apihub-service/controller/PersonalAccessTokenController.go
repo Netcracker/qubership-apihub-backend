@@ -3,13 +3,15 @@ package controller
 import (
 	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
+
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
-	"io"
-	"net/http"
 )
 
 type PersonalAccessTokenController interface {
@@ -19,7 +21,7 @@ type PersonalAccessTokenController interface {
 	GetPatByPat(w http.ResponseWriter, r *http.Request)
 }
 
-func NewPersonalAccessTokenController(svc service.PersonalAccessTokenService, responder *utils.Responder) PersonalAccessTokenController {
+func NewPersonalAccessTokenController(svc service.PersonalAccessTokenService, responder *responder.Responder) PersonalAccessTokenController {
 	return &PersonalAccessTokenControllerImpl{
 		svc:       svc,
 		responder: responder,
@@ -28,7 +30,7 @@ func NewPersonalAccessTokenController(svc service.PersonalAccessTokenService, re
 
 type PersonalAccessTokenControllerImpl struct {
 	svc       service.PersonalAccessTokenService
-	responder *utils.Responder
+	responder *responder.Responder
 }
 
 func (u PersonalAccessTokenControllerImpl) CreatePAT(w http.ResponseWriter, r *http.Request) {

@@ -8,6 +8,7 @@ import (
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -20,7 +21,7 @@ type PackageExportConfigController interface {
 
 func NewPackageExportConfigController(roleService service.RoleService,
 	expConfSvc service.PackageExportConfigService,
-	ptHandler service.PackageTransitionHandler, responder *utils.Responder) PackageExportConfigController {
+	ptHandler service.PackageTransitionHandler, responder *responder.Responder) PackageExportConfigController {
 	return packageExportConfigControllerImpl{roleService: roleService, expConfSvc: expConfSvc, ptHandler: ptHandler, responder: responder}
 }
 
@@ -28,7 +29,7 @@ type packageExportConfigControllerImpl struct {
 	roleService service.RoleService
 	expConfSvc  service.PackageExportConfigService
 	ptHandler   service.PackageTransitionHandler
-	responder   *utils.Responder
+	responder   *responder.Responder
 }
 
 func (p packageExportConfigControllerImpl) GetConfig(w http.ResponseWriter, r *http.Request) {

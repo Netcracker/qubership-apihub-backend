@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 
@@ -169,7 +169,7 @@ func getLimitQueryParamBase(r *http.Request, defaultLimit, maxLimit int) (int, *
 }
 
 // TODO: duplicate in v2
-func handlePkgRedirectOrRespondWithError(w http.ResponseWriter, r *http.Request, responder *utils.Responder, ptHandler service.PackageTransitionHandler, packageId, msg string, err error) {
+func handlePkgRedirectOrRespondWithError(w http.ResponseWriter, r *http.Request, responder *responder.Responder, ptHandler service.PackageTransitionHandler, packageId, msg string, err error) {
 	if customError, ok := err.(*exception.CustomError); ok {
 		if strings.Contains(r.URL.Path, packageId) &&
 			(customError.Code == exception.PackageNotFound ||

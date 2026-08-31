@@ -5,10 +5,9 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
-
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 )
@@ -18,7 +17,7 @@ type TransformationController interface {
 	GetDataForDocumentsTransformation(w http.ResponseWriter, r *http.Request)
 }
 
-func NewTransformationController(roleService service.RoleService, buildService service.BuildService, versionService service.VersionService, transformationService service.TransformationService, operationGroupService service.OperationGroupService, responder *utils.Responder) TransformationController {
+func NewTransformationController(roleService service.RoleService, buildService service.BuildService, versionService service.VersionService, transformationService service.TransformationService, operationGroupService service.OperationGroupService, responder *responder.Responder) TransformationController {
 	return transformationControllerImpl{roleService: roleService, buildService: buildService, versionService: versionService, transformationService: transformationService, operationGroupService: operationGroupService, responder: responder}
 }
 
@@ -28,7 +27,7 @@ type transformationControllerImpl struct {
 	versionService        service.VersionService
 	transformationService service.TransformationService
 	operationGroupService service.OperationGroupService
-	responder             *utils.Responder
+	responder             *responder.Responder
 }
 
 func (t transformationControllerImpl) TransformDocuments_deprecated_2(w http.ResponseWriter, r *http.Request) {

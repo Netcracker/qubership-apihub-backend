@@ -10,11 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
-
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	log "github.com/sirupsen/logrus"
@@ -33,7 +32,7 @@ func NewPublishV2Controller(buildService service.BuildService,
 	buildResultService service.BuildResultService,
 	roleService service.RoleService,
 	systemInfoService service.SystemInfoService,
-	packageService service.PackageService, responder *utils.Responder) PublishV2Controller {
+	packageService service.PackageService, responder *responder.Responder) PublishV2Controller {
 
 	publishArchiveSizeLimit := systemInfoService.GetPublishArchiveSizeLimitMB()
 	publishFileSizeLimit := systemInfoService.GetPublishFileSizeLimitMB()
@@ -61,7 +60,7 @@ type publishV2ControllerImpl struct {
 
 	publishArchiveSizeLimit int64
 	publishFileSizeLimit    int64 //TODO: why is not used?
-	responder               *utils.Responder
+	responder               *responder.Responder
 }
 
 func (p publishV2ControllerImpl) Publish(w http.ResponseWriter, r *http.Request) {

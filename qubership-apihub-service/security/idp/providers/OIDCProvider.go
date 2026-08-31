@@ -7,7 +7,13 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"time"
+
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
@@ -16,10 +22,6 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"
-	"io"
-	"net/http"
-	"net/url"
-	"time"
 )
 
 const SSOLoginRefreshPathTemplate = "/api/v1/login/sso/%s"
@@ -33,10 +35,10 @@ type oidcProvider struct {
 	allowedHosts   []string
 	apihubHost     string
 	productionMode bool
-	responder      *utils.Responder
+	responder      *responder.Responder
 }
 
-func newOIDCProvider(config idp.IDP, provider *oidc.Provider, verifier *oidc.IDTokenVerifier, oAuth2Config oauth2.Config, userService service.UserService, allowedHosts []string, apihubHost string, productionMode bool, responder *utils.Responder) idp.Provider {
+func newOIDCProvider(config idp.IDP, provider *oidc.Provider, verifier *oidc.IDTokenVerifier, oAuth2Config oauth2.Config, userService service.UserService, allowedHosts []string, apihubHost string, productionMode bool, responder *responder.Responder) idp.Provider {
 	return &oidcProvider{
 		config:         config,
 		provider:       provider,

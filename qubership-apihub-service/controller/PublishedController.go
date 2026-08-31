@@ -5,8 +5,8 @@ import (
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 )
 
@@ -16,7 +16,7 @@ type PublishedController interface {
 	GetPublishedVersionBuildConfig(w http.ResponseWriter, r *http.Request)
 }
 
-func NewPublishedController(versionService service.PublishedService, portalService service.PortalService, roleService service.RoleService, responder *utils.Responder) PublishedController {
+func NewPublishedController(versionService service.PublishedService, portalService service.PortalService, roleService service.RoleService, responder *responder.Responder) PublishedController {
 	return &publishControllerImpl{
 		publishedService: versionService,
 		portalService:    portalService,
@@ -29,7 +29,7 @@ type publishControllerImpl struct {
 	publishedService service.PublishedService
 	portalService    service.PortalService
 	roleService      service.RoleService
-	responder        *utils.Responder
+	responder        *responder.Responder
 }
 
 func (v publishControllerImpl) GetVersionSources(w http.ResponseWriter, r *http.Request) {

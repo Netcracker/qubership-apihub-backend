@@ -7,8 +7,8 @@ import (
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 )
 
@@ -19,7 +19,7 @@ type BuildController interface {
 	GetBuildSources(w http.ResponseWriter, r *http.Request)
 }
 
-func NewBuildController(buildResultService service.BuildResultService, buildService service.BuildService, isSysadm func(ctx context.SecurityContext) bool, responder *utils.Responder) BuildController {
+func NewBuildController(buildResultService service.BuildResultService, buildService service.BuildService, isSysadm func(ctx context.SecurityContext) bool, responder *responder.Responder) BuildController {
 	return &buildControllerImpl{
 		buildResultService: buildResultService,
 		buildService:       buildService,
@@ -32,7 +32,7 @@ type buildControllerImpl struct {
 	buildResultService service.BuildResultService
 	buildService       service.BuildService
 	isSysadm           func(ctx context.SecurityContext) bool
-	responder          *utils.Responder
+	responder          *responder.Responder
 }
 
 func (c buildControllerImpl) GetBuild(w http.ResponseWriter, r *http.Request) {

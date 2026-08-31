@@ -14,6 +14,7 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -31,7 +32,7 @@ type OperationGroupController interface {
 	GetOperationGroupPublishStatus(w http.ResponseWriter, r *http.Request)
 }
 
-func NewOperationGroupController(roleService service.RoleService, operationGroupService service.OperationGroupService, versionService service.VersionService, systemInfoService service.SystemInfoService, packageService service.PackageService, responder *utils.Responder) OperationGroupController {
+func NewOperationGroupController(roleService service.RoleService, operationGroupService service.OperationGroupService, versionService service.VersionService, systemInfoService service.SystemInfoService, packageService service.PackageService, responder *responder.Responder) OperationGroupController {
 	return &operationGroupControllerImpl{
 		roleService:           roleService,
 		operationGroupService: operationGroupService,
@@ -48,7 +49,7 @@ type operationGroupControllerImpl struct {
 	versionService        service.VersionService
 	packageService        service.PackageService
 	templateSizeLimit     int64
-	responder             *utils.Responder
+	responder             *responder.Responder
 }
 
 func (o operationGroupControllerImpl) GetGroupedOperations(w http.ResponseWriter, r *http.Request) {

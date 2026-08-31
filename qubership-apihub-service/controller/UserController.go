@@ -9,6 +9,7 @@ import (
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -26,7 +27,7 @@ type UserController interface {
 	GetExtendedUser(w http.ResponseWriter, r *http.Request)
 }
 
-func NewUserController(service service.UserService, privateUserPackageService service.PrivateUserPackageService, roleService service.RoleService, responder *utils.Responder) UserController {
+func NewUserController(service service.UserService, privateUserPackageService service.PrivateUserPackageService, roleService service.RoleService, responder *responder.Responder) UserController {
 	return &userControllerImpl{
 		service:                   service,
 		privateUserPackageService: privateUserPackageService,
@@ -39,7 +40,7 @@ type userControllerImpl struct {
 	service                   service.UserService
 	privateUserPackageService service.PrivateUserPackageService
 	roleService               service.RoleService
-	responder                 *utils.Responder
+	responder                 *responder.Responder
 }
 
 func (u userControllerImpl) GetUserAvatar(w http.ResponseWriter, r *http.Request) {

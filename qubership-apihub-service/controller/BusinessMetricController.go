@@ -2,9 +2,10 @@ package controller
 
 import (
 	"fmt"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"net/http"
 	"strconv"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
@@ -17,7 +18,7 @@ type BusinessMetricController interface {
 	GetBusinessMetrics(w http.ResponseWriter, r *http.Request)
 }
 
-func NewBusinessMetricController(businessMetricService service.BusinessMetricService, excelService service.ExcelService, isSysadm func(context.SecurityContext) bool, responder *utils.Responder) BusinessMetricController {
+func NewBusinessMetricController(businessMetricService service.BusinessMetricService, excelService service.ExcelService, isSysadm func(context.SecurityContext) bool, responder *responder.Responder) BusinessMetricController {
 	return businessMetricControllerImpl{
 		businessMetricService: businessMetricService,
 		isSysadm:              isSysadm,
@@ -30,7 +31,7 @@ type businessMetricControllerImpl struct {
 	businessMetricService service.BusinessMetricService
 	excelService          service.ExcelService
 	isSysadm              func(context.SecurityContext) bool
-	responder             *utils.Responder
+	responder             *responder.Responder
 }
 
 func (b businessMetricControllerImpl) GetBusinessMetrics(w http.ResponseWriter, r *http.Request) {

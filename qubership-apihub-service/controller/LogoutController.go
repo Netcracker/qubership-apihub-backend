@@ -1,18 +1,20 @@
 package controller
 
 import (
+	"net/http"
+
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
-	"net/http"
 )
 
 type LogoutController interface {
 	Logout(http.ResponseWriter, *http.Request)
 }
 
-func NewLogoutController(tokenRevocationService service.TokenRevocationService, systemInfoService service.SystemInfoService, responder *utils.Responder) LogoutController {
+func NewLogoutController(tokenRevocationService service.TokenRevocationService, systemInfoService service.SystemInfoService, responder *responder.Responder) LogoutController {
 	authConfig := systemInfoService.GetAuthConfig()
 	var refreshTokenPaths []string
 	for _, idp := range authConfig.Providers {
@@ -30,7 +32,7 @@ type logoutControllerImpl struct {
 	tokenRevocationService service.TokenRevocationService
 	refreshTokenPaths      []string
 	productionMode         bool
-	responder              *utils.Responder
+	responder              *responder.Responder
 }
 
 func (l *logoutControllerImpl) Logout(w http.ResponseWriter, r *http.Request) {

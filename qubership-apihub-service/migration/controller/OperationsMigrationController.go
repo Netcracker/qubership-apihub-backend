@@ -10,7 +10,7 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/migration/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/migration/view"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/gorilla/mux"
 )
 
@@ -22,7 +22,7 @@ type OperationsMigrationController interface {
 	GetMigrationPerfReport(w http.ResponseWriter, r *http.Request)
 }
 
-func NewTempMigrationController(migrationService service.DBMigrationService, isSysadmFunc func(context.SecurityContext) bool, responder *utils.Responder) OperationsMigrationController {
+func NewTempMigrationController(migrationService service.DBMigrationService, isSysadmFunc func(context.SecurityContext) bool, responder *responder.Responder) OperationsMigrationController {
 	return &operationsMigrationControllerImpl{
 		migrationService: migrationService,
 		isSysadm:         isSysadmFunc,
@@ -33,7 +33,7 @@ func NewTempMigrationController(migrationService service.DBMigrationService, isS
 type operationsMigrationControllerImpl struct {
 	migrationService service.DBMigrationService
 	isSysadm         func(context.SecurityContext) bool
-	responder        *utils.Responder
+	responder        *responder.Responder
 }
 
 func (t operationsMigrationControllerImpl) StartOpsMigration(w http.ResponseWriter, r *http.Request) {

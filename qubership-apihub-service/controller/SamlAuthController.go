@@ -3,17 +3,18 @@ package controller
 import (
 	"encoding/base64"
 	"encoding/json"
+	"net/http"
+	"net/url"
+
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security/idp/providers"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	"github.com/crewjam/saml/samlsp"
 	log "github.com/sirupsen/logrus"
-	"net/http"
-	"net/url"
 )
 
 type SamlAuthController interface {
@@ -23,7 +24,7 @@ type SamlAuthController interface {
 	GetSystemSSOInfo_deprecated(w http.ResponseWriter, r *http.Request)
 }
 
-func NewSamlAuthController(userService service.UserService, systemInfoService service.SystemInfoService, idpManager idp.Manager, responder *utils.Responder) SamlAuthController {
+func NewSamlAuthController(userService service.UserService, systemInfoService service.SystemInfoService, idpManager idp.Manager, responder *responder.Responder) SamlAuthController {
 	var samlInstance *samlsp.Middleware
 	for _, provider := range idpManager.GetAuthConfig().Providers {
 		if provider.IdpType == idp.IDPTypeExternal && provider.Protocol == idp.AuthProtocolSAML {
@@ -46,7 +47,7 @@ type authenticationControllerImpl struct {
 	userService       service.UserService
 	systemInfoService service.SystemInfoService
 	apihubHost        string
-	responder         *utils.Responder
+	responder         *responder.Responder
 }
 
 func (a *authenticationControllerImpl) ServeMetadata_deprecated(w http.ResponseWriter, r *http.Request) {
