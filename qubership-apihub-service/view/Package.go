@@ -385,6 +385,7 @@ type PackageDocument struct {
 	Metadata     map[string]interface{} `json:"metadata"`
 	Filename     string                 `json:"filename" validate:"required"`
 	Format       string                 `json:"format"`
+	ApiKind      string                 `json:"apiKind"`
 	HasErrors    bool                   `json:"hasErrors"`
 }
 

@@ -129,6 +129,7 @@ func (a *BuildResultToEntitiesReader) ReadDocumentsToEntities(buildConfig *view.
 				OperationIds: document.OperationIds,
 				Filename:     document.Filename,
 				Shareability: view.ShareabilityUnknown,
+				ApiKind:      document.ApiKind,
 			})
 			fileDataEntities = append(fileDataEntities, &entity.PublishedContentDataEntity{
 				PackageId: a.PackageInfo.PackageId,
