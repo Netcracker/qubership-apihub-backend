@@ -205,6 +205,7 @@ type PublishedContentEntity struct {
 	OperationIds []string `pg:"operation_ids, type:varchar[], array"`
 	Filename     string   `pg:"filename, type:varchar"`
 	Shareability string   `pg:"shareability_status, type:varchar"`
+	ApiKind      string   `pg:"api_kind, type:varchar"`
 }
 
 type DocumentErrorSummaryEntity struct {
@@ -411,6 +412,7 @@ func MakePublishedDocumentView(ent *PublishedContentEntity) *view.PublishedDocum
 		Description:  ent.Metadata.GetDescription(),
 		Version:      ent.Metadata.GetVersion(),
 		Shareability: ent.Shareability,
+		ApiKind:      view.ApiKindOrDefault(ent.ApiKind),
 		Info:         ent.Metadata.GetInfo(),
 		ExternalDocs: ent.Metadata.GetExternalDocs(),
 		Title:        ent.Title,
@@ -430,6 +432,7 @@ func MakeDocumentForTransformationView(ent *PublishedContentWithDataEntity) *vie
 		Description:          ent.Metadata.GetDescription(),
 		Version:              ent.Metadata.GetVersion(),
 		Shareability:         ent.Shareability,
+		ApiKind:              view.ApiKindOrDefault(ent.ApiKind),
 		Title:                ent.Title,
 		Filename:             ent.Filename,
 		IncludedOperationIds: ent.OperationIds,
@@ -448,6 +451,7 @@ func MakePublishedDocumentRefView2(ent *PublishedContentEntity) *view.PublishedD
 		Description:  ent.Metadata.GetDescription(),
 		Version:      ent.Metadata.GetVersion(),
 		Shareability: ent.Shareability,
+		ApiKind:      view.ApiKindOrDefault(ent.ApiKind),
 		Title:        ent.Title,
 		Filename:     ent.Filename,
 		PackageRef:   view.MakePackageRefKey(ent.PackageId, ent.Version, ent.Revision),
