@@ -858,9 +858,6 @@ const ReferencedVersionHasErrorsMsg = "Version $version for package $packageId c
 const ReleasePublishWithErrorsMsg = "Version $version for package $packageId cannot be published with the 'release' status because it contains errors. Publish the version as a draft for troubleshooting."
 const ErroredVersionUsedAsPreviousMsg = "Version $version for package $packageId cannot be published because it contains errors and is the previous version of: $dependentVersions. Fix the errors, or change the previous version of those versions, then retry."
 
-const ComparisonChangesNotCalculated = "8900"
-const ComparisonChangesNotCalculatedMsg = "Comparison for versions pair exists, but its $changesKind changes were never calculated, so they cannot be taken from cache (comparisonId=$comparisonId) (packageId:$packageId - version:$version - revision:$revision vs previousPackageId:$previousPackageId - previousVersion:$previousVersion - previousRevision:$previousRevision)"
-
 // AI Chat error codes (APIHUB-AI-*). Each public error has a Code constant; variant
 // messages reuse the parent Code (same pattern as InvalidParameterValue + InvalidLimitMsg).
 

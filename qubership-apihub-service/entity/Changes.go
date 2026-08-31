@@ -318,7 +318,7 @@ func (s OperationSearchTextEntity) GetChanges(t OperationSearchTextEntity) map[s
 	return changes
 }
 
-func (s VersionComparisonEntity) GetChanges(t VersionComparisonEntity, operationChangesFromCache bool, ddlChangesFromCache bool) map[string]interface{} {
+func (s VersionComparisonEntity) GetChanges(t VersionComparisonEntity) map[string]interface{} {
 	changes := make(map[string]interface{}, 0)
 	if s.Metadata.GetHasErrors() != t.Metadata.GetHasErrors() {
 		changes["HasErrors"] = map[string]interface{}{
@@ -333,12 +333,8 @@ func (s VersionComparisonEntity) GetChanges(t VersionComparisonEntity, operation
 			"new": t.Refs,
 		}
 	}
-	if !operationChangesFromCache {
-		s.setOperationTypeChanges(t, changes)
-	}
-	if !ddlChangesFromCache {
-		s.setContractTypeChanges(t, changes)
-	}
+	s.setOperationTypeChanges(t, changes)
+	s.setContractTypeChanges(t, changes)
 	return changes
 }
 
