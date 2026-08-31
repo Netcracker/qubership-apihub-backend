@@ -36,9 +36,10 @@ type oidcProvider struct {
 	apihubHost     string
 	productionMode bool
 	responder      *responder.Responder
+	authHandler    *security.AuthHandler
 }
 
-func newOIDCProvider(config idp.IDP, provider *oidc.Provider, verifier *oidc.IDTokenVerifier, oAuth2Config oauth2.Config, userService service.UserService, allowedHosts []string, apihubHost string, productionMode bool, responder *responder.Responder) idp.Provider {
+func newOIDCProvider(config idp.IDP, provider *oidc.Provider, verifier *oidc.IDTokenVerifier, oAuth2Config oauth2.Config, userService service.UserService, allowedHosts []string, apihubHost string, productionMode bool, responder *responder.Responder, authHandler *security.AuthHandler) idp.Provider {
 	return &oidcProvider{
 		config:         config,
 		provider:       provider,
@@ -49,6 +50,7 @@ func newOIDCProvider(config idp.IDP, provider *oidc.Provider, verifier *oidc.IDT
 		apihubHost:     apihubHost,
 		productionMode: productionMode,
 		responder:      responder,
+		authHandler:    authHandler,
 	}
 }
 
@@ -299,7 +301,7 @@ func (o oidcProvider) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add authentication cookies
-	if err = security.SetAuthTokenCookies(w, user, fmt.Sprintf(SSOLoginRefreshPathTemplate, o.config.Id)); err != nil {
+	if err = o.authHandler.SetAuthTokenCookies(w, user, fmt.Sprintf(SSOLoginRefreshPathTemplate, o.config.Id)); err != nil {
 		o.responder.RespondWithError(w, "Failed to set auth cookie", err)
 		return
 	}

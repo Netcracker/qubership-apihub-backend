@@ -6,19 +6,10 @@ import (
 	"runtime/debug"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/shaj13/go-guardian/v2/auth"
 	"github.com/shaj13/go-guardian/v2/auth/strategies/union"
 	log "github.com/sirupsen/logrus"
 )
-
-type AuthHandler struct {
-	responder *responder.Responder
-}
-
-func NewAuthHandler(responder *responder.Responder) *AuthHandler {
-	return &AuthHandler{responder: responder}
-}
 
 func (a *AuthHandler) Secure(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -35,7 +26,7 @@ func (a *AuthHandler) Secure(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 		}()
-		_, user, err := fullAuthStrategy.AuthenticateRequest(r)
+		_, user, err := a.fullAuthStrategy.AuthenticateRequest(r)
 		if err != nil {
 			if multiError, ok := err.(union.MultiError); ok {
 				for _, e := range multiError {
@@ -71,7 +62,7 @@ func (a *AuthHandler) SecureUser(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 		}()
-		user, err := userAuthStrategy.Authenticate(r.Context(), r)
+		user, err := a.userAuthStrategy.Authenticate(r.Context(), r)
 		if err != nil {
 			a.respondWithAuthFailedError(w, err)
 			return
@@ -97,7 +88,7 @@ func (a *AuthHandler) SecureJWT(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 		}()
-		user, err := jwtAuthStrategy.Authenticate(r.Context(), r)
+		user, err := a.jwtAuthStrategy.Authenticate(r.Context(), r)
 		if err != nil {
 			a.respondWithAuthFailedError(w, err)
 			return
@@ -143,7 +134,7 @@ func (a *AuthHandler) SecureProxy(next http.HandlerFunc) http.HandlerFunc {
 			}
 		}()
 		//TODO: need to remove customJwtStrategy and use sessionCookie strategy only
-		user, err := proxyAuthStrategy.Authenticate(r.Context(), r)
+		user, err := a.proxyAuthStrategy.Authenticate(r.Context(), r)
 		if err != nil {
 			a.respondWithAuthFailedError(w, err)
 			return
@@ -178,13 +169,13 @@ func (a *AuthHandler) RefreshToken(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 		}()
-		user, err := refreshTokenStrategy.Authenticate(r.Context(), r)
+		user, err := a.refreshTokenStrategy.Authenticate(r.Context(), r)
 		if user != nil && user.GetExtensions().Get(SetAccessTokenCookieExt) != "" {
 			http.SetCookie(w, &http.Cookie{
 				Name:     AccessTokenCookieName,
 				Value:    user.GetExtensions().Get(SetAccessTokenCookieExt),
-				MaxAge:   int(accessTokenDuration.Seconds()),
-				Secure:   productionMode,
+				MaxAge:   int(a.accessTokenDuration.Seconds()),
+				Secure:   a.productionMode,
 				HttpOnly: true,
 				Path:     "/",
 			})
@@ -213,7 +204,7 @@ func (a *AuthHandler) SecureMCP(next http.Handler) http.Handler {
 				return
 			}
 		}()
-		user, err := apiKeyStrategy.Authenticate(r.Context(), r)
+		user, err := a.apiKeyStrategy.Authenticate(r.Context(), r)
 		if err != nil {
 			a.respondWithAuthFailedError(w, err)
 			return
@@ -222,14 +213,4 @@ func (a *AuthHandler) SecureMCP(next http.Handler) http.Handler {
 		r = auth.RequestWithUser(user, r)
 		next.ServeHTTP(w, r)
 	})
-}
-
-func (a *AuthHandler) respondWithAuthFailedError(w http.ResponseWriter, err error) {
-	log.Tracef("Authentication failed: %+v", err)
-	customErr := &exception.CustomError{
-		Status:  http.StatusUnauthorized,
-		Message: http.StatusText(http.StatusUnauthorized),
-		Debug:   fmt.Sprintf("%v", err),
-	}
-	a.responder.RespondWithCustomError(w, customErr)
 }

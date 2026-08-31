@@ -24,7 +24,7 @@ type SamlAuthController interface {
 	GetSystemSSOInfo_deprecated(w http.ResponseWriter, r *http.Request)
 }
 
-func NewSamlAuthController(userService service.UserService, systemInfoService service.SystemInfoService, idpManager idp.Manager, responder *responder.Responder) SamlAuthController {
+func NewSamlAuthController(userService service.UserService, systemInfoService service.SystemInfoService, idpManager idp.Manager, responder *responder.Responder, authHandler *security.AuthHandler) SamlAuthController {
 	var samlInstance *samlsp.Middleware
 	for _, provider := range idpManager.GetAuthConfig().Providers {
 		if provider.IdpType == idp.IDPTypeExternal && provider.Protocol == idp.AuthProtocolSAML {
@@ -39,6 +39,7 @@ func NewSamlAuthController(userService service.UserService, systemInfoService se
 		systemInfoService: systemInfoService,
 		apihubHost:        apihubURL.Hostname(),
 		responder:         responder,
+		authHandler:       authHandler,
 	}
 }
 
@@ -48,6 +49,7 @@ type authenticationControllerImpl struct {
 	systemInfoService service.SystemInfoService
 	apihubHost        string
 	responder         *responder.Responder
+	authHandler       *security.AuthHandler
 }
 
 func (a *authenticationControllerImpl) ServeMetadata_deprecated(w http.ResponseWriter, r *http.Request) {
@@ -65,7 +67,7 @@ func (a *authenticationControllerImpl) AssertionConsumerHandler_deprecated(w htt
 }
 
 func (a *authenticationControllerImpl) setUserViewCookie(w http.ResponseWriter, user *view.User, idpId string) error {
-	userView, err := security.CreateTokenForUser_deprecated(*user)
+	userView, err := a.authHandler.CreateTokenForUser_deprecated(*user)
 	if err != nil {
 		return &exception.CustomError{
 			Status:  http.StatusInternalServerError,
@@ -87,7 +89,7 @@ func (a *authenticationControllerImpl) setUserViewCookie(w http.ResponseWriter, 
 	})
 	//TODO: remove after IDP reconfiguration
 	if a.systemInfoService.IsLegacySAML() {
-		security.SetAuthTokenCookies(w, user, "/login/sso/saml")
+		a.authHandler.SetAuthTokenCookies(w, user, "/login/sso/saml")
 	}
 	log.Debugf("Auth user result object: %+v", userView)
 

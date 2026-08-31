@@ -79,8 +79,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	responder := responder.NewResponder(systemInfoService.ShowDebugInResponse())
-	authHandler := security.NewAuthHandler(responder)
+
 	if err := utils.ValidateTLSAtStartup(); err != nil {
 		log.Fatalf("TLS configuration failed: %v", err)
 	}
@@ -301,9 +300,15 @@ func main() {
 
 	mcpService := service.NewMCPService(systemInfoService, operationService, packageService, versionService, monitoringService, roleService)
 
+	responder := responder.NewResponder(systemInfoService.ShowDebugInResponse())
+	authHandler, err := security.NewAuthHandler(userService, roleService, apihubApiKeyService, personalAccessTokenService, systemInfoService, tokenRevocationService, responder)
+
+	if err != nil {
+		log.Fatalf("Can't setup authHandler. Error - %s", err.Error())
+	}
 	ephemeralFileRepository := repository.NewEphemeralFileRepositoryPG(cp)
 	ephemeralFileService := service.NewEphemeralFileService(systemInfoService, ephemeralFileRepository)
-	ephemeralFileController := controller.NewEphemeralFileController(ephemeralFileService, responder)
+	ephemeralFileController := controller.NewEphemeralFileController(ephemeralFileService, responder, authHandler)
 	ephemeralFileCleanup := service.NewEphemeralFileCleanupService(ephemeralFileRepository, lockService)
 	if err := ephemeralFileCleanup.StartCleanupJob(systemInfoService.GetEphemeralFilesCleanupSchedule(), systemInfoService.GetEphemeralFileDirectory()); err != nil {
 		log.Warnf("Failed to start ephemeral files cleanup: %v", err)
@@ -319,7 +324,7 @@ func main() {
 			log.Fatalf("Failed to create OpenAI LLM client: %v", err)
 		}
 		aiChatsService := service.NewAiChatsService(aiChatRepository)
-		aiChatTurnService, err := service.NewAiChatTurnService(systemInfoService, aiChatRepository, llmClient, mcpService, ephemeralFileService, security.MintEphemeralFileToken)
+		aiChatTurnService, err := service.NewAiChatTurnService(systemInfoService, aiChatRepository, llmClient, mcpService, ephemeralFileService, authHandler.MintEphemeralFileToken)
 		if err != nil {
 			log.Fatalf("Failed to create AiChatTurnService: %v", err)
 		}
@@ -331,7 +336,7 @@ func main() {
 		}
 	}
 
-	idpManager, err := providers.NewIDPManager(systemInfoService.GetAuthConfig(), systemInfoService.GetAllowedHosts(), systemInfoService.IsProductionMode(), userService, responder)
+	idpManager, err := providers.NewIDPManager(systemInfoService.GetAuthConfig(), systemInfoService.GetAllowedHosts(), systemInfoService.IsProductionMode(), userService, responder, authHandler)
 	if err != nil {
 		log.Error("Failed to initialize external IDP: " + err.Error())
 		panic("Failed to initialize external IDP: " + err.Error())
@@ -355,10 +360,10 @@ func main() {
 	packageController := controller.NewPackageController(packageService, publishedService, portalService, roleService, monitoringService, ptHandler, responder)
 	versionController := controller.NewVersionController(versionService, roleService, monitoringService, ptHandler, roleService.IsSysadm, excelService, systemInfoService.GetShareabilityReportSizeLimitMB(), responder)
 	roleController := controller.NewRoleController(roleService, responder)
-	samlAuthController := controller.NewSamlAuthController(userService, systemInfoService, idpManager, responder) //deprecated
+	samlAuthController := controller.NewSamlAuthController(userService, systemInfoService, idpManager, responder, authHandler) //deprecated
 	authController := controller.NewAuthController(systemInfoService, idpManager, responder)
 	userController := controller.NewUserController(userService, privateUserPackageService, roleService, responder)
-	jwtPubKeyController := controller.NewJwtPubKeyController(responder)
+	jwtPubKeyController := controller.NewJwtPubKeyController(responder, authHandler)
 	logoutController := controller.NewLogoutController(tokenRevocationService, systemInfoService, responder)
 	operationController := controller.NewOperationController(roleService, operationService, buildService, monitoringService, ptHandler, responder)
 	operationGroupController := controller.NewOperationGroupController(roleService, operationGroupService, versionService, systemInfoService, packageService, responder)
@@ -694,12 +699,6 @@ func main() {
 	})
 
 	debug.SetGCPercent(30)
-
-	err = security.SetupGoGuardian(userService, roleService, apihubApiKeyService, personalAccessTokenService, systemInfoService, tokenRevocationService)
-	if err != nil {
-		log.Fatalf("Can't setup go_guardian. Error - %s", err.Error())
-	}
-	log.Info("go_guardian was installed")
 
 	srv := makeServer(systemInfoService, r)
 

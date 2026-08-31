@@ -19,16 +19,20 @@ const (
 	refreshTokenCachePrefix = "ref:"
 )
 
-func NewRefreshTokenStrategy(cache libcache.Cache, jwtValidator JWTValidator) auth.Strategy {
+func NewRefreshTokenStrategy(cache libcache.Cache, jwtValidator JWTValidator, accessTokenDuration time.Duration, keeper jwt.SecretsKeeper) auth.Strategy {
 	return &refreshTokenStrategyImpl{
-		cache:        cache,
-		jwtValidator: jwtValidator,
+		cache:               cache,
+		jwtValidator:        jwtValidator,
+		accessTokenDuration: accessTokenDuration,
+		keeper:              keeper,
 	}
 }
 
 type refreshTokenStrategyImpl struct {
-	cache        libcache.Cache
-	jwtValidator JWTValidator
+	cache               libcache.Cache
+	jwtValidator        JWTValidator
+	accessTokenDuration time.Duration
+	keeper              jwt.SecretsKeeper
 }
 
 func (r refreshTokenStrategyImpl) Authenticate(ctx goctx.Context, req *http.Request) (auth.Info, error) {
@@ -73,9 +77,9 @@ func (r refreshTokenStrategyImpl) refreshAccessToken(userInfo auth.Info) (auth.I
 	extensions := user.GetExtensions()
 	extensions.Set(context.SystemRoleExt, userInfo.GetExtensions().Get(context.SystemRoleExt))
 	extensions.Set(TokenTypeExt, AccessTokenType)
-	accessDuration := jwt.SetExpDuration(accessTokenDuration)
+	accessDuration := jwt.SetExpDuration(r.accessTokenDuration)
 
-	accessToken, err := jwt.IssueAccessToken(user, keeper, accessDuration)
+	accessToken, err := jwt.IssueAccessToken(user, r.keeper, accessDuration)
 	if err != nil {
 		return nil, err
 	}

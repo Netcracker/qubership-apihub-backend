@@ -33,15 +33,17 @@ type samlProvider struct {
 	userService  service.UserService
 	apihubHost   string
 	responder    *responder.Responder
+	authHandler  *security.AuthHandler
 }
 
-func newSAMLProvider(samlInstance *samlsp.Middleware, config idp.IDP, userService service.UserService, apihubHost string, responder *responder.Responder) idp.Provider {
+func newSAMLProvider(samlInstance *samlsp.Middleware, config idp.IDP, userService service.UserService, apihubHost string, responder *responder.Responder, authHandler *security.AuthHandler) idp.Provider {
 	return &samlProvider{
 		samlInstance: samlInstance,
 		config:       config,
 		userService:  userService,
 		apihubHost:   apihubHost,
 		responder:    responder,
+		authHandler:  authHandler,
 	}
 }
 
@@ -50,7 +52,7 @@ func (s samlProvider) StartAuthentication(w http.ResponseWriter, r *http.Request
 }
 
 func (s samlProvider) CallbackHandler(w http.ResponseWriter, r *http.Request) {
-	HandleAssertion(w, r, s.responder, s.userService, s.samlInstance, s.config.Id, s.apihubHost, security.SetAuthTokenCookies)
+	HandleAssertion(w, r, s.responder, s.userService, s.samlInstance, s.config.Id, s.apihubHost, s.authHandler.SetAuthTokenCookies)
 }
 
 func (s samlProvider) ServeMetadata(w http.ResponseWriter, r *http.Request) {
