@@ -182,6 +182,11 @@ func (d dbMigrationServiceImpl) GetMigrationReport(ctx context.Context, migratio
 			migrationChange.AffectedBuildSample = mEntity.MakeSuspiciousBuildView(*changedVersion)
 		}
 		result.MigrationChanges = append(result.MigrationChanges, migrationChange)
+		// Sort by affected builds count - highest first
+		sort.SliceStable(result.MigrationChanges, func(i, j int) bool {
+			return result.MigrationChanges[i].AffectedBuildsCount >
+				result.MigrationChanges[j].AffectedBuildsCount
+		})
 	}
 	_, err = d.cp.GetConnection().WithContext(ctx).Query(pg.Scan(&result.SuspiciousBuildsCount),
 		`select count(*) from migrated_version_changes where migration_id = ?`, migrationId)
