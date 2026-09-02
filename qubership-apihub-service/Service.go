@@ -700,6 +700,7 @@ func main() {
 		log.Fatalf("Can't setup go_guardian. Error - %s", err.Error())
 	}
 	log.Info("go_guardian was installed")
+	log.Info("DEBUG: Using updated changes")
 
 	srv := makeServer(systemInfoService, r)
 

@@ -182,6 +182,7 @@ func (d dbMigrationServiceImpl) GetMigrationReport(ctx context.Context, migratio
 			migrationChange.AffectedBuildSample = mEntity.MakeSuspiciousBuildView(*changedVersion)
 		}
 		result.MigrationChanges = append(result.MigrationChanges, migrationChange)
+		log.Info("Using updated logic with sorting changes")
 		// Sort by affected builds count - highest first
 		sort.SliceStable(result.MigrationChanges, func(i, j int) bool {
 			return result.MigrationChanges[i].AffectedBuildsCount >
