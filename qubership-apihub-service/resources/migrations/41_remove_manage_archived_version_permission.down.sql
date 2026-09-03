@@ -1,5 +1,14 @@
 -- Partial rollback for issue #762.
 --
+-- Restore versions this up-migration soft-deleted. The metadata.archived flag marks those
+-- rows; already-deleted archived versions never received the flag and stay deleted.
+UPDATE public.published_version
+SET
+    status = 'archived',
+    deleted_at = NULL,
+    metadata = metadata - 'archived'
+WHERE metadata @> '{"archived": true}'::jsonb;
+
 -- The up-migration erases which roles used to carry 'manage_archived_version', so a faithful
 -- rollback is not possible: custom roles that had the permission cannot be identified after
 -- the fact. This down-migration therefore restores the permission only for the three roles
