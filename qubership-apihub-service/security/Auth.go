@@ -1,11 +1,13 @@
 package security
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
+
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	"github.com/shaj13/go-guardian/v2/auth"
 	"github.com/shaj13/go-guardian/v2/auth/strategies/jwt"
@@ -22,15 +24,16 @@ type UserView struct {
 	User        view.User `json:"user"`
 }
 
-func (a *AuthHandler) CreateLocalUserToken_deprecated(w http.ResponseWriter, r *http.Request) {
-	user, err := a.authenticateUser(r)
+func (a *AuthHandler)  CreateLocalUserToken_deprecated(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	user, err := a.authenticateUser(ctx, r)
 	if err != nil {
-		a.respondWithAuthFailedError(w, err)
+		a.respondWithAuthFailedError(w, r, err)
 		return
 	}
-	userView, err := a.CreateTokenForUser_deprecated(*user)
+	userView, err := a.CreateTokenForUser_deprecated(ctx,*user)
 	if err != nil {
-		a.respondWithAuthFailedError(w, err)
+		a.respondWithAuthFailedError(w, r, err)
 		return
 	}
 
@@ -40,8 +43,8 @@ func (a *AuthHandler) CreateLocalUserToken_deprecated(w http.ResponseWriter, r *
 	w.Write(response)
 }
 
-func (a *AuthHandler) CreateTokenForUser_deprecated(dbUser view.User) (*UserView, error) {
-	accessToken, refreshToken, err := a.issueTokenPair(dbUser, true)
+func(a *AuthHandler)  CreateTokenForUser_deprecated(ctx context.Context, dbUser view.User) (*UserView, error) {
+	accessToken, refreshToken, err := a.issueTokenPair(ctx, dbUser, true)
 	if err != nil {
 		return nil, err
 	}
@@ -50,27 +53,28 @@ func (a *AuthHandler) CreateTokenForUser_deprecated(dbUser view.User) (*UserView
 	return &userView, nil
 }
 
-func (a *AuthHandler) CreateLocalUserToken(w http.ResponseWriter, r *http.Request) {
-	user, err := a.authenticateUser(r)
+func (a *AuthHandler)  CreateLocalUserToken(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	user, err := a.authenticateUser(ctx, r)
 	if err != nil {
-		a.respondWithAuthFailedError(w, err)
+		a.respondWithAuthFailedError(w, r, err)
 		return
 	}
 
-	if err = a.SetAuthTokenCookies(w, user, LocalRefreshPath); err != nil {
-		a.respondWithAuthFailedError(w, err)
+	if err = a.SetAuthTokenCookies(ctx, w, user, LocalRefreshPath); err != nil {
+		a.respondWithAuthFailedError(w, r, err)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
 }
 
-func (a *AuthHandler) authenticateUser(r *http.Request) (*view.User, error) {
+func (a *AuthHandler)  authenticateUser(ctx context.Context, r *http.Request) (*view.User, error) {
 	email, password, ok := r.BasicAuth()
 	if !ok {
 		return nil, fmt.Errorf("user credentials are not provided")
 	}
-	user, err := a.userService.AuthenticateUser(email, password)
+	user, err := a.userService.AuthenticateUser(ctx, email, password)
 	if err != nil {
 		return nil, err
 	}
@@ -78,8 +82,8 @@ func (a *AuthHandler) authenticateUser(r *http.Request) (*view.User, error) {
 	return user, nil
 }
 
-func (a *AuthHandler) SetAuthTokenCookies(w http.ResponseWriter, user *view.User, refreshTokenPath string) error {
-	accessToken, refreshToken, err := a.issueTokenPair(*user, false)
+func (a *AuthHandler)  SetAuthTokenCookies(ctx context.Context, w http.ResponseWriter, user *view.User, refreshTokenPath string) error {
+	accessToken, refreshToken, err := a.issueTokenPair(ctx, *user, false)
 	if err != nil {
 		return fmt.Errorf("failed to create token pair for user: %v", err.Error())
 	}
@@ -103,17 +107,17 @@ func (a *AuthHandler) SetAuthTokenCookies(w http.ResponseWriter, user *view.User
 	return nil
 }
 
-func (a *AuthHandler) issueTokenPair(dbUser view.User, withGitIntegration bool) (accessToken string, refreshToken string, err error) {
+func (a *AuthHandler) issueTokenPair(ctx context.Context, dbUser view.User, withGitIntegration bool) (accessToken string, refreshToken string, err error) {
 	user := auth.NewUserInfo(dbUser.Name, dbUser.Id, []string{}, auth.Extensions{})
 	accessDuration := jwt.SetExpDuration(a.accessTokenDuration) // should be more than one minute!
 
 	extensions := user.GetExtensions()
-	systemRole, err := a.roleService.GetUserSystemRole(user.GetID())
+	systemRole, err := a.roleService.GetUserSystemRole(ctx, user.GetID())
 	if err != nil {
 		return "", "", fmt.Errorf("failed to check user system role: %v", err.Error())
 	}
 	if systemRole != "" {
-		extensions.Set(context.SystemRoleExt, systemRole)
+		extensions.Set(secctx.SystemRoleExt, systemRole)
 	}
 	if withGitIntegration {
 		extensions.Set(gitIntegrationExt, "false") //TODO: can we remove it ?

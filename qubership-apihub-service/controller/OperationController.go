@@ -5,7 +5,7 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/metrics"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
@@ -52,7 +52,7 @@ type operationControllerImpl struct {
 
 func (o operationControllerImpl) GetOperationList(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := o.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, o.responder, o.ptHandler, packageId, "Failed to check user privileges", err)
@@ -315,7 +315,7 @@ func (o operationControllerImpl) GetOperationList(w http.ResponseWriter, r *http
 		AsyncapiProtocol: asyncapiProtocol,
 	}
 
-	operations, err := o.operationService.GetOperations(packageId, versionName, skipRefs, restOperationListReq)
+	operations, err := o.operationService.GetOperations(ctx, packageId, versionName, skipRefs, restOperationListReq)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, o.responder, o.ptHandler, packageId, "Failed to get operations", err)
 		return
@@ -325,7 +325,7 @@ func (o operationControllerImpl) GetOperationList(w http.ResponseWriter, r *http
 
 func (o operationControllerImpl) GetOperation(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := o.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, o.responder, o.ptHandler, packageId, "Failed to check user privileges", err)
@@ -398,7 +398,7 @@ func (o operationControllerImpl) GetOperation(w http.ResponseWriter, r *http.Req
 		IncludeData: includeData,
 	}
 
-	operation, err := o.operationService.GetOperation(basicSearchFilter)
+	operation, err := o.operationService.GetOperation(ctx, basicSearchFilter)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, o.responder, o.ptHandler, packageId, "Failed to get operation", err)
 		return
@@ -408,7 +408,7 @@ func (o operationControllerImpl) GetOperation(w http.ResponseWriter, r *http.Req
 
 func (o operationControllerImpl) GetOperationsTags(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := o.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, o.responder, o.ptHandler, packageId, "Failed to check user privileges", err)
@@ -524,7 +524,7 @@ func (o operationControllerImpl) GetOperationsTags(w http.ResponseWriter, r *htt
 		ApiAudience: apiAudience,
 	}
 
-	tags, err := o.operationService.GetOperationsTags(basicSearchFilter, skipRefs)
+	tags, err := o.operationService.GetOperationsTags(ctx, basicSearchFilter, skipRefs)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, o.responder, o.ptHandler, packageId, "Failed to get operations tags", err)
 		return
@@ -534,7 +534,7 @@ func (o operationControllerImpl) GetOperationsTags(w http.ResponseWriter, r *htt
 
 func (o operationControllerImpl) GetOperationChanges(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := o.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, o.responder, o.ptHandler, packageId, "Failed to check user privileges", err)
@@ -589,7 +589,7 @@ func (o operationControllerImpl) GetOperationChanges(w http.ResponseWriter, r *h
 			return
 		}
 	}
-	changes, err := o.operationService.GetOperationChanges(packageId, versionName, operationId, previousVersionPackageId, previousVersion, severities)
+	changes, err := o.operationService.GetOperationChanges(ctx, packageId, versionName, operationId, previousVersionPackageId, previousVersion, severities)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, o.responder, o.ptHandler, packageId, "Failed to get operation changes", err)
 		return
@@ -599,7 +599,7 @@ func (o operationControllerImpl) GetOperationChanges(w http.ResponseWriter, r *h
 
 func (o operationControllerImpl) GetOperationsChanges(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := o.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, o.responder, o.ptHandler, packageId, "Failed to check user privileges", err)
@@ -795,7 +795,7 @@ func (o operationControllerImpl) GetOperationsChanges(w http.ResponseWriter, r *
 		AsyncapiProtocol:         asyncapiProtocol,
 	}
 
-	changelog, err := o.operationService.GetVersionChanges(packageId, versionName, apiType, versionChangesSearchReq)
+	changelog, err := o.operationService.GetVersionChanges(ctx, packageId, versionName, apiType, versionChangesSearchReq)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, o.responder, o.ptHandler, packageId, "Failed to get operations changelog", err)
 		return
@@ -805,7 +805,7 @@ func (o operationControllerImpl) GetOperationsChanges(w http.ResponseWriter, r *
 
 func (o operationControllerImpl) GetDeprecatedOperationsList(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := o.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, o.responder, o.ptHandler, packageId, "Failed to check user privileges", err)
@@ -1015,7 +1015,7 @@ func (o operationControllerImpl) GetDeprecatedOperationsList(w http.ResponseWrit
 		return
 	}
 
-	o.monitoringService.IncreaseBusinessMetricCounter(ctx.GetUserId(), metrics.DeprecatedOperationsCalled, packageId)
+	o.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.DeprecatedOperationsCalled, packageId)
 
 	deprecatedOperationListReq := view.DeprecatedOperationListReq{
 		Ids:                    ids,
@@ -1036,7 +1036,7 @@ func (o operationControllerImpl) GetDeprecatedOperationsList(w http.ResponseWrit
 		AsyncapiProtocol:       asyncapiProtocol,
 	}
 
-	operations, err := o.operationService.GetDeprecatedOperations(packageId, versionName, deprecatedOperationListReq)
+	operations, err := o.operationService.GetDeprecatedOperations(ctx, packageId, versionName, deprecatedOperationListReq)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, o.responder, o.ptHandler, packageId, "Failed to get operations", err)
 		return
@@ -1046,7 +1046,7 @@ func (o operationControllerImpl) GetDeprecatedOperationsList(w http.ResponseWrit
 
 func (o operationControllerImpl) GetOperationDeprecatedItems(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := o.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, o.responder, o.ptHandler, packageId, "Failed to check user privileges", err)
@@ -1104,7 +1104,7 @@ func (o operationControllerImpl) GetOperationDeprecatedItems(w http.ResponseWrit
 		OperationId: operationId,
 	}
 
-	operationDeprecatedItems, err := o.operationService.GetOperationDeprecatedItems(basicSearchFilter)
+	operationDeprecatedItems, err := o.operationService.GetOperationDeprecatedItems(ctx, basicSearchFilter)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, o.responder, o.ptHandler, packageId, "Failed to get operation deprecated items", err)
 		return
@@ -1114,7 +1114,7 @@ func (o operationControllerImpl) GetOperationDeprecatedItems(w http.ResponseWrit
 
 func (o operationControllerImpl) GetDeprecatedOperationsSummary(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := o.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, o.responder, o.ptHandler, packageId, "Failed to check user privileges", err)
@@ -1139,7 +1139,7 @@ func (o operationControllerImpl) GetDeprecatedOperationsSummary(w http.ResponseW
 		})
 		return
 	}
-	deprecatedOperationsSummary, err := o.operationService.GetDeprecatedOperationsSummary(packageId, versionName)
+	deprecatedOperationsSummary, err := o.operationService.GetDeprecatedOperationsSummary(ctx, packageId, versionName)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, o.responder, o.ptHandler, packageId, "Failed to get operation deprecated summary", err)
 		return
@@ -1150,7 +1150,7 @@ func (o operationControllerImpl) GetDeprecatedOperationsSummary(w http.ResponseW
 
 func (o operationControllerImpl) GetOperationModelUsages(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := o.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, o.responder, o.ptHandler, packageId, "Failed to check user privileges", err)
@@ -1208,7 +1208,7 @@ func (o operationControllerImpl) GetOperationModelUsages(w http.ResponseWriter, 
 		})
 		return
 	}
-	modelUsages, err := o.operationService.GetOperationModelUsages(packageId, version, apiType, operationId, modelName)
+	modelUsages, err := o.operationService.GetOperationModelUsages(ctx, packageId, version, apiType, operationId, modelName)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, o.responder, o.ptHandler, packageId, "Failed to get operation model usages", err)
 		return
@@ -1218,7 +1218,7 @@ func (o operationControllerImpl) GetOperationModelUsages(w http.ResponseWriter, 
 
 func (o operationControllerImpl) GetOperationChangesSummary(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := o.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, o.responder, o.ptHandler, packageId, "Failed to check user privileges", err)
@@ -1259,7 +1259,7 @@ func (o operationControllerImpl) GetOperationChangesSummary(w http.ResponseWrite
 	previousVersionPackageId := r.URL.Query().Get("previousVersionPackageId")
 	refPackageId := r.URL.Query().Get("refPackageId")
 
-	changes, err := o.operationService.GetOperationChangesSummary(packageId, versionName, operationId, previousVersionPackageId, previousVersion, refPackageId)
+	changes, err := o.operationService.GetOperationChangesSummary(ctx, packageId, versionName, operationId, previousVersionPackageId, previousVersion, refPackageId)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, o.responder, o.ptHandler, packageId, "Failed to get operation changes", err)
 		return

@@ -7,9 +7,9 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/metrics"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
@@ -52,7 +52,7 @@ type comparisonControllerImpl struct {
 }
 
 func (c comparisonControllerImpl) CompareTwoVersions(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	builderId, err := url.QueryUnescape(r.URL.Query().Get("builderId"))
 	if err != nil {
 		c.responder.RespondWithCustomError(w, &exception.CustomError{
@@ -117,7 +117,7 @@ func (c comparisonControllerImpl) CompareTwoVersions(w http.ResponseWriter, r *h
 		return
 	}
 	if err := utils.ValidateObject(compareVersionsReq); err != nil {
-		c.responder.RespondWithError(w, "", exception.CustomError{
+		c.responder.RespondWithError(w, r, "", exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidCompareVersionReq,
 			Message: exception.InvalidCompareVersionReqMsg,
@@ -127,7 +127,7 @@ func (c comparisonControllerImpl) CompareTwoVersions(w http.ResponseWriter, r *h
 
 	sufficientPrivileges, err := c.roleService.HasRequiredPermissions(ctx, compareVersionsReq.PackageId, view.ReadPermission)
 	if err != nil {
-		c.responder.RespondWithError(w, "Failed to check user privileges", err)
+		c.responder.RespondWithError(w,r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -139,14 +139,14 @@ func (c comparisonControllerImpl) CompareTwoVersions(w http.ResponseWriter, r *h
 		return
 	}
 
-	revision, err := c.versionService.GetLatestRevision(compareVersionsReq.PackageId, compareVersionsReq.Version)
+	revision, err := c.versionService.GetLatestRevision(ctx, compareVersionsReq.PackageId, compareVersionsReq.Version)
 	if err != nil {
-		c.responder.RespondWithError(w, "Failed to get version", err)
+		c.responder.RespondWithError(w,r, "Failed to get version", err)
 		return
 	}
-	prevVersionRevision, err := c.versionService.GetLatestRevision(compareVersionsReq.PreviousVersionPackageId, compareVersionsReq.PreviousVersion)
+	prevVersionRevision, err := c.versionService.GetLatestRevision(ctx, compareVersionsReq.PreviousVersionPackageId, compareVersionsReq.PreviousVersion)
 	if err != nil {
-		c.responder.RespondWithError(w, "Failed to get previous version", err)
+		c.responder.RespondWithError(w,r, "Failed to get previous version", err)
 		return
 	}
 
@@ -156,16 +156,16 @@ func (c comparisonControllerImpl) CompareTwoVersions(w http.ResponseWriter, r *h
 		PreviousVersionPackageId: compareVersionsReq.PreviousVersionPackageId,
 		PreviousVersion:          compareVersionsReq.PreviousVersion,
 		BuildType:                view.ChangelogType,
-		CreatedBy:                ctx.GetUserId(),
+		CreatedBy:                secctx.GetUserId(ctx),
 
 		ComparisonRevision:     revision,
 		ComparisonPrevRevision: prevVersionRevision,
 	}
 
 	if reCalculate {
-		buildId, buildConfig, err := c.buildService.CreateChangelogBuild(buildConfig, clientBuild, builderId)
+		buildId, buildConfig, err := c.buildService.CreateChangelogBuild(ctx, buildConfig, clientBuild, builderId)
 		if err != nil {
-			c.responder.RespondWithError(w, "Failed to create changelog type build", err)
+			c.responder.RespondWithError(w, r, "Failed to create changelog type build", err)
 			return
 		}
 		if clientBuild {
@@ -187,9 +187,9 @@ func (c comparisonControllerImpl) CompareTwoVersions(w http.ResponseWriter, r *h
 		return
 	}
 
-	compareResult, err := c.comparisonService.ValidComparisonResultExists(compareVersionsReq.PackageId, compareVersionsReq.Version, compareVersionsReq.PreviousVersionPackageId, compareVersionsReq.PreviousVersion)
+	compareResult, err := c.comparisonService.ValidComparisonResultExists(ctx, compareVersionsReq.PackageId, compareVersionsReq.Version, compareVersionsReq.PreviousVersionPackageId, compareVersionsReq.PreviousVersion)
 	if err != nil {
-		c.responder.RespondWithError(w, "Failed to get versions comparison result", err)
+		c.responder.RespondWithError(w, r, "Failed to get versions comparison result", err)
 		return
 	}
 	if compareResult {
@@ -208,13 +208,13 @@ func (c comparisonControllerImpl) CompareTwoVersions(w http.ResponseWriter, r *h
 		ComparisonPrevRevision: prevVersionRevision,
 	}
 	var calculationProcessStatus view.CalculationProcessStatus
-	buildView, err := c.buildService.GetBuildViewByChangelogSearchQuery(searchRequest)
+	buildView, err := c.buildService.GetBuildViewByChangelogSearchQuery(ctx, searchRequest)
 	if err != nil {
 		if customError, ok := err.(*exception.CustomError); ok {
 			if customError.Status == http.StatusNotFound {
-				buildId, buildConfig, err := c.buildService.CreateChangelogBuild(buildConfig, clientBuild, builderId)
+				buildId, buildConfig, err := c.buildService.CreateChangelogBuild(ctx, buildConfig, clientBuild, builderId)
 				if err != nil {
-					c.responder.RespondWithError(w, "Failed to create changelog type build", err)
+					c.responder.RespondWithError(w, r, "Failed to create changelog type build", err)
 					return
 				}
 				if clientBuild {
@@ -236,7 +236,7 @@ func (c comparisonControllerImpl) CompareTwoVersions(w http.ResponseWriter, r *h
 				return
 			}
 		}
-		c.responder.RespondWithError(w, "Failed to get buildStatus", err)
+		c.responder.RespondWithError(w, r, "Failed to get buildStatus", err)
 		return
 	}
 	switch buildView.Status {
@@ -250,18 +250,18 @@ func (c comparisonControllerImpl) CompareTwoVersions(w http.ResponseWriter, r *h
 	case string(view.StatusComplete):
 		//this case is possible only if we have an old finished build for which we don't have a comparison (rebuild required)
 		//or if this build completed during this method execution (rebuild is not requried)
-		compareResult, err := c.comparisonService.ValidComparisonResultExists(compareVersionsReq.PackageId, compareVersionsReq.Version, compareVersionsReq.PreviousVersionPackageId, compareVersionsReq.PreviousVersion)
+		compareResult, err := c.comparisonService.ValidComparisonResultExists(ctx, compareVersionsReq.PackageId, compareVersionsReq.Version, compareVersionsReq.PreviousVersionPackageId, compareVersionsReq.PreviousVersion)
 		if err != nil {
-			c.responder.RespondWithError(w, "Failed to get versions comparison result", err)
+			c.responder.RespondWithError(w, r, "Failed to get versions comparison result", err)
 			return
 		}
 		if compareResult {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		buildId, buildConfig, err := c.buildService.CreateChangelogBuild(buildConfig, clientBuild, builderId)
+		buildId, buildConfig, err := c.buildService.CreateChangelogBuild(ctx, buildConfig, clientBuild, builderId)
 		if err != nil {
-			c.responder.RespondWithError(w, "Failed to create changelog type build", err)
+			c.responder.RespondWithError(w, r, "Failed to create changelog type build", err)
 			return
 		}
 		if clientBuild {
@@ -292,7 +292,7 @@ func (c comparisonControllerImpl) CompareTwoVersions(w http.ResponseWriter, r *h
 
 func (c comparisonControllerImpl) GetComparisonChangesSummary(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := c.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, c.responder, c.ptHandler, packageId, "Failed to check user privileges", err)
@@ -340,12 +340,12 @@ func (c comparisonControllerImpl) GetComparisonChangesSummary(w http.ResponseWri
 		return
 	}
 
-	c.monitoringService.IncreaseBusinessMetricCounter(ctx.GetUserId(), metrics.ComparisonsCalled, packageId)
+	c.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.ComparisonsCalled, packageId)
 	if previousVersionPackageId != "" {
-		c.monitoringService.IncreaseBusinessMetricCounter(ctx.GetUserId(), metrics.ComparisonsCalled, previousVersionPackageId)
+		c.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.ComparisonsCalled, previousVersionPackageId)
 	}
 
-	comparisonSummary, err := c.comparisonService.GetComparisonResult(packageId, version, previousVersionPackageId, previousVersion)
+	comparisonSummary, err := c.comparisonService.GetComparisonResult(ctx, packageId, version, previousVersionPackageId, previousVersion)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, c.responder, c.ptHandler, packageId, "Failed to get comparison changes summary", err)
 		return

@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,12 +10,12 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/metrics"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
@@ -73,10 +74,10 @@ type exportControllerImpl struct {
 
 func (e exportControllerImpl) ExportOperationGroupAsOpenAPIDocuments_deprecated_2(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		e.responder.RespondWithError(w, "Failed to check user privileges", err)
+		e.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -146,14 +147,14 @@ func (e exportControllerImpl) ExportOperationGroupAsOpenAPIDocuments_deprecated_
 
 	err = view.ValidateFormatForBuildType(buildType, format)
 	if err != nil {
-		e.responder.RespondWithError(w, "buildType format validation failed", err)
+		e.responder.RespondWithError(w, r, "buildType format validation failed", err)
 		return
 	}
-	e.monitoringService.IncreaseBusinessMetricCounter(ctx.GetUserId(), metrics.ExportsCalled, packageId)
+	e.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.ExportsCalled, packageId)
 
-	content, err := e.versionService.GetTransformedDocuments(packageId, version, apiType, groupName, buildType, format)
+	content, err := e.versionService.GetTransformedDocuments(ctx, packageId, version, apiType, groupName, buildType, format)
 	if err != nil {
-		e.responder.RespondWithError(w, "Failed to export operations group", err)
+		e.responder.RespondWithError(w, r, "Failed to export operations group", err)
 		return
 	}
 	if content == nil {
@@ -194,10 +195,10 @@ func (e exportControllerImpl) ExportOperationGroupAsOpenAPIDocuments_deprecated_
 
 func (e exportControllerImpl) GenerateVersionDoc(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		e.responder.RespondWithError(w, "Failed to check user privileges", err)
+		e.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -222,16 +223,16 @@ func (e exportControllerImpl) GenerateVersionDoc(w http.ResponseWriter, r *http.
 
 	docType := view.GetDtFromStr(r.URL.Query().Get("docType"))
 
-	e.monitoringService.IncreaseBusinessMetricCounter(ctx.GetUserId(), metrics.ExportsCalled, packageId)
+	e.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.ExportsCalled, packageId)
 
 	var data []byte
 	var filename string
 	switch docType {
 	case view.DTInteractive:
-		data, filename, err = e.portalService.GenerateInteractivePageForPublishedVersion(packageId, versionName)
+		data, filename, err = e.portalService.GenerateInteractivePageForPublishedVersion(ctx, packageId, versionName)
 
 		if err != nil {
-			e.responder.RespondWithError(w, fmt.Sprintf("Failed to generate interactive HTML page for version %s:%s", packageId, versionName), err)
+			e.responder.RespondWithError(w, r, fmt.Sprintf("Failed to generate interactive HTML page for version %s:%s", packageId, versionName), err)
 			return
 		}
 
@@ -262,10 +263,10 @@ func (e exportControllerImpl) GenerateVersionDoc(w http.ResponseWriter, r *http.
 
 func (e exportControllerImpl) GenerateFileDoc(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		e.responder.RespondWithError(w, "Failed to check user privileges", err)
+		e.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -291,24 +292,24 @@ func (e exportControllerImpl) GenerateFileDoc(w http.ResponseWriter, r *http.Req
 
 	docType := view.GetDtFromStr(r.URL.Query().Get("docType"))
 
-	e.monitoringService.IncreaseBusinessMetricCounter(ctx.GetUserId(), metrics.ExportsCalled, packageId)
+	e.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.ExportsCalled, packageId)
 
 	var data []byte
 	switch docType {
 	case view.DTInteractive:
 		var filename string
-		data, filename, err = e.portalService.GenerateInteractivePageForPublishedFile(packageId, versionName, slug)
+		data, filename, err = e.portalService.GenerateInteractivePageForPublishedFile(ctx, packageId, versionName, slug)
 		if err != nil {
-			e.responder.RespondWithError(w, fmt.Sprintf("Failed to generate interactive HTML page for file %s:%s:%s", packageId, versionName, slug), err)
+			e.responder.RespondWithError(w, r, fmt.Sprintf("Failed to generate interactive HTML page for file %s:%s:%s", packageId, versionName, slug), err)
 			return
 		}
 		w.Header().Set("Content-Type", "application/octet-stream")
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%v", filename))
 
 	case view.DTRaw:
-		content, cd, err := e.publishedService.GetLatestContentDataBySlug(packageId, versionName, slug)
+		content, cd, err := e.publishedService.GetLatestContentDataBySlug(ctx, packageId, versionName, slug)
 		if err != nil {
-			e.responder.RespondWithError(w, "Failed to get published content as file", err)
+			e.responder.RespondWithError(w, r, "Failed to get published content as file", err)
 			return
 		}
 		data = cd.Data
@@ -334,10 +335,10 @@ func (e exportControllerImpl) GenerateFileDoc(w http.ResponseWriter, r *http.Req
 // GenerateApiChangesExcelReport deprecated
 func (e exportControllerImpl) GenerateApiChangesExcelReport(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		e.responder.RespondWithError(w, "Failed to check user privileges", err)
+		e.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -408,15 +409,15 @@ func (e exportControllerImpl) GenerateApiChangesExcelReport(w http.ResponseWrite
 		return
 	}
 
-	e.monitoringService.IncreaseBusinessMetricCounter(ctx.GetUserId(), metrics.ExportsCalled, packageId)
+	e.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.ExportsCalled, packageId)
 
 	exportApiChangesRequestView := view.ExportApiChangesRequestView{
 		PreviousVersionPackageId: previousVersionPackageId,
 		PreviousVersion:          previousVersion,
 	}
-	apiChangesReport, versionName, err := e.excelService.ExportApiChanges(packageId, version, "", []string{}, exportApiChangesRequestView)
+	apiChangesReport, versionName, err := e.excelService.ExportApiChanges(ctx, packageId, version, "", []string{}, exportApiChangesRequestView)
 	if err != nil {
-		e.responder.RespondWithError(w, "Failed to export api changes", err)
+		e.responder.RespondWithError(w, r, "Failed to export api changes", err)
 		return
 	}
 	if apiChangesReport == nil {
@@ -437,10 +438,10 @@ func (e exportControllerImpl) GenerateApiChangesExcelReport(w http.ResponseWrite
 
 func (e exportControllerImpl) GenerateApiChangesExcelReportV3(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		e.responder.RespondWithError(w, "Failed to check user privileges", err)
+		e.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -613,7 +614,7 @@ func (e exportControllerImpl) GenerateApiChangesExcelReportV3(w http.ResponseWri
 		return
 	}
 
-	e.monitoringService.IncreaseBusinessMetricCounter(ctx.GetUserId(), metrics.ExportsCalled, packageId)
+	e.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.ExportsCalled, packageId)
 
 	exportApiChangesRequestView := view.ExportApiChangesRequestView{
 		PreviousVersionPackageId: previousVersionPackageId,
@@ -629,9 +630,9 @@ func (e exportControllerImpl) GenerateApiChangesExcelReportV3(w http.ResponseWri
 		AsyncapiChannel:          asyncapiChannel,
 		AsyncapiProtocol:         asyncapiProtocol,
 	}
-	apiChangesReport, versionName, err := e.excelService.ExportApiChanges(packageId, version, apiType, severities, exportApiChangesRequestView)
+	apiChangesReport, versionName, err := e.excelService.ExportApiChanges(ctx, packageId, version, apiType, severities, exportApiChangesRequestView)
 	if err != nil {
-		e.responder.RespondWithError(w, "Failed to export api changes", err)
+		e.responder.RespondWithError(w, r, "Failed to export api changes", err)
 		return
 	}
 	if apiChangesReport == nil {
@@ -652,10 +653,10 @@ func (e exportControllerImpl) GenerateApiChangesExcelReportV3(w http.ResponseWri
 
 func (e exportControllerImpl) GenerateOperationsExcelReport(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		e.responder.RespondWithError(w, "Failed to check user privileges", err)
+		e.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -817,7 +818,7 @@ func (e exportControllerImpl) GenerateOperationsExcelReport(w http.ResponseWrite
 		return
 	}
 
-	e.monitoringService.IncreaseBusinessMetricCounter(ctx.GetUserId(), metrics.ExportsCalled, packageId)
+	e.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.ExportsCalled, packageId)
 
 	exportOperationsRequestView := view.ExportOperationRequestView{
 		Tag:              tag,
@@ -831,9 +832,9 @@ func (e exportControllerImpl) GenerateOperationsExcelReport(w http.ResponseWrite
 		AsyncapiProtocol: asyncapiProtocol,
 		AsyncapiChannel:  asyncapiChannel,
 	}
-	operationsReport, versionName, err := e.excelService.ExportOperations(packageId, version, apiType, exportOperationsRequestView)
+	operationsReport, versionName, err := e.excelService.ExportOperations(ctx, packageId, version, apiType, exportOperationsRequestView)
 	if err != nil {
-		e.responder.RespondWithError(w, "Failed to export operations", err)
+		e.responder.RespondWithError(w, r, "Failed to export operations", err)
 		return
 	}
 	if operationsReport == nil {
@@ -854,10 +855,10 @@ func (e exportControllerImpl) GenerateOperationsExcelReport(w http.ResponseWrite
 
 func (e exportControllerImpl) GenerateDeprecatedOperationsExcelReport(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		e.responder.RespondWithError(w, "Failed to check user privileges", err)
+		e.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -1010,7 +1011,7 @@ func (e exportControllerImpl) GenerateDeprecatedOperationsExcelReport(w http.Res
 		return
 	}
 
-	e.monitoringService.IncreaseBusinessMetricCounter(ctx.GetUserId(), metrics.ExportsCalled, packageId)
+	e.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.ExportsCalled, packageId)
 
 	exportOperationsRequestView := view.ExportOperationRequestView{
 		Tags:             tags,
@@ -1024,9 +1025,9 @@ func (e exportControllerImpl) GenerateDeprecatedOperationsExcelReport(w http.Res
 		AsyncapiChannel:  asyncapiChannel,
 		AsyncapiProtocol: asyncapiProtocol,
 	}
-	deprecatedOperationsReport, versionName, err := e.excelService.ExportDeprecatedOperations(packageId, version, apiType, exportOperationsRequestView)
+	deprecatedOperationsReport, versionName, err := e.excelService.ExportDeprecatedOperations(ctx, packageId, version, apiType, exportOperationsRequestView)
 	if err != nil {
-		e.responder.RespondWithError(w, "Failed to export operations", err)
+		e.responder.RespondWithError(w, r, "Failed to export operations", err)
 		return
 	}
 	if deprecatedOperationsReport == nil {
@@ -1047,10 +1048,10 @@ func (e exportControllerImpl) GenerateDeprecatedOperationsExcelReport(w http.Res
 
 func (e exportControllerImpl) GenerateDdlEntitiesExcelReport(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		e.responder.RespondWithError(w, "Failed to check user privileges", err)
+		e.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -1085,14 +1086,14 @@ func (e exportControllerImpl) GenerateDdlEntitiesExcelReport(w http.ResponseWrit
 	}
 	refPackageId := r.URL.Query().Get("refPackageId")
 
-	e.monitoringService.IncreaseBusinessMetricCounter(ctx.GetUserId(), metrics.ExportsCalled, packageId)
+	e.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.ExportsCalled, packageId)
 
-	report, versionName, err := e.excelService.ExportDdlEntities(packageId, version, view.ExportDdlEntitiesRequestView{
+	report, versionName, err := e.excelService.ExportDdlEntities(ctx, packageId, version, view.ExportDdlEntitiesRequestView{
 		RefPackageId: refPackageId,
 		TextFilter:   textFilter,
 	})
 	if err != nil {
-		e.responder.RespondWithError(w, "Failed to export DDL entities", err)
+		e.responder.RespondWithError(w, r, "Failed to export DDL entities", err)
 		return
 	}
 	if report == nil {
@@ -1112,10 +1113,10 @@ func (e exportControllerImpl) GenerateDdlEntitiesExcelReport(w http.ResponseWrit
 
 func (e exportControllerImpl) GenerateDdlChangesExcelReport(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		e.responder.RespondWithError(w, "Failed to check user privileges", err)
+		e.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -1168,9 +1169,9 @@ func (e exportControllerImpl) GenerateDdlChangesExcelReport(w http.ResponseWrite
 		}
 	}
 
-	e.monitoringService.IncreaseBusinessMetricCounter(ctx.GetUserId(), metrics.ExportsCalled, packageId)
+	e.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.ExportsCalled, packageId)
 
-	report, versionName, err := e.excelService.ExportDdlChanges(packageId, version, view.ExportDdlChangesRequestView{
+	report, versionName, err := e.excelService.ExportDdlChanges(ctx, packageId, version, view.ExportDdlChangesRequestView{
 		PreviousVersion:          previousVersion,
 		PreviousVersionPackageId: previousVersionPackageId,
 		RefPackageId:             refPackageId,
@@ -1178,7 +1179,7 @@ func (e exportControllerImpl) GenerateDdlChangesExcelReport(w http.ResponseWrite
 		TextFilter:               textFilter,
 	})
 	if err != nil {
-		e.responder.RespondWithError(w, "Failed to export DDL changes", err)
+		e.responder.RespondWithError(w, r, "Failed to export DDL changes", err)
 		return
 	}
 	if report == nil {
@@ -1198,10 +1199,10 @@ func (e exportControllerImpl) GenerateDdlChangesExcelReport(w http.ResponseWrite
 
 func (e exportControllerImpl) GenerateMcpEntitiesExcelReport(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		e.responder.RespondWithError(w, "Failed to check user privileges", err)
+		e.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -1247,14 +1248,14 @@ func (e exportControllerImpl) GenerateMcpEntitiesExcelReport(w http.ResponseWrit
 	}
 	refPackageId := r.URL.Query().Get("refPackageId")
 
-	e.monitoringService.IncreaseBusinessMetricCounter(ctx.GetUserId(), metrics.ExportsCalled, packageId)
+	e.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.ExportsCalled, packageId)
 
-	report, versionName, err := e.excelService.ExportMcpEntities(packageId, version, kind, view.ExportMcpEntitiesRequestView{
+	report, versionName, err := e.excelService.ExportMcpEntities(ctx, packageId, version, kind, view.ExportMcpEntitiesRequestView{
 		RefPackageId: refPackageId,
 		TextFilter:   textFilter,
 	})
 	if err != nil {
-		e.responder.RespondWithError(w, "Failed to export MCP entities", err)
+		e.responder.RespondWithError(w, r, "Failed to export MCP entities", err)
 		return
 	}
 	if report == nil {
@@ -1273,6 +1274,7 @@ func (e exportControllerImpl) GenerateMcpEntitiesExcelReport(w http.ResponseWrit
 }
 
 func (e exportControllerImpl) StartAsyncExport(w http.ResponseWriter, r *http.Request) {
+	ctx := secctx.MakeUserContext(r)
 	defer r.Body.Close()
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -1340,16 +1342,14 @@ func (e exportControllerImpl) StartAsyncExport(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	err = e.validatePackageAndVersion(discriminator)
+	err = e.validatePackageAndVersion(ctx, discriminator)
 	if err != nil {
-		e.responder.RespondWithError(w, "request validation failed", err)
+		e.responder.RespondWithError(w, r, "request validation failed", err)
 	}
-
-	ctx := context.Create(r)
 
 	sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, discriminator.PackageId, view.ReadPermission)
 	if err != nil {
-		e.responder.RespondWithError(w, "Failed to check user privileges", err)
+		e.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -1375,7 +1375,7 @@ func (e exportControllerImpl) StartAsyncExport(w http.ResponseWriter, r *http.Re
 		exportID, err = e.exportService.StartAsyncAPIOpGroupExport(ctx, *exportRequest.(*view.ExportAsyncapiOperationsGroupReq))
 	}
 	if err != nil {
-		e.responder.RespondWithError(w, "Failed to start export process", err)
+		e.responder.RespondWithError(w, r, "Failed to start export process", err)
 		return
 	}
 	e.responder.RespondWithJson(w, http.StatusAccepted, view.ExportResponse{
@@ -1383,8 +1383,8 @@ func (e exportControllerImpl) StartAsyncExport(w http.ResponseWriter, r *http.Re
 	})
 }
 
-func (e exportControllerImpl) validatePackageAndVersion(req view.ExportRequestDiscriminator) error {
-	pkgExists, err := e.packageService.PackageExists(req.PackageId)
+func (e exportControllerImpl) validatePackageAndVersion(ctx context.Context, req view.ExportRequestDiscriminator) error {
+	pkgExists, err := e.packageService.PackageExists(ctx, req.PackageId)
 	if err != nil {
 		return fmt.Errorf("failed to check if package %s exists: %s", req.PackageId, err)
 	}
@@ -1396,7 +1396,7 @@ func (e exportControllerImpl) validatePackageAndVersion(req view.ExportRequestDi
 			Params:  map[string]interface{}{"packageId": req.PackageId},
 		}
 	}
-	verExists, err := e.publishedService.VersionPublished(req.PackageId, req.Version)
+	verExists, err := e.publishedService.VersionPublished(ctx, req.PackageId, req.Version)
 	if err != nil {
 		return fmt.Errorf("failed to check if version %s exists for package %s: %s", req.Version, req.PackageId, err)
 	}
@@ -1412,11 +1412,12 @@ func (e exportControllerImpl) validatePackageAndVersion(req view.ExportRequestDi
 }
 
 func (e exportControllerImpl) GetAsyncExportStatus(w http.ResponseWriter, r *http.Request) {
+	ctx := secctx.MakeUserContext(r)
 	exportId := getStringParam(r, "exportId")
 
-	status, result, packageId, err := e.exportService.GetAsyncExportStatus(exportId)
+	status, result, packageId, err := e.exportService.GetAsyncExportStatus(ctx, exportId)
 	if err != nil {
-		e.responder.RespondWithError(w, "Failed to get publish status", err)
+		e.responder.RespondWithError(w, r, "Failed to get publish status", err)
 		return
 	}
 
@@ -1436,10 +1437,9 @@ func (e exportControllerImpl) GetAsyncExportStatus(w http.ResponseWriter, r *htt
 	}
 
 	if packageId != "" { // do permissions check for sensitive data like export content. Export status is considered as non-sensitive.
-		ctx := context.Create(r)
 		sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 		if err != nil {
-			e.responder.RespondWithError(w, "Failed to check user privileges", err)
+			e.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 			return
 		}
 		if !sufficientPrivileges {
@@ -1459,11 +1459,11 @@ func (e exportControllerImpl) GetAsyncExportStatus(w http.ResponseWriter, r *htt
 }
 
 func (e exportControllerImpl) GenerateShareabilityReport(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	groupId := getStringParam(r, "packageId")
 	sufficientPrivileges, err := e.roleService.HasRequiredPermissions(ctx, groupId, view.ReadPermission)
 	if err != nil {
-		e.responder.RespondWithError(w, "Failed to check user privileges", err)
+		e.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -1486,9 +1486,9 @@ func (e exportControllerImpl) GenerateShareabilityReport(w http.ResponseWriter, 
 		return
 	}
 
-	report, filename, err := e.excelService.BuildShareabilityReport(groupId, version)
+	report, filename, err := e.excelService.BuildShareabilityReport(ctx, groupId, version)
 	if err != nil {
-		e.responder.RespondWithError(w, "Failed to build shareability report", err)
+		e.responder.RespondWithError(w, r, "Failed to build shareability report", err)
 		return
 	}
 	defer func() {

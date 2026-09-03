@@ -11,10 +11,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -54,10 +54,10 @@ type operationGroupControllerImpl struct {
 
 func (o operationGroupControllerImpl) GetGroupedOperations(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := o.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		o.responder.RespondWithError(w, "Failed to check user privileges", err)
+		o.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -286,9 +286,9 @@ func (o operationGroupControllerImpl) GetGroupedOperations(w http.ResponseWriter
 		AsyncapiProtocol: asyncapiProtocol,
 	}
 
-	groupedOperations, err := o.operationGroupService.GetGroupedOperations(packageId, versionName, apiType, groupName, groupedOperationListReq)
+	groupedOperations, err := o.operationGroupService.GetGroupedOperations(ctx, packageId, versionName, apiType, groupName, groupedOperationListReq)
 	if err != nil {
-		o.responder.RespondWithError(w, "Failed to get operations from group", err)
+		o.responder.RespondWithError(w, r, "Failed to get operations from group", err)
 		return
 	}
 	o.responder.RespondWithJson(w, http.StatusOK, groupedOperations)
@@ -296,7 +296,7 @@ func (o operationGroupControllerImpl) GetGroupedOperations(w http.ResponseWriter
 
 func (o operationGroupControllerImpl) CreateOperationGroup(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	versionName, err := getUnescapedStringParam(r, "version")
 	if err != nil {
 		o.responder.RespondWithCustomError(w, &exception.CustomError{
@@ -331,14 +331,14 @@ func (o operationGroupControllerImpl) CreateOperationGroup(w http.ResponseWriter
 		return
 	}
 
-	versionStatus, err := o.versionService.GetVersionStatus(packageId, versionName)
+	versionStatus, err := o.versionService.GetVersionStatus(ctx, packageId, versionName)
 	if err != nil {
-		o.responder.RespondWithError(w, "Failed to check user privileges", err)
+		o.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	sufficientPrivileges, err := o.roleService.HasManageVersionPermission(ctx, packageId, versionStatus)
 	if err != nil {
-		o.responder.RespondWithError(w, "Failed to check user privileges", err)
+		o.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -460,7 +460,7 @@ func (o operationGroupControllerImpl) CreateOperationGroup(w http.ResponseWriter
 
 	err = o.operationGroupService.CreateOperationGroup(ctx, packageId, versionName, apiType, createOperationGroupReq)
 	if err != nil {
-		o.responder.RespondWithError(w, "Failed to create operation group", err)
+		o.responder.RespondWithError(w,r, "Failed to create operation group", err)
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
@@ -468,7 +468,7 @@ func (o operationGroupControllerImpl) CreateOperationGroup(w http.ResponseWriter
 
 func (o operationGroupControllerImpl) DeleteOperationGroup(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	versionName, err := getUnescapedStringParam(r, "version")
 	if err != nil {
 		o.responder.RespondWithCustomError(w, &exception.CustomError{
@@ -514,14 +514,14 @@ func (o operationGroupControllerImpl) DeleteOperationGroup(w http.ResponseWriter
 		return
 	}
 
-	versionStatus, err := o.versionService.GetVersionStatus(packageId, versionName)
+	versionStatus, err := o.versionService.GetVersionStatus(ctx, packageId, versionName)
 	if err != nil {
-		o.responder.RespondWithError(w, "Failed to check user privileges", err)
+		o.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	sufficientPrivileges, err := o.roleService.HasManageVersionPermission(ctx, packageId, versionStatus)
 	if err != nil {
-		o.responder.RespondWithError(w, "Failed to check user privileges", err)
+		o.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -535,7 +535,7 @@ func (o operationGroupControllerImpl) DeleteOperationGroup(w http.ResponseWriter
 
 	err = o.operationGroupService.DeleteOperationGroup(ctx, packageId, versionName, apiType, groupName)
 	if err != nil {
-		o.responder.RespondWithError(w, "Failed to delete operation group", err)
+		o.responder.RespondWithError(w, r, "Failed to delete operation group", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -543,7 +543,7 @@ func (o operationGroupControllerImpl) DeleteOperationGroup(w http.ResponseWriter
 
 func (o operationGroupControllerImpl) UpdateOperationGroup(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	versionName, err := getUnescapedStringParam(r, "version")
 	if err != nil {
 		o.responder.RespondWithCustomError(w, &exception.CustomError{
@@ -589,14 +589,14 @@ func (o operationGroupControllerImpl) UpdateOperationGroup(w http.ResponseWriter
 		return
 	}
 
-	versionStatus, err := o.versionService.GetVersionStatus(packageId, versionName)
+	versionStatus, err := o.versionService.GetVersionStatus(ctx, packageId, versionName)
 	if err != nil {
-		o.responder.RespondWithError(w, "Failed to check user privileges", err)
+		o.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	sufficientPrivileges, err := o.roleService.HasManageVersionPermission(ctx, packageId, versionStatus)
 	if err != nil {
-		o.responder.RespondWithError(w, "Failed to check user privileges", err)
+		o.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -747,7 +747,7 @@ func (o operationGroupControllerImpl) UpdateOperationGroup(w http.ResponseWriter
 
 	err = o.operationGroupService.UpdateOperationGroup(ctx, packageId, versionName, apiType, groupName, updateOperationGroupReq)
 	if err != nil {
-		o.responder.RespondWithError(w, "Failed to update operation group", err)
+		o.responder.RespondWithError(w, r, "Failed to update operation group", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -755,7 +755,7 @@ func (o operationGroupControllerImpl) UpdateOperationGroup(w http.ResponseWriter
 
 func (o operationGroupControllerImpl) GetGroupExportTemplate(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	versionName, err := getUnescapedStringParam(r, "version")
 	if err != nil {
 		o.responder.RespondWithCustomError(w, &exception.CustomError{
@@ -812,7 +812,7 @@ func (o operationGroupControllerImpl) GetGroupExportTemplate(w http.ResponseWrit
 
 	sufficientPrivileges, err := o.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		o.responder.RespondWithError(w, "Failed to check user privileges", err)
+		o.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -824,9 +824,9 @@ func (o operationGroupControllerImpl) GetGroupExportTemplate(w http.ResponseWrit
 		return
 	}
 
-	template, templateFilename, err := o.operationGroupService.GetOperationGroupExportTemplate(packageId, versionName, apiType, groupName)
+	template, templateFilename, err := o.operationGroupService.GetOperationGroupExportTemplate(ctx, packageId, versionName, apiType, groupName)
 	if err != nil {
-		o.responder.RespondWithError(w, "Failed to get group export template", err)
+		o.responder.RespondWithError(w, r, "Failed to get group export template", err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/octet-stream")
@@ -880,10 +880,10 @@ func (o operationGroupControllerImpl) StartOperationGroupPublish(w http.Response
 		})
 		return
 	}
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := o.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		o.responder.RespondWithError(w, "Failed to check user privileges", err)
+		o.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -925,9 +925,9 @@ func (o operationGroupControllerImpl) StartOperationGroupPublish(w http.Response
 		}
 	}
 
-	packageKind, err := o.packageService.GetPackageKind(req.PackageId)
+	packageKind, err := o.packageService.GetPackageKind(ctx, req.PackageId)
 	if err != nil {
-		o.responder.RespondWithError(w, "Failed to get package info", err)
+		o.responder.RespondWithError(w, r, "Failed to get package info", err)
 		return
 	}
 
@@ -947,7 +947,7 @@ func (o operationGroupControllerImpl) StartOperationGroupPublish(w http.Response
 	}
 	sufficientPrivileges, err = o.roleService.HasManageVersionPermission(ctx, req.PackageId, req.Status)
 	if err != nil {
-		o.responder.RespondWithError(w, "Failed to check user privileges", err)
+		o.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -961,7 +961,7 @@ func (o operationGroupControllerImpl) StartOperationGroupPublish(w http.Response
 
 	publishId, err := o.operationGroupService.StartOperationGroupPublish(ctx, packageId, version, apiType, groupName, req)
 	if err != nil {
-		o.responder.RespondWithError(w, "Failed to start operation group publish process", err)
+		o.responder.RespondWithError(w, r, "Failed to start operation group publish process", err)
 		return
 	}
 	o.responder.RespondWithJson(w, http.StatusAccepted, view.OperationGroupPublishResp{PublishId: publishId})
@@ -970,10 +970,10 @@ func (o operationGroupControllerImpl) StartOperationGroupPublish(w http.Response
 func (o operationGroupControllerImpl) GetOperationGroupPublishStatus(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
 	publishId := getStringParam(r, "publishId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := o.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		o.responder.RespondWithError(w, "Failed to check user privileges", err)
+		o.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -985,9 +985,9 @@ func (o operationGroupControllerImpl) GetOperationGroupPublishStatus(w http.Resp
 		return
 	}
 
-	publishStatus, err := o.operationGroupService.GetOperationGroupPublishStatus(publishId)
+	publishStatus, err := o.operationGroupService.GetOperationGroupPublishStatus(ctx, publishId)
 	if err != nil {
-		o.responder.RespondWithError(w, "Failed to get operation group publish status", err)
+		o.responder.RespondWithError(w, r, "Failed to get operation group publish status", err)
 		return
 	}
 	o.responder.RespondWithJson(w, http.StatusOK, publishStatus)

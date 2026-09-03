@@ -130,6 +130,7 @@ func (o oidcProvider) StartAuthentication(w http.ResponseWriter, r *http.Request
 }
 
 func (o oidcProvider) CallbackHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	stateCookie, err := r.Cookie("oidc_state_" + o.config.Id)
 	if err != nil {
 		o.responder.RespondWithCustomError(w, &exception.CustomError{
@@ -288,21 +289,21 @@ func (o oidcProvider) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 
 	if avatarData != nil {
 		oidcUser.AvatarUrl = fmt.Sprintf("/api/v2/users/%s/profile/avatar", oidcUser.Id)
-		err = o.userService.StoreUserAvatar(oidcUser.Id, avatarData)
+		err = o.userService.StoreUserAvatar(ctx, oidcUser.Id, avatarData)
 		if err != nil {
 			log.Warnf("Failed to store user avatar: %v", err)
 		}
 	}
 
-	user, err := o.userService.GetOrCreateUserForIntegration(oidcUser, view.ExternalIdpIntegration, o.config.Id)
+	user, err := o.userService.GetOrCreateUserForIntegration(ctx, oidcUser, view.ExternalIdpIntegration, o.config.Id)
 	if err != nil {
-		o.responder.RespondWithError(w, "Failed to create user for OIDC integration", err)
+		o.responder.RespondWithError(w, r, "Failed to create user for OIDC integration", err)
 		return
 	}
 
 	// Add authentication cookies
-	if err = o.authHandler.SetAuthTokenCookies(w, user, fmt.Sprintf(SSOLoginRefreshPathTemplate, o.config.Id)); err != nil {
-		o.responder.RespondWithError(w, "Failed to set auth cookie", err)
+	if err = o.authHandler.SetAuthTokenCookies(r.Context(), w, user, fmt.Sprintf(SSOLoginRefreshPathTemplate, o.config.Id)); err != nil {
+		o.responder.RespondWithError(w, r, "Failed to set auth cookie", err)
 		return
 	}
 
@@ -311,7 +312,7 @@ func (o oidcProvider) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (o oidcProvider) ServeMetadata(w http.ResponseWriter, r *http.Request) {
-	o.responder.RespondWithError(w, "Not implemented", errors.New("not implemented"))
+	o.responder.RespondWithError(w, r, "Not implemented", errors.New("not implemented"))
 }
 
 func (o oidcProvider) generateState() (string, error) {

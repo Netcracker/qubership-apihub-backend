@@ -1,15 +1,32 @@
 package security
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"runtime/debug"
+	"time"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/shaj13/go-guardian/v2/auth"
 	"github.com/shaj13/go-guardian/v2/auth/strategies/union"
 	log "github.com/sirupsen/logrus"
 )
+
+const authTimeout = 15 * time.Second
+
+// authenticate verifies credentials under authTimeout
+func authenticate(strategy auth.Strategy, r *http.Request) (auth.Info, error) {
+	ctx, cancel := context.WithTimeout(r.Context(), authTimeout)
+	defer cancel()
+	// union.Union.Authenticate ignores its ctx argument and reads r.Context(), so the deadline has
+	// to travel on the request as well.
+	info, err := strategy.Authenticate(ctx, r.WithContext(ctx))
+	// authTimeout is shorter than the request deadline, so a credential check that runs out of time
+	// leaves the request context healthy. Without this the failure looks like a rejected credential.
+	return info, utils.WrapContextError(ctx, err)
+}
 
 func (a *AuthHandler) Secure(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -26,7 +43,7 @@ func (a *AuthHandler) Secure(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 		}()
-		_, user, err := a.fullAuthStrategy.AuthenticateRequest(r)
+		user, err := authenticate(a.fullAuthStrategy, r)
 		if err != nil {
 			if multiError, ok := err.(union.MultiError); ok {
 				for _, e := range multiError {
@@ -38,7 +55,7 @@ func (a *AuthHandler) Secure(next http.HandlerFunc) http.HandlerFunc {
 					}
 				}
 			}
-			a.respondWithAuthFailedError(w, err)
+			a.respondWithAuthFailedError(w, r, err)
 			return
 		}
 
@@ -62,9 +79,9 @@ func (a *AuthHandler) SecureUser(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 		}()
-		user, err := a.userAuthStrategy.Authenticate(r.Context(), r)
+		user, err := authenticate(a.userAuthStrategy, r)
 		if err != nil {
-			a.respondWithAuthFailedError(w, err)
+			a.respondWithAuthFailedError(w, r, err)
 			return
 		}
 
@@ -88,9 +105,9 @@ func (a *AuthHandler) SecureJWT(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 		}()
-		user, err := a.jwtAuthStrategy.Authenticate(r.Context(), r)
+		user, err := authenticate(a.jwtAuthStrategy, r)
 		if err != nil {
-			a.respondWithAuthFailedError(w, err)
+			a.respondWithAuthFailedError(w, r, err)
 			return
 		}
 
@@ -134,9 +151,9 @@ func (a *AuthHandler) SecureProxy(next http.HandlerFunc) http.HandlerFunc {
 			}
 		}()
 		//TODO: need to remove customJwtStrategy and use sessionCookie strategy only
-		user, err := a.proxyAuthStrategy.Authenticate(r.Context(), r)
+		user, err := authenticate(a.proxyAuthStrategy, r)
 		if err != nil {
-			a.respondWithAuthFailedError(w, err)
+			a.respondWithAuthFailedError(w, r, err)
 			return
 		}
 		r = auth.RequestWithUser(user, r)
@@ -169,7 +186,7 @@ func (a *AuthHandler) RefreshToken(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 		}()
-		user, err := a.refreshTokenStrategy.Authenticate(r.Context(), r)
+		user, err := authenticate(a.refreshTokenStrategy, r)
 		if user != nil && user.GetExtensions().Get(SetAccessTokenCookieExt) != "" {
 			http.SetCookie(w, &http.Cookie{
 				Name:     AccessTokenCookieName,
@@ -181,6 +198,13 @@ func (a *AuthHandler) RefreshToken(next http.HandlerFunc) http.HandlerFunc {
 			})
 			w.WriteHeader(http.StatusOK)
 		} else {
+			// Falling through belongs to a missing, expired, or invalid refresh token. A refresh that
+			// ran out of time says nothing about the session, so sending a valid one to the identity
+			// provider would loop while the database or the cache is degraded.
+			if cause := a.contextErrorCause(err); cause != nil {
+				a.responder.RespondWithContextError(w, r, "Token refresh aborted", cause, err)
+				return
+			}
 			if err != nil {
 				log.Debugf("Failed to refresh access token: %v", err)
 			}
@@ -204,13 +228,28 @@ func (a *AuthHandler) SecureMCP(next http.Handler) http.Handler {
 				return
 			}
 		}()
-		user, err := a.apiKeyStrategy.Authenticate(r.Context(), r)
+		user, err := authenticate(a.apiKeyStrategy, r)
 		if err != nil {
-			a.respondWithAuthFailedError(w, err)
+			a.respondWithAuthFailedError(w, r, err)
 			return
 		}
 
 		r = auth.RequestWithUser(user, r)
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (a *AuthHandler) contextErrorCause(err error) error {
+	if multiError, ok := err.(union.MultiError); ok {
+		for _, e := range multiError {
+			if cause := a.contextErrorCause(e); cause != nil {
+				return cause
+			}
+		}
+		return nil
+	}
+	if a.responder.IsRequestTimeout(err) || a.responder.IsContextCancelled(err) {
+		return err
+	}
+	return nil
 }

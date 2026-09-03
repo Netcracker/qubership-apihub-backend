@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 )
@@ -35,10 +35,10 @@ type internalDocumentControllerImpl struct {
 func (c *internalDocumentControllerImpl) GetVersionInternalDocuments(w http.ResponseWriter, r *http.Request) {
 	var err error
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := c.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		c.responder.RespondWithError(w, "Failed to check user privileges", err)
+		c.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -61,9 +61,9 @@ func (c *internalDocumentControllerImpl) GetVersionInternalDocuments(w http.Resp
 		return
 	}
 
-	response, err := c.publishedService.GetVersionInternalDocuments(packageId, version)
+	response, err := c.publishedService.GetVersionInternalDocuments(ctx, packageId, version)
 	if err != nil {
-		c.responder.RespondWithError(w, "Failed to get internal documents for version", err)
+		c.responder.RespondWithError(w, r, "Failed to get internal documents for version", err)
 		return
 	}
 
@@ -71,11 +71,12 @@ func (c *internalDocumentControllerImpl) GetVersionInternalDocuments(w http.Resp
 }
 
 func (c *internalDocumentControllerImpl) GetVersionInternalDocumentData(w http.ResponseWriter, r *http.Request) {
+	ctx := secctx.MakeUserContext(r)
 	hash := getStringParam(r, "hash")
 
-	data, filename, err := c.publishedService.GetVersionInternalDocumentData(hash)
+	data, filename, err := c.publishedService.GetVersionInternalDocumentData(ctx, hash)
 	if err != nil {
-		c.responder.RespondWithError(w, "Failed to get internal document data", err)
+		c.responder.RespondWithError(w, r, "Failed to get internal document data", err)
 		return
 	}
 
@@ -88,10 +89,10 @@ func (c *internalDocumentControllerImpl) GetVersionInternalDocumentData(w http.R
 func (c *internalDocumentControllerImpl) GetComparisonInternalDocuments(w http.ResponseWriter, r *http.Request) {
 	var err error
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := c.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		c.responder.RespondWithError(w, "Failed to check user privileges", err)
+		c.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -117,9 +118,9 @@ func (c *internalDocumentControllerImpl) GetComparisonInternalDocuments(w http.R
 	previousVersionPackageId := r.URL.Query().Get("previousVersionPackageId")
 	refPackageId := r.URL.Query().Get("refPackageId")
 
-	response, err := c.publishedService.GetComparisonInternalDocuments(packageId, version, previousVersionPackageId, previousVersion, refPackageId)
+	response, err := c.publishedService.GetComparisonInternalDocuments(ctx, packageId, version, previousVersionPackageId, previousVersion, refPackageId)
 	if err != nil {
-		c.responder.RespondWithError(w, "Failed to get internal documents for comparison", err)
+		c.responder.RespondWithError(w, r, "Failed to get internal documents for comparison", err)
 		return
 	}
 
@@ -127,11 +128,12 @@ func (c *internalDocumentControllerImpl) GetComparisonInternalDocuments(w http.R
 }
 
 func (c *internalDocumentControllerImpl) GetComparisonInternalDocumentData(w http.ResponseWriter, r *http.Request) {
+	ctx := secctx.MakeUserContext(r)
 	hash := getStringParam(r, "hash")
 
-	data, filename, err := c.publishedService.GetComparisonInternalDocumentData(hash)
+	data, filename, err := c.publishedService.GetComparisonInternalDocumentData(ctx, hash)
 	if err != nil {
-		c.responder.RespondWithError(w, "Failed to get internal document data", err)
+		c.responder.RespondWithError(w, r, "Failed to get internal document data", err)
 		return
 	}
 

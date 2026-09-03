@@ -30,7 +30,7 @@ func (c *EphemeralFileController) Download(w http.ResponseWriter, r *http.Reques
 
 	f, err := c.svc.GetFileByID(r.Context(), fileID)
 	if err != nil {
-		c.responder.RespondWithError(w, "Get file", err)
+		c.responder.RespondWithError(w, r, "Get file", err)
 		return
 	}
 	if f == nil || f.ExpiresAt.Before(time.Now().UTC()) {
@@ -43,7 +43,7 @@ func (c *EphemeralFileController) Download(w http.ResponseWriter, r *http.Reques
 		c.responder.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusUnauthorized, Code: exception.EphemeralFileTokenMissing, Message: exception.EphemeralFileTokenMissingMsg})
 		return
 	}
-	uid, tokFileID, err := c.authHandler.ValidateEphemeralFileToken(token)
+	uid, tokFileID, err := c.authHandler.ValidateEphemeralFileToken(r.Context(), token)
 	if err != nil {
 		if security.IsTokenExpiredError(err) {
 			c.responder.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusGone, Code: exception.EphemeralFileTokenExpired, Message: exception.EphemeralFileTokenExpiredMsg, Debug: err.Error()})

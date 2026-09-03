@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/migration/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/migration/view"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/gorilla/mux"
 )
@@ -22,23 +22,21 @@ type OperationsMigrationController interface {
 	GetMigrationPerfReport(w http.ResponseWriter, r *http.Request)
 }
 
-func NewTempMigrationController(migrationService service.DBMigrationService, isSysadmFunc func(context.SecurityContext) bool, responder *responder.Responder) OperationsMigrationController {
+func NewTempMigrationController(migrationService service.DBMigrationService, responder *responder.Responder) OperationsMigrationController {
 	return &operationsMigrationControllerImpl{
 		migrationService: migrationService,
-		isSysadm:         isSysadmFunc,
 		responder:        responder,
 	}
 }
 
 type operationsMigrationControllerImpl struct {
 	migrationService service.DBMigrationService
-	isSysadm         func(context.SecurityContext) bool
 	responder        *responder.Responder
 }
 
 func (t operationsMigrationControllerImpl) StartOpsMigration(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Create(r)
-	sufficientPrivileges := t.isSysadm(ctx)
+	ctx := secctx.MakeUserContext(r)
+	sufficientPrivileges := secctx.IsSysadm(ctx)
 	if !sufficientPrivileges {
 		t.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
@@ -72,9 +70,9 @@ func (t operationsMigrationControllerImpl) StartOpsMigration(w http.ResponseWrit
 		return
 	}
 
-	id, err := t.migrationService.StartMigrateOperations(req)
+	id, err := t.migrationService.StartMigrateOperations(ctx, req)
 	if err != nil {
-		t.responder.RespondWithError(w, "Failed to start operations migration", err)
+		t.responder.RespondWithError(w, r, "Failed to start operations migration", err)
 		return
 	}
 
@@ -86,8 +84,8 @@ func (t operationsMigrationControllerImpl) StartOpsMigration(w http.ResponseWrit
 
 func (t operationsMigrationControllerImpl) GetMigrationReport(w http.ResponseWriter, r *http.Request) {
 	var err error
-	ctx := context.Create(r)
-	sufficientPrivileges := t.isSysadm(ctx)
+	ctx := secctx.MakeUserContext(r)
+	sufficientPrivileges := secctx.IsSysadm(ctx)
 	if !sufficientPrivileges {
 		t.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
@@ -114,7 +112,7 @@ func (t operationsMigrationControllerImpl) GetMigrationReport(w http.ResponseWri
 			return
 		}
 	}
-	report, err := t.migrationService.GetMigrationReport(migrationId, includeBuildSamples)
+	report, err := t.migrationService.GetMigrationReport(ctx, migrationId, includeBuildSamples)
 	if err != nil {
 		t.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusInternalServerError,
@@ -137,8 +135,8 @@ func (t operationsMigrationControllerImpl) GetMigrationReport(w http.ResponseWri
 }
 
 func (t operationsMigrationControllerImpl) CancelRunningMigrations(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Create(r)
-	sufficientPrivileges := t.isSysadm(ctx)
+	ctx := secctx.MakeUserContext(r)
+	sufficientPrivileges := secctx.IsSysadm(ctx)
 	if !sufficientPrivileges {
 		t.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
@@ -147,9 +145,9 @@ func (t operationsMigrationControllerImpl) CancelRunningMigrations(w http.Respon
 		})
 		return
 	}
-	err := t.migrationService.CancelRunningMigrations()
+	err := t.migrationService.CancelRunningMigrations(ctx)
 	if err != nil {
-		t.responder.RespondWithError(w, "Failed to cancel running migrations", err)
+		t.responder.RespondWithError(w, r, "Failed to cancel running migrations", err)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -157,8 +155,8 @@ func (t operationsMigrationControllerImpl) CancelRunningMigrations(w http.Respon
 
 func (t operationsMigrationControllerImpl) GetSuspiciousBuilds(w http.ResponseWriter, r *http.Request) {
 	var err error
-	ctx := context.Create(r)
-	sufficientPrivileges := t.isSysadm(ctx)
+	ctx := secctx.MakeUserContext(r)
+	sufficientPrivileges := secctx.IsSysadm(ctx)
 	if !sufficientPrivileges {
 		t.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
@@ -210,7 +208,7 @@ func (t operationsMigrationControllerImpl) GetSuspiciousBuilds(w http.ResponseWr
 	}
 	changedField := r.URL.Query().Get("changedField")
 
-	suspiciousBuilds, err := t.migrationService.GetSuspiciousBuilds(migrationId, changedField, limit, page)
+	suspiciousBuilds, err := t.migrationService.GetSuspiciousBuilds(ctx, migrationId, changedField, limit, page)
 	if err != nil {
 		t.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusInternalServerError,
@@ -225,8 +223,8 @@ func (t operationsMigrationControllerImpl) GetSuspiciousBuilds(w http.ResponseWr
 
 func (t operationsMigrationControllerImpl) GetMigrationPerfReport(w http.ResponseWriter, r *http.Request) {
 	var err error
-	ctx := context.Create(r)
-	sufficientPrivileges := t.isSysadm(ctx)
+	ctx := secctx.MakeUserContext(r)
+	sufficientPrivileges := secctx.IsSysadm(ctx)
 	if !sufficientPrivileges {
 		t.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
@@ -253,9 +251,9 @@ func (t operationsMigrationControllerImpl) GetMigrationPerfReport(w http.Respons
 		stageFilter = &cast
 	}
 
-	report, err := t.migrationService.GetMigrationPerfReport(migrationId, includeHourPackageData, stageFilter)
+	report, err := t.migrationService.GetMigrationPerfReport(ctx, migrationId, includeHourPackageData, stageFilter)
 	if err != nil {
-		t.responder.RespondWithError(w, "Failed to get migration perf report", err)
+		t.responder.RespondWithError(w, r, "Failed to get migration perf report", err)
 		return
 	}
 

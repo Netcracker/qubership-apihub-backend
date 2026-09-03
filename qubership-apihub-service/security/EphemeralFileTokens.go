@@ -1,6 +1,7 @@
 package security
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -22,8 +23,8 @@ func (a *AuthHandler) MintEphemeralFileToken(userID, fileID string, ttl time.Dur
 	return jwt.IssueAccessToken(user, a.keeper, jwt.SetExpDuration(ttl))
 }
 
-func (a *AuthHandler) ValidateEphemeralFileToken(token string) (userID, fileID string, err error) {
-	info, exp, err := a.jwtValidator.ValidateToken(token, EphemeralFileDownloadTokenType)
+func (a *AuthHandler) ValidateEphemeralFileToken(ctx context.Context, token string) (userID, fileID string, err error) {
+	info, exp, err := a.jwtValidator.ValidateToken(ctx, token, EphemeralFileDownloadTokenType)
 	if err != nil {
 		return "", "", err
 	}

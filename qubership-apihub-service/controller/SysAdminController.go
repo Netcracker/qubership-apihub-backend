@@ -5,9 +5,9 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -32,8 +32,8 @@ type sysAdminControllerImpl struct {
 }
 
 func (a sysAdminControllerImpl) GetSystemAdministrators(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Create(r)
-	sufficientPrivileges := a.roleService.IsSysadm(ctx)
+	ctx := secctx.MakeUserContext(r)
+	sufficientPrivileges := secctx.IsSysadm(ctx)
 	if !sufficientPrivileges {
 		a.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
@@ -42,17 +42,17 @@ func (a sysAdminControllerImpl) GetSystemAdministrators(w http.ResponseWriter, r
 		})
 		return
 	}
-	admins, err := a.roleService.GetSystemAdministrators()
+	admins, err := a.roleService.GetSystemAdministrators(ctx)
 	if err != nil {
-		a.responder.RespondWithError(w, "Failed to get system administrators", err)
+		a.responder.RespondWithError(w, r, "Failed to get system administrators", err)
 		return
 	}
 	a.responder.RespondWithJson(w, http.StatusOK, admins)
 }
 
 func (a sysAdminControllerImpl) AddSystemAdministrator(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Create(r)
-	sufficientPrivileges := a.roleService.IsSysadm(ctx)
+	ctx := secctx.MakeUserContext(r)
+	sufficientPrivileges := secctx.IsSysadm(ctx)
 	if !sufficientPrivileges {
 		a.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
@@ -91,9 +91,9 @@ func (a sysAdminControllerImpl) AddSystemAdministrator(w http.ResponseWriter, r 
 		}
 	}
 
-	admins, err := a.roleService.AddSystemAdministrator(addSysadmReq.UserId)
+	admins, err := a.roleService.AddSystemAdministrator(ctx, addSysadmReq.UserId)
 	if err != nil {
-		a.responder.RespondWithError(w, "Failed to add system administrator", err)
+		a.responder.RespondWithError(w, r, "Failed to add system administrator", err)
 		return
 	}
 	a.responder.RespondWithJson(w, http.StatusOK, admins)
@@ -101,8 +101,8 @@ func (a sysAdminControllerImpl) AddSystemAdministrator(w http.ResponseWriter, r 
 
 func (a sysAdminControllerImpl) DeleteSystemAdministrator(w http.ResponseWriter, r *http.Request) {
 	userId := getStringParam(r, "userId")
-	ctx := context.Create(r)
-	sufficientPrivileges := a.roleService.IsSysadm(ctx)
+	ctx := secctx.MakeUserContext(r)
+	sufficientPrivileges := secctx.IsSysadm(ctx)
 	if !sufficientPrivileges {
 		a.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
@@ -111,9 +111,9 @@ func (a sysAdminControllerImpl) DeleteSystemAdministrator(w http.ResponseWriter,
 		})
 		return
 	}
-	err := a.roleService.DeleteSystemAdministrator(userId)
+	err := a.roleService.DeleteSystemAdministrator(ctx, userId)
 	if err != nil {
-		a.responder.RespondWithError(w, "Failed to delete system administrator", err)
+		a.responder.RespondWithError(w, r, "Failed to delete system administrator", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

@@ -23,9 +23,9 @@ type systemInfoControllerImpl struct {
 }
 
 func (g systemInfoControllerImpl) GetSystemInfo(w http.ResponseWriter, r *http.Request) {
-	migrationInProgress, err := g.migrationService.IsMigrationInProgress()
+	migrationInProgress, err := g.migrationService.IsMigrationInProgress(r.Context())
 	if err != nil {
-		g.responder.RespondWithError(w, "Failed to check if migration is currently in progress", err)
+		g.responder.RespondWithError(w, r, "Failed to check if migration is currently in progress", err)
 		return
 	}
 	systemInfo := g.service.GetSystemInfo()

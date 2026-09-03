@@ -5,9 +5,9 @@ import (
 	"net/http"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 )
@@ -16,10 +16,9 @@ type AdminPublishedController interface {
 	ReplaceVersionSources(w http.ResponseWriter, r *http.Request)
 }
 
-func NewAdminPublishedController(publishedService service.PublishedService, isSysadm func(ctx context.SecurityContext) bool, publishArchiveSizeLimit int64, responder *responder.Responder) AdminPublishedController {
+func NewAdminPublishedController(publishedService service.PublishedService, publishArchiveSizeLimit int64, responder *responder.Responder) AdminPublishedController {
 	return &adminPublishedControllerImpl{
 		publishedService:        publishedService,
-		isSysadm:                isSysadm,
 		publishArchiveSizeLimit: publishArchiveSizeLimit,
 		responder:               responder,
 	}
@@ -27,14 +26,13 @@ func NewAdminPublishedController(publishedService service.PublishedService, isSy
 
 type adminPublishedControllerImpl struct {
 	publishedService        service.PublishedService
-	isSysadm                func(ctx context.SecurityContext) bool
 	publishArchiveSizeLimit int64
 	responder               *responder.Responder
 }
 
 func (c adminPublishedControllerImpl) ReplaceVersionSources(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Create(r)
-	if !c.isSysadm(ctx) {
+	ctx := secctx.MakeUserContext(r)
+	if !secctx.IsSysadm(ctx) {
 		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
@@ -91,7 +89,7 @@ func (c adminPublishedControllerImpl) ReplaceVersionSources(w http.ResponseWrite
 
 	err = c.publishedService.ReplaceVersionSources(ctx, packageId, versionName, body)
 	if err != nil {
-		c.responder.RespondWithError(w, "Failed to replace version sources", err)
+		c.responder.RespondWithError(w, r, "Failed to replace version sources", err)
 		return
 	}
 

@@ -6,7 +6,6 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service/cleanup"
-	log "github.com/sirupsen/logrus"
 )
 
 type CleanupController interface {
@@ -37,17 +36,9 @@ func (c cleanupControllerImpl) ClearTestData(w http.ResponseWriter, r *http.Requ
 		})
 		return
 	}
-	err = c.cleanupService.ClearTestData(testId)
+	err = c.cleanupService.ClearTestData(r.Context(), testId)
 	if err != nil {
-		log.Error("Failed to clear test data: ", err.Error())
-		if customError, ok := err.(*exception.CustomError); ok {
-			c.responder.RespondWithCustomError(w, customError)
-		} else {
-			c.responder.RespondWithCustomError(w, &exception.CustomError{
-				Status:  http.StatusInternalServerError,
-				Message: "Failed to clear test data",
-				Debug:   err.Error()})
-		}
+		c.responder.RespondWithError(w, r, "Failed to clear test data", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

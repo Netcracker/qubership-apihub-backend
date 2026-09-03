@@ -6,9 +6,9 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -33,7 +33,7 @@ type packageExportConfigControllerImpl struct {
 }
 
 func (p packageExportConfigControllerImpl) GetConfig(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	packageId := getStringParam(r, "packageId")
 	sufficientPrivileges, err := p.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
@@ -49,7 +49,7 @@ func (p packageExportConfigControllerImpl) GetConfig(w http.ResponseWriter, r *h
 		return
 	}
 
-	result, err := p.expConfSvc.GetConfig(packageId)
+	result, err := p.expConfSvc.GetConfig(ctx, packageId)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, p.responder, p.ptHandler, packageId, "Failed to get package export config", err)
 		return
@@ -60,7 +60,7 @@ func (p packageExportConfigControllerImpl) GetConfig(w http.ResponseWriter, r *h
 
 func (p packageExportConfigControllerImpl) SetConfig(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := p.roleService.HasRequiredPermissions(ctx, packageId, view.CreateAndUpdatePackagePermission)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, p.responder, p.ptHandler, packageId, "Failed to check user privileges", err)
@@ -106,15 +106,15 @@ func (p packageExportConfigControllerImpl) SetConfig(w http.ResponseWriter, r *h
 		}
 	}
 
-	err = p.expConfSvc.SetConfig(packageId, req.AllowedOasExtensions)
+	err = p.expConfSvc.SetConfig(ctx, packageId, req.AllowedOasExtensions)
 	if err != nil {
 		handlePkgRedirectOrRespondWithError(w, r, p.responder, p.ptHandler, packageId, "Failed to update package export config", err)
 		return
 	}
 
-	result, err := p.expConfSvc.GetConfig(packageId)
+	result, err := p.expConfSvc.GetConfig(ctx, packageId)
 	if err != nil {
-		p.responder.RespondWithError(w, "Failed to get package export config after update", err)
+		p.responder.RespondWithError(w, r, "Failed to get package export config after update", err)
 		return
 	}
 

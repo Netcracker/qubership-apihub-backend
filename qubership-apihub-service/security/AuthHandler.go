@@ -97,12 +97,18 @@ func NewAuthHandler(userService service.UserService, roleService service.RoleSer
 	}, nil
 }
 
-func (a *AuthHandler) respondWithAuthFailedError(w http.ResponseWriter, err error) {
+func (a *AuthHandler) respondWithAuthFailedError(w http.ResponseWriter, r *http.Request, err error) {
+	if cause := a.contextErrorCause(err); cause != nil {
+		// A request that gave up while authenticating is not an authentication failure, and reporting it
+		// as 401 sends the user off to fix credentials that can be perfectly valid.
+		a.responder.RespondWithContextError(w, r, "Authentication aborted", cause, err)
+		return
+	}
 	log.Tracef("Authentication failed: %+v", err)
 	customErr := &exception.CustomError{
 		Status:  http.StatusUnauthorized,
 		Message: http.StatusText(http.StatusUnauthorized),
 		Debug:   fmt.Sprintf("%v", err),
 	}
-	a.responder.RespondWithCustomError(w, customErr)
+	a.responder.RespondWithJson(w, customErr.Status, customErr)
 }
