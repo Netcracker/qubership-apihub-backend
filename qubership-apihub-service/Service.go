@@ -219,6 +219,8 @@ func main() {
 
 	globalSearchPartitionRepository := repository.NewGlobalSearchPartitionRepository(cp)
 
+	ddlTableGroupRepository := repository.NewDDLTableGroupRepository(cp)
+
 	olricProvider, err := cache.NewOlricProvider(systemInfoService.GetOlricConfig())
 	if err != nil {
 		log.Error("Failed to create olricProvider: " + err.Error())
@@ -281,7 +283,9 @@ func main() {
 	versionService.SetBuildService(buildService)
 	operationGroupService.SetBuildService(buildService)
 
-	excelService := service.NewExcelService(publishedRepository, versionService, operationService, packageService, ddlContractServiceForVersion, mcpContractServiceForVersion)
+	//declared before excelService rather than at the end of the block because excelService consumes it
+	ddlTableGroupService := service.NewDDLTableGroupService(ddlTableGroupRepository, publishedRepository, packageVersionEnrichmentService)
+	excelService := service.NewExcelService(publishedRepository, versionService, operationService, packageService, ddlContractServiceForVersion, mcpContractServiceForVersion, ddlTableGroupService)
 	comparisonService := service.NewComparisonService(publishedRepository, operationRepository, packageVersionEnrichmentService, ddlContractServiceForVersion)
 	businessMetricService := service.NewBusinessMetricService(businessMetricRepository)
 
@@ -384,6 +388,7 @@ func main() {
 	mcpController := controller.NewMCPController(mcpService)
 	buildController := controller.NewBuildController(buildResultService, buildService)
 	adminPublishedController := controller.NewAdminPublishedController(publishedService, systemInfoService.GetPublishArchiveSizeLimitMB())
+	ddlTableGroupController := controller.NewDDLTableGroupController(roleService, ddlTableGroupService, versionService, ptHandler)
 
 	r.HandleFunc("/api/v1/system/info", security.Secure(systemInfoController.GetSystemInfo)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/system/configuration", samlAuthController.GetSystemSSOInfo_deprecated).Methods(http.MethodGet) //deprecated
@@ -501,6 +506,13 @@ func main() {
 	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/entities/{ddlEntityId}", security.Secure(ddlContractController.GetDdlEntity)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/entities/{ddlEntityId}/changes", security.Secure(ddlContractController.GetDdlEntityChanges)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/entities/{ddlEntityId}/changes/summary", security.Secure(ddlContractController.GetDdlEntityChangesSummary)).Methods(http.MethodGet)
+
+	// Manual DDL table groups.
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/groups", security.Secure(ddlTableGroupController.ListDdlTableGroups)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/groups", security.Secure(ddlTableGroupController.CreateDdlTableGroup)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/groups/{groupName}", security.Secure(ddlTableGroupController.GetGroupedDdlEntities)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/groups/{groupName}", security.Secure(ddlTableGroupController.UpdateDdlTableGroup)).Methods(http.MethodPatch)
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/groups/{groupName}", security.Secure(ddlTableGroupController.DeleteDdlTableGroup)).Methods(http.MethodDelete)
 
 	// MCP Contract routes ({entity} ∈ {inits, tools, prompts, resources}).
 	// mcp/export/{entity} is registered before mcp/{entity}/{mcpEntityId} so it is not shadowed.
