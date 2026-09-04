@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS global_search.fts_mcp_search_text
 CREATE INDEX IF NOT EXISTS gs_fts_mcp_search_text_data_vector_idx
     ON global_search.fts_mcp_search_text USING gin (data_vector);
 
--- Create one LIST partition per workspace id (active workspaces + any id still present in public.fts_*).
+-- Create one LIST partition per workspace id.
 -- partition_slug keeps relation names short and identifier-safe.
 DO
 $$
@@ -72,23 +72,9 @@ $$
         slug text;
     BEGIN
         FOR r IN
-            SELECT DISTINCT workspace_id
-            FROM (
-                     SELECT id AS workspace_id
-                     FROM package_group
-                     WHERE kind = 'workspace'
-                     UNION
-                     SELECT split_part(package_id, '.', 1)
-                     FROM fts_operation_search_text
-                     UNION
-                     SELECT split_part(package_id, '.', 1)
-                     FROM fts_ddl_search_text
-                     UNION
-                     SELECT split_part(package_id, '.', 1)
-                     FROM fts_mcp_search_text
-                 ) w
-            WHERE workspace_id IS NOT NULL
-              AND workspace_id <> ''
+            SELECT id AS workspace_id
+            FROM package_group
+            WHERE kind = 'workspace'
             LOOP
                 slug := 'p_' || left(md5(r.workspace_id), 16);
                 INSERT INTO global_search.workspace_registry (workspace_id, partition_slug)
