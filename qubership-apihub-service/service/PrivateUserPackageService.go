@@ -27,20 +27,23 @@ func NewPrivateUserPackageService(
 	userRepo repository.UserRepository,
 	roleRepository repository.RoleRepository,
 	favoritesRepo repository.FavoritesRepository,
+	globalSearchPartitionService GlobalSearchPartitionService,
 ) PrivateUserPackageService {
 	return &privateUserPackageServiceImpl{
-		publishedRepo:  publishedRepo,
-		userRepo:       userRepo,
-		roleRepository: roleRepository,
-		favoritesRepo:  favoritesRepo,
+		publishedRepo:                publishedRepo,
+		userRepo:                     userRepo,
+		roleRepository:               roleRepository,
+		favoritesRepo:                favoritesRepo,
+		globalSearchPartitionService: globalSearchPartitionService,
 	}
 }
 
 type privateUserPackageServiceImpl struct {
-	publishedRepo  repository.PublishedRepository
-	userRepo       repository.UserRepository
-	roleRepository repository.RoleRepository
-	favoritesRepo  repository.FavoritesRepository
+	publishedRepo                repository.PublishedRepository
+	userRepo                     repository.UserRepository
+	roleRepository               repository.RoleRepository
+	favoritesRepo                repository.FavoritesRepository
+	globalSearchPartitionService GlobalSearchPartitionService
 }
 
 func (p privateUserPackageServiceImpl) GenerateUserPrivatePackageId(ctx context.Context, userId string) (string, error) {
@@ -100,6 +103,9 @@ func (p privateUserPackageServiceImpl) CreatePrivateUserPackage(ctx context.Cont
 			if err != nil {
 				return nil, err
 			}
+			if err := p.globalSearchPartitionService.EnsureWorkspacePartitions(packageEnt.Id); err != nil {
+				return nil, fmt.Errorf("failed to ensure global search partitions for private workspace %s: %w", packageEnt.Id, err)
+			}
 			userPermissions, err := p.roleRepository.GetUserPermissions(ctx, packageEnt.Id, userId)
 			if err != nil {
 				return nil, err
@@ -120,7 +126,7 @@ func (p privateUserPackageServiceImpl) CreatePrivateUserPackage(ctx context.Cont
 		ParentId:          "",
 		Alias:             userEnt.PrivatePackageId,
 		DefaultRole:       view.NoneRoleId,
-		ExcludeFromSearch: true,
+		ExcludeFromSearch: false,
 		CreatedAt:         time.Now(),
 		CreatedBy:         secctx.GetUserId(ctx),
 	}
@@ -135,6 +141,9 @@ func (p privateUserPackageServiceImpl) CreatePrivateUserPackage(ctx context.Cont
 	err = p.publishedRepo.CreatePrivatePackageForUser(ctx, newPrivatePackageEnt, userPackageMemberEnt)
 	if err != nil {
 		return nil, err
+	}
+	if err := p.globalSearchPartitionService.EnsureWorkspacePartitions(newPrivatePackageEnt.Id); err != nil {
+		return nil, fmt.Errorf("failed to ensure global search partitions for private workspace %s: %w", newPrivatePackageEnt.Id, err)
 	}
 
 	userPermissions, err := p.roleRepository.GetUserPermissions(ctx, newPrivatePackageEnt.Id, userId)

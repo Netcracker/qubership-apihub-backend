@@ -12106,9 +12106,11 @@ components:
           type: string
         excludeFromSearch:
           description: |
-            If true, the package (including child packages) will be ignored by global search.
-            Changing the value of the parent package will change the value of all child packages.
-            A child package cannot have a negative value if the parent package has a positive value. The default value for a newly created package is equal to the value from the parent package.
+            If true, the package (including child packages) is omitted from the global search index.
+            Changing the value of the parent package changes the value of all child packages.
+            A child package cannot have false if the parent package has true.
+            The default for a newly created package equals the parent value; a new workspace defaults to false.
+            Personal private workspaces also default to false — privacy for search is enforced by read permission (`defaultRole: none`), not by this flag.
           type: boolean
     Package:
       description: Simple package object, without content and dependencies
@@ -12168,9 +12170,11 @@ components:
           type: string
         excludeFromSearch:
           description: |
-            If true, the package (including child packages) will be ignored by global search.
-            Changing the value of the parent package will change the value of all child packages.
-            A child package cannot have a negative value if the parent package has a positive value. The default value for a newly created package is equal to the value from the parent package.
+            If true, the package (including child packages) is omitted from the global search index.
+            Changing the value of the parent package changes the value of all child packages.
+            A child package cannot have false if the parent package has true.
+            The default for a newly created package equals the parent value; a new workspace defaults to false.
+            Personal private workspaces also default to false — privacy for search is enforced by read permission (`defaultRole: none`), not by this flag.
           type: boolean
         restGroupingPrefix:
           description: |
@@ -12286,9 +12290,11 @@ components:
           type: string
         excludeFromSearch:
           description: |
-            If true, the package (including child packages) will be ignored by global search.
-            Changing the value of the parent package will change the value of all child packages.
-            A child package cannot have a negative value if the parent package has a positive value. The default value for a newly created package is equal to the value from the parent package.
+            If true, the package (including child packages) is omitted from the global search index.
+            Changing the value of the parent package changes the value of all child packages.
+            A child package cannot have false if the parent package has true.
+            The default for a newly created package equals the parent value; a new workspace defaults to false.
+            Personal private workspaces also default to false — privacy for search is enforced by read permission (`defaultRole: none`), not by this flag.
           type: boolean
         restGroupingPrefix:
           description: Regular expression used as criteria for grouping operations.
