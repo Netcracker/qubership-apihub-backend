@@ -290,7 +290,7 @@ func main() {
 		log.Error("Failed to start cleaning job" + err.Error())
 	}
 
-	transitionService := service.NewTransitionService(transitionRepository, publishedRepository, systemInfoService, globalSearchPartitionService)
+	transitionService := service.NewTransitionService(transitionRepository, publishedRepository, systemInfoService)
 	transformationService := service.NewTransformationService(publishedRepository, operationRepository, packageVersionEnrichmentService)
 
 	zeroDayAdminService := service.NewZeroDayAdminService(userService, roleService, usersRepository, systemInfoService)
