@@ -143,6 +143,20 @@ func (r *refResolverServiceImpl) CalculateBuildConfigRefs(ctx context.Context, r
 			}
 		}
 		uniquePackageRefs[ref.RefId] = struct{}{}
+		if !ref.Excluded {
+			refHasErrors, err := VersionHasAnyErrors(ctx, r.publishedRepo, versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
+			if err != nil {
+				return nil, err
+			}
+			if refHasErrors {
+				return nil, &exception.CustomError{
+					Status:  http.StatusBadRequest,
+					Code:    exception.VersionHasErrors,
+					Message: exception.ReferencedVersionHasErrorsMsg,
+					Params:  map[string]interface{}{"packageId": ref.RefId, "version": ref.Version},
+				}
+			}
+		}
 	}
 	return refs, nil
 }

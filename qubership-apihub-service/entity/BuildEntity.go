@@ -98,6 +98,17 @@ func MakeBuildView(buildEnt *BuildEntity) *view.BuildView {
 	}
 }
 
+func MakePublishStatusResponse(buildEnt *BuildEntity) view.PublishStatusResponse {
+	metadata := Metadata(buildEnt.Metadata)
+	return view.PublishStatusResponse{
+		PublishId:          buildEnt.BuildId,
+		Status:             buildEnt.Status,
+		Message:            buildEnt.Details,
+		HasErrors:          metadata.GetHasErrors(),
+		ChangelogHasErrors: metadata.GetChangelogHasErrors(),
+	}
+}
+
 func MakeExtendedBuildView(buildEnt *ExtendedBuildEntity) (*view.ExtendedBuild, error) {
 	config, err := view.BuildConfigFromMap(buildEnt.Config, buildEnt.BuildId)
 	if err != nil {
