@@ -491,6 +491,55 @@ func (m mcpService) ExecuteGetDocumentTool(ctx context.Context, req mcp.CallTool
 	return mcp.NewToolResultStructuredOnly(payload), nil
 }
 
+// ExecuteListApiOperationsTool executes the list_api_operations tool
+func (m mcpService) ExecuteListApiOperationsTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, MCPToolCallTimeout)
+	defer cancel()
+	packageId, err := req.RequireString("packageId")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	sufficientPrivileges, err := m.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to check user privileges: %s", err.Error())), nil
+	}
+	if !sufficientPrivileges {
+		return mcp.NewToolResultError(exception.InsufficientPrivilegesMsg), nil
+	}
+	version, err := req.RequireString("version")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	apiType, err := requireMCPApiType(req, view.RestApiType, view.GraphqlApiType, view.AsyncapiApiType)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	textFilter := req.GetString("textFilter", "")
+	limit := req.GetInt("limit", mcpListDefaultLimit)
+	page := req.GetInt("page", 0)
+
+	m.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.MCPListApiOperationsToolCalled, mcpMetricKey(ctx, apiType, packageId))
+
+	log.Infof("list_api_operations: packageId=%s, version=%s, apiType=%s, textFilter=%s, limit=%d, page=%d", packageId, version, apiType, textFilter, limit, page)
+
+	result, err := m.operationService.GetOperations(ctx, packageId, version, false, view.OperationListReq{
+		ApiType:    apiType,
+		TextFilter: textFilter,
+		Limit:      limit,
+		Page:       page,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	payload := map[string]any{"operations": result.Operations, "packages": result.Packages}
+
+	payloadJSON, _ := json.Marshal(payload)
+	log.Debugf("MCP tool list_api_operations response: %s", string(payloadJSON))
+
+	return mcp.NewToolResultStructuredOnly(payload), nil
+}
+
 // ExecuteListDdlEntitiesTool executes the list_ddl_entities tool
 func (m mcpService) ExecuteListDdlEntitiesTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	packageId, err := req.RequireString("packageId")

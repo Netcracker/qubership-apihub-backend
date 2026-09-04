@@ -341,6 +341,7 @@ func TestGetToolMetadataUsesGenericToolNames(t *testing.T) {
 		ToolNameGetOperationDiff,
 		ToolNameGetDocument,
 		ToolNameListWorkspaces,
+		ToolNameListApiOperations,
 		ToolNameListDdlEntities,
 		ToolNameGetDdlEntity,
 		ToolNameGetDdlEntityDiff,

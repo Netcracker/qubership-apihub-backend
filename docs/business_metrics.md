@@ -71,6 +71,7 @@ The following table lists constants (values stored in `metric`), their meaning, 
 | `mcp_list_workspaces_tool_called` | MCP/AI Chat `list_workspaces` tool invocation; key is the fixed label `workspaces`. |
 | `mcp_list_workspace_packages_tool_called` | MCP `list_workspace_packages` tool invocation; key is `workspace`. |
 | `mcp_list_package_versions_tool_called` | MCP `list_package_versions` tool invocation; key is `package_id`. |
+| `mcp_list_api_operations_tool_called` | MCP/AI Chat `list_api_operations` tool invocation; key is `<apiType>\|<MCP client label>\|<package_id>`. |
 | `mcp_list_ddl_entities_tool_called` | MCP `list_ddl_entities` tool invocation; key is `<contractType>\|<MCP client label>\|<package_id>`. |
 | `mcp_get_ddl_entity_tool_called` | MCP `get_ddl_entity` tool invocation; key is `<contractType>\|<MCP client label>\|<package_id>`. |
 | `mcp_get_ddl_entity_diff_tool_called` | MCP `get_ddl_entity_diff` tool invocation; key is `<contractType>\|<MCP client label>\|<package_id>`. |
