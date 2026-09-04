@@ -1488,7 +1488,10 @@ components:
                         description: |
                           Flag showing that the document has a critical problem, i.e. the build produced at
                           least one notification with severity = 0 (Error) attributed to this document.
-                          Such a document is published, but exposes no operations or contract entities.
+                          Such a document is published and keeps whatever the build managed to produce from
+                          it: the flag marks the document, it does not empty it. A document with no
+                          operations or contract entities is one whose parsing or build left nothing to
+                          expose.
                           See notifications.json for the details.
                         type: boolean
                         default: false
@@ -2524,6 +2527,7 @@ components:
             - build-operations
             - duplicate-operation-id
             - rest-duplicate-operation
+            - async-duplicate-operation
             - empty-path-parameter
             - double-slash-path
             - ddl-duplicate-object
@@ -2541,11 +2545,9 @@ components:
             - version-not-resolved
             - version-refs-not-resolved
             - version-documents-missing
-            - operation-data-missing
             - risky-before-value
             - risky-origins
             - comparison-serialization
-            - previous-version-missing
             - group-documents-missing
             - partial-group-documents
           example: build-document
