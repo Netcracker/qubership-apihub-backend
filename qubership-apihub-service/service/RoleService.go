@@ -674,9 +674,8 @@ func (r roleServiceImpl) GetWorkspacePackageVisibilityRoots(ctx context.Context,
 
 	if principal.Kind == entity.VisibilityPrincipalSysadmin {
 		return &view.PackageVisibilityRoots{
-			WorkspaceId:    workspaceId,
-			VisibleRoots:   []string{workspaceId},
-			InvisibleRoots: []string{},
+			WorkspaceId:  workspaceId,
+			VisibleRoots: []string{workspaceId},
 		}, nil
 	}
 
@@ -684,18 +683,15 @@ func (r roleServiceImpl) GetWorkspacePackageVisibilityRoots(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	allIds := make([]string, 0, len(accessRows))
 	readableIds := make([]string, 0, len(accessRows))
 	for _, row := range accessRows {
-		allIds = append(allIds, row.PackageId)
 		if row.CanRead {
 			readableIds = append(readableIds, row.PackageId)
 		}
 	}
 	return &view.PackageVisibilityRoots{
-		WorkspaceId:    workspaceId,
-		VisibleRoots:   utils.CompressVisibleRoots(readableIds),
-		InvisibleRoots: utils.CompressInvisibleRoots(allIds, readableIds),
+		WorkspaceId:  workspaceId,
+		VisibleRoots: utils.CompressVisibleRoots(readableIds),
 	}, nil
 }
 

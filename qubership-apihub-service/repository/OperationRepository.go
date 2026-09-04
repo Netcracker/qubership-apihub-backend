@@ -21,7 +21,6 @@ const globalSearchWorkMem = "16MB"
 // applied (no packages requested).
 const globalSearchScopeJoinPlaceholder = "/*scope_join*/"
 const globalSearchPrivacyJoinPlaceholder = "/*privacy_join*/"
-const globalSearchPrivacyWherePlaceholder = "/*privacy_where*/"
 
 type OperationRepository interface {
 	GetOperationsByIds(ctx context.Context, packageId string, version string, revision int, operationIds []string) ([]entity.OperationEntity, error)
@@ -1304,9 +1303,6 @@ func (o operationRepositoryImpl) GlobalSearchForOperations(ctx context.Context, 
 	if len(searchQuery.VisibleRoots) == 0 {
 		return nil, nil
 	}
-	if searchQuery.InvisibleRoots == nil {
-		searchQuery.InvisibleRoots = make([]string, 0)
-	}
 
 	// Privacy-aware search against global_search.fts_operation_search_text.
 	// Deprecated: public.fts_operation_search_text is dual-written but no longer used for global search reads.
@@ -1352,7 +1348,6 @@ from operation o
             and pv.published_at >= ?start_date
             and pv.published_at <= ?end_date
             and search_query @@ ts.data_vector
-            /*privacy_where*/
         ORDER BY ts_rank(ts.data_vector, search_query) DESC,
                  package_id,
                  operation_id desc,
@@ -1380,12 +1375,6 @@ limit ?limit;
             inner join unnest(?visible_roots::text[]) as vis(parent)
                 on ts.package_id = vis.parent
                 or (ts.package_id ~>=~ (vis.parent || '.') and ts.package_id ~<~ (vis.parent || '/'))`
-	privacyWhere := `
-            and not exists (
-                select 1 from unnest(?invisible_roots::text[]) as inv(parent)
-                where ts.package_id = inv.parent
-                   or (ts.package_id ~>=~ (inv.parent || '.') and ts.package_id ~<~ (inv.parent || '/'))
-            )`
 
 	err := o.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
 		if _, err := tx.Exec("SET LOCAL work_mem = ?", globalSearchWorkMem); err != nil {
@@ -1396,7 +1385,6 @@ limit ?limit;
 		}
 		query := strings.Replace(operationsSearchQuery, globalSearchScopeJoinPlaceholder, packagesSearchScopeJoin, 1)
 		query = strings.Replace(query, globalSearchPrivacyJoinPlaceholder, privacyJoin, 1)
-		query = strings.Replace(query, globalSearchPrivacyWherePlaceholder, privacyWhere, 1)
 		if _, err := tx.Model(searchQuery).Query(&result, query); err != nil {
 			return err
 		}

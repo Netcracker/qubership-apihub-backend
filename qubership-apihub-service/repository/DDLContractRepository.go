@@ -273,9 +273,6 @@ func (r *ddlContractRepositoryImpl) GlobalSearchForDDL(ctx context.Context, sear
 	if len(searchQuery.VisibleRoots) == 0 {
 		return nil, nil
 	}
-	if searchQuery.InvisibleRoots == nil {
-		searchQuery.InvisibleRoots = make([]string, 0)
-	}
 	_, err := r.cp.GetConnection().WithContext(ctx).Exec("select websearch_to_tsquery(?)", searchQuery.OriginalTextInput)
 	if err != nil {
 		return nil, fmt.Errorf("invalid search string: %v", err.Error())
@@ -319,10 +316,6 @@ from ddl_tables dt
 						select id from unnest(?visible_roots::text[]) id
 						union
 						select id||'.%' from unnest(?visible_roots::text[]) id))
-        and not (package_id like ANY(
-						select id from unnest(?invisible_roots::text[]) id
-						union
-						select id||'.%' from unnest(?invisible_roots::text[]) id))
         and search_query @@ data_vector
     ORDER BY ts_rank(data_vector, search_query) DESC,
              package_id,

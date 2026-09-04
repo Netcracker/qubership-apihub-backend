@@ -44,12 +44,12 @@ type searchControllerImpl struct {
 	roleService        service.RoleService
 }
 
-func (s searchControllerImpl) applyVisibility(ctx context.Context, workspace string, packageIds []string) (visible []string, invisible []string, err error) {
+func (s searchControllerImpl) applyVisibility(ctx context.Context, workspace string, packageIds []string) (visible []string, err error) {
 	roots, err := s.roleService.GetWorkspacePackageVisibilityRoots(ctx, workspace)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return roots.VisibleRoots, roots.InvisibleRoots, nil
+	return roots.VisibleRoots, nil
 }
 
 func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
@@ -151,13 +151,12 @@ func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
 	}
 	////
 
-	visible, invisible, err := s.applyVisibility(ctx, searchQuery.Workspace, searchQuery.PackageIds)
+	visible, err := s.applyVisibility(ctx, searchQuery.Workspace, searchQuery.PackageIds)
 	if err != nil {
 		utils.RespondWithError(w, r, "Failed to resolve package visibility for search", err)
 		return
 	}
 	searchQuery.VisiblePackageRoots = visible
-	searchQuery.InvisiblePackageRoots = invisible
 
 	switch searchLevel {
 	case view.SearchLevelOperations:
@@ -363,13 +362,12 @@ func (s searchControllerImpl) Search_deprecated(w http.ResponseWriter, r *http.R
 	}
 	////
 
-	visible, invisible, err := s.applyVisibility(ctx, searchQuery.Workspace, searchQuery.PackageIds)
+	visible, err := s.applyVisibility(ctx, searchQuery.Workspace, searchQuery.PackageIds)
 	if err != nil {
 		utils.RespondWithError(w, r, "Failed to resolve package visibility for search", err)
 		return
 	}
 	searchQuery.VisiblePackageRoots = visible
-	searchQuery.InvisiblePackageRoots = invisible
 
 	switch searchLevel {
 	case view.SearchLevelOperations:
