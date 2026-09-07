@@ -20,7 +20,6 @@ const globalSearchWorkMem = "16MB"
 // global search query. It is a SQL comment so the template stays valid SQL when no scope join is
 // applied (no packages requested).
 const globalSearchScopeJoinPlaceholder = "/*scope_join*/"
-const globalSearchPrivacyJoinPlaceholder = "/*privacy_join*/"
 
 type OperationRepository interface {
 	GetOperationsByIds(ctx context.Context, packageId string, version string, revision int, operationIds []string) ([]entity.OperationEntity, error)
@@ -1338,7 +1337,9 @@ from operation o
                 and pv.revision = ts.revision
             cross join websearch_to_tsquery(?original_text_input) search_query
             /*scope_join*/
-            /*privacy_join*/
+            inner join unnest(?visible_roots::text[]) as vis(parent)
+                on ts.package_id = vis.parent
+                or (ts.package_id ~>=~ (vis.parent || '.') and ts.package_id ~<~ (vis.parent || '/'))
         WHERE ts.workspace_id = ?workspace_id
             and ts.status = ?status
             and ts.api_type = ?api_type
@@ -1379,10 +1380,6 @@ limit ?limit;
 				on ts.package_id = scope_pkg.parent
 				or (ts.package_id ~>=~ (scope_pkg.parent || '.') and ts.package_id ~<~ (scope_pkg.parent || '/'))`
 	}
-	privacyJoin := `
-            inner join unnest(?visible_roots::text[]) as vis(parent)
-                on ts.package_id = vis.parent
-                or (ts.package_id ~>=~ (vis.parent || '.') and ts.package_id ~<~ (vis.parent || '/'))`
 
 	err := o.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
 		if _, err := tx.Exec("SET LOCAL work_mem = ?", globalSearchWorkMem); err != nil {
@@ -1392,7 +1389,6 @@ limit ?limit;
 			return fmt.Errorf("invalid search string: %v", err.Error())
 		}
 		query := strings.Replace(operationsSearchQuery, globalSearchScopeJoinPlaceholder, packagesSearchScopeJoin, 1)
-		query = strings.Replace(query, globalSearchPrivacyJoinPlaceholder, privacyJoin, 1)
 		if _, err := tx.Model(searchQuery).Query(&result, query); err != nil {
 			return err
 		}
