@@ -667,16 +667,16 @@ func (r roleServiceImpl) GetWorkspacePackageVisibilityRoots(ctx context.Context,
 		}
 	}
 
-	principal, err := r.resolveVisibilityPrincipal(ctx, workspaceId)
-	if err != nil {
-		return nil, err
-	}
-
-	if principal.Kind == entity.VisibilityPrincipalSysadmin {
+	if secctx.IsSysadm(ctx) {
 		return &view.PackageVisibilityRoots{
 			WorkspaceId:  workspaceId,
 			VisibleRoots: []string{workspaceId},
 		}, nil
+	}
+
+	principal, err := r.resolveVisibilityPrincipal(ctx, workspaceId)
+	if err != nil {
+		return nil, err
 	}
 
 	accessRows, err := r.roleRepository.GetWorkspacePackageReadAccess(ctx, workspaceId, principal)
@@ -696,9 +696,6 @@ func (r roleServiceImpl) GetWorkspacePackageVisibilityRoots(ctx context.Context,
 }
 
 func (r roleServiceImpl) resolveVisibilityPrincipal(ctx context.Context, workspaceId string) (entity.VisibilityPrincipal, error) {
-	if secctx.IsSysadm(ctx) {
-		return entity.VisibilityPrincipal{Kind: entity.VisibilityPrincipalSysadmin}, nil
-	}
 	if apikeyPackageId := secctx.GetApiKeyPackageId(ctx); apikeyPackageId != "" {
 		inWorkspace := apikeyPackageId == "*" ||
 			apikeyPackageId == workspaceId ||
@@ -713,13 +710,11 @@ func (r roleServiceImpl) resolveVisibilityPrincipal(ctx context.Context, workspa
 			}
 		}
 		return entity.VisibilityPrincipal{
-			Kind:          entity.VisibilityPrincipalApiKey,
 			ApiKeyScopeId: apikeyPackageId,
 			ApiKeyRoleIds: secctx.GetApiKeyRoles(ctx),
 		}, nil
 	}
 	return entity.VisibilityPrincipal{
-		Kind:   entity.VisibilityPrincipalUser,
 		UserId: secctx.GetUserId(ctx),
 	}, nil
 }
