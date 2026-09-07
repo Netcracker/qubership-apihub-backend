@@ -10627,9 +10627,10 @@ paths:
         versions.
 
         A message with severity = error means that the comparison may be incomplete or inaccurate, and the
-        corresponding comparison is marked with hasErrors. Such a message describes the comparison only: it
-        does not mark either of the compared versions and does not prevent publication of a version in
-        `release` status. Problems of the versions themselves are returned by
+        corresponding comparison is marked with hasErrors. Such a message describes the comparison only and
+        does not mark either of the compared versions — but it does refuse a `release`: a version whose
+        changelog is unreliable can be published in `draft` status only, the same as one whose own documents
+        carry errors. Problems of the versions themselves are returned by
         `GET /api/v2/packages/{packageId}/versions/{version}/notifications` instead.
 
         Most comparison messages are not attributable to a document, e.g. the previous version could not be
@@ -11817,8 +11818,7 @@ components:
           * **ddl-*** - DDL parsing, entity build and duplicates.
           * **tolerant-hash-*** / **deprecated-component-path** - deprecated item hashing and matching.
           * **risky-*** - reclassification of breaking changes during a comparison.
-          * **version-*** / **operation-data-missing** / **previous-version-missing** - a version, its
-            references, its documents or its operation data could not be resolved.
+          * **version-*** - a version, its references or its documents could not be resolved.
           * everything else names the check directly, e.g. `parse-file`, `invalid-text-file`,
             `duplicate-operation-id`, `empty-path-parameter`, `comparison-serialization`.
       type: string
@@ -11835,6 +11835,7 @@ components:
         - build-operations
         - duplicate-operation-id
         - rest-duplicate-operation
+        - async-duplicate-operation
         - empty-path-parameter
         - double-slash-path
         - ddl-duplicate-object
@@ -11852,11 +11853,9 @@ components:
         - version-not-resolved
         - version-refs-not-resolved
         - version-documents-missing
-        - operation-data-missing
         - risky-before-value
         - risky-origins
         - comparison-serialization
-        - previous-version-missing
         - group-documents-missing
         - partial-group-documents
       example: build-document
@@ -12740,7 +12739,9 @@ components:
         hasErrors:
           description: |
             Flag showing that the document has a critical problem detected during the build. Such a document is
-            published, but exposes no operations or contract entities.
+            published and keeps whatever the build managed to produce from it: the flag marks the document,
+            it does not empty it. A document with no operations or contract entities is one whose parsing or
+            build left nothing to expose.
 
             Use `GET /api/v2/packages/{packageId}/versions/{version}/notifications?documentId={slug}` to get
             the details.
