@@ -3244,6 +3244,11 @@ func (p publishedRepositoryImpl) CreatePackage(ctx context.Context, packageEntit
 				return err
 			}
 		}
+		if packageEntity.Kind == entity.KIND_WORKSPACE {
+			if err := EnsureGlobalSearchPartitionsTx(tx, packageEntity.Id); err != nil {
+				return fmt.Errorf("failed to ensure global search partitions for workspace %s: %w", packageEntity.Id, err)
+			}
+		}
 		return err
 	})
 	if err != nil {
@@ -3261,6 +3266,11 @@ func (p publishedRepositoryImpl) CreatePrivatePackageForUser(ctx context.Context
 		_, err = tx.Model(userRoleEntity).Insert()
 		if err != nil {
 			return err
+		}
+		if packageEntity.Kind == entity.KIND_WORKSPACE {
+			if err := EnsureGlobalSearchPartitionsTx(tx, packageEntity.Id); err != nil {
+				return fmt.Errorf("failed to ensure global search partitions for workspace %s: %w", packageEntity.Id, err)
+			}
 		}
 		return nil
 	})
@@ -3435,6 +3445,11 @@ func (p publishedRepositoryImpl) UpdatePackage(ctx context.Context, ent *entity.
 		_, err := p.updatePackage(tx, ent, excludeFromSearchChanged)
 		if err != nil {
 			return err
+		}
+		if ent.Kind == entity.KIND_WORKSPACE {
+			if err := EnsureGlobalSearchPartitionsTx(tx, ent.Id); err != nil {
+				return fmt.Errorf("failed to ensure global search partitions for workspace %s: %w", ent.Id, err)
+			}
 		}
 		return nil
 	})

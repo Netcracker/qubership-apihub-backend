@@ -46,35 +46,32 @@ func NewPackageService(favoritesRepo repository.FavoritesRepository,
 	operationGroupService OperationGroupService,
 	userRepo repository.UserRepository,
 	ptHandler PackageTransitionHandler,
-	systemInfoService SystemInfoService,
-	globalSearchPartitionService GlobalSearchPartitionService) PackageService {
+	systemInfoService SystemInfoService) PackageService {
 	return &packageServiceImpl{
-		favoritesRepo:                favoritesRepo,
-		publishedRepo:                publishedRepo,
-		versionService:               versionService,
-		roleService:                  roleService,
-		atService:                    atService,
-		monitoringService:            monitoringService,
-		operationGroupService:        operationGroupService,
-		userRepo:                     userRepo,
-		ptHandler:                    ptHandler,
-		systemInfoService:            systemInfoService,
-		globalSearchPartitionService: globalSearchPartitionService,
+		favoritesRepo:         favoritesRepo,
+		publishedRepo:         publishedRepo,
+		versionService:        versionService,
+		roleService:           roleService,
+		atService:             atService,
+		monitoringService:     monitoringService,
+		operationGroupService: operationGroupService,
+		userRepo:              userRepo,
+		ptHandler:             ptHandler,
+		systemInfoService:     systemInfoService,
 	}
 }
 
 type packageServiceImpl struct {
-	favoritesRepo                repository.FavoritesRepository
-	publishedRepo                repository.PublishedRepository
-	versionService               VersionService
-	roleService                  RoleService
-	atService                    ActivityTrackingService
-	monitoringService            MonitoringService
-	operationGroupService        OperationGroupService
-	userRepo                     repository.UserRepository
-	ptHandler                    PackageTransitionHandler
-	systemInfoService            SystemInfoService
-	globalSearchPartitionService GlobalSearchPartitionService
+	favoritesRepo         repository.FavoritesRepository
+	publishedRepo         repository.PublishedRepository
+	versionService        VersionService
+	roleService           RoleService
+	atService             ActivityTrackingService
+	monitoringService     MonitoringService
+	operationGroupService OperationGroupService
+	userRepo              repository.UserRepository
+	ptHandler             PackageTransitionHandler
+	systemInfoService     SystemInfoService
 }
 
 func (p packageServiceImpl) CreatePackage(ctx context.Context, packg view.SimplePackage) (*view.SimplePackage, error) {
@@ -223,11 +220,6 @@ func (p packageServiceImpl) CreatePackage(ctx context.Context, packg view.Simple
 	err = p.publishedRepo.CreatePackage(ctx, entity.MakePackageEntity(&packg))
 	if err != nil {
 		return nil, err
-	}
-	if packg.Kind == entity.KIND_WORKSPACE {
-		if err := p.globalSearchPartitionService.EnsureWorkspacePartitions(packg.Id); err != nil {
-			return nil, fmt.Errorf("failed to ensure global search partitions for workspace %s: %w", packg.Id, err)
-		}
 	}
 
 	p.atService.TrackEvent(ctx, view.ActivityTrackingEvent{
