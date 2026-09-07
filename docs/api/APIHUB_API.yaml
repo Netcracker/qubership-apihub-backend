@@ -10530,7 +10530,9 @@ paths:
             example: qitmf-v5-11-json
         - name: severity
           in: query
-          description: Filter by severity. Repeat the parameter to filter by several values.
+          description: |
+            Filter by severity.\
+            Multiple severities separated by comma can be specified.
           schema:
             type: array
             items:
@@ -10540,15 +10542,21 @@ paths:
                 - warning
                 - information
                 - hint
-          example: ["error"]
+          style: form
+          explode: false
+          example: ["error", "warning"]
         - name: category
           in: query
-          description: Filter by message category. Repeat the parameter to filter by several values.
+          description: |
+            Filter by message category.\
+            Multiple categories separated by comma can be specified.
           schema:
             type: array
             items:
               $ref: "#/components/schemas/NotificationCategoryEnum"
-          example: ["document-build"]
+          style: form
+          explode: false
+          example: ["build-document", "parse-file"]
         - $ref: "#/components/parameters/limit"
         - $ref: "#/components/parameters/page"
       responses:
@@ -10649,7 +10657,9 @@ paths:
             example: qitmf-v5-11-json
         - name: severity
           in: query
-          description: Filter by severity. Repeat the parameter to filter by several values.
+          description: |
+            Filter by severity.\
+            Multiple severities separated by comma can be specified.
           schema:
             type: array
             items:
@@ -10659,15 +10669,21 @@ paths:
                 - warning
                 - information
                 - hint
-          example: ["error"]
+          style: form
+          explode: false
+          example: ["error", "warning"]
         - name: category
           in: query
-          description: Filter by message category. Repeat the parameter to filter by several values.
+          description: |
+            Filter by message category.\
+            Multiple categories separated by comma can be specified.
           schema:
             type: array
             items:
               $ref: "#/components/schemas/NotificationCategoryEnum"
-          example: ["resolution"]
+          style: form
+          explode: false
+          example: ["version-not-resolved", "comparison-serialization"]
         - $ref: "#/components/parameters/limit"
         - $ref: "#/components/parameters/page"
       responses:
