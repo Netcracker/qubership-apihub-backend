@@ -7,7 +7,6 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"path"
-	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -217,17 +216,13 @@ func main() {
 
 	lockRepo := repository.NewLockRepository(cp)
 
-	globalSearchPartitionRepository := repository.NewGlobalSearchPartitionRepository(cp)
-
 	olricProvider, err := cache.NewOlricProvider(systemInfoService.GetOlricConfig())
 	if err != nil {
 		log.Error("Failed to create olricProvider: " + err.Error())
 		panic("Failed to create olricProvider: " + err.Error())
 	}
 
-	globalSearchPartitionService := service.NewGlobalSearchPartitionService(globalSearchPartitionRepository)
-
-	privateUserPackageService := service.NewPrivateUserPackageService(publishedRepository, usersRepository, roleRepository, favoritesRepository, globalSearchPartitionService)
+	privateUserPackageService := service.NewPrivateUserPackageService(publishedRepository, usersRepository, roleRepository, favoritesRepository)
 	userService := service.NewUserService(usersRepository, systemInfoService, privateUserPackageService)
 
 	lockService := service.NewLockService(lockRepo, systemInfoService.GetInstanceId())
@@ -264,7 +259,7 @@ func main() {
 	ddlContractServiceForVersion := service.NewDDLContractService(ddlContractRepository, publishedRepository, packageVersionEnrichmentService)
 	mcpContractServiceForVersion := service.NewMCPContractService(mcpContractRepository, publishedRepository, packageVersionEnrichmentService)
 	versionService := service.NewVersionService(favoritesRepository, publishedRepository, publishedService, operationRepository, exportRepository, operationService, activityTrackingService, systemInfoService, packageVersionEnrichmentService, portalService, versionCleanupRepository, operationGroupService, monitoringService, roleService, ddlContractServiceForVersion, mcpContractServiceForVersion)
-	packageService := service.NewPackageService(favoritesRepository, publishedRepository, versionService, roleService, activityTrackingService, monitoringService, operationGroupService, usersRepository, ptHandler, systemInfoService, globalSearchPartitionService)
+	packageService := service.NewPackageService(favoritesRepository, publishedRepository, versionService, roleService, activityTrackingService, monitoringService, operationGroupService, usersRepository, ptHandler, systemInfoService)
 
 	logsService := service.NewLogsService()
 	apihubApiKeyService := service.NewApihubApiKeyService(apihubApiKeyRepository, publishedRepository, activityTrackingService, userService, roleRepository, systemInfoService)
@@ -290,7 +285,7 @@ func main() {
 		log.Error("Failed to start cleaning job" + err.Error())
 	}
 
-	transitionService := service.NewTransitionService(transitionRepository, publishedRepository, systemInfoService, globalSearchPartitionService)
+	transitionService := service.NewTransitionService(transitionRepository, publishedRepository, systemInfoService)
 	transformationService := service.NewTransformationService(publishedRepository, operationRepository, packageVersionEnrichmentService)
 
 	zeroDayAdminService := service.NewZeroDayAdminService(userService, roleService, usersRepository, systemInfoService)
@@ -699,8 +694,6 @@ func main() {
 			portalFs.ServeHTTP(w, r) // portal is default app
 		}
 	})
-
-	debug.SetGCPercent(30)
 
 	err = security.SetupGoGuardian(userService, roleService, apihubApiKeyService, personalAccessTokenService, systemInfoService, tokenRevocationService)
 	if err != nil {
