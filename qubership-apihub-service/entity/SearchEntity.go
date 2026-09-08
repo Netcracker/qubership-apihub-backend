@@ -30,7 +30,6 @@ type GlobalContractSearchQuery struct {
 	WorkspaceId       string    `pg:"workspace_id, type:varchar, use_zero"`
 	Packages          []string  `pg:"packages, type:varchar[], use_zero"`
 	VisibleRoots      []string  `pg:"visible_roots, type:varchar[], use_zero"`
-	InvisibleRoots    []string  `pg:"invisible_roots, type:varchar[], use_zero"`
 	Versions          []string  `pg:"versions, type:varchar[], use_zero"`
 	Status            string    `pg:"status, type:varchar, use_zero"`
 	StartDate         time.Time `pg:"start_date, type:timestamp without time zone, use_zero"`
@@ -91,7 +90,6 @@ type GlobalOperationSearchQuery struct {
 	WorkspaceId       string    `pg:"workspace_id, type:varchar, use_zero"`
 	Packages          []string  `pg:"packages, type:varchar[], use_zero"`
 	VisibleRoots      []string  `pg:"visible_roots, type:varchar[], use_zero"`
-	InvisibleRoots    []string  `pg:"invisible_roots, type:varchar[], use_zero"`
 	Versions          []string  `pg:"versions, type:varchar[], use_zero"`
 	Status            string    `pg:"status, type:varchar, use_zero"`
 	StartDate         time.Time `pg:"start_date, type:timestamp without time zone, use_zero"`
@@ -144,17 +142,16 @@ type PackageSearchWeight struct {
 type PackageSearchQuery struct {
 	PackageSearchWeight
 	VersionStatusSearchWeight
-	ApiType        string    `pg:"api_type, type:varchar, use_zero"`
-	TextFilter     string    `pg:"text_filter, type:varchar, use_zero"` //for varchar
-	Packages       []string  `pg:"packages, type:varchar[], use_zero"`
-	VisibleRoots   []string  `pg:"visible_roots, type:varchar[], use_zero"`
-	InvisibleRoots []string  `pg:"invisible_roots, type:varchar[], use_zero"`
-	Versions       []string  `pg:"versions, type:varchar[], use_zero"`
-	Statuses       []string  `pg:"statuses, type:varchar[], use_zero"`
-	StartDate      time.Time `pg:"start_date, type:timestamp without time zone, use_zero"`
-	EndDate        time.Time `pg:"end_date, type:timestamp without time zone, use_zero"`
-	Limit          int       `pg:"limit, type:integer, use_zero"`
-	Offset         int       `pg:"offset, type:integer, use_zero"`
+	ApiType      string    `pg:"api_type, type:varchar, use_zero"`
+	TextFilter   string    `pg:"text_filter, type:varchar, use_zero"` //for varchar
+	Packages     []string  `pg:"packages, type:varchar[], use_zero"`
+	VisibleRoots []string  `pg:"visible_roots, type:varchar[], use_zero"`
+	Versions     []string  `pg:"versions, type:varchar[], use_zero"`
+	Statuses     []string  `pg:"statuses, type:varchar[], use_zero"`
+	StartDate    time.Time `pg:"start_date, type:timestamp without time zone, use_zero"`
+	EndDate      time.Time `pg:"end_date, type:timestamp without time zone, use_zero"`
+	Limit        int       `pg:"limit, type:integer, use_zero"`
+	Offset       int       `pg:"offset, type:integer, use_zero"`
 }
 
 type PackageSearchResult struct {
@@ -187,26 +184,22 @@ type PackageSearchResult struct {
 
 func MakePackageSearchQueryEntity(searchQuery *view.SearchQueryReq_deprecated) (*PackageSearchQuery, error) {
 	searchQueryEntity := &PackageSearchQuery{
-		ApiType:        searchQuery.ApiType,
-		TextFilter:     searchQuery.SearchString,
-		Packages:       searchQuery.PackageIds,
-		VisibleRoots:   searchQuery.VisiblePackageRoots,
-		InvisibleRoots: searchQuery.InvisiblePackageRoots,
-		Versions:       searchQuery.Versions,
-		Statuses:       searchQuery.Statuses,
-		StartDate:      searchQuery.PublicationDateInterval.StartDate,
-		EndDate:        searchQuery.PublicationDateInterval.EndDate,
-		Limit:          searchQuery.Limit,
-		Offset:         searchQuery.Limit * searchQuery.Page,
+		ApiType:      searchQuery.ApiType,
+		TextFilter:   searchQuery.SearchString,
+		Packages:     searchQuery.PackageIds,
+		VisibleRoots: searchQuery.VisiblePackageRoots,
+		Versions:     searchQuery.Versions,
+		Statuses:     searchQuery.Statuses,
+		StartDate:    searchQuery.PublicationDateInterval.StartDate,
+		EndDate:      searchQuery.PublicationDateInterval.EndDate,
+		Limit:        searchQuery.Limit,
+		Offset:       searchQuery.Limit * searchQuery.Page,
 	}
 	if searchQueryEntity.Packages == nil {
 		searchQueryEntity.Packages = make([]string, 0)
 	}
 	if searchQueryEntity.VisibleRoots == nil {
 		searchQueryEntity.VisibleRoots = make([]string, 0)
-	}
-	if searchQueryEntity.InvisibleRoots == nil {
-		searchQueryEntity.InvisibleRoots = make([]string, 0)
 	}
 	if searchQueryEntity.Versions == nil {
 		searchQueryEntity.Versions = make([]string, 0)
@@ -262,18 +255,17 @@ type DocumentSearchWeight struct {
 type DocumentSearchQuery struct {
 	DocumentSearchWeight
 	VersionStatusSearchWeight
-	ApiType        string    `pg:"api_type, type:varchar, use_zero"`
-	TextFilter     string    `pg:"text_filter, type:varchar, use_zero"` //for varchar
-	Packages       []string  `pg:"packages, type:varchar[], use_zero"`
-	VisibleRoots   []string  `pg:"visible_roots, type:varchar[], use_zero"`
-	InvisibleRoots []string  `pg:"invisible_roots, type:varchar[], use_zero"`
-	Versions       []string  `pg:"versions, type:varchar[], use_zero"`
-	Statuses       []string  `pg:"statuses, type:varchar[], use_zero"`
-	StartDate      time.Time `pg:"start_date, type:timestamp without time zone, use_zero"`
-	EndDate        time.Time `pg:"end_date, type:timestamp without time zone, use_zero"`
-	Limit          int       `pg:"limit, type:integer, use_zero"`
-	Offset         int       `pg:"offset, type:integer, use_zero"`
-	UnknownTypes   []string  `pg:"unknown_types, type:varchar[], use_zero"`
+	ApiType      string    `pg:"api_type, type:varchar, use_zero"`
+	TextFilter   string    `pg:"text_filter, type:varchar, use_zero"` //for varchar
+	Packages     []string  `pg:"packages, type:varchar[], use_zero"`
+	VisibleRoots []string  `pg:"visible_roots, type:varchar[], use_zero"`
+	Versions     []string  `pg:"versions, type:varchar[], use_zero"`
+	Statuses     []string  `pg:"statuses, type:varchar[], use_zero"`
+	StartDate    time.Time `pg:"start_date, type:timestamp without time zone, use_zero"`
+	EndDate      time.Time `pg:"end_date, type:timestamp without time zone, use_zero"`
+	Limit        int       `pg:"limit, type:integer, use_zero"`
+	Offset       int       `pg:"offset, type:integer, use_zero"`
+	UnknownTypes []string  `pg:"unknown_types, type:varchar[], use_zero"`
 }
 
 type DocumentSearchResult struct {
@@ -302,27 +294,23 @@ type DocumentSearchResult struct {
 
 func MakeDocumentSearchQueryEntity(searchQuery *view.SearchQueryReq_deprecated, unknownTypes []string) (*DocumentSearchQuery, error) {
 	searchQueryEntity := &DocumentSearchQuery{
-		ApiType:        searchQuery.ApiType,
-		TextFilter:     searchQuery.SearchString,
-		Packages:       searchQuery.PackageIds,
-		VisibleRoots:   searchQuery.VisiblePackageRoots,
-		InvisibleRoots: searchQuery.InvisiblePackageRoots,
-		Versions:       searchQuery.Versions,
-		Statuses:       searchQuery.Statuses,
-		StartDate:      searchQuery.PublicationDateInterval.StartDate,
-		EndDate:        searchQuery.PublicationDateInterval.EndDate,
-		Limit:          searchQuery.Limit,
-		Offset:         searchQuery.Limit * searchQuery.Page,
-		UnknownTypes:   unknownTypes,
+		ApiType:      searchQuery.ApiType,
+		TextFilter:   searchQuery.SearchString,
+		Packages:     searchQuery.PackageIds,
+		VisibleRoots: searchQuery.VisiblePackageRoots,
+		Versions:     searchQuery.Versions,
+		Statuses:     searchQuery.Statuses,
+		StartDate:    searchQuery.PublicationDateInterval.StartDate,
+		EndDate:      searchQuery.PublicationDateInterval.EndDate,
+		Limit:        searchQuery.Limit,
+		Offset:       searchQuery.Limit * searchQuery.Page,
+		UnknownTypes: unknownTypes,
 	}
 	if searchQueryEntity.Packages == nil {
 		searchQueryEntity.Packages = make([]string, 0)
 	}
 	if searchQueryEntity.VisibleRoots == nil {
 		searchQueryEntity.VisibleRoots = make([]string, 0)
-	}
-	if searchQueryEntity.InvisibleRoots == nil {
-		searchQueryEntity.InvisibleRoots = make([]string, 0)
 	}
 	if searchQueryEntity.Versions == nil {
 		searchQueryEntity.Versions = make([]string, 0)

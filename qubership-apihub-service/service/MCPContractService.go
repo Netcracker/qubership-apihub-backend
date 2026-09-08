@@ -148,7 +148,6 @@ func (s *mcpContractServiceImpl) GlobalSearchForMCP(ctx context.Context, searchR
 		WorkspaceId:       searchReq.Workspace,
 		Packages:          searchReq.PackageIds,
 		VisibleRoots:      searchReq.VisiblePackageRoots,
-		InvisibleRoots:    searchReq.InvisiblePackageRoots,
 		Versions:          versions,
 		Status:            searchReq.Status,
 		StartDate:         startDate,
@@ -161,9 +160,6 @@ func (s *mcpContractServiceImpl) GlobalSearchForMCP(ctx context.Context, searchR
 	}
 	if searchQuery.VisibleRoots == nil {
 		searchQuery.VisibleRoots = make([]string, 0)
-	}
-	if searchQuery.InvisibleRoots == nil {
-		searchQuery.InvisibleRoots = make([]string, 0)
 	}
 	entities, err := s.mcpRepo.GlobalSearchForMCP(ctx, searchQuery)
 	if err != nil {

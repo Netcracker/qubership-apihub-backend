@@ -387,6 +387,20 @@ func (d softDeletedDataCleanupRepositoryImpl) VacuumAffectedTables(ctx context.C
 				logger.Warn(ctx, errorMsg)
 				vacuumErrors = append(vacuumErrors, errorMsg)
 			}
+			logger.Debugf(ctx, "Vacuuming 'global_search.fts_ddl_search_text' parent table")
+			_, err = d.cp.GetConnection().ExecContext(ctx, "VACUUM FULL global_search.fts_ddl_search_text")
+			if err != nil {
+				errorMsg := fmt.Sprintf("Failed to vacuum 'global_search.fts_ddl_search_text' table: %v", err)
+				logger.Warn(ctx, errorMsg)
+				vacuumErrors = append(vacuumErrors, errorMsg)
+			}
+			logger.Debugf(ctx, "Vacuuming 'global_search.fts_mcp_search_text' parent table")
+			_, err = d.cp.GetConnection().ExecContext(ctx, "VACUUM FULL global_search.fts_mcp_search_text")
+			if err != nil {
+				errorMsg := fmt.Sprintf("Failed to vacuum 'global_search.fts_mcp_search_text' table: %v", err)
+				logger.Warn(ctx, errorMsg)
+				vacuumErrors = append(vacuumErrors, errorMsg)
+			}
 		}
 	} else {
 		logger.Info(ctx, "No deleted items found - skipping vacuum operations")
