@@ -139,6 +139,12 @@ func logCustomError(msg string, customError *exception.CustomError, err error) {
 
 func (resp *Responder) RespondWithCustomError(w http.ResponseWriter, err *exception.CustomError) {
 	log.Debugf("Request failed. Code = %d. Message = %s. Params: %v. Debug: %s", err.Status, err.Message, err.Params, err.Debug)
+	if !resp.includeDebug && err.Debug != "" {
+		errWithoutDebug := *err
+		errWithoutDebug.Debug = ""
+		resp.RespondWithJson(w, errWithoutDebug.Status, errWithoutDebug)
+		return
+	}
 	resp.RespondWithJson(w, err.Status, err)
 }
 
