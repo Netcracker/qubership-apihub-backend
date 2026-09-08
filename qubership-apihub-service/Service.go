@@ -303,14 +303,14 @@ func main() {
 	mcpService := service.NewMCPService(systemInfoService, operationService, packageService, versionService, monitoringService, roleService)
 
 	responder := responder.NewResponder(systemInfoService.ShowDebugInResponse())
-	authHandler, err := security.NewAuthHandler(userService, roleService, apihubApiKeyService, personalAccessTokenService, systemInfoService, tokenRevocationService, responder)
+	authenticator, err := security.NewAuthenticator(userService, roleService, apihubApiKeyService, personalAccessTokenService, systemInfoService, tokenRevocationService, responder)
 
 	if err != nil {
-		log.Fatalf("Can't setup authHandler. Error - %s", err.Error())
+		log.Fatalf("Can't setup authenticator. Error - %s", err.Error())
 	}
 	ephemeralFileRepository := repository.NewEphemeralFileRepositoryPG(cp)
 	ephemeralFileService := service.NewEphemeralFileService(systemInfoService, ephemeralFileRepository)
-	ephemeralFileController := controller.NewEphemeralFileController(ephemeralFileService, responder, authHandler)
+	ephemeralFileController := controller.NewEphemeralFileController(ephemeralFileService, responder, authenticator)
 	ephemeralFileCleanup := service.NewEphemeralFileCleanupService(ephemeralFileRepository, lockService)
 	if err := ephemeralFileCleanup.StartCleanupJob(systemInfoService.GetEphemeralFilesCleanupSchedule(), systemInfoService.GetEphemeralFileDirectory()); err != nil {
 		log.Warnf("Failed to start ephemeral files cleanup: %v", err)
@@ -326,7 +326,7 @@ func main() {
 			log.Fatalf("Failed to create OpenAI LLM client: %v", err)
 		}
 		aiChatsService := service.NewAiChatsService(aiChatRepository)
-		aiChatTurnService, err := service.NewAiChatTurnService(systemInfoService, aiChatRepository, llmClient, mcpService, ephemeralFileService, authHandler.MintEphemeralFileToken)
+		aiChatTurnService, err := service.NewAiChatTurnService(systemInfoService, aiChatRepository, llmClient, mcpService, ephemeralFileService, authenticator.MintEphemeralFileToken)
 		if err != nil {
 			log.Fatalf("Failed to create AiChatTurnService: %v", err)
 		}
@@ -338,7 +338,7 @@ func main() {
 		}
 	}
 
-	idpManager, err := providers.NewIDPManager(systemInfoService.GetAuthConfig(), systemInfoService.GetAllowedHosts(), systemInfoService.IsProductionMode(), userService, responder, authHandler)
+	idpManager, err := providers.NewIDPManager(systemInfoService.GetAuthConfig(), systemInfoService.GetAllowedHosts(), systemInfoService.IsProductionMode(), userService, responder, authenticator)
 	if err != nil {
 		log.Error("Failed to initialize external IDP: " + err.Error())
 		panic("Failed to initialize external IDP: " + err.Error())
@@ -362,10 +362,10 @@ func main() {
 	packageController := controller.NewPackageController(packageService, publishedService, portalService, roleService, monitoringService, ptHandler, responder)
 	versionController := controller.NewVersionController(versionService, roleService, monitoringService, ptHandler, excelService, systemInfoService.GetShareabilityReportSizeLimitMB(), responder)
 	roleController := controller.NewRoleController(roleService, responder)
-	samlAuthController := controller.NewSamlAuthController(userService, systemInfoService, idpManager, responder, authHandler) //deprecated
+	samlAuthController := controller.NewSamlAuthController(userService, systemInfoService, idpManager, responder, authenticator) //deprecated
 	authController := controller.NewAuthController(systemInfoService, idpManager, responder)
 	userController := controller.NewUserController(userService, privateUserPackageService, roleService, responder)
-	jwtPubKeyController := controller.NewJwtPubKeyController(responder, authHandler)
+	jwtPubKeyController := controller.NewJwtPubKeyController(responder, authenticator)
 	logoutController := controller.NewLogoutController(tokenRevocationService, systemInfoService, responder)
 	operationController := controller.NewOperationController(roleService, operationService, buildService, monitoringService, ptHandler, responder)
 	operationGroupController := controller.NewOperationGroupController(roleService, operationGroupService, versionService, systemInfoService, packageService, responder)
@@ -388,255 +388,255 @@ func main() {
 	buildController := controller.NewBuildController(buildResultService, buildService, responder)
 	adminPublishedController := controller.NewAdminPublishedController(publishedService, systemInfoService.GetPublishArchiveSizeLimitMB(), responder)
 
-	r.HandleFunc("/api/v1/system/info", authHandler.Secure(systemInfoController.GetSystemInfo)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/system/info", authenticator.Secure(systemInfoController.GetSystemInfo)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/system/configuration", samlAuthController.GetSystemSSOInfo_deprecated).Methods(http.MethodGet) //deprecated
-	r.HandleFunc("/api/v2/system/configuration", authHandler.NoSecure(authController.GetSystemConfigurationInfo)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/system/configuration", authenticator.NoSecure(authController.GetSystemConfigurationInfo)).Methods(http.MethodGet)
 
-	r.HandleFunc("/api/v1/debug/logs", authHandler.SecureUser(logsController.StoreLogs)).Methods(http.MethodPut)
-	r.HandleFunc("/api/v1/debug/logs/setLevel", authHandler.Secure(logsController.SetLogLevel)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v1/debug/logs/checkLevel", authHandler.Secure(logsController.CheckLogLevel)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/debug/logs", authenticator.SecureUser(logsController.StoreLogs)).Methods(http.MethodPut)
+	r.HandleFunc("/api/v1/debug/logs/setLevel", authenticator.Secure(logsController.SetLogLevel)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v1/debug/logs/checkLevel", authenticator.Secure(logsController.CheckLogLevel)).Methods(http.MethodGet)
 
 	//Search
-	r.HandleFunc("/api/v3/search/{searchLevel}", authHandler.SecureUser(searchController.Search_deprecated)).Methods(http.MethodPost) //TODO: add API key strategy after authorization fix
-	r.HandleFunc("/api/v4/search/{searchLevel}", authHandler.SecureUser(searchController.Search)).Methods(http.MethodPost)            //TODO: add API key strategy after authorization fix
+	r.HandleFunc("/api/v3/search/{searchLevel}", authenticator.SecureUser(searchController.Search_deprecated)).Methods(http.MethodPost) //TODO: add API key strategy after authorization fix
+	r.HandleFunc("/api/v4/search/{searchLevel}", authenticator.SecureUser(searchController.Search)).Methods(http.MethodPost)            //TODO: add API key strategy after authorization fix
 
-	r.HandleFunc("/api/v2/builders/{builderId}/tasks", authHandler.Secure(publishV2Controller.GetFreeBuild)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v2/builders/{builderId}/tasks", authenticator.Secure(publishV2Controller.GetFreeBuild)).Methods(http.MethodPost)
 
-	r.HandleFunc("/api/v2/packages", authHandler.Secure(packageController.CreatePackage)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v2/packages/{packageId}", authHandler.Secure(packageController.UpdatePackage)).Methods(http.MethodPatch)
-	r.HandleFunc("/api/v2/packages/{packageId}", authHandler.Secure(packageController.DeletePackage)).Methods(http.MethodDelete)
-	r.HandleFunc("/api/v2/packages/{packageId}/favor", authHandler.Secure(packageController.FavorPackage)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v2/packages/{packageId}/disfavor", authHandler.Secure(packageController.DisfavorPackage)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v2/packages/{packageId}", authHandler.Secure(packageController.GetPackage)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/status", authHandler.Secure(packageController.GetPackageStatus)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages", authHandler.Secure(packageController.GetPackagesList)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/publish/availableStatuses", authHandler.Secure(packageController.GetAvailableVersionStatusesForPublish_deprecated)).Methods(http.MethodGet) // deprecated
+	r.HandleFunc("/api/v2/packages", authenticator.Secure(packageController.CreatePackage)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v2/packages/{packageId}", authenticator.Secure(packageController.UpdatePackage)).Methods(http.MethodPatch)
+	r.HandleFunc("/api/v2/packages/{packageId}", authenticator.Secure(packageController.DeletePackage)).Methods(http.MethodDelete)
+	r.HandleFunc("/api/v2/packages/{packageId}/favor", authenticator.Secure(packageController.FavorPackage)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v2/packages/{packageId}/disfavor", authenticator.Secure(packageController.DisfavorPackage)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v2/packages/{packageId}", authenticator.Secure(packageController.GetPackage)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/status", authenticator.Secure(packageController.GetPackageStatus)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages", authenticator.Secure(packageController.GetPackagesList)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/publish/availableStatuses", authenticator.Secure(packageController.GetAvailableVersionStatusesForPublish_deprecated)).Methods(http.MethodGet) // deprecated
 
-	r.HandleFunc("/api/v4/packages/{packageId}/apiKeys", authHandler.Secure(apihubApiKeyController.GetApiKeys)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v4/packages/{packageId}/apiKeys", authHandler.Secure(apihubApiKeyController.CreateApiKey)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v2/packages/{packageId}/apiKeys/{id}", authHandler.Secure(apihubApiKeyController.RevokeApiKey)).Methods(http.MethodDelete)
+	r.HandleFunc("/api/v4/packages/{packageId}/apiKeys", authenticator.Secure(apihubApiKeyController.GetApiKeys)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v4/packages/{packageId}/apiKeys", authenticator.Secure(apihubApiKeyController.CreateApiKey)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v2/packages/{packageId}/apiKeys/{id}", authenticator.Secure(apihubApiKeyController.RevokeApiKey)).Methods(http.MethodDelete)
 
-	r.HandleFunc("/api/v2/packages/{packageId}/members", authHandler.Secure(roleController.GetPackageMembers)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/members", authHandler.Secure(roleController.AddPackageMembers)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v2/packages/{packageId}/members/{userId}", authHandler.Secure(roleController.UpdatePackageMembers)).Methods(http.MethodPatch)
-	r.HandleFunc("/api/v2/packages/{packageId}/members/{userId}", authHandler.Secure(roleController.DeletePackageMember)).Methods(http.MethodDelete)
+	r.HandleFunc("/api/v2/packages/{packageId}/members", authenticator.Secure(roleController.GetPackageMembers)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/members", authenticator.Secure(roleController.AddPackageMembers)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v2/packages/{packageId}/members/{userId}", authenticator.Secure(roleController.UpdatePackageMembers)).Methods(http.MethodPatch)
+	r.HandleFunc("/api/v2/packages/{packageId}/members/{userId}", authenticator.Secure(roleController.DeletePackageMember)).Methods(http.MethodDelete)
 
-	r.HandleFunc("/api/v2/packages/{packageId}/recalculateGroups", authHandler.Secure(packageController.RecalculateOperationGroups)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v2/packages/{packageId}/calculateGroups", authHandler.Secure(packageController.CalculateOperationGroups)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/recalculateGroups", authenticator.Secure(packageController.RecalculateOperationGroups)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v2/packages/{packageId}/calculateGroups", authenticator.Secure(packageController.CalculateOperationGroups)).Methods(http.MethodGet)
 
 	//api for extensions
-	r.HandleFunc("/api/v2/users/{userId}/availablePackagePromoteStatuses", authHandler.Secure(roleController.GetAvailableUserPackagePromoteStatuses)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v2/users/{userId}/availablePackagePromoteStatuses", authenticator.Secure(roleController.GetAvailableUserPackagePromoteStatuses)).Methods(http.MethodPost)
 
-	r.HandleFunc("/api/v2/packages/{packageId}/publish/{publishId}/status", authHandler.Secure(publishV2Controller.GetPublishStatus)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/publish/statuses", authHandler.Secure(publishV2Controller.GetPublishStatuses)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v2/packages/{packageId}/publish", authHandler.Secure(publishV2Controller.Publish)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v3/packages/{packageId}/publish/{publishId}/status", authHandler.Secure(publishV2Controller.SetPublishStatus)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v1/packages/{packageId}/publish/withOperationsGroup", authHandler.Secure(versionController.PublishFromCSV_deprecated)).Methods(http.MethodPost) //deprecated
-	r.HandleFunc("/api/v2/packages/{packageId}/publish/withOperationsGroup/{apiType}", authHandler.Secure(versionController.PublishFromCSV)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v1/packages/{packageId}/publish/{publishId}/withOperationsGroup/status", authHandler.Secure(versionController.GetCSVDashboardPublishStatus)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v1/packages/{packageId}/publish/{publishId}/withOperationsGroup/report", authHandler.Secure(versionController.GetCSVDashboardPublishReport)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/publish/{publishId}/status", authenticator.Secure(publishV2Controller.GetPublishStatus)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/publish/statuses", authenticator.Secure(publishV2Controller.GetPublishStatuses)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v2/packages/{packageId}/publish", authenticator.Secure(publishV2Controller.Publish)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v3/packages/{packageId}/publish/{publishId}/status", authenticator.Secure(publishV2Controller.SetPublishStatus)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v1/packages/{packageId}/publish/withOperationsGroup", authenticator.Secure(versionController.PublishFromCSV_deprecated)).Methods(http.MethodPost) //deprecated
+	r.HandleFunc("/api/v2/packages/{packageId}/publish/withOperationsGroup/{apiType}", authenticator.Secure(versionController.PublishFromCSV)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v1/packages/{packageId}/publish/{publishId}/withOperationsGroup/status", authenticator.Secure(versionController.GetCSVDashboardPublishStatus)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/packages/{packageId}/publish/{publishId}/withOperationsGroup/report", authenticator.Secure(versionController.GetCSVDashboardPublishReport)).Methods(http.MethodGet)
 
-	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}", authHandler.Secure(versionController.GetPackageVersionContent)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v3/packages/{packageId}/versions", authHandler.Secure(versionController.GetPackageVersionsList)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}", authHandler.Secure(versionController.DeleteVersion)).Methods(http.MethodDelete)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}", authHandler.Secure(versionController.PatchVersion)).Methods(http.MethodPatch)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/recursiveDelete", authHandler.Secure(versionController.DeleteVersionsRecursively)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}", authenticator.Secure(versionController.GetPackageVersionContent)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v3/packages/{packageId}/versions", authenticator.Secure(versionController.GetPackageVersionsList)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}", authenticator.Secure(versionController.DeleteVersion)).Methods(http.MethodDelete)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}", authenticator.Secure(versionController.PatchVersion)).Methods(http.MethodPatch)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/recursiveDelete", authenticator.Secure(versionController.DeleteVersionsRecursively)).Methods(http.MethodPost)
 
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/files/{slug}/raw", authHandler.Secure(versionController.GetVersionedContentFileRaw)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/sharedFiles/{sharedFileId}", authHandler.NoSecure(versionController.GetSharedContentFile)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/changes", authHandler.Secure(versionController.GetVersionChanges_deprecated)).Methods(http.MethodGet)   // deprecated
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/problems", authHandler.Secure(versionController.GetVersionProblems_deprecated)).Methods(http.MethodGet) // deprecated
-	r.HandleFunc("/api/v2/sharedFiles", authHandler.Secure(versionController.SharePublishedFile)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/files/{slug}/raw", authenticator.Secure(versionController.GetVersionedContentFileRaw)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/sharedFiles/{sharedFileId}", authenticator.NoSecure(versionController.GetSharedContentFile)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/changes", authenticator.Secure(versionController.GetVersionChanges_deprecated)).Methods(http.MethodGet)   // deprecated
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/problems", authenticator.Secure(versionController.GetVersionProblems_deprecated)).Methods(http.MethodGet) // deprecated
+	r.HandleFunc("/api/v2/sharedFiles", authenticator.Secure(versionController.SharePublishedFile)).Methods(http.MethodPost)
 
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/doc", authHandler.Secure(exportController.GenerateVersionDoc)).Methods(http.MethodGet)           // deprecated
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/files/{slug}/doc", authHandler.Secure(exportController.GenerateFileDoc)).Methods(http.MethodGet) // deprecated
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/doc", authenticator.Secure(exportController.GenerateVersionDoc)).Methods(http.MethodGet)           // deprecated
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/files/{slug}/doc", authenticator.Secure(exportController.GenerateFileDoc)).Methods(http.MethodGet) // deprecated
 
-	r.HandleFunc("/api/v2/auth/saml", authHandler.NoSecure(samlAuthController.StartSamlAuthentication_deprecated)).Methods(http.MethodGet)   // deprecated
-	r.HandleFunc("/login/sso/saml", authHandler.RefreshToken(samlAuthController.StartSamlAuthentication_deprecated)).Methods(http.MethodGet) // deprecated
-	r.HandleFunc("/saml/acs", authHandler.NoSecure(samlAuthController.AssertionConsumerHandler_deprecated)).Methods(http.MethodPost)
-	r.HandleFunc("/saml/metadata", authHandler.NoSecure(samlAuthController.ServeMetadata_deprecated)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/auth/saml", authenticator.NoSecure(samlAuthController.StartSamlAuthentication_deprecated)).Methods(http.MethodGet)   // deprecated
+	r.HandleFunc("/login/sso/saml", authenticator.RefreshToken(samlAuthController.StartSamlAuthentication_deprecated)).Methods(http.MethodGet) // deprecated
+	r.HandleFunc("/saml/acs", authenticator.NoSecure(samlAuthController.AssertionConsumerHandler_deprecated)).Methods(http.MethodPost)
+	r.HandleFunc("/saml/metadata", authenticator.NoSecure(samlAuthController.ServeMetadata_deprecated)).Methods(http.MethodGet)
 
-	r.HandleFunc("/api/v1/login/sso/{idpId}", authHandler.RefreshToken(authController.StartAuthentication)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v1/saml/{idpId}/acs", authHandler.NoSecure(authController.SAMLAssertionConsumerHandler)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v1/saml/{idpId}/metadata", authHandler.NoSecure(authController.ServeMetadata)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/login/sso/{idpId}", authenticator.RefreshToken(authController.StartAuthentication)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/saml/{idpId}/acs", authenticator.NoSecure(authController.SAMLAssertionConsumerHandler)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v1/saml/{idpId}/metadata", authenticator.NoSecure(authController.ServeMetadata)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/oidc/{idpId}/callback", authController.OIDCCallbackHandler).Methods(http.MethodGet)
 
-	r.HandleFunc("/api/v1/logout", authHandler.SecureJWT(logoutController.Logout)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v1/logout", authenticator.SecureJWT(logoutController.Logout)).Methods(http.MethodPost)
 
 	// Required for agent to verify apihub tokens
-	r.HandleFunc("/api/v2/auth/publicKey", authHandler.NoSecure(jwtPubKeyController.GetRsaPublicKey)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/auth/publicKey", authenticator.NoSecure(jwtPubKeyController.GetRsaPublicKey)).Methods(http.MethodGet)
 	// Required to verify api key for external authorization
-	r.HandleFunc("/api/v2/auth/apiKey", authHandler.NoSecure(apihubApiKeyController.GetApiKeyByKey)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/auth/apiKey", authenticator.NoSecure(apihubApiKeyController.GetApiKeyByKey)).Methods(http.MethodGet)
 	// Required to verify PAT for external authorization
-	r.HandleFunc("/api/v2/auth/pat", authHandler.NoSecure(personalAccessTokenController.GetPatByPat)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v1/auth/apiKey/{apiKeyId}", authHandler.Secure(apihubApiKeyController.GetApiKeyById)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/auth/pat", authenticator.NoSecure(personalAccessTokenController.GetPatByPat)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/auth/apiKey/{apiKeyId}", authenticator.Secure(apihubApiKeyController.GetApiKeyById)).Methods(http.MethodGet)
 	// Required for extensions to check Apihub auth. Just return 200 OK if authentication is passed.
-	r.HandleFunc("/api/v1/auth/token", authHandler.SecureJWT(func(writer http.ResponseWriter, request *http.Request) {})).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/auth/token", authenticator.SecureJWT(func(writer http.ResponseWriter, request *http.Request) {})).Methods(http.MethodGet)
 
-	r.HandleFunc("/api/v2/users/{userId}/profile/avatar", authHandler.NoSecure(userController.GetUserAvatar)).Methods(http.MethodGet) // Should not be secured! FE renders avatar as <img src='avatarUrl' and it couldn't include auth header
-	r.HandleFunc("/api/v2/users", authHandler.Secure(userController.GetUsers)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/users/{userId}", authHandler.Secure(userController.GetUserById)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/users/{userId}/space", authHandler.Secure(userController.CreatePrivatePackageForUser)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v2/space", authHandler.SecureUser(userController.CreatePrivateUserPackage)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v2/space", authHandler.SecureUser(userController.GetPrivateUserPackage)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v1/user", authHandler.SecureUser(userController.GetExtendedUser_deprecated)).Methods(http.MethodGet) //deprecated
-	r.HandleFunc("/api/v2/user", authHandler.SecureUser(userController.GetExtendedUser)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/users/{userId}/profile/avatar", authenticator.NoSecure(userController.GetUserAvatar)).Methods(http.MethodGet) // Should not be secured! FE renders avatar as <img src='avatarUrl' and it couldn't include auth header
+	r.HandleFunc("/api/v2/users", authenticator.Secure(userController.GetUsers)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/users/{userId}", authenticator.Secure(userController.GetUserById)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/users/{userId}/space", authenticator.Secure(userController.CreatePrivatePackageForUser)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v2/space", authenticator.SecureUser(userController.CreatePrivateUserPackage)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v2/space", authenticator.SecureUser(userController.GetPrivateUserPackage)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/user", authenticator.SecureUser(userController.GetExtendedUser_deprecated)).Methods(http.MethodGet) //deprecated
+	r.HandleFunc("/api/v2/user", authenticator.SecureUser(userController.GetExtendedUser)).Methods(http.MethodGet)
 
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/changes/summary", authHandler.Secure(comparisonController.GetComparisonChangesSummary)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/operations", authHandler.Secure(operationController.GetOperationList)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/operations/{operationId}", authHandler.Secure(operationController.GetOperation)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/operations/{operationId}/changes", authHandler.Secure(operationController.GetOperationChanges)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/operations/{operationId}/models/{modelName}/usages", authHandler.Secure(operationController.GetOperationModelUsages)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v4/packages/{packageId}/versions/{version}/{apiType}/changes", authHandler.Secure(operationController.GetOperationsChanges)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/tags", authHandler.Secure(operationController.GetOperationsTags)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/deprecated", authHandler.Secure(operationController.GetDeprecatedOperationsList)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/operations/{operationId}/deprecatedItems", authHandler.Secure(operationController.GetOperationDeprecatedItems)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/deprecated/summary", authHandler.Secure(operationController.GetDeprecatedOperationsSummary)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/operations/{operationId}/changes/summary", authHandler.Secure(operationController.GetOperationChangesSummary)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/changes/summary", authenticator.Secure(comparisonController.GetComparisonChangesSummary)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/operations", authenticator.Secure(operationController.GetOperationList)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/operations/{operationId}", authenticator.Secure(operationController.GetOperation)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/operations/{operationId}/changes", authenticator.Secure(operationController.GetOperationChanges)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/operations/{operationId}/models/{modelName}/usages", authenticator.Secure(operationController.GetOperationModelUsages)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v4/packages/{packageId}/versions/{version}/{apiType}/changes", authenticator.Secure(operationController.GetOperationsChanges)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/tags", authenticator.Secure(operationController.GetOperationsTags)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/deprecated", authenticator.Secure(operationController.GetDeprecatedOperationsList)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/operations/{operationId}/deprecatedItems", authenticator.Secure(operationController.GetOperationDeprecatedItems)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/deprecated/summary", authenticator.Secure(operationController.GetDeprecatedOperationsSummary)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/operations/{operationId}/changes/summary", authenticator.Secure(operationController.GetOperationChangesSummary)).Methods(http.MethodGet)
 
 	// DDL Contract routes.
 	// Static sub-routes (changes, export/*) are registered before the {ddlEntityId} wildcard
 	// so gorilla/mux does not shadow them.
-	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/entities", authHandler.Secure(ddlContractController.ListDdlEntities)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/changes", authHandler.Secure(ddlContractController.GetChangedDdlEntities)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/export/entities", authHandler.Secure(exportController.GenerateDdlEntitiesExcelReport)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/export/changes", authHandler.Secure(exportController.GenerateDdlChangesExcelReport)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/entities/{ddlEntityId}", authHandler.Secure(ddlContractController.GetDdlEntity)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/entities/{ddlEntityId}/changes", authHandler.Secure(ddlContractController.GetDdlEntityChanges)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/entities/{ddlEntityId}/changes/summary", authHandler.Secure(ddlContractController.GetDdlEntityChangesSummary)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/entities", authenticator.Secure(ddlContractController.ListDdlEntities)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/changes", authenticator.Secure(ddlContractController.GetChangedDdlEntities)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/export/entities", authenticator.Secure(exportController.GenerateDdlEntitiesExcelReport)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/export/changes", authenticator.Secure(exportController.GenerateDdlChangesExcelReport)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/entities/{ddlEntityId}", authenticator.Secure(ddlContractController.GetDdlEntity)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/entities/{ddlEntityId}/changes", authenticator.Secure(ddlContractController.GetDdlEntityChanges)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/entities/{ddlEntityId}/changes/summary", authenticator.Secure(ddlContractController.GetDdlEntityChangesSummary)).Methods(http.MethodGet)
 
 	// MCP Contract routes ({entity} ∈ {inits, tools, prompts, resources}).
 	// mcp/export/{entity} is registered before mcp/{entity}/{mcpEntityId} so it is not shadowed.
-	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/mcp/export/{entity}", authHandler.Secure(exportController.GenerateMcpEntitiesExcelReport)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/mcp/{entity}", authHandler.Secure(mcpContractController.ListMcpEntities)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/mcp/{entity}/{mcpEntityId}", authHandler.Secure(mcpContractController.GetMcpEntity)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/mcp/export/{entity}", authenticator.Secure(exportController.GenerateMcpEntitiesExcelReport)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/mcp/{entity}", authenticator.Secure(mcpContractController.ListMcpEntities)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/mcp/{entity}/{mcpEntityId}", authenticator.Secure(mcpContractController.GetMcpEntity)).Methods(http.MethodGet)
 
-	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/documents/{slug}", authHandler.Secure(versionController.GetVersionedDocument)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/documents", authHandler.Secure(versionController.GetVersionDocuments)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/documents/{slug}/shareability", authHandler.Secure(versionController.UpdateDocumentShareability)).Methods(http.MethodPatch)
-	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/references", authHandler.Secure(versionController.GetVersionReferencesV3)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/sources", authHandler.Secure(publishedController.GetVersionSources)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/revisions", authHandler.Secure(versionController.GetVersionRevisionsList)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/sourceData", authHandler.Secure(publishedController.GetPublishedVersionSourceDataConfig)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/config", authHandler.Secure(publishedController.GetPublishedVersionBuildConfig)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/copy", authHandler.Secure(versionController.CopyVersion)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/documents/{slug}", authenticator.Secure(versionController.GetVersionedDocument)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/documents", authenticator.Secure(versionController.GetVersionDocuments)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/documents/{slug}/shareability", authenticator.Secure(versionController.UpdateDocumentShareability)).Methods(http.MethodPatch)
+	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/references", authenticator.Secure(versionController.GetVersionReferencesV3)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/sources", authenticator.Secure(publishedController.GetVersionSources)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/revisions", authenticator.Secure(versionController.GetVersionRevisionsList)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/sourceData", authenticator.Secure(publishedController.GetPublishedVersionSourceDataConfig)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/config", authenticator.Secure(publishedController.GetPublishedVersionBuildConfig)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/copy", authenticator.Secure(versionController.CopyVersion)).Methods(http.MethodPost)
 
-	r.HandleFunc("/api/v4/packages/{packageId}/activity", authHandler.Secure(activityTrackingController.GetActivityHistoryForPackage)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v4/activity", authHandler.Secure(activityTrackingController.GetActivityHistory)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v4/packages/{packageId}/activity", authenticator.Secure(activityTrackingController.GetActivityHistoryForPackage)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v4/activity", authenticator.Secure(activityTrackingController.GetActivityHistory)).Methods(http.MethodGet)
 
-	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/groups", authHandler.Secure(operationGroupController.CreateOperationGroup)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}", authHandler.Secure(operationGroupController.DeleteOperationGroup)).Methods(http.MethodDelete)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}", authHandler.Secure(operationGroupController.GetGroupedOperations)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}", authHandler.Secure(operationGroupController.UpdateOperationGroup)).Methods(http.MethodPatch)
-	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}/template", authHandler.Secure(operationGroupController.GetGroupExportTemplate)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/groups", authenticator.Secure(operationGroupController.CreateOperationGroup)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}", authenticator.Secure(operationGroupController.DeleteOperationGroup)).Methods(http.MethodDelete)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}", authenticator.Secure(operationGroupController.GetGroupedOperations)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}", authenticator.Secure(operationGroupController.UpdateOperationGroup)).Methods(http.MethodPatch)
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}/template", authenticator.Secure(operationGroupController.GetGroupExportTemplate)).Methods(http.MethodGet)
 
-	r.HandleFunc("/playground/proxy", authHandler.SecureProxy(playgroundProxyController.Proxy))
+	r.HandleFunc("/playground/proxy", authenticator.SecureProxy(playgroundProxyController.Proxy))
 
-	r.HandleFunc("/api/v2/admins", authHandler.Secure(sysAdminController.GetSystemAdministrators)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/admins", authHandler.Secure(sysAdminController.AddSystemAdministrator)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v2/admins/{userId}", authHandler.Secure(sysAdminController.DeleteSystemAdministrator)).Methods(http.MethodDelete)
-	r.HandleFunc("/api/v2/permissions", authHandler.Secure(roleController.GetExistingPermissions)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/roles", authHandler.Secure(roleController.CreateRole)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v2/roles", authHandler.Secure(roleController.GetExistingRoles)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/roles/{roleId}", authHandler.Secure(roleController.UpdateRole)).Methods(http.MethodPatch)
-	r.HandleFunc("/api/v2/roles/{roleId}", authHandler.Secure(roleController.DeleteRole)).Methods(http.MethodDelete)
-	r.HandleFunc("/api/v2/roles/changeOrder", authHandler.Secure(roleController.SetRoleOrder)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v2/packages/{packageId}/availableRoles", authHandler.Secure(roleController.GetAvailablePackageRoles)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/admins", authenticator.Secure(sysAdminController.GetSystemAdministrators)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/admins", authenticator.Secure(sysAdminController.AddSystemAdministrator)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v2/admins/{userId}", authenticator.Secure(sysAdminController.DeleteSystemAdministrator)).Methods(http.MethodDelete)
+	r.HandleFunc("/api/v2/permissions", authenticator.Secure(roleController.GetExistingPermissions)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/roles", authenticator.Secure(roleController.CreateRole)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v2/roles", authenticator.Secure(roleController.GetExistingRoles)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/roles/{roleId}", authenticator.Secure(roleController.UpdateRole)).Methods(http.MethodPatch)
+	r.HandleFunc("/api/v2/roles/{roleId}", authenticator.Secure(roleController.DeleteRole)).Methods(http.MethodDelete)
+	r.HandleFunc("/api/v2/roles/changeOrder", authenticator.Secure(roleController.SetRoleOrder)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v2/packages/{packageId}/availableRoles", authenticator.Secure(roleController.GetAvailablePackageRoles)).Methods(http.MethodGet)
 
-	r.HandleFunc("/api/internal/migrate/operations", authHandler.Secure(dataMigrationController.StartOpsMigration)).Methods(http.MethodPost)
-	r.HandleFunc("/api/internal/migrate/operations/{migrationId}", authHandler.Secure(dataMigrationController.GetMigrationReport)).Methods(http.MethodGet)
-	r.HandleFunc("/api/internal/migrate/operations/{migrationId}/suspiciousBuilds", authHandler.Secure(dataMigrationController.GetSuspiciousBuilds)).Methods(http.MethodGet)
-	r.HandleFunc("/api/internal/migrate/operations/{migrationId}/perf", authHandler.Secure(dataMigrationController.GetMigrationPerfReport)).Methods(http.MethodGet)
-	r.HandleFunc("/api/internal/migrate/operations/cancel", authHandler.Secure(dataMigrationController.CancelRunningMigrations)).Methods(http.MethodPost)
+	r.HandleFunc("/api/internal/migrate/operations", authenticator.Secure(dataMigrationController.StartOpsMigration)).Methods(http.MethodPost)
+	r.HandleFunc("/api/internal/migrate/operations/{migrationId}", authenticator.Secure(dataMigrationController.GetMigrationReport)).Methods(http.MethodGet)
+	r.HandleFunc("/api/internal/migrate/operations/{migrationId}/suspiciousBuilds", authenticator.Secure(dataMigrationController.GetSuspiciousBuilds)).Methods(http.MethodGet)
+	r.HandleFunc("/api/internal/migrate/operations/{migrationId}/perf", authenticator.Secure(dataMigrationController.GetMigrationPerfReport)).Methods(http.MethodGet)
+	r.HandleFunc("/api/internal/migrate/operations/cancel", authenticator.Secure(dataMigrationController.CancelRunningMigrations)).Methods(http.MethodPost)
 
-	r.HandleFunc("/api/v2/admin/transition/move", authHandler.Secure(transitionController.MoveOrRenamePackage)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v2/admin/transition/move/{id}", authHandler.Secure(transitionController.GetMoveStatus)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/admin/transition/activity", authHandler.Secure(transitionController.ListActivities)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/admin/transition", authHandler.Secure(transitionController.ListPackageTransitions)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/admin/transition/move", authenticator.Secure(transitionController.MoveOrRenamePackage)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v2/admin/transition/move/{id}", authenticator.Secure(transitionController.GetMoveStatus)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/admin/transition/activity", authenticator.Secure(transitionController.ListActivities)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/admin/transition", authenticator.Secure(transitionController.ListPackageTransitions)).Methods(http.MethodGet)
 
-	r.HandleFunc("/api/v1/builds", authHandler.Secure(buildController.ListBuilds)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v1/builds/{buildId}", authHandler.Secure(buildController.GetBuild)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/admin/builds/{buildId}/result", authHandler.Secure(buildController.GetBuildResult)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/admin/builds/{buildId}/sources", authHandler.Secure(buildController.GetBuildSources)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/builds", authenticator.Secure(buildController.ListBuilds)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/builds/{buildId}", authenticator.Secure(buildController.GetBuild)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/admin/builds/{buildId}/result", authenticator.Secure(buildController.GetBuildResult)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/admin/builds/{buildId}/sources", authenticator.Secure(buildController.GetBuildSources)).Methods(http.MethodGet)
 
-	r.HandleFunc("/api/v2/admin/packages/{packageId}/versions/{version}/sources", authHandler.Secure(adminPublishedController.ReplaceVersionSources)).Methods(http.MethodPut)
+	r.HandleFunc("/api/v2/admin/packages/{packageId}/versions/{version}/sources", authenticator.Secure(adminPublishedController.ReplaceVersionSources)).Methods(http.MethodPut)
 
-	r.HandleFunc("/api/v2/admin/system/stats", authHandler.Secure(systemStatsController.GetSystemStats)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/admin/system/stats", authenticator.Secure(systemStatsController.GetSystemStats)).Methods(http.MethodGet)
 
-	r.HandleFunc("/api/v2/compare", authHandler.Secure(comparisonController.CompareTwoVersions)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v2/compare", authenticator.Secure(comparisonController.CompareTwoVersions)).Methods(http.MethodPost)
 
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/changes/export", authHandler.Secure(exportController.GenerateApiChangesExcelReport)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/export/changes", authHandler.Secure(exportController.GenerateApiChangesExcelReportV3)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/export/operations", authHandler.Secure(exportController.GenerateOperationsExcelReport)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/export/operations/deprecated", authHandler.Secure(exportController.GenerateDeprecatedOperationsExcelReport)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/export/shareability-report", authHandler.Secure(exportController.GenerateShareabilityReport)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/changes/export", authenticator.Secure(exportController.GenerateApiChangesExcelReport)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/export/changes", authenticator.Secure(exportController.GenerateApiChangesExcelReportV3)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/export/operations", authenticator.Secure(exportController.GenerateOperationsExcelReport)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/export/operations/deprecated", authenticator.Secure(exportController.GenerateDeprecatedOperationsExcelReport)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/export/shareability-report", authenticator.Secure(exportController.GenerateShareabilityReport)).Methods(http.MethodGet)
 
 	r.Path("/metrics").Handler(promhttp.Handler())
-	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/build/groups/{groupName}/buildType/{buildType}", authHandler.Secure(transformationController.TransformDocuments_deprecated_2)).Methods(http.MethodPost)             //deprecated
-	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/export/groups/{groupName}/buildType/{buildType}", authHandler.Secure(exportController.ExportOperationGroupAsOpenAPIDocuments_deprecated_2)).Methods(http.MethodGet) //deprecated
-	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}/documents", authHandler.Secure(transformationController.GetDataForDocumentsTransformation)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/build/groups/{groupName}/buildType/{buildType}", authenticator.Secure(transformationController.TransformDocuments_deprecated_2)).Methods(http.MethodPost)             //deprecated
+	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/export/groups/{groupName}/buildType/{buildType}", authenticator.Secure(exportController.ExportOperationGroupAsOpenAPIDocuments_deprecated_2)).Methods(http.MethodGet) //deprecated
+	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}/documents", authenticator.Secure(transformationController.GetDataForDocumentsTransformation)).Methods(http.MethodGet)
 
-	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}/publish", authHandler.Secure(operationGroupController.StartOperationGroupPublish)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}/publish/{publishId}/status", authHandler.Secure(operationGroupController.GetOperationGroupPublishStatus)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}/publish", authenticator.Secure(operationGroupController.StartOperationGroupPublish)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/groups/{groupName}/publish/{publishId}/status", authenticator.Secure(operationGroupController.GetOperationGroupPublishStatus)).Methods(http.MethodGet)
 
-	r.HandleFunc("/api/v2/businessMetrics", authHandler.Secure(businessMetricController.GetBusinessMetrics)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/businessMetrics", authenticator.Secure(businessMetricController.GetBusinessMetrics)).Methods(http.MethodGet)
 
-	r.HandleFunc("/api/v1/publishHistory", authHandler.Secure(versionController.GetPublishedVersionsHistory)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/publishHistory", authenticator.Secure(versionController.GetPublishedVersionsHistory)).Methods(http.MethodGet)
 
-	r.HandleFunc("/api/v1/personalAccessToken", authHandler.Secure(personalAccessTokenController.CreatePAT)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v1/personalAccessToken", authHandler.Secure(personalAccessTokenController.ListPATs)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v1/personalAccessToken/{id}", authHandler.Secure(personalAccessTokenController.DeletePAT)).Methods(http.MethodDelete)
+	r.HandleFunc("/api/v1/personalAccessToken", authenticator.Secure(personalAccessTokenController.CreatePAT)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v1/personalAccessToken", authenticator.Secure(personalAccessTokenController.ListPATs)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/personalAccessToken/{id}", authenticator.Secure(personalAccessTokenController.DeletePAT)).Methods(http.MethodDelete)
 
-	r.HandleFunc("/api/v1/packages/{packageId}/exportConfig", authHandler.Secure(packageExportConfigController.GetConfig)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v1/packages/{packageId}/exportConfig", authHandler.Secure(packageExportConfigController.SetConfig)).Methods(http.MethodPatch)
+	r.HandleFunc("/api/v1/packages/{packageId}/exportConfig", authenticator.Secure(packageExportConfigController.GetConfig)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/packages/{packageId}/exportConfig", authenticator.Secure(packageExportConfigController.SetConfig)).Methods(http.MethodPatch)
 
-	r.HandleFunc("/api/v1/export", authHandler.Secure(exportController.StartAsyncExport)).Methods(http.MethodPost)
-	r.HandleFunc("/api/v1/export/{exportId}/status", authHandler.Secure(exportController.GetAsyncExportStatus)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/export", authenticator.Secure(exportController.StartAsyncExport)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v1/export/{exportId}/status", authenticator.Secure(exportController.GetAsyncExportStatus)).Methods(http.MethodGet)
 
-	r.HandleFunc("/api/v1/deleted/packages", authHandler.Secure(packageController.GetDeletedPackagesList)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v1/deleted/packages/{packageId}/versions", authHandler.Secure(versionController.GetDeletedPackageVersionsList)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v1/deleted/packages/{packageId}/versions/{version}", authHandler.Secure(versionController.GetDeletedPackageVersionContent)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/deleted/packages", authenticator.Secure(packageController.GetDeletedPackagesList)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/deleted/packages/{packageId}/versions", authenticator.Secure(versionController.GetDeletedPackageVersionsList)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/deleted/packages/{packageId}/versions/{version}", authenticator.Secure(versionController.GetDeletedPackageVersionContent)).Methods(http.MethodGet)
 
-	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/version-internal-documents", authHandler.Secure(internalDocsController.GetVersionInternalDocuments)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v1/version-internal-documents/{hash}", authHandler.Secure(internalDocsController.GetVersionInternalDocumentData)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/comparison-internal-documents", authHandler.Secure(internalDocsController.GetComparisonInternalDocuments)).Methods(http.MethodGet)
-	r.HandleFunc("/api/v1/comparison-internal-documents/{hash}", authHandler.Secure(internalDocsController.GetComparisonInternalDocumentData)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/version-internal-documents", authenticator.Secure(internalDocsController.GetVersionInternalDocuments)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/version-internal-documents/{hash}", authenticator.Secure(internalDocsController.GetVersionInternalDocumentData)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/comparison-internal-documents", authenticator.Secure(internalDocsController.GetComparisonInternalDocuments)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/comparison-internal-documents/{hash}", authenticator.Secure(internalDocsController.GetComparisonInternalDocumentData)).Methods(http.MethodGet)
 
-	r.HandleFunc("/api/v1/shareability/bulk-update", authHandler.Secure(versionController.BulkUpdateDocumentShareability)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v1/shareability/bulk-update", authenticator.Secure(versionController.BulkUpdateDocumentShareability)).Methods(http.MethodPost)
 
 	//debug + cleanup
 	if !systemInfoService.GetSystemInfo().ProductionMode {
-		r.HandleFunc("/api/internal/users/{userId}/systemRole", authHandler.Secure(roleController.TestSetUserSystemRole)).Methods(http.MethodPost)
-		r.HandleFunc("/api/internal/users", authHandler.NoSecure(userController.CreateInternalUser)).Methods(http.MethodPost)
-		r.HandleFunc("/api/v2/auth/local", authHandler.NoSecure(authHandler.CreateLocalUserToken_deprecated)).Methods(http.MethodPost) //deprecated
-		r.HandleFunc("/api/v3/auth/local", authHandler.NoSecure(authHandler.CreateLocalUserToken)).Methods(http.MethodPost)
-		r.HandleFunc("/api/v3/auth/local/refresh", authHandler.RefreshToken(responder.RedirectHandler(systemInfoService.GetAPIHubUrl()))).Methods(http.MethodGet)
+		r.HandleFunc("/api/internal/users/{userId}/systemRole", authenticator.Secure(roleController.TestSetUserSystemRole)).Methods(http.MethodPost)
+		r.HandleFunc("/api/internal/users", authenticator.NoSecure(userController.CreateInternalUser)).Methods(http.MethodPost)
+		r.HandleFunc("/api/v2/auth/local", authenticator.NoSecure(authenticator.CreateLocalUserToken_deprecated)).Methods(http.MethodPost) //deprecated
+		r.HandleFunc("/api/v3/auth/local", authenticator.NoSecure(authenticator.CreateLocalUserToken)).Methods(http.MethodPost)
+		r.HandleFunc("/api/v3/auth/local/refresh", authenticator.RefreshToken(responder.RedirectHandler(systemInfoService.GetAPIHubUrl()))).Methods(http.MethodGet)
 
-		r.HandleFunc("/api/internal/clear/{testId}", authHandler.Secure(cleanupController.ClearTestData)).Methods(http.MethodDelete)
+		r.HandleFunc("/api/internal/clear/{testId}", authenticator.Secure(cleanupController.ClearTestData)).Methods(http.MethodDelete)
 
 		r.PathPrefix("/debug/").Handler(http.DefaultServeMux)
 
-		r.HandleFunc("/api/internal/minio/download", authHandler.Secure(minioStorageController.DownloadFilesFromMinioToDatabase)).Methods(http.MethodPost)
+		r.HandleFunc("/api/internal/minio/download", authenticator.Secure(minioStorageController.DownloadFilesFromMinioToDatabase)).Methods(http.MethodPost)
 	}
 
-	r.HandleFunc("/api/v1/ephemeral-files/{fileId}", authHandler.NoSecure(ephemeralFileController.Download)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/ephemeral-files/{fileId}", authenticator.NoSecure(ephemeralFileController.Download)).Methods(http.MethodGet)
 
 	if aiChatEnabled {
-		r.HandleFunc("/api/v1/ai-chat/chats", authHandler.Secure(aiChatController.ListChats)).Methods(http.MethodGet)
-		r.HandleFunc("/api/v1/ai-chat/chats", authHandler.Secure(aiChatController.CreateChat)).Methods(http.MethodPost)
-		r.HandleFunc("/api/v1/ai-chat/chats/{chatId}", authHandler.Secure(aiChatController.GetChat)).Methods(http.MethodGet)
-		r.HandleFunc("/api/v1/ai-chat/chats/{chatId}", authHandler.Secure(aiChatController.UpdateChat)).Methods(http.MethodPatch)
-		r.HandleFunc("/api/v1/ai-chat/chats/{chatId}", authHandler.Secure(aiChatController.DeleteChat)).Methods(http.MethodDelete)
-		r.HandleFunc("/api/v1/ai-chat/chats/{chatId}/messages", authHandler.Secure(aiChatController.ListMessages)).Methods(http.MethodGet)
-		r.HandleFunc("/api/v1/ai-chat/chats/{chatId}/messages", authHandler.Secure(aiChatController.SendMessage)).Methods(http.MethodPost)
-		r.HandleFunc("/api/v1/ai-chat/chats/{chatId}/messages/stream", authHandler.Secure(aiChatController.SendMessageStream)).Methods(http.MethodPost)
+		r.HandleFunc("/api/v1/ai-chat/chats", authenticator.Secure(aiChatController.ListChats)).Methods(http.MethodGet)
+		r.HandleFunc("/api/v1/ai-chat/chats", authenticator.Secure(aiChatController.CreateChat)).Methods(http.MethodPost)
+		r.HandleFunc("/api/v1/ai-chat/chats/{chatId}", authenticator.Secure(aiChatController.GetChat)).Methods(http.MethodGet)
+		r.HandleFunc("/api/v1/ai-chat/chats/{chatId}", authenticator.Secure(aiChatController.UpdateChat)).Methods(http.MethodPatch)
+		r.HandleFunc("/api/v1/ai-chat/chats/{chatId}", authenticator.Secure(aiChatController.DeleteChat)).Methods(http.MethodDelete)
+		r.HandleFunc("/api/v1/ai-chat/chats/{chatId}/messages", authenticator.Secure(aiChatController.ListMessages)).Methods(http.MethodGet)
+		r.HandleFunc("/api/v1/ai-chat/chats/{chatId}/messages", authenticator.Secure(aiChatController.SendMessage)).Methods(http.MethodPost)
+		r.HandleFunc("/api/v1/ai-chat/chats/{chatId}/messages/stream", authenticator.Secure(aiChatController.SendMessageStream)).Methods(http.MethodPost)
 	}
 
 	mcpHandler := mcpController.MakeMCPServer()
 	// The MCP transport request is deliberately exempt from RequestTimeoutMiddleware: it is a
 	// long-lived stream that carries many tool calls. The DB work is bounded per tool call by
 	// service.MCPToolCallTimeout instead.
-	r.Handle("/api/v1/mcp/", authHandler.SecureMCP(mcpHandler))
+	r.Handle("/api/v1/mcp/", authenticator.SecureMCP(mcpHandler))
 
 	discoveryConfig := config.DiscoveryConfig{
 		ScanDirectory: systemInfoService.GetApiSpecDirectory(),

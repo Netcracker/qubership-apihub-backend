@@ -15,7 +15,7 @@ const (
 	fileIDExt                      = "fileId"
 )
 
-func (a AuthHandler) MintEphemeralFileToken(userID, fileID string, ttl time.Duration) (string, error) {
+func (a Authenticator) MintEphemeralFileToken(userID, fileID string, ttl time.Duration) (string, error) {
 	user := auth.NewUserInfo("", userID, nil, auth.Extensions{})
 	ext := user.GetExtensions()
 	ext.Set(TokenTypeExt, EphemeralFileDownloadTokenType)
@@ -23,7 +23,7 @@ func (a AuthHandler) MintEphemeralFileToken(userID, fileID string, ttl time.Dura
 	return jwt.IssueAccessToken(user, a.keeper, jwt.SetExpDuration(ttl))
 }
 
-func (a AuthHandler) ValidateEphemeralFileToken(ctx context.Context, token string) (userID, fileID string, err error) {
+func (a Authenticator) ValidateEphemeralFileToken(ctx context.Context, token string) (userID, fileID string, err error) {
 	info, exp, err := a.jwtValidator.ValidateToken(ctx, token, EphemeralFileDownloadTokenType)
 	if err != nil {
 		return "", "", err

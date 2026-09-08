@@ -29,22 +29,22 @@ const (
 )
 
 type samlProvider struct {
-	samlInstance *samlsp.Middleware
-	config       idp.IDP
-	userService  service.UserService
-	apihubHost   string
-	responder    responder.Responder
-	authHandler  security.AuthHandler
+	samlInstance  *samlsp.Middleware
+	config        idp.IDP
+	userService   service.UserService
+	apihubHost    string
+	responder     responder.Responder
+	authenticator security.Authenticator
 }
 
-func newSAMLProvider(samlInstance *samlsp.Middleware, config idp.IDP, userService service.UserService, apihubHost string, responder responder.Responder, authHandler security.AuthHandler) idp.Provider {
+func newSAMLProvider(samlInstance *samlsp.Middleware, config idp.IDP, userService service.UserService, apihubHost string, responder responder.Responder, authenticator security.Authenticator) idp.Provider {
 	return &samlProvider{
-		samlInstance: samlInstance,
-		config:       config,
-		userService:  userService,
-		apihubHost:   apihubHost,
-		responder:    responder,
-		authHandler:  authHandler,
+		samlInstance:  samlInstance,
+		config:        config,
+		userService:   userService,
+		apihubHost:    apihubHost,
+		responder:     responder,
+		authenticator: authenticator,
 	}
 }
 
@@ -53,7 +53,7 @@ func (s samlProvider) StartAuthentication(w http.ResponseWriter, r *http.Request
 }
 
 func (s samlProvider) CallbackHandler(w http.ResponseWriter, r *http.Request) {
-	HandleAssertion(r.Context(), w, r, s.responder, s.userService, s.samlInstance, s.config.Id, s.apihubHost, s.authHandler.SetAuthTokenCookies)
+	HandleAssertion(r.Context(), w, r, s.responder, s.userService, s.samlInstance, s.config.Id, s.apihubHost, s.authenticator.SetAuthTokenCookies)
 }
 
 func (s samlProvider) ServeMetadata(w http.ResponseWriter, r *http.Request) {

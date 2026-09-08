@@ -25,7 +25,7 @@ type SamlAuthController interface {
 	GetSystemSSOInfo_deprecated(w http.ResponseWriter, r *http.Request)
 }
 
-func NewSamlAuthController(userService service.UserService, systemInfoService service.SystemInfoService, idpManager idp.Manager, responder responder.Responder, authHandler security.AuthHandler) SamlAuthController {
+func NewSamlAuthController(userService service.UserService, systemInfoService service.SystemInfoService, idpManager idp.Manager, responder responder.Responder, authenticator security.Authenticator) SamlAuthController {
 	var samlInstance *samlsp.Middleware
 	for _, provider := range idpManager.GetAuthConfig().Providers {
 		if provider.IdpType == idp.IDPTypeExternal && provider.Protocol == idp.AuthProtocolSAML {
@@ -40,7 +40,7 @@ func NewSamlAuthController(userService service.UserService, systemInfoService se
 		systemInfoService: systemInfoService,
 		apihubHost:        apihubURL.Hostname(),
 		responder:         responder,
-		authHandler:       authHandler,
+		authenticator:     authenticator,
 	}
 }
 
@@ -50,7 +50,7 @@ type authenticationControllerImpl struct {
 	systemInfoService service.SystemInfoService
 	apihubHost        string
 	responder         responder.Responder
-	authHandler       security.AuthHandler
+	authenticator     security.Authenticator
 }
 
 func (a *authenticationControllerImpl) ServeMetadata_deprecated(w http.ResponseWriter, r *http.Request) {
@@ -69,7 +69,7 @@ func (a *authenticationControllerImpl) AssertionConsumerHandler_deprecated(w htt
 }
 
 func (a *authenticationControllerImpl) setUserViewCookie(ctx context.Context, w http.ResponseWriter, user *view.User, idpId string) error {
-	userView, err := a.authHandler.CreateTokenForUser_deprecated(ctx, *user)
+	userView, err := a.authenticator.CreateTokenForUser_deprecated(ctx, *user)
 	if err != nil {
 		return &exception.CustomError{
 			Status:  http.StatusInternalServerError,
@@ -91,7 +91,7 @@ func (a *authenticationControllerImpl) setUserViewCookie(ctx context.Context, w 
 	})
 	//TODO: remove after IDP reconfiguration
 	if a.systemInfoService.IsLegacySAML() {
-		a.authHandler.SetAuthTokenCookies(ctx, w, user, "/login/sso/saml")
+		a.authenticator.SetAuthTokenCookies(ctx, w, user, "/login/sso/saml")
 	}
 	log.Debugf("Auth user result object: %+v", userView)
 

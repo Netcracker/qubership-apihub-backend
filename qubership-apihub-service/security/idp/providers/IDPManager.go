@@ -25,7 +25,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-func NewIDPManager(authConfig idp.AuthConfig, allowedHosts []string, productionMode bool, userService service.UserService, responder responder.Responder, authHandler security.AuthHandler) (idp.Manager, error) {
+func NewIDPManager(authConfig idp.AuthConfig, allowedHosts []string, productionMode bool, userService service.UserService, responder responder.Responder, authenticator security.Authenticator) (idp.Manager, error) {
 	idpManager := idpManagerImpl{
 		config:    authConfig,
 		providers: make(map[string]idp.Provider),
@@ -36,7 +36,7 @@ func NewIDPManager(authConfig idp.AuthConfig, allowedHosts []string, productionM
 				log.Debugf("SAML provider with id %s already exists", provider.Id)
 				continue
 			}
-			samlProvider, err := idpManager.createSAMLProvider(provider, userService, responder, authHandler)
+			samlProvider, err := idpManager.createSAMLProvider(provider, userService, responder, authenticator)
 			if err != nil {
 				return nil, err
 			}
@@ -46,7 +46,7 @@ func NewIDPManager(authConfig idp.AuthConfig, allowedHosts []string, productionM
 				log.Debugf("OIDC provider with id %s already exists", provider.Id)
 				continue
 			}
-			oidcProvider, err := idpManager.createOIDCProvider(provider, userService, allowedHosts, productionMode, responder, authHandler)
+			oidcProvider, err := idpManager.createOIDCProvider(provider, userService, allowedHosts, productionMode, responder, authenticator)
 			if err != nil {
 				return nil, err
 			}
@@ -74,16 +74,16 @@ func (i *idpManagerImpl) IsSSOIntegrationEnabled() bool {
 	return len(i.config.Providers) > 0
 }
 
-func (i *idpManagerImpl) createSAMLProvider(idpConfig idp.IDP, userService service.UserService, responder responder.Responder, authHandler security.AuthHandler) (idp.Provider, error) {
+func (i *idpManagerImpl) createSAMLProvider(idpConfig idp.IDP, userService service.UserService, responder responder.Responder, authenticator security.Authenticator) (idp.Provider, error) {
 	samlInstance, err := CreateSAMLInstance(idpConfig.Id, idpConfig.SAMLConfiguration)
 	if err != nil {
 		return nil, err
 	}
 	rootURL, _ := url.Parse(idpConfig.SAMLConfiguration.RootURL)
-	return newSAMLProvider(samlInstance, idpConfig, userService, rootURL.Hostname(), responder, authHandler), nil
+	return newSAMLProvider(samlInstance, idpConfig, userService, rootURL.Hostname(), responder, authenticator), nil
 }
 
-func (i *idpManagerImpl) createOIDCProvider(idpConfig idp.IDP, userService service.UserService, allowedHosts []string, productionMode bool, responder responder.Responder, authHandler security.AuthHandler) (idp.Provider, error) {
+func (i *idpManagerImpl) createOIDCProvider(idpConfig idp.IDP, userService service.UserService, allowedHosts []string, productionMode bool, responder responder.Responder, authenticator security.Authenticator) (idp.Provider, error) {
 	if idpConfig.OIDCConfiguration == nil {
 		log.Error("OIDC configuration is invalid")
 		return nil, fmt.Errorf("OIDC configuration is invalid")
@@ -117,7 +117,7 @@ func (i *idpManagerImpl) createOIDCProvider(idpConfig idp.IDP, userService servi
 	}
 
 	verifier := provider.Verifier(&oidc.Config{ClientID: idpConfig.OIDCConfiguration.ClientID})
-	return newOIDCProvider(idpConfig, provider, verifier, oidcConfig, userService, allowedHosts, rootURL.Hostname(), productionMode, responder, authHandler), nil
+	return newOIDCProvider(idpConfig, provider, verifier, oidcConfig, userService, allowedHosts, rootURL.Hostname(), productionMode, responder, authenticator), nil
 }
 
 func CreateSAMLInstance(idpId string, samlConfig *idp.SAMLConfiguration) (*samlsp.Middleware, error) {

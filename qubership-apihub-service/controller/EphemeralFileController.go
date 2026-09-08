@@ -16,13 +16,13 @@ import (
 
 // Download: resolve file row (404 if missing/expired) before JWT check, then ownership.
 type EphemeralFileController struct {
-	svc         aiservice.EphemeralFileService
-	responder   responder.Responder
-	authHandler security.AuthHandler
+	svc           aiservice.EphemeralFileService
+	responder     responder.Responder
+	authenticator security.Authenticator
 }
 
-func NewEphemeralFileController(svc aiservice.EphemeralFileService, responder responder.Responder, authHandler security.AuthHandler) *EphemeralFileController {
-	return &EphemeralFileController{svc: svc, responder: responder, authHandler: authHandler}
+func NewEphemeralFileController(svc aiservice.EphemeralFileService, responder responder.Responder, authenticator security.Authenticator) *EphemeralFileController {
+	return &EphemeralFileController{svc: svc, responder: responder, authenticator: authenticator}
 }
 
 func (c *EphemeralFileController) Download(w http.ResponseWriter, r *http.Request) {
@@ -43,7 +43,7 @@ func (c *EphemeralFileController) Download(w http.ResponseWriter, r *http.Reques
 		c.responder.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusUnauthorized, Code: exception.EphemeralFileTokenMissing, Message: exception.EphemeralFileTokenMissingMsg})
 		return
 	}
-	uid, tokFileID, err := c.authHandler.ValidateEphemeralFileToken(r.Context(), token)
+	uid, tokFileID, err := c.authenticator.ValidateEphemeralFileToken(r.Context(), token)
 	if err != nil {
 		if security.IsTokenExpiredError(err) {
 			c.responder.RespondWithCustomError(w, &exception.CustomError{Status: http.StatusGone, Code: exception.EphemeralFileTokenExpired, Message: exception.EphemeralFileTokenExpiredMsg, Debug: err.Error()})

@@ -12,17 +12,17 @@ type JwtPubKeyController interface {
 	GetRsaPublicKey(w http.ResponseWriter, r *http.Request)
 }
 
-func NewJwtPubKeyController(responder responder.Responder, authHandler security.AuthHandler) JwtPubKeyController {
-	return &jwtPubKeyControllerImpl{responder: responder, authHandler: authHandler}
+func NewJwtPubKeyController(responder responder.Responder, authenticator security.Authenticator) JwtPubKeyController {
+	return &jwtPubKeyControllerImpl{responder: responder, authenticator: authenticator}
 }
 
 type jwtPubKeyControllerImpl struct {
-	responder   responder.Responder
-	authHandler security.AuthHandler
+	responder     responder.Responder
+	authenticator security.Authenticator
 }
 
 func (t jwtPubKeyControllerImpl) GetRsaPublicKey(w http.ResponseWriter, r *http.Request) {
-	key := t.authHandler.GetPublicKey()
+	key := t.authenticator.GetPublicKey()
 	if key == nil {
 		t.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusNotFound,
