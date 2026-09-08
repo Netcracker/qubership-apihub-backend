@@ -19,7 +19,7 @@ func TestCompressVisibleRoots(t *testing.T) {
 
 func TestPartitionSlug(t *testing.T) {
 	slug := PartitionSlug("acme-corp")
-	if len(slug) != 18 || slug[:2] != "p_" {
+	if len(slug) != 34 || slug[:2] != "p_" {
 		t.Fatalf("unexpected slug %q", slug)
 	}
 	if PartitionSlug("acme-corp") != slug {

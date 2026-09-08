@@ -76,7 +76,7 @@ $$
             FROM package_group
             WHERE kind = 'workspace'
             LOOP
-                slug := 'p_' || left(md5(r.workspace_id), 16);
+                slug := 'p_' || md5(r.workspace_id);
                 INSERT INTO global_search.workspace_registry (workspace_id, partition_slug)
                 VALUES (r.workspace_id, slug)
                 ON CONFLICT (workspace_id) DO NOTHING;
