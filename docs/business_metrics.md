@@ -68,6 +68,7 @@ The following table lists constants (values stored in `metric`), their meaning, 
 | `mcp_get_operation_diff_tool_called` | MCP operation diff tool; key is `<apiType>\|<MCP client label>\|<package_id>`. |
 | `mcp_get_document_tool_called` | MCP document tool; key is `<apiType>\|<MCP client label>\|<package_id>`. |
 | `mcp_search_operations_v2_tool_called` | MCP workspace-aware search tool (`search_api_operations_v2`) invocation; key is `<apiType>\|<MCP client label>\|<group or packageId>`. `apiType` may also be `ddl` or `mcp` for contract search. |
+| `mcp_search_operations_in_groups_tool_called` | MCP multi-package search tool (`search_api_operations_in_groups`) invocation; key is `<apiType>\|<MCP client label>\|<comma-separated packageIds>`. The packageId part is the workspace when the caller omits `groups`. `apiType` may also be `ddl` or `mcp` for contract search. |
 | `mcp_list_workspaces_tool_called` | MCP/AI Chat `list_workspaces` tool invocation; key is the fixed label `workspaces`. |
 | `mcp_list_workspace_packages_tool_called` | MCP `list_workspace_packages` tool invocation; key is `workspace`. |
 | `mcp_list_package_versions_tool_called` | MCP `list_package_versions` tool invocation; key is `package_id`. |
