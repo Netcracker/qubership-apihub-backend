@@ -17,7 +17,7 @@ type PublishedController interface {
 	GetPublishedVersionBuildConfig(w http.ResponseWriter, r *http.Request)
 }
 
-func NewPublishedController(versionService service.PublishedService, portalService service.PortalService, roleService service.RoleService, responder *responder.Responder) PublishedController {
+func NewPublishedController(versionService service.PublishedService, portalService service.PortalService, roleService service.RoleService, responder responder.Responder) PublishedController {
 	return &publishControllerImpl{
 		publishedService: versionService,
 		portalService:    portalService,
@@ -30,7 +30,7 @@ type publishControllerImpl struct {
 	publishedService service.PublishedService
 	portalService    service.PortalService
 	roleService      service.RoleService
-	responder        *responder.Responder
+	responder        responder.Responder
 }
 
 func (v publishControllerImpl) GetVersionSources(w http.ResponseWriter, r *http.Request) {

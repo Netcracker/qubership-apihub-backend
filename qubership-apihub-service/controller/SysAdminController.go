@@ -19,7 +19,7 @@ type SysAdminController interface {
 	DeleteSystemAdministrator(w http.ResponseWriter, r *http.Request)
 }
 
-func NewSysAdminController(roleService service.RoleService, responder *responder.Responder) SysAdminController {
+func NewSysAdminController(roleService service.RoleService, responder responder.Responder) SysAdminController {
 	return &sysAdminControllerImpl{
 		roleService: roleService,
 		responder:   responder,
@@ -28,7 +28,7 @@ func NewSysAdminController(roleService service.RoleService, responder *responder
 
 type sysAdminControllerImpl struct {
 	roleService service.RoleService
-	responder   *responder.Responder
+	responder   responder.Responder
 }
 
 func (a sysAdminControllerImpl) GetSystemAdministrators(w http.ResponseWriter, r *http.Request) {

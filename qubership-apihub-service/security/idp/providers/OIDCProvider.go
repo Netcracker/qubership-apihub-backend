@@ -35,11 +35,11 @@ type oidcProvider struct {
 	allowedHosts   []string
 	apihubHost     string
 	productionMode bool
-	responder      *responder.Responder
+	responder      responder.Responder
 	authHandler    *security.AuthHandler
 }
 
-func newOIDCProvider(config idp.IDP, provider *oidc.Provider, verifier *oidc.IDTokenVerifier, oAuth2Config oauth2.Config, userService service.UserService, allowedHosts []string, apihubHost string, productionMode bool, responder *responder.Responder, authHandler *security.AuthHandler) idp.Provider {
+func newOIDCProvider(config idp.IDP, provider *oidc.Provider, verifier *oidc.IDTokenVerifier, oAuth2Config oauth2.Config, userService service.UserService, allowedHosts []string, apihubHost string, productionMode bool, responder responder.Responder, authHandler *security.AuthHandler) idp.Provider {
 	return &oidcProvider{
 		config:         config,
 		provider:       provider,

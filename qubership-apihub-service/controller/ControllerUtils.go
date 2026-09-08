@@ -194,7 +194,7 @@ func getLimitQueryParamBase(r *http.Request, defaultLimit, maxLimit int) (int, *
 }
 
 // TODO: duplicate in v2
-func handlePkgRedirectOrRespondWithError(w http.ResponseWriter, r *http.Request, responder *responder.Responder, ptHandler service.PackageTransitionHandler, packageId, msg string, err error) {
+func handlePkgRedirectOrRespondWithError(w http.ResponseWriter, r *http.Request, responder responder.Responder, ptHandler service.PackageTransitionHandler, packageId, msg string, err error) {
 	ctx := r.Context()
 	if customError, ok := err.(*exception.CustomError); ok {
 		if strings.Contains(r.URL.Path, packageId) &&

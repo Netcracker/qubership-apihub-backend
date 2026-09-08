@@ -6,8 +6,8 @@ import (
 	"strconv"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 )
@@ -19,7 +19,7 @@ type BuildController interface {
 	GetBuildSources(w http.ResponseWriter, r *http.Request)
 }
 
-func NewBuildController(buildResultService service.BuildResultService, buildService service.BuildService,  responder *responder.Responder) BuildController {
+func NewBuildController(buildResultService service.BuildResultService, buildService service.BuildService, responder responder.Responder) BuildController {
 	return &buildControllerImpl{
 		buildResultService: buildResultService,
 		buildService:       buildService,
@@ -30,7 +30,7 @@ func NewBuildController(buildResultService service.BuildResultService, buildServ
 type buildControllerImpl struct {
 	buildResultService service.BuildResultService
 	buildService       service.BuildService
-	responder          *responder.Responder
+	responder          responder.Responder
 }
 
 func (c buildControllerImpl) GetBuild(w http.ResponseWriter, r *http.Request) {
@@ -46,7 +46,7 @@ func (c buildControllerImpl) GetBuild(w http.ResponseWriter, r *http.Request) {
 	buildId := getStringParam(r, "buildId")
 	build, err := c.buildService.GetExtendedBuild(ctx, buildId)
 	if err != nil {
-		c.responder.RespondWithError(w,r, "Failed to get build", err)
+		c.responder.RespondWithError(w, r, "Failed to get build", err)
 		return
 	}
 	if build == nil {
@@ -95,7 +95,7 @@ func (c buildControllerImpl) ListBuilds(w http.ResponseWriter, r *http.Request) 
 		Limit:     limit,
 	})
 	if err != nil {
-		c.responder.RespondWithError(w,r, "Failed to list builds", err)
+		c.responder.RespondWithError(w, r, "Failed to list builds", err)
 		return
 	}
 	c.responder.RespondWithJson(w, http.StatusOK, builds)
@@ -114,7 +114,7 @@ func (c buildControllerImpl) GetBuildResult(w http.ResponseWriter, r *http.Reque
 	buildId := getStringParam(r, "buildId")
 	data, err := c.buildResultService.GetBuildResultData(ctx, buildId)
 	if err != nil {
-		c.responder.RespondWithError(w,r, "Failed to get build result", err)
+		c.responder.RespondWithError(w, r, "Failed to get build result", err)
 		return
 	}
 	if data == nil {
@@ -172,7 +172,7 @@ func (c buildControllerImpl) GetBuildSources(w http.ResponseWriter, r *http.Requ
 	buildId := getStringParam(r, "buildId")
 	data, err := c.buildService.GetBuildSourceData(ctx, buildId)
 	if err != nil {
-		c.responder.RespondWithError(w,r, "Failed to get build sources", err)
+		c.responder.RespondWithError(w, r, "Failed to get build sources", err)
 		return
 	}
 	if data == nil {

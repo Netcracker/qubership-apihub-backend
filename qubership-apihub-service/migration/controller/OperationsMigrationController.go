@@ -9,8 +9,8 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/migration/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/migration/view"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/gorilla/mux"
 )
 
@@ -22,7 +22,7 @@ type OperationsMigrationController interface {
 	GetMigrationPerfReport(w http.ResponseWriter, r *http.Request)
 }
 
-func NewTempMigrationController(migrationService service.DBMigrationService, responder *responder.Responder) OperationsMigrationController {
+func NewTempMigrationController(migrationService service.DBMigrationService, responder responder.Responder) OperationsMigrationController {
 	return &operationsMigrationControllerImpl{
 		migrationService: migrationService,
 		responder:        responder,
@@ -31,7 +31,7 @@ func NewTempMigrationController(migrationService service.DBMigrationService, res
 
 type operationsMigrationControllerImpl struct {
 	migrationService service.DBMigrationService
-	responder        *responder.Responder
+	responder        responder.Responder
 }
 
 func (t operationsMigrationControllerImpl) StartOpsMigration(w http.ResponseWriter, r *http.Request) {

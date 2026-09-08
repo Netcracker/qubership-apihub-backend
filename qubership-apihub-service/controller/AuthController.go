@@ -19,7 +19,7 @@ type AuthController interface {
 	GetSystemConfigurationInfo(w http.ResponseWriter, r *http.Request)
 }
 
-func NewAuthController(systemInfoService service.SystemInfoService, idpManager idp.Manager, responder *responder.Responder) AuthController {
+func NewAuthController(systemInfoService service.SystemInfoService, idpManager idp.Manager, responder responder.Responder) AuthController {
 	return &authControllerImpl{
 		idpManager:        idpManager,
 		systemInfoService: systemInfoService,
@@ -30,7 +30,7 @@ func NewAuthController(systemInfoService service.SystemInfoService, idpManager i
 type authControllerImpl struct {
 	idpManager        idp.Manager
 	systemInfoService service.SystemInfoService
-	responder         *responder.Responder
+	responder         responder.Responder
 }
 
 func (a *authControllerImpl) ServeMetadata(w http.ResponseWriter, r *http.Request) {

@@ -18,10 +18,10 @@ type AiChatController struct {
 	chatsSvc      service.AiChatsService
 	aiSvc         service.AiChatTurnService
 	monitoringSvc service.MonitoringService
-	responder     *responder.Responder
+	responder     responder.Responder
 }
 
-func NewAiChatController(chatsSvc service.AiChatsService, aiSvc service.AiChatTurnService, monitoringSvc service.MonitoringService, responder *responder.Responder) *AiChatController {
+func NewAiChatController(chatsSvc service.AiChatsService, aiSvc service.AiChatTurnService, monitoringSvc service.MonitoringService, responder responder.Responder) *AiChatController {
 	return &AiChatController{chatsSvc: chatsSvc, aiSvc: aiSvc, monitoringSvc: monitoringSvc, responder: responder}
 }
 

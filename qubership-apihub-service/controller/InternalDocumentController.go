@@ -18,7 +18,7 @@ type InternalDocumentController interface {
 	GetComparisonInternalDocumentData(w http.ResponseWriter, r *http.Request)
 }
 
-func NewInternalDocumentController(publishedService service.PublishedService, roleService service.RoleService, responder *responder.Responder) InternalDocumentController {
+func NewInternalDocumentController(publishedService service.PublishedService, roleService service.RoleService, responder responder.Responder) InternalDocumentController {
 	return &internalDocumentControllerImpl{
 		publishedService: publishedService,
 		roleService:      roleService,
@@ -29,7 +29,7 @@ func NewInternalDocumentController(publishedService service.PublishedService, ro
 type internalDocumentControllerImpl struct {
 	publishedService service.PublishedService
 	roleService      service.RoleService
-	responder        *responder.Responder
+	responder        responder.Responder
 }
 
 func (c *internalDocumentControllerImpl) GetVersionInternalDocuments(w http.ResponseWriter, r *http.Request) {

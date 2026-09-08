@@ -10,8 +10,8 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 
 	log "github.com/sirupsen/logrus"
@@ -46,7 +46,7 @@ func NewExportController(publishedService service.PublishedService,
 	versionService service.VersionService,
 	monitoringService service.MonitoringService,
 	exportService service.ExportService,
-	packageService service.PackageService, responder *responder.Responder) ExportController {
+	packageService service.PackageService, responder responder.Responder) ExportController {
 	return &exportControllerImpl{
 		publishedService:  publishedService,
 		portalService:     portalService,
@@ -69,7 +69,7 @@ type exportControllerImpl struct {
 	monitoringService service.MonitoringService
 	exportService     service.ExportService
 	packageService    service.PackageService
-	responder         *responder.Responder
+	responder         responder.Responder
 }
 
 func (e exportControllerImpl) ExportOperationGroupAsOpenAPIDocuments_deprecated_2(w http.ResponseWriter, r *http.Request) {

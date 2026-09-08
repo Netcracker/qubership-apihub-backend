@@ -17,11 +17,11 @@ import (
 // Download: resolve file row (404 if missing/expired) before JWT check, then ownership.
 type EphemeralFileController struct {
 	svc         aiservice.EphemeralFileService
-	responder   *responder.Responder
+	responder   responder.Responder
 	authHandler *security.AuthHandler
 }
 
-func NewEphemeralFileController(svc aiservice.EphemeralFileService, responder *responder.Responder, authHandler *security.AuthHandler) *EphemeralFileController {
+func NewEphemeralFileController(svc aiservice.EphemeralFileService, responder responder.Responder, authHandler *security.AuthHandler) *EphemeralFileController {
 	return &EphemeralFileController{svc: svc, responder: responder, authHandler: authHandler}
 }
 

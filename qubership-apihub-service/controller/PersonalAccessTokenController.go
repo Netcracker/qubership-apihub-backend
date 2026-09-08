@@ -21,7 +21,7 @@ type PersonalAccessTokenController interface {
 	GetPatByPat(w http.ResponseWriter, r *http.Request)
 }
 
-func NewPersonalAccessTokenController(svc service.PersonalAccessTokenService, responder *responder.Responder) PersonalAccessTokenController {
+func NewPersonalAccessTokenController(svc service.PersonalAccessTokenService, responder responder.Responder) PersonalAccessTokenController {
 	return &PersonalAccessTokenControllerImpl{
 		svc:       svc,
 		responder: responder,
@@ -30,7 +30,7 @@ func NewPersonalAccessTokenController(svc service.PersonalAccessTokenService, re
 
 type PersonalAccessTokenControllerImpl struct {
 	svc       service.PersonalAccessTokenService
-	responder *responder.Responder
+	responder responder.Responder
 }
 
 func (u PersonalAccessTokenControllerImpl) CreatePAT(w http.ResponseWriter, r *http.Request) {

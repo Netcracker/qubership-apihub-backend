@@ -12,12 +12,12 @@ type JwtPubKeyController interface {
 	GetRsaPublicKey(w http.ResponseWriter, r *http.Request)
 }
 
-func NewJwtPubKeyController(responder *responder.Responder, authHandler *security.AuthHandler) JwtPubKeyController {
+func NewJwtPubKeyController(responder responder.Responder, authHandler *security.AuthHandler) JwtPubKeyController {
 	return &jwtPubKeyControllerImpl{responder: responder, authHandler: authHandler}
 }
 
 type jwtPubKeyControllerImpl struct {
-	responder   *responder.Responder
+	responder   responder.Responder
 	authHandler *security.AuthHandler
 }
 

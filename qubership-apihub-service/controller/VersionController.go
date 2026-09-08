@@ -48,7 +48,7 @@ type VersionController interface {
 }
 
 func NewVersionController(versionService service.VersionService, roleService service.RoleService, monitoringService service.MonitoringService,
-	ptHandler service.PackageTransitionHandler, excelService service.ExcelService, shareabilityReportSizeLimit int64, responder *responder.Responder) VersionController {
+	ptHandler service.PackageTransitionHandler, excelService service.ExcelService, shareabilityReportSizeLimit int64, responder responder.Responder) VersionController {
 	return &versionControllerImpl{
 		versionService:              versionService,
 		roleService:                 roleService,
@@ -67,7 +67,7 @@ type versionControllerImpl struct {
 	ptHandler                   service.PackageTransitionHandler
 	excelService                service.ExcelService
 	shareabilityReportSizeLimit int64
-	responder                   *responder.Responder
+	responder                   responder.Responder
 }
 
 func (v versionControllerImpl) SharePublishedFile(w http.ResponseWriter, r *http.Request) {

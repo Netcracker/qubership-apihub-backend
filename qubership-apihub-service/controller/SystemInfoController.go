@@ -12,14 +12,14 @@ type SystemInfoController interface {
 	GetSystemInfo(w http.ResponseWriter, r *http.Request)
 }
 
-func NewSystemInfoController(service service.SystemInfoService, migrationService mservice.DBMigrationService, responder *responder.Responder) SystemInfoController {
+func NewSystemInfoController(service service.SystemInfoService, migrationService mservice.DBMigrationService, responder responder.Responder) SystemInfoController {
 	return &systemInfoControllerImpl{service: service, migrationService: migrationService, responder: responder}
 }
 
 type systemInfoControllerImpl struct {
 	service          service.SystemInfoService
 	migrationService mservice.DBMigrationService
-	responder        *responder.Responder
+	responder        responder.Responder
 }
 
 func (g systemInfoControllerImpl) GetSystemInfo(w http.ResponseWriter, r *http.Request) {

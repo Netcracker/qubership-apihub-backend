@@ -23,7 +23,7 @@ type ProxyController interface {
 	Proxy(w http.ResponseWriter, req *http.Request)
 }
 
-func NewPlaygroundProxyController(systemInfoService service.SystemInfoService, responder *responder.Responder) (ProxyController, error) {
+func NewPlaygroundProxyController(systemInfoService service.SystemInfoService, responder responder.Responder) (ProxyController, error) {
 	tlsConfig, err := utils.BuildSecureTLSConfig(nil)
 	if err != nil {
 		return nil, err
@@ -42,7 +42,7 @@ func NewPlaygroundProxyController(systemInfoService service.SystemInfoService, r
 type playgroundProxyControllerImpl struct {
 	tr                http.Transport
 	systemInfoService service.SystemInfoService
-	responder         *responder.Responder
+	responder         responder.Responder
 }
 
 const CustomProxyUrlHeader = "X-Apihub-Proxy-Url"

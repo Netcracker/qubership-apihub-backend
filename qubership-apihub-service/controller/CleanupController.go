@@ -12,7 +12,7 @@ type CleanupController interface {
 	ClearTestData(w http.ResponseWriter, r *http.Request)
 }
 
-func NewCleanupController(cleanupService cleanup.CleanupService, responder *responder.Responder) CleanupController {
+func NewCleanupController(cleanupService cleanup.CleanupService, responder responder.Responder) CleanupController {
 	return &cleanupControllerImpl{
 		cleanupService: cleanupService,
 		responder:      responder,
@@ -21,7 +21,7 @@ func NewCleanupController(cleanupService cleanup.CleanupService, responder *resp
 
 type cleanupControllerImpl struct {
 	cleanupService cleanup.CleanupService
-	responder      *responder.Responder
+	responder      responder.Responder
 }
 
 func (c cleanupControllerImpl) ClearTestData(w http.ResponseWriter, r *http.Request) {

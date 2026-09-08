@@ -24,7 +24,7 @@ type SearchController interface {
 	Search(w http.ResponseWriter, r *http.Request)
 }
 
-func NewSearchController(operationService service.OperationService, versionService service.VersionService, monitoringService service.MonitoringService, ddlContractService service.DDLContractService, mcpContractService service.MCPContractService, responder *responder.Responder) SearchController {
+func NewSearchController(operationService service.OperationService, versionService service.VersionService, monitoringService service.MonitoringService, ddlContractService service.DDLContractService, mcpContractService service.MCPContractService, responder responder.Responder) SearchController {
 	return &searchControllerImpl{
 		operationService:   operationService,
 		versionService:     versionService,
@@ -41,7 +41,7 @@ type searchControllerImpl struct {
 	monitoringService  service.MonitoringService
 	ddlContractService service.DDLContractService
 	mcpContractService service.MCPContractService
-	responder          *responder.Responder
+	responder          responder.Responder
 }
 
 func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {

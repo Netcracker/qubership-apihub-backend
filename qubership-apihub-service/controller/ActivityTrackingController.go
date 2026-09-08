@@ -18,7 +18,7 @@ type ActivityTrackingController interface {
 	GetActivityHistoryForPackage(w http.ResponseWriter, r *http.Request)
 }
 
-func NewActivityTrackingController(activityTrackingService service.ActivityTrackingService, roleService service.RoleService, ptHandler service.PackageTransitionHandler, responder *responder.Responder) ActivityTrackingController {
+func NewActivityTrackingController(activityTrackingService service.ActivityTrackingService, roleService service.RoleService, ptHandler service.PackageTransitionHandler, responder responder.Responder) ActivityTrackingController {
 	return &activityTrackingControllerImpl{activityTrackingService: activityTrackingService, roleService: roleService, ptHandler: ptHandler, responder: responder}
 }
 
@@ -26,7 +26,7 @@ type activityTrackingControllerImpl struct {
 	activityTrackingService service.ActivityTrackingService
 	roleService             service.RoleService
 	ptHandler               service.PackageTransitionHandler
-	responder               *responder.Responder
+	responder               responder.Responder
 }
 
 func (a activityTrackingControllerImpl) GetActivityHistory(w http.ResponseWriter, r *http.Request) {

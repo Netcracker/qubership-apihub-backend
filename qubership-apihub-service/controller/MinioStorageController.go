@@ -3,9 +3,9 @@ package controller
 import (
 	"net/http"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 )
@@ -14,7 +14,7 @@ type MinioStorageController interface {
 	DownloadFilesFromMinioToDatabase(w http.ResponseWriter, r *http.Request)
 }
 
-func NewMinioStorageController(minioCreds *view.MinioStorageCreds, minioStorageService service.MinioStorageService, responder *responder.Responder) MinioStorageController {
+func NewMinioStorageController(minioCreds *view.MinioStorageCreds, minioStorageService service.MinioStorageService, responder responder.Responder) MinioStorageController {
 	return &minioStorageControllerImpl{
 		minioStorageService: minioStorageService,
 		minioCreds:          minioCreds,
@@ -25,7 +25,7 @@ func NewMinioStorageController(minioCreds *view.MinioStorageCreds, minioStorageS
 type minioStorageControllerImpl struct {
 	minioStorageService service.MinioStorageService
 	minioCreds          *view.MinioStorageCreds
-	responder           *responder.Responder
+	responder           responder.Responder
 }
 
 func (m minioStorageControllerImpl) DownloadFilesFromMinioToDatabase(w http.ResponseWriter, r *http.Request) {

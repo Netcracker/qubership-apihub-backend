@@ -16,7 +16,7 @@ type AdminPublishedController interface {
 	ReplaceVersionSources(w http.ResponseWriter, r *http.Request)
 }
 
-func NewAdminPublishedController(publishedService service.PublishedService, publishArchiveSizeLimit int64, responder *responder.Responder) AdminPublishedController {
+func NewAdminPublishedController(publishedService service.PublishedService, publishArchiveSizeLimit int64, responder responder.Responder) AdminPublishedController {
 	return &adminPublishedControllerImpl{
 		publishedService:        publishedService,
 		publishArchiveSizeLimit: publishArchiveSizeLimit,
@@ -27,7 +27,7 @@ func NewAdminPublishedController(publishedService service.PublishedService, publ
 type adminPublishedControllerImpl struct {
 	publishedService        service.PublishedService
 	publishArchiveSizeLimit int64
-	responder               *responder.Responder
+	responder               responder.Responder
 }
 
 func (c adminPublishedControllerImpl) ReplaceVersionSources(w http.ResponseWriter, r *http.Request) {

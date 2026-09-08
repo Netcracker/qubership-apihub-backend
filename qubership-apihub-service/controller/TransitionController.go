@@ -21,16 +21,16 @@ type TransitionController interface {
 	ListPackageTransitions(w http.ResponseWriter, r *http.Request)
 }
 
-func NewTransitionController(tService service.TransitionService, responder *responder.Responder) TransitionController {
+func NewTransitionController(tService service.TransitionService, responder responder.Responder) TransitionController {
 	return &transitionControllerImpl{
-		tService:     tService,
-		responder:    responder,
+		tService:  tService,
+		responder: responder,
 	}
 }
 
 type transitionControllerImpl struct {
-	tService     service.TransitionService
-	responder    *responder.Responder
+	tService  service.TransitionService
+	responder responder.Responder
 }
 
 func (t transitionControllerImpl) MoveOrRenamePackage(w http.ResponseWriter, r *http.Request) {

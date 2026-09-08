@@ -25,7 +25,7 @@ type SamlAuthController interface {
 	GetSystemSSOInfo_deprecated(w http.ResponseWriter, r *http.Request)
 }
 
-func NewSamlAuthController(userService service.UserService, systemInfoService service.SystemInfoService, idpManager idp.Manager, responder *responder.Responder, authHandler *security.AuthHandler) SamlAuthController {
+func NewSamlAuthController(userService service.UserService, systemInfoService service.SystemInfoService, idpManager idp.Manager, responder responder.Responder, authHandler *security.AuthHandler) SamlAuthController {
 	var samlInstance *samlsp.Middleware
 	for _, provider := range idpManager.GetAuthConfig().Providers {
 		if provider.IdpType == idp.IDPTypeExternal && provider.Protocol == idp.AuthProtocolSAML {
@@ -49,7 +49,7 @@ type authenticationControllerImpl struct {
 	userService       service.UserService
 	systemInfoService service.SystemInfoService
 	apihubHost        string
-	responder         *responder.Responder
+	responder         responder.Responder
 	authHandler       *security.AuthHandler
 }
 

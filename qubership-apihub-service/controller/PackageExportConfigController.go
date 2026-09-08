@@ -21,7 +21,7 @@ type PackageExportConfigController interface {
 
 func NewPackageExportConfigController(roleService service.RoleService,
 	expConfSvc service.PackageExportConfigService,
-	ptHandler service.PackageTransitionHandler, responder *responder.Responder) PackageExportConfigController {
+	ptHandler service.PackageTransitionHandler, responder responder.Responder) PackageExportConfigController {
 	return packageExportConfigControllerImpl{roleService: roleService, expConfSvc: expConfSvc, ptHandler: ptHandler, responder: responder}
 }
 
@@ -29,7 +29,7 @@ type packageExportConfigControllerImpl struct {
 	roleService service.RoleService
 	expConfSvc  service.PackageExportConfigService
 	ptHandler   service.PackageTransitionHandler
-	responder   *responder.Responder
+	responder   responder.Responder
 }
 
 func (p packageExportConfigControllerImpl) GetConfig(w http.ResponseWriter, r *http.Request) {

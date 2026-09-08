@@ -6,8 +6,8 @@ import (
 	"net/http"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -21,7 +21,7 @@ type ApihubApiKeyController interface {
 	GetApiKeyById(w http.ResponseWriter, r *http.Request)
 }
 
-func NewApihubApiKeyController(apihubApiKeyService service.ApihubApiKeyService, roleService service.RoleService, responder *responder.Responder) ApihubApiKeyController {
+func NewApihubApiKeyController(apihubApiKeyService service.ApihubApiKeyService, roleService service.RoleService, responder responder.Responder) ApihubApiKeyController {
 	return &ApihubApiKeyControllerImpl{
 		apihubApiKeyService: apihubApiKeyService,
 		roleService:         roleService,
@@ -32,7 +32,7 @@ func NewApihubApiKeyController(apihubApiKeyService service.ApihubApiKeyService, 
 type ApihubApiKeyControllerImpl struct {
 	apihubApiKeyService service.ApihubApiKeyService
 	roleService         service.RoleService
-	responder           *responder.Responder
+	responder           responder.Responder
 }
 
 func (a ApihubApiKeyControllerImpl) CreateApiKey(w http.ResponseWriter, r *http.Request) {
@@ -52,7 +52,7 @@ func (a ApihubApiKeyControllerImpl) CreateApiKey(w http.ResponseWriter, r *http.
 	} else {
 		sufficientPrivileges, err := a.roleService.HasRequiredPermissions(ctx, packageId, view.AccessTokenManagementPermission)
 		if err != nil {
-			a.responder.RespondWithError(w,r, "Failed to check user privileges", err)
+			a.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 			return
 		}
 		if !sufficientPrivileges {
@@ -122,7 +122,7 @@ func (a ApihubApiKeyControllerImpl) RevokeApiKey(w http.ResponseWriter, r *http.
 	} else {
 		sufficientPrivileges, err := a.roleService.HasRequiredPermissions(ctx, packageId, view.AccessTokenManagementPermission)
 		if err != nil {
-			a.responder.RespondWithError(w,r, "Failed to check user privileges", err)
+			a.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 			return
 		}
 		if !sufficientPrivileges {
@@ -159,7 +159,7 @@ func (a ApihubApiKeyControllerImpl) GetApiKeys(w http.ResponseWriter, r *http.Re
 	} else {
 		sufficientPrivileges, err := a.roleService.HasRequiredPermissions(ctx, packageId, view.AccessTokenManagementPermission)
 		if err != nil {
-			a.responder.RespondWithError(w,r,  "Failed to check user privileges", err)
+			a.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 			return
 		}
 		if !sufficientPrivileges {
@@ -174,7 +174,7 @@ func (a ApihubApiKeyControllerImpl) GetApiKeys(w http.ResponseWriter, r *http.Re
 	}
 	apiKeys, err := a.apihubApiKeyService.GetProjectApiKeys(ctx, packageId)
 	if err != nil {
-		a.responder.RespondWithError(w,r, "Failed to get all apihub api keys", err)
+		a.responder.RespondWithError(w, r, "Failed to get all apihub api keys", err)
 		return
 	}
 	a.responder.RespondWithJson(w, http.StatusOK, apiKeys)
@@ -193,7 +193,7 @@ func (a ApihubApiKeyControllerImpl) GetApiKeyByKey(w http.ResponseWriter, r *htt
 	}
 	apiKey, err := a.apihubApiKeyService.GetApiKeyByKey(ctx, apiKeyHeader)
 	if err != nil {
-		a.responder.RespondWithError(w,r, "Failed to get apihub api key", err)
+		a.responder.RespondWithError(w, r, "Failed to get apihub api key", err)
 		return
 	}
 	if apiKey == nil {
@@ -213,7 +213,7 @@ func (a ApihubApiKeyControllerImpl) GetApiKeyById(w http.ResponseWriter, r *http
 
 	apiKey, err := a.apihubApiKeyService.GetApiKeyById(ctx, apiKeyId)
 	if err != nil {
-		a.responder.RespondWithError(w,r, "Failed to get apihub api key by id", err)
+		a.responder.RespondWithError(w, r, "Failed to get apihub api key by id", err)
 		return
 	}
 	if apiKey == nil {

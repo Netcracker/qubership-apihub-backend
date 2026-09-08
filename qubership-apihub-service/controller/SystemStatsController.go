@@ -13,7 +13,7 @@ type SystemStatsController interface {
 	GetSystemStats(w http.ResponseWriter, r *http.Request)
 }
 
-func NewSystemStatsController(statsService service.SystemStatsService, responder *responder.Responder) SystemStatsController {
+func NewSystemStatsController(statsService service.SystemStatsService, responder responder.Responder) SystemStatsController {
 	return &systemStatsControllerImpl{
 		statsService: statsService,
 		responder:    responder,
@@ -22,7 +22,7 @@ func NewSystemStatsController(statsService service.SystemStatsService, responder
 
 type systemStatsControllerImpl struct {
 	statsService service.SystemStatsService
-	responder    *responder.Responder
+	responder    responder.Responder
 }
 
 func (s systemStatsControllerImpl) GetSystemStats(w http.ResponseWriter, r *http.Request) {

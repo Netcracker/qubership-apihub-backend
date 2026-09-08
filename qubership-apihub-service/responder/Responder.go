@@ -15,11 +15,11 @@ type Responder struct {
 	includeDebug bool
 }
 
-func NewResponder(includeDebug bool) *Responder {
-	return &Responder{includeDebug: includeDebug}
+func NewResponder(includeDebug bool) Responder {
+	return Responder{includeDebug: includeDebug}
 }
 
-func (resp *Responder) RedirectHandler(apihubURLStr string) http.HandlerFunc {
+func (resp Responder) RedirectHandler(apihubURLStr string) http.HandlerFunc {
 	apihubURL, _ := url.Parse(apihubURLStr)
 	return func(w http.ResponseWriter, r *http.Request) {
 		redirectURI := r.URL.Query().Get("redirectUri")
@@ -53,16 +53,16 @@ func (resp *Responder) RedirectHandler(apihubURLStr string) http.HandlerFunc {
 }
 
 // IsRequestTimeout reports whether err was caused by the request running out of its own deadline
-func (resp *Responder) IsRequestTimeout(err error) bool {
+func (resp Responder) IsRequestTimeout(err error) bool {
 	return errors.Is(err, context.DeadlineExceeded)
 }
 
-func (resp *Responder) IsContextCancelled(err error) bool {
+func (resp Responder) IsContextCancelled(err error) bool {
 	return errors.Is(err, context.Canceled)
 }
 
 // IsClientDisconnected reports whether the client went away before the request completed
-func (resp *Responder) IsClientDisconnected(r *http.Request) bool {
+func (resp Responder) IsClientDisconnected(r *http.Request) bool {
 	return r != nil && resp.IsContextCancelled(r.Context().Err())
 }
 
@@ -71,7 +71,7 @@ func (resp *Responder) IsClientDisconnected(r *http.Request) bool {
 // with SQLSTATE 57014 or an i/o timeout, so the sentinel is usually missing from the error chain.
 // The error chain is checked second, which covers deadlines owned by an inner context: credential
 // verification and LDAP lookups bound themselves well below the request deadline.
-func (resp *Responder) requestContextError(r *http.Request, err error) error {
+func (resp Responder) requestContextError(r *http.Request, err error) error {
 	if r != nil {
 		if ctxErr := r.Context().Err(); ctxErr != nil {
 			return ctxErr
@@ -86,7 +86,7 @@ func (resp *Responder) requestContextError(r *http.Request, err error) error {
 	return nil
 }
 
-func (resp *Responder) RespondWithError(w http.ResponseWriter, r *http.Request, msg string, err error) {
+func (resp Responder) RespondWithError(w http.ResponseWriter, r *http.Request, msg string, err error) {
 	if ctxErr := resp.requestContextError(r, err); ctxErr != nil {
 		resp.RespondWithContextError(w, r, msg, ctxErr, err)
 		return
@@ -107,7 +107,7 @@ func (resp *Responder) RespondWithError(w http.ResponseWriter, r *http.Request, 
 
 // RespondWithContextError reports a request that ended because its context was done: ctxErr tells a
 // timeout from a cancellation, cause is the failure the call chain actually returned.
-func (resp *Responder) RespondWithContextError(w http.ResponseWriter, r *http.Request, msg string, ctxErr error, cause error) {
+func (resp Responder) RespondWithContextError(w http.ResponseWriter, r *http.Request, msg string, ctxErr error, cause error) {
 	// Nobody is left to read a response
 	if resp.IsClientDisconnected(r) {
 		log.Debugf("%s: client closed the request before it completed: %s", msg, cause.Error())
@@ -137,7 +137,7 @@ func logCustomError(msg string, customError *exception.CustomError, err error) {
 	log.Errorf("%s: %s", msg, err.Error())
 }
 
-func (resp *Responder) RespondWithCustomError(w http.ResponseWriter, err *exception.CustomError) {
+func (resp Responder) RespondWithCustomError(w http.ResponseWriter, err *exception.CustomError) {
 	log.Debugf("Request failed. Code = %d. Message = %s. Params: %v. Debug: %s", err.Status, err.Message, err.Params, err.Debug)
 	if !resp.includeDebug && err.Debug != "" {
 		errWithoutDebug := *err
@@ -148,7 +148,7 @@ func (resp *Responder) RespondWithCustomError(w http.ResponseWriter, err *except
 	resp.RespondWithJson(w, err.Status, err)
 }
 
-func (resp *Responder) RespondWithJson(w http.ResponseWriter, code int, payload interface{}) {
+func (resp Responder) RespondWithJson(w http.ResponseWriter, code int, payload interface{}) {
 	response, _ := json.Marshal(payload)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)

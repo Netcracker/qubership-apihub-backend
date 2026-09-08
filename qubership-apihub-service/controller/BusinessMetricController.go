@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 
@@ -18,7 +18,7 @@ type BusinessMetricController interface {
 	GetBusinessMetrics(w http.ResponseWriter, r *http.Request)
 }
 
-func NewBusinessMetricController(businessMetricService service.BusinessMetricService, excelService service.ExcelService,  responder *responder.Responder) BusinessMetricController {
+func NewBusinessMetricController(businessMetricService service.BusinessMetricService, excelService service.ExcelService, responder responder.Responder) BusinessMetricController {
 	return businessMetricControllerImpl{
 		businessMetricService: businessMetricService,
 		excelService:          excelService,
@@ -29,7 +29,7 @@ func NewBusinessMetricController(businessMetricService service.BusinessMetricSer
 type businessMetricControllerImpl struct {
 	businessMetricService service.BusinessMetricService
 	excelService          service.ExcelService
-	responder             *responder.Responder
+	responder             responder.Responder
 }
 
 func (b businessMetricControllerImpl) GetBusinessMetrics(w http.ResponseWriter, r *http.Request) {
@@ -66,7 +66,7 @@ func (b businessMetricControllerImpl) GetBusinessMetrics(w http.ResponseWriter, 
 	}
 	businessMetrics, err := b.businessMetricService.GetBusinessMetrics(ctx, parentPackageId, hierarchyLevel)
 	if err != nil {
-		b.responder.RespondWithError(w,r, "Failed to get business metrics", err)
+		b.responder.RespondWithError(w, r, "Failed to get business metrics", err)
 		return
 	}
 	switch format {
@@ -76,7 +76,7 @@ func (b businessMetricControllerImpl) GetBusinessMetrics(w http.ResponseWriter, 
 	case view.ExportFormatXlsx:
 		report, filename, err := b.excelService.ExportBusinessMetrics(businessMetrics)
 		if err != nil {
-			b.responder.RespondWithError(w,r, "Failed to export business metrics as xlsx", err)
+			b.responder.RespondWithError(w, r, "Failed to export business metrics as xlsx", err)
 			return
 		}
 		w.Header().Set("Content-Type", "application/octet-stream")

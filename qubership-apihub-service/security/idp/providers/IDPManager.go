@@ -25,7 +25,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-func NewIDPManager(authConfig idp.AuthConfig, allowedHosts []string, productionMode bool, userService service.UserService, responder *responder.Responder, authHandler *security.AuthHandler) (idp.Manager, error) {
+func NewIDPManager(authConfig idp.AuthConfig, allowedHosts []string, productionMode bool, userService service.UserService, responder responder.Responder, authHandler *security.AuthHandler) (idp.Manager, error) {
 	idpManager := idpManagerImpl{
 		config:    authConfig,
 		providers: make(map[string]idp.Provider),
@@ -74,7 +74,7 @@ func (i *idpManagerImpl) IsSSOIntegrationEnabled() bool {
 	return len(i.config.Providers) > 0
 }
 
-func (i *idpManagerImpl) createSAMLProvider(idpConfig idp.IDP, userService service.UserService, responder *responder.Responder, authHandler *security.AuthHandler) (idp.Provider, error) {
+func (i *idpManagerImpl) createSAMLProvider(idpConfig idp.IDP, userService service.UserService, responder responder.Responder, authHandler *security.AuthHandler) (idp.Provider, error) {
 	samlInstance, err := CreateSAMLInstance(idpConfig.Id, idpConfig.SAMLConfiguration)
 	if err != nil {
 		return nil, err
@@ -83,7 +83,7 @@ func (i *idpManagerImpl) createSAMLProvider(idpConfig idp.IDP, userService servi
 	return newSAMLProvider(samlInstance, idpConfig, userService, rootURL.Hostname(), responder, authHandler), nil
 }
 
-func (i *idpManagerImpl) createOIDCProvider(idpConfig idp.IDP, userService service.UserService, allowedHosts []string, productionMode bool, responder *responder.Responder, authHandler *security.AuthHandler) (idp.Provider, error) {
+func (i *idpManagerImpl) createOIDCProvider(idpConfig idp.IDP, userService service.UserService, allowedHosts []string, productionMode bool, responder responder.Responder, authHandler *security.AuthHandler) (idp.Provider, error) {
 	if idpConfig.OIDCConfiguration == nil {
 		log.Error("OIDC configuration is invalid")
 		return nil, fmt.Errorf("OIDC configuration is invalid")

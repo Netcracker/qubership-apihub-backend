@@ -33,11 +33,11 @@ type samlProvider struct {
 	config       idp.IDP
 	userService  service.UserService
 	apihubHost   string
-	responder    *responder.Responder
+	responder    responder.Responder
 	authHandler  *security.AuthHandler
 }
 
-func newSAMLProvider(samlInstance *samlsp.Middleware, config idp.IDP, userService service.UserService, apihubHost string, responder *responder.Responder, authHandler *security.AuthHandler) idp.Provider {
+func newSAMLProvider(samlInstance *samlsp.Middleware, config idp.IDP, userService service.UserService, apihubHost string, responder responder.Responder, authHandler *security.AuthHandler) idp.Provider {
 	return &samlProvider{
 		samlInstance: samlInstance,
 		config:       config,
@@ -60,7 +60,7 @@ func (s samlProvider) ServeMetadata(w http.ResponseWriter, r *http.Request) {
 	ServeMetadata(w, r, s.responder, s.samlInstance)
 }
 
-func StartSAMLAuthentication(w http.ResponseWriter, r *http.Request, responder *responder.Responder, samlInstance *samlsp.Middleware, apihubHost string) {
+func StartSAMLAuthentication(w http.ResponseWriter, r *http.Request, responder responder.Responder, samlInstance *samlsp.Middleware, apihubHost string) {
 	if samlInstance == nil {
 		log.Errorf("Cannot StartSamlAuthentication with nil samlInstance")
 		responder.RespondWithCustomError(w, &exception.CustomError{
@@ -107,7 +107,7 @@ func StartSAMLAuthentication(w http.ResponseWriter, r *http.Request, responder *
 	samlInstance.HandleStartAuthFlow(w, r)
 }
 
-func HandleAssertion(ctx context.Context, w http.ResponseWriter, r *http.Request, responder *responder.Responder, userService service.UserService, samlInstance *samlsp.Middleware, providerId string, apihubHost string, setAuthCookie func(ctx context.Context, w http.ResponseWriter, user *view.User, refreshTokenPath string) error) {
+func HandleAssertion(ctx context.Context, w http.ResponseWriter, r *http.Request, responder responder.Responder, userService service.UserService, samlInstance *samlsp.Middleware, providerId string, apihubHost string, setAuthCookie func(ctx context.Context, w http.ResponseWriter, user *view.User, refreshTokenPath string) error) {
 	if samlInstance == nil {
 		log.Errorf("Cannot run AssertionConsumerHandler with nill samlInstanse")
 		responder.RespondWithCustomError(w, &exception.CustomError{
@@ -303,7 +303,7 @@ func getOrCreateUser(ctx context.Context, userService service.UserService, asser
 	return user, nil
 }
 
-func ServeMetadata(w http.ResponseWriter, r *http.Request, responder *responder.Responder, samlInstance *samlsp.Middleware) {
+func ServeMetadata(w http.ResponseWriter, r *http.Request, responder responder.Responder, samlInstance *samlsp.Middleware) {
 	if samlInstance == nil {
 		log.Errorf("Cannot serveMetadata with nil samlInstanse")
 		responder.RespondWithCustomError(w, &exception.CustomError{

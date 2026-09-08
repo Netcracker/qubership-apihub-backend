@@ -32,7 +32,7 @@ type OperationGroupController interface {
 	GetOperationGroupPublishStatus(w http.ResponseWriter, r *http.Request)
 }
 
-func NewOperationGroupController(roleService service.RoleService, operationGroupService service.OperationGroupService, versionService service.VersionService, systemInfoService service.SystemInfoService, packageService service.PackageService, responder *responder.Responder) OperationGroupController {
+func NewOperationGroupController(roleService service.RoleService, operationGroupService service.OperationGroupService, versionService service.VersionService, systemInfoService service.SystemInfoService, packageService service.PackageService, responder responder.Responder) OperationGroupController {
 	return &operationGroupControllerImpl{
 		roleService:           roleService,
 		operationGroupService: operationGroupService,
@@ -49,7 +49,7 @@ type operationGroupControllerImpl struct {
 	versionService        service.VersionService
 	packageService        service.PackageService
 	templateSizeLimit     int64
-	responder             *responder.Responder
+	responder             responder.Responder
 }
 
 func (o operationGroupControllerImpl) GetGroupedOperations(w http.ResponseWriter, r *http.Request) {
@@ -460,7 +460,7 @@ func (o operationGroupControllerImpl) CreateOperationGroup(w http.ResponseWriter
 
 	err = o.operationGroupService.CreateOperationGroup(ctx, packageId, versionName, apiType, createOperationGroupReq)
 	if err != nil {
-		o.responder.RespondWithError(w,r, "Failed to create operation group", err)
+		o.responder.RespondWithError(w, r, "Failed to create operation group", err)
 		return
 	}
 	w.WriteHeader(http.StatusCreated)

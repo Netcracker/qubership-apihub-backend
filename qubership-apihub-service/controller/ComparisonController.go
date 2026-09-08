@@ -9,8 +9,8 @@ import (
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/metrics"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -27,7 +27,7 @@ func NewComparisonController(operationService service.OperationService,
 	roleService service.RoleService,
 	comparisonService service.ComparisonService,
 	monitoringService service.MonitoringService,
-	ptHandler service.PackageTransitionHandler, responder *responder.Responder) ComparisonController {
+	ptHandler service.PackageTransitionHandler, responder responder.Responder) ComparisonController {
 	return &comparisonControllerImpl{
 		operationService:  operationService,
 		versionService:    versionService,
@@ -48,7 +48,7 @@ type comparisonControllerImpl struct {
 	comparisonService service.ComparisonService
 	monitoringService service.MonitoringService
 	ptHandler         service.PackageTransitionHandler
-	responder         *responder.Responder
+	responder         responder.Responder
 }
 
 func (c comparisonControllerImpl) CompareTwoVersions(w http.ResponseWriter, r *http.Request) {
@@ -127,7 +127,7 @@ func (c comparisonControllerImpl) CompareTwoVersions(w http.ResponseWriter, r *h
 
 	sufficientPrivileges, err := c.roleService.HasRequiredPermissions(ctx, compareVersionsReq.PackageId, view.ReadPermission)
 	if err != nil {
-		c.responder.RespondWithError(w,r, "Failed to check user privileges", err)
+		c.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
@@ -141,12 +141,12 @@ func (c comparisonControllerImpl) CompareTwoVersions(w http.ResponseWriter, r *h
 
 	revision, err := c.versionService.GetLatestRevision(ctx, compareVersionsReq.PackageId, compareVersionsReq.Version)
 	if err != nil {
-		c.responder.RespondWithError(w,r, "Failed to get version", err)
+		c.responder.RespondWithError(w, r, "Failed to get version", err)
 		return
 	}
 	prevVersionRevision, err := c.versionService.GetLatestRevision(ctx, compareVersionsReq.PreviousVersionPackageId, compareVersionsReq.PreviousVersion)
 	if err != nil {
-		c.responder.RespondWithError(w,r, "Failed to get previous version", err)
+		c.responder.RespondWithError(w, r, "Failed to get previous version", err)
 		return
 	}
 

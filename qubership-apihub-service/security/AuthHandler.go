@@ -19,7 +19,7 @@ import (
 )
 
 type AuthHandler struct {
-	responder            *responder.Responder
+	responder            responder.Responder
 	userService          service.UserService
 	roleService          service.RoleService
 	accessTokenDuration  time.Duration
@@ -36,7 +36,7 @@ type AuthHandler struct {
 	keeper               jwt.SecretsKeeper
 }
 
-func NewAuthHandler(userService service.UserService, roleService service.RoleService, apiKeyService service.ApihubApiKeyService, patService service.PersonalAccessTokenService, systemInfoService service.SystemInfoService, tokenRevocationService service.TokenRevocationService, responder *responder.Responder) (*AuthHandler, error) {
+func NewAuthHandler(userService service.UserService, roleService service.RoleService, apiKeyService service.ApihubApiKeyService, patService service.PersonalAccessTokenService, systemInfoService service.SystemInfoService, tokenRevocationService service.TokenRevocationService, responder responder.Responder) (*AuthHandler, error) {
 	apihubApiKeyStrategy := NewApihubApiKeyStrategy(apiKeyService)
 	personalAccessTokenStrategy := NewApihubPATStrategy(patService)
 	accessTokenDuration := time.Second * time.Duration(systemInfoService.GetAccessTokenDurationSec())

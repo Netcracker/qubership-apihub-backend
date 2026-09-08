@@ -6,8 +6,8 @@ import (
 	"net/http"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -30,7 +30,7 @@ type RoleController interface {
 	TestSetUserSystemRole(w http.ResponseWriter, r *http.Request)
 }
 
-func NewRoleController(roleService service.RoleService, responder *responder.Responder) RoleController {
+func NewRoleController(roleService service.RoleService, responder responder.Responder) RoleController {
 	return &roleControllerImpl{
 		roleService: roleService,
 		responder:   responder,
@@ -39,7 +39,7 @@ func NewRoleController(roleService service.RoleService, responder *responder.Res
 
 type roleControllerImpl struct {
 	roleService service.RoleService
-	responder   *responder.Responder
+	responder   responder.Responder
 }
 
 func (c roleControllerImpl) GetPackageMembers(w http.ResponseWriter, r *http.Request) {

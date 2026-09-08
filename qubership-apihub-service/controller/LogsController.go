@@ -21,7 +21,7 @@ type LogsController interface {
 	CheckLogLevel(w http.ResponseWriter, r *http.Request)
 }
 
-func NewLogsController(logsService service.LogsService, responder *responder.Responder) LogsController {
+func NewLogsController(logsService service.LogsService, responder responder.Responder) LogsController {
 	return &logsControllerImpl{
 		logsService: logsService,
 		responder:   responder,
@@ -30,7 +30,7 @@ func NewLogsController(logsService service.LogsService, responder *responder.Res
 
 type logsControllerImpl struct {
 	logsService service.LogsService
-	responder   *responder.Responder
+	responder   responder.Responder
 }
 
 func (l logsControllerImpl) StoreLogs(w http.ResponseWriter, r *http.Request) {
