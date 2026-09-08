@@ -45,6 +45,15 @@ func validateMCPGroup(group, workspace string) error {
 	return nil
 }
 
+func validateMCPGroups(groups []string, workspace string) error {
+	for _, group := range groups {
+		if err := validateMCPGroup(group, workspace); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (m mcpService) ExecuteLegacyRestSearchTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	mcpWorkspace := m.systemInfoService.GetAiMCPConfig().Workspace
 	group := req.GetString("group", mcpWorkspace)
@@ -58,7 +67,9 @@ func (m mcpService) ExecuteLegacyRestSearchTool(ctx context.Context, req mcp.Cal
 		mcpLegacyMetricKey(ctx, group),
 	)
 	log.Infof("%s: delegating to %s with apiType=rest", LegacyToolNameSearchRestOperations, ToolNameSearchOperations)
-	return m.ExecuteSearchTool(ctx, withInjectedMCPArg(req, "apiType", string(view.RestApiType)))
+	req = withInjectedMCPArg(req, "apiType", string(view.RestApiType))
+	req = withInjectedMCPArg(req, "groups", []string{group})
+	return m.ExecuteSearchTool(ctx, req)
 }
 
 func (m mcpService) ExecuteLegacyRestGetSpecTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -164,26 +175,24 @@ func (m mcpService) ExecuteSearchTool(ctx context.Context, req mcp.CallToolReque
 
 	limit := req.GetInt("limit", 100)
 	page := req.GetInt("page", 0)
-	group := req.GetString("group", mcpWorkspace)
+	groups := req.GetStringSlice("groups", nil)
+	if len(groups) == 0 && mcpWorkspace != "" {
+		groups = []string{mcpWorkspace}
+	}
 	releaseVersion := req.GetString("release", CalculateNearestCompletedReleaseVersion())
-	if err := validateMCPGroup(group, mcpWorkspace); err != nil {
+	if err := validateMCPGroups(groups, mcpWorkspace); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	log.Infof("search_api_operations: apiType=%s, query=%s, limit=%d, page=%d, group=%s, releaseVersion=%s", apiType, q, limit, page, group, releaseVersion)
+	log.Infof("search_api_operations: apiType=%s, query=%s, limit=%d, page=%d, groups=%v, releaseVersion=%s", apiType, q, limit, page, groups, releaseVersion)
 
 	userID := secctx.GetUserId(ctx)
-	m.monitoringService.IncreaseBusinessMetricCounter(userID, metrics.MCPSearchToolCalled, mcpMetricKey(ctx, apiType, group))
-
-	var packageIds []string
-	if group != "" {
-		packageIds = []string{group}
-	}
+	m.monitoringService.IncreaseBusinessMetricCounter(userID, metrics.MCPSearchToolCalled, mcpMetricKey(ctx, apiType, strings.Join(groups, ",")))
 
 	searchReq := view.SearchQueryReq{
 		SearchString: q,
 		ApiType:      apiType,
-		PackageIds:   packageIds,
+		PackageIds:   groups,
 		Workspace:    mcpWorkspace,
 		Versions:     []string{releaseVersion},
 		Status:       "release",
