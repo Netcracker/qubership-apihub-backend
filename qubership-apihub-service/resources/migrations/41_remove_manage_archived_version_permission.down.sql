@@ -2,6 +2,15 @@
 --
 -- Restore versions this up-migration soft-deleted. The metadata.archived flag marks those
 -- rows; already-deleted archived versions never received the flag and stay deleted.
+-- Rewrite FTS first, while the flag is still present on published_version.
+UPDATE public.fts_operation_search_text AS fts
+SET status = 'archived'
+FROM public.published_version AS pv
+WHERE fts.package_id = pv.package_id
+  AND fts.version = pv.version
+  AND fts.revision = pv.revision
+  AND pv.metadata @> '{"archived": true}'::jsonb;
+
 UPDATE public.published_version
 SET
     status = 'archived',

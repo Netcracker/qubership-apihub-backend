@@ -7,11 +7,25 @@ SET permissions = array_remove(permissions, 'manage_archived_version')
 WHERE 'manage_archived_version' = ANY(permissions);
 
 -- Live versions that still have status 'archived' would otherwise stay visible after the
--- status is removed from the API. Soft-delete them and stamp metadata.archived so the
--- down-migration can restore them. Versions that are already deleted are left as-is.
+-- status is removed from the API. Soft-delete them, rewrite status to 'draft' so the
+-- retired constant is gone from the column, and stamp metadata.archived so the
+-- down-migration can restore them.
 UPDATE public.published_version
 SET
+    status = 'draft',
     deleted_at = now(),
     metadata = COALESCE(metadata, '{}'::jsonb) || '{"archived": true}'::jsonb
 WHERE status = 'archived'
   AND deleted_at IS NULL;
+
+-- Already-deleted archived rows still carry the retired status. Rewrite it only; do not
+-- stamp metadata.archived, or the down-migration would undelete them.
+UPDATE public.published_version
+SET status = 'draft'
+WHERE status = 'archived';
+
+-- FTS copies published_version.status. Rewrite leftover archived values so the constant
+-- does not remain in search rows.
+UPDATE public.fts_operation_search_text
+SET status = 'draft'
+WHERE status = 'archived';
