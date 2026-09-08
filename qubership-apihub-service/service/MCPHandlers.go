@@ -265,12 +265,11 @@ func (m mcpService) executeSearchCore(ctx context.Context, req mcp.CallToolReque
 		Limit:        limit,
 		Page:         page,
 	}
-	visibility, err := m.roleService.GetWorkspacePackageVisibilityRoots(ctx, workspace)
+	visibleRoots, err := m.roleService.GetWorkspacePackageVisibilityRoots(ctx, workspace)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to resolve package visibility: %s", err.Error())), nil
 	}
-	searchReq.VisiblePackageRoots = visibility.VisibleRoots
-	searchReq.InvisiblePackageRoots = visibility.InvisibleRoots
+	searchReq.VisiblePackageRoots = visibleRoots
 
 	var payload map[string]any
 	switch apiType {
