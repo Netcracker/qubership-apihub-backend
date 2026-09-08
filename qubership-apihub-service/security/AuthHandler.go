@@ -36,7 +36,7 @@ type AuthHandler struct {
 	keeper               jwt.SecretsKeeper
 }
 
-func NewAuthHandler(userService service.UserService, roleService service.RoleService, apiKeyService service.ApihubApiKeyService, patService service.PersonalAccessTokenService, systemInfoService service.SystemInfoService, tokenRevocationService service.TokenRevocationService, responder responder.Responder) (*AuthHandler, error) {
+func NewAuthHandler(userService service.UserService, roleService service.RoleService, apiKeyService service.ApihubApiKeyService, patService service.PersonalAccessTokenService, systemInfoService service.SystemInfoService, tokenRevocationService service.TokenRevocationService, responder responder.Responder) (AuthHandler, error) {
 	apihubApiKeyStrategy := NewApihubApiKeyStrategy(apiKeyService)
 	personalAccessTokenStrategy := NewApihubPATStrategy(patService)
 	accessTokenDuration := time.Second * time.Duration(systemInfoService.GetAccessTokenDurationSec())
@@ -46,15 +46,15 @@ func NewAuthHandler(userService service.UserService, roleService service.RoleSer
 	block, _ := pem.Decode(systemInfoService.GetJwtPrivateKey())
 	pkcs8PrivateKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	if err != nil {
-		return nil, fmt.Errorf("can't parse pkcs1 private key. Error - %s", err.Error())
+		return AuthHandler{}, fmt.Errorf("can't parse pkcs1 private key. Error - %s", err.Error())
 	}
 	privateKey, ok := pkcs8PrivateKey.(*rsa.PrivateKey)
 	if !ok {
-		return nil, fmt.Errorf("can't parse pkcs8 private key to rsa.PrivateKey. Error - %s", err.Error())
+		return AuthHandler{}, fmt.Errorf("can't parse pkcs8 private key to rsa.PrivateKey. Error - %s", err.Error())
 	}
 	keySize := privateKey.N.BitLen()
 	if keySize < 2048 || keySize > 4096 {
-		return nil, fmt.Errorf("RSA key length must be between 2048 and 4096 bits, got %d bits", keySize)
+		return AuthHandler{}, fmt.Errorf("RSA key length must be between 2048 and 4096 bits, got %d bits", keySize)
 	}
 	publicKey := x509.MarshalPKCS1PublicKey(&privateKey.PublicKey)
 
@@ -78,7 +78,7 @@ func NewAuthHandler(userService service.UserService, roleService service.RoleSer
 	customJwtStrategy := NewCustomJWTStrategy(cache, jwtValidator)
 	proxyAuthStrategy := union.New(customJwtStrategy, cookieTokenStrategy)
 	apiKeyStrategy := apihubApiKeyStrategy
-	return &AuthHandler{
+	return AuthHandler{
 		responder:            responder,
 		userService:          userService,
 		roleService:          roleService,
@@ -97,7 +97,7 @@ func NewAuthHandler(userService service.UserService, roleService service.RoleSer
 	}, nil
 }
 
-func (a *AuthHandler) respondWithAuthFailedError(w http.ResponseWriter, r *http.Request, err error) {
+func (a AuthHandler) respondWithAuthFailedError(w http.ResponseWriter, r *http.Request, err error) {
 	if cause := a.contextErrorCause(err); cause != nil {
 		// A request that gave up while authenticating is not an authentication failure, and reporting it
 		// as 401 sends the user off to fix credentials that can be perfectly valid.

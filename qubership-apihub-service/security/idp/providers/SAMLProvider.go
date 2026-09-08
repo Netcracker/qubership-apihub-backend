@@ -34,10 +34,10 @@ type samlProvider struct {
 	userService  service.UserService
 	apihubHost   string
 	responder    responder.Responder
-	authHandler  *security.AuthHandler
+	authHandler  security.AuthHandler
 }
 
-func newSAMLProvider(samlInstance *samlsp.Middleware, config idp.IDP, userService service.UserService, apihubHost string, responder responder.Responder, authHandler *security.AuthHandler) idp.Provider {
+func newSAMLProvider(samlInstance *samlsp.Middleware, config idp.IDP, userService service.UserService, apihubHost string, responder responder.Responder, authHandler security.AuthHandler) idp.Provider {
 	return &samlProvider{
 		samlInstance: samlInstance,
 		config:       config,

@@ -24,14 +24,14 @@ type UserView struct {
 	User        view.User `json:"user"`
 }
 
-func (a *AuthHandler)  CreateLocalUserToken_deprecated(w http.ResponseWriter, r *http.Request) {
+func (a AuthHandler) CreateLocalUserToken_deprecated(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, err := a.authenticateUser(ctx, r)
 	if err != nil {
 		a.respondWithAuthFailedError(w, r, err)
 		return
 	}
-	userView, err := a.CreateTokenForUser_deprecated(ctx,*user)
+	userView, err := a.CreateTokenForUser_deprecated(ctx, *user)
 	if err != nil {
 		a.respondWithAuthFailedError(w, r, err)
 		return
@@ -43,7 +43,7 @@ func (a *AuthHandler)  CreateLocalUserToken_deprecated(w http.ResponseWriter, r 
 	w.Write(response)
 }
 
-func(a *AuthHandler)  CreateTokenForUser_deprecated(ctx context.Context, dbUser view.User) (*UserView, error) {
+func (a AuthHandler) CreateTokenForUser_deprecated(ctx context.Context, dbUser view.User) (*UserView, error) {
 	accessToken, refreshToken, err := a.issueTokenPair(ctx, dbUser, true)
 	if err != nil {
 		return nil, err
@@ -53,7 +53,7 @@ func(a *AuthHandler)  CreateTokenForUser_deprecated(ctx context.Context, dbUser 
 	return &userView, nil
 }
 
-func (a *AuthHandler)  CreateLocalUserToken(w http.ResponseWriter, r *http.Request) {
+func (a AuthHandler) CreateLocalUserToken(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, err := a.authenticateUser(ctx, r)
 	if err != nil {
@@ -69,7 +69,7 @@ func (a *AuthHandler)  CreateLocalUserToken(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusOK)
 }
 
-func (a *AuthHandler)  authenticateUser(ctx context.Context, r *http.Request) (*view.User, error) {
+func (a AuthHandler) authenticateUser(ctx context.Context, r *http.Request) (*view.User, error) {
 	email, password, ok := r.BasicAuth()
 	if !ok {
 		return nil, fmt.Errorf("user credentials are not provided")
@@ -82,7 +82,7 @@ func (a *AuthHandler)  authenticateUser(ctx context.Context, r *http.Request) (*
 	return user, nil
 }
 
-func (a *AuthHandler)  SetAuthTokenCookies(ctx context.Context, w http.ResponseWriter, user *view.User, refreshTokenPath string) error {
+func (a AuthHandler) SetAuthTokenCookies(ctx context.Context, w http.ResponseWriter, user *view.User, refreshTokenPath string) error {
 	accessToken, refreshToken, err := a.issueTokenPair(ctx, *user, false)
 	if err != nil {
 		return fmt.Errorf("failed to create token pair for user: %v", err.Error())
@@ -107,7 +107,7 @@ func (a *AuthHandler)  SetAuthTokenCookies(ctx context.Context, w http.ResponseW
 	return nil
 }
 
-func (a *AuthHandler) issueTokenPair(ctx context.Context, dbUser view.User, withGitIntegration bool) (accessToken string, refreshToken string, err error) {
+func (a AuthHandler) issueTokenPair(ctx context.Context, dbUser view.User, withGitIntegration bool) (accessToken string, refreshToken string, err error) {
 	user := auth.NewUserInfo(dbUser.Name, dbUser.Id, []string{}, auth.Extensions{})
 	accessDuration := jwt.SetExpDuration(a.accessTokenDuration) // should be more than one minute!
 
@@ -140,6 +140,6 @@ func (a *AuthHandler) issueTokenPair(ctx context.Context, dbUser view.User, with
 	return accessToken, refreshToken, nil
 }
 
-func (a *AuthHandler) GetPublicKey() []byte {
+func (a AuthHandler) GetPublicKey() []byte {
 	return a.publicKey
 }

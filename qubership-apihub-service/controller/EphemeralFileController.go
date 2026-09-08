@@ -18,10 +18,10 @@ import (
 type EphemeralFileController struct {
 	svc         aiservice.EphemeralFileService
 	responder   responder.Responder
-	authHandler *security.AuthHandler
+	authHandler security.AuthHandler
 }
 
-func NewEphemeralFileController(svc aiservice.EphemeralFileService, responder responder.Responder, authHandler *security.AuthHandler) *EphemeralFileController {
+func NewEphemeralFileController(svc aiservice.EphemeralFileService, responder responder.Responder, authHandler security.AuthHandler) *EphemeralFileController {
 	return &EphemeralFileController{svc: svc, responder: responder, authHandler: authHandler}
 }
 

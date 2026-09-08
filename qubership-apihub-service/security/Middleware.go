@@ -28,7 +28,7 @@ func authenticate(strategy auth.Strategy, r *http.Request) (auth.Info, error) {
 	return info, utils.WrapContextError(ctx, err)
 }
 
-func (a *AuthHandler) Secure(next http.HandlerFunc) http.HandlerFunc {
+func (a AuthHandler) Secure(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
@@ -64,7 +64,7 @@ func (a *AuthHandler) Secure(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func (a *AuthHandler) SecureUser(next http.HandlerFunc) http.HandlerFunc {
+func (a AuthHandler) SecureUser(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
@@ -90,7 +90,7 @@ func (a *AuthHandler) SecureUser(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func (a *AuthHandler) SecureJWT(next http.HandlerFunc) http.HandlerFunc {
+func (a AuthHandler) SecureJWT(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
@@ -116,7 +116,7 @@ func (a *AuthHandler) SecureJWT(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func (a *AuthHandler) NoSecure(next http.HandlerFunc) http.HandlerFunc {
+func (a AuthHandler) NoSecure(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
@@ -135,7 +135,7 @@ func (a *AuthHandler) NoSecure(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func (a *AuthHandler) SecureProxy(next http.HandlerFunc) http.HandlerFunc {
+func (a AuthHandler) SecureProxy(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
@@ -171,7 +171,7 @@ func (a *AuthHandler) SecureProxy(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func (a *AuthHandler) RefreshToken(next http.HandlerFunc) http.HandlerFunc {
+func (a AuthHandler) RefreshToken(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
@@ -213,7 +213,7 @@ func (a *AuthHandler) RefreshToken(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func (a *AuthHandler) SecureMCP(next http.Handler) http.Handler {
+func (a AuthHandler) SecureMCP(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
@@ -239,7 +239,7 @@ func (a *AuthHandler) SecureMCP(next http.Handler) http.Handler {
 	})
 }
 
-func (a *AuthHandler) contextErrorCause(err error) error {
+func (a AuthHandler) contextErrorCause(err error) error {
 	if multiError, ok := err.(union.MultiError); ok {
 		for _, e := range multiError {
 			if cause := a.contextErrorCause(e); cause != nil {
