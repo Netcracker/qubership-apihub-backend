@@ -9298,6 +9298,9 @@ paths:
       summary: Get the version revisions list
       description: |
         Get the list of version revisions.
+
+        Every revision reports its own hasErrors and changelogHasErrors, so a revision that was published with
+        errors stays marked after a later revision fixed them.
       operationId: getPackagesIdVersionsIdRevisionsV3
       parameters:
         - $ref: "#/components/parameters/packageId"
@@ -14151,6 +14154,20 @@ components:
               description: Namespace of Agent's publication.
               type: string
               example: cloudQSS-release2
+        hasErrors:
+          description: |
+            Flag showing that at least one document of the revision has a critical problem detected during the
+            build. Such a revision can only be published in `draft` status.
+
+            The flag belongs to the revision, not to the version: a later revision that fixed the problem has
+            hasErrors = false while the revision that carried it keeps hasErrors = true.
+
+            Use `GET /api/v2/packages/{packageId}/versions/{version}@{revision}/notifications` to get the
+            details.
+          type: boolean
+          default: false
+        changelogHasErrors:
+          $ref: "#/components/schemas/ChangelogHasErrors"
     InternalDocumentMetadata:
       type: object
       required:
