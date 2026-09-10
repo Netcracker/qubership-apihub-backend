@@ -3296,19 +3296,7 @@ paths:
                       contractsSummary:
                         $ref: "#/components/schemas/VersionContractsSummary"
                       changelogHasErrors:
-                        description: |
-                          Flag showing that the changelog calculation between this version and its
-                          previousVersion produced at least one critical problem, i.e. the comparison may be
-                          incomplete or inaccurate. Returned when includeSummary = true and the version has a
-                          previous version.
-
-                          The flag describes the comparison only, it does not mean that the version itself has
-                          problems - see hasErrors for that.
-
-                          Use `GET /api/v2/packages/{packageId}/versions/{version}/changes/notifications` to
-                          get the details.
-                        type: boolean
-                        default: false
+                        $ref: "#/components/schemas/ChangelogHasErrors"
                   - type: object
                     properties:
                       operationGroups:
@@ -3427,17 +3415,7 @@ paths:
                       contractsChangesSummary:
                         $ref: "#/components/schemas/VersionComparisonContractsSummary"
                       hasErrors:
-                        description: |
-                          Flag showing that the changelog calculation for this version pair produced at least
-                          one critical problem, i.e. the comparison may be incomplete or inaccurate.
-
-                          The flag describes the comparison only, it does not mean that any of the compared
-                          versions has problems.
-
-                          Use `GET /api/v2/packages/{packageId}/versions/{version}/changes/notifications` to
-                          get the details.
-                        type: boolean
-                        default: false
+                        $ref: "#/components/schemas/ChangelogHasErrors"
                   - type: object
                     title: dashboardComparison
                     required:
@@ -3495,15 +3473,7 @@ paths:
                             contractsChangesSummary:
                               $ref: "#/components/schemas/VersionComparisonContractsSummary"
                             hasErrors:
-                              description: |
-                                Flag showing that the changelog calculation for this referenced package pair
-                                produced at least one critical problem, i.e. the comparison may be incomplete
-                                or inaccurate.
-
-                                The flag describes the comparison only, it does not mean that any of the
-                                compared versions has problems.
-                              type: boolean
-                              default: false
+                              $ref: "#/components/schemas/ChangelogHasErrors"
                       packages:
                         $ref: "#/components/schemas/PackagesMap"
         "301":
@@ -11811,6 +11781,18 @@ components:
                 - $ref: "#/components/schemas/ChangeSummary"
                 - type: object
                   description: Number of DDL entities impacted by each severity type.
+    ChangelogHasErrors:
+      description: |
+        Flag showing that the changelog calculation for the comparison produced at least one critical problem,
+        i.e. the comparison may be incomplete or inaccurate. Returned when there is a comparison to describe -
+        on a version or a revision that means one against its previousVersion.
+
+        The flag describes the comparison only, it does not mean that either of the compared versions has
+        problems - see hasErrors on the version for that.
+
+        Use `GET /api/v2/packages/{packageId}/versions/{version}/changes/notifications` to get the details.
+      type: boolean
+      default: false
     NotificationCategoryEnum:
       description: |
         Stable code identifying which check produced the message. There is one value per diagnostic, so the
@@ -12612,18 +12594,7 @@ components:
           type: boolean
           default: false
         changelogHasErrors:
-          description: |
-            Flag showing that the changelog calculation between this version and its previousVersion produced
-            at least one critical problem, i.e. the comparison may be incomplete or inaccurate. Returned when
-            the version has a previous version.
-
-            The flag describes the comparison only, it does not mean that the version itself has problems -
-            see hasErrors for that.
-
-            Use `GET /api/v2/packages/{packageId}/versions/{version}/changes/notifications` to get the
-            details.
-          type: boolean
-          default: false
+          $ref: "#/components/schemas/ChangelogHasErrors"
     PackageVersionContent:
       description: Published package version content
       type: object
