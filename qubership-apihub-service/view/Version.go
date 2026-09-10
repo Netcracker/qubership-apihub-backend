@@ -160,14 +160,16 @@ type PackageVersionRevisions struct {
 }
 
 type PackageVersionRevision struct {
-	Version           string                 `json:"version"`
-	Revision          int                    `json:"revision"`
-	Status            string                 `json:"status"`
-	CreatedBy         map[string]interface{} `json:"createdBy"`
-	CreatedAt         time.Time              `json:"createdAt"`
-	RevisionLabels    []string               `json:"revisionLabels"`
-	PublishMeta       BuildConfigMetadata    `json:"publishMeta"`
-	NotLatestRevision bool                   `json:"notLatestRevision,omitempty"`
+	Version            string                 `json:"version"`
+	Revision           int                    `json:"revision"`
+	Status             string                 `json:"status"`
+	CreatedBy          map[string]interface{} `json:"createdBy"`
+	CreatedAt          time.Time              `json:"createdAt"`
+	RevisionLabels     []string               `json:"revisionLabels"`
+	PublishMeta        BuildConfigMetadata    `json:"publishMeta"`
+	NotLatestRevision  bool                   `json:"notLatestRevision,omitempty"`
+	HasErrors          bool                   `json:"hasErrors"`
+	ChangelogHasErrors *bool                  `json:"changelogHasErrors,omitempty"`
 }
 
 type DeleteVersionsRecursivelyReq struct {

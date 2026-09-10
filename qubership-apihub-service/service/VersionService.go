@@ -1614,10 +1614,31 @@ func (v versionServiceImpl) GetVersionRevisionsList(ctx context.Context, package
 	if err != nil {
 		return nil, err
 	}
-	revisions := make([]view.PackageVersionRevision, 0)
-
+	revisions := make([]view.PackageVersionRevision, 0, len(versionRevisionsEnts))
+	revisionKeys := make([]entity.PublishedVersionKeyEntity, 0, len(versionRevisionsEnts))
 	for _, ent := range versionRevisionsEnts {
 		revisions = append(revisions, *entity.MakePackageVersionRevisionView(&ent))
+		revisionKeys = append(revisionKeys, entity.PublishedVersionKeyEntity{
+			PackageId: ent.PackageId,
+			Version:   ent.Version,
+			Revision:  ent.Revision,
+		})
+	}
+
+	errorSummaries, err := v.publishedRepo.GetVersionsErrorSummary(ctx, revisionKeys, false)
+	if err != nil {
+		return nil, err
+	}
+	for i, key := range revisionKeys {
+		errorSummary, exists := errorSummaries[key]
+		if !exists {
+			continue
+		}
+		revisions[i].HasErrors = errorSummary.ContentHasErrors()
+		if versionRevisionsEnts[i].PreviousVersion != "" {
+			changelogHasErrors := errorSummary.ChangelogHasAnyErrors()
+			revisions[i].ChangelogHasErrors = &changelogHasErrors
+		}
 	}
 	return &view.PackageVersionRevisions{Revisions: revisions}, nil
 }

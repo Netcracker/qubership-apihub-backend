@@ -161,3 +161,69 @@ func TestGetPackageVersionsViewQueriesTheSummaryForPackagesToo(t *testing.T) {
 		t.Fatal("expected the error summary to be queried for a package as well as for a dashboard")
 	}
 }
+
+const revisionsPreviousVersion = "2025.4"
+
+type revisionsListRepoStub struct {
+	repository.PublishedRepository
+	summaries      map[int]entity.VersionErrorSummaryEntity
+	queriedKeys    []entity.PublishedVersionKeyEntity
+	summaryQueries int
+}
+
+func (s *revisionsListRepoStub) GetVersion(context.Context, string, string) (*entity.PublishedVersionEntity, error) {
+	return &entity.PublishedVersionEntity{PackageId: listPackageId, Version: listVersion, Revision: listRevision}, nil
+}
+
+// Revision 1 was published against a baseline, revision 2 without one.
+func (s *revisionsListRepoStub) GetVersionRevisionsList(context.Context, entity.PackageVersionSearchQueryEntity) ([]entity.PackageVersionRevisionEntity, error) {
+	return []entity.PackageVersionRevisionEntity{
+		{PublishedVersionEntity: entity.PublishedVersionEntity{PackageId: listPackageId, Version: listVersion, Revision: 2}},
+		{PublishedVersionEntity: entity.PublishedVersionEntity{PackageId: listPackageId, Version: listVersion, Revision: 1, PreviousVersion: revisionsPreviousVersion}},
+	}, nil
+}
+
+func (s *revisionsListRepoStub) GetVersionsErrorSummary(_ context.Context, versionKeys []entity.PublishedVersionKeyEntity, _ bool) (map[entity.PublishedVersionKeyEntity]entity.VersionErrorSummaryEntity, error) {
+	s.summaryQueries++
+	s.queriedKeys = versionKeys
+	result := make(map[entity.PublishedVersionKeyEntity]entity.VersionErrorSummaryEntity, len(versionKeys))
+	for _, key := range versionKeys {
+		result[key] = s.summaries[key.Revision]
+	}
+	return result, nil
+}
+
+// Every revision reports its own flags: a revision published with errors stays marked after a later revision
+// fixed them, and the changelog flag appears only on revisions that had a baseline to compare against.
+func TestGetVersionRevisionsListReportsFlagsPerRevision(t *testing.T) {
+	repo := &revisionsListRepoStub{summaries: map[int]entity.VersionErrorSummaryEntity{
+		1: {HasErrors: true, ChangelogHasErrors: true},
+		2: {},
+	}}
+	service := versionServiceImpl{publishedRepo: repo}
+
+	revisions, err := service.GetVersionRevisionsList(context.Background(), listPackageId, listVersion, view.PagingFilterReq{})
+	if err != nil {
+		t.Fatalf("expected the revisions to be listed, got %v", err)
+	}
+	if repo.summaryQueries != 1 || len(repo.queriedKeys) != 2 {
+		t.Fatalf("expected one summary query for both revisions, got %d queries for %d keys", repo.summaryQueries, len(repo.queriedKeys))
+	}
+
+	latest, first := revisions.Revisions[0], revisions.Revisions[1]
+	if latest.Revision != 2 || first.Revision != 1 {
+		t.Fatalf("expected revisions 2 and 1 in order, got %d and %d", latest.Revision, first.Revision)
+	}
+	if latest.HasErrors {
+		t.Error("expected the fixed revision to report no errors")
+	}
+	if latest.ChangelogHasErrors != nil {
+		t.Errorf("expected no changelog flag without a baseline, got %v", *latest.ChangelogHasErrors)
+	}
+	if !first.HasErrors {
+		t.Error("expected the errored revision to stay marked")
+	}
+	if first.ChangelogHasErrors == nil || !*first.ChangelogHasErrors {
+		t.Error("expected the errored revision to report its changelog flag")
+	}
+}

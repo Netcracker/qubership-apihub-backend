@@ -4,21 +4,6 @@
   "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
   "description": "Verifies tolerant publication: a version whose documents fail to build is still published in draft\nstatus, is marked with hasErrors, exposes per-document error details through the notification\nendpoints, and is barred from every composition that would spread the error.\n\nEndpoints under test:\n  GET   /api/v2/packages/{packageId}/versions/{version}/notifications\n  GET   /api/v2/packages/{packageId}/versions/{version}/changes/notifications\n  GET   /api/v2/packages/{packageId}/versions/{version}/changes/summary    (hasErrors)\n  GET   /api/v3/packages/{packageId}/versions/{version}          (hasErrors, contract summaries)\n  GET   /api/v3/packages/{packageId}/versions                    (hasErrors)\n  GET   /api/v2/packages/{packageId}/versions/{version}/documents (hasErrors)\n  POST  /api/v2/packages/{packageId}/publish                     (release and baseline refusals)\n  PATCH /api/v2/packages/{packageId}/versions/{version}          (status change refusal)\n\nAuth: the api-key header carries a sysadm token; set apiKey to zeroDayConfiguration.accessToken\nof the running instance.\n\nPrerequisites: the backend and a tolerant-publication-capable build-task-consumer must be running.\n\nRun from the repository root so the multipart fixtures resolve:\n  newman run tests/api/tolerant_publication.postman_collection.json --working-dir . \\\n    --env-var baseUrl=http://localhost:8090 --env-var apiKey=<token>\n\nFolder 02 uses a mixed fixture: one version with two API types (rest, asyncapi) and two contract\ntypes (ddl, mcp over two endpoints), where three of its seven documents fail. It is there so the\nper-type roll-ups are checked for discrimination, not just for being set.\n\nFolder 09 checks that the two error flags stay apart: hasErrors describes the version's content and\nchangelogHasErrors describes its changelog, and neither reports the other's problem. It also checks\nthat the versions list and the version itself answer identically. A changelog that genuinely fails is\nnot constructible from source fixtures - every comparison-phase Error is an internal resolution\nfailure - so that half is covered by unit tests instead.\n\nA unique suffix is generated once per run, so the collection is safe to re-run. Package aliases\nstay within the API's 10-character limit."
  },
- "event": [
-  {
-   "listen": "prerequest",
-   "script": {
-    "type": "text/javascript",
-    "exec": [
-     "if (!pm.collectionVariables.get('runSuffix')) {",
-     "    var suffix = (Date.now().toString(36) + Math.random().toString(36).slice(2)).slice(-7);",
-     "    pm.collectionVariables.set('runSuffix', suffix);",
-     "    pm.collectionVariables.set('workspaceAlias', 'tpw' + suffix);",
-     "}"
-    ]
-   }
-  }
- ],
  "variable": [
   {
    "key": "baseUrl",
@@ -163,6 +148,19 @@
     {
      "name": "Create workspace",
      "event": [
+      {
+       "listen": "prerequest",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "// A fresh suffix on every run: Postman keeps collection variables between runs, and a deleted",
+         "// package still reserves its alias, so reusing the previous suffix would fail with 409.",
+         "var suffix = (Date.now().toString(36) + Math.random().toString(36).slice(2)).slice(-7);",
+         "pm.collectionVariables.set('runSuffix', suffix);",
+         "pm.collectionVariables.set('workspaceAlias', 'tpw' + suffix);"
+        ]
+       }
+      },
       {
        "listen": "test",
        "script": {
@@ -2137,6 +2135,47 @@
      "response": []
     },
     {
+     "name": "Revisions carry their own changelog flag",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Revisions are readable', function () { pm.response.to.have.status(200); });",
+         "var revisions = pm.response.json().revisions;",
+         "pm.test('Both revisions are listed, latest first', function () {",
+         "    pm.expect(revisions).to.have.lengthOf(2);",
+         "    pm.expect(revisions[0].revision).to.eql(2);",
+         "    pm.expect(revisions[1].revision).to.eql(1);",
+         "});",
+         "pm.test('Neither revision has document errors', function () {",
+         "    pm.expect(revisions[0].hasErrors).to.eql(false);",
+         "    pm.expect(revisions[1].hasErrors).to.eql(false);",
+         "});",
+         "pm.test('The repointed revision has no baseline, so it reports no changelog flag', function () {",
+         "    pm.expect(revisions[0]).to.not.have.property('changelogHasErrors');",
+         "});",
+         "pm.test('The first revision keeps the sound changelog against its baseline', function () {",
+         "    pm.expect(revisions[1].changelogHasErrors).to.eql(false);",
+         "});"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v3/packages/{{pkgBId}}/versions/{{nextVersion}}/revisions"
+     },
+     "response": []
+    },
+    {
      "name": "Republish the baseline with a broken document again",
      "event": [
       {
@@ -2427,6 +2466,47 @@
       "url": "{{baseUrl}}/api/v2/packages/{{pkgAId}}/versions/{{brokenVersion}}%401/notifications"
      },
      "response": []
+    },
+    {
+     "name": "Every revision reports its own hasErrors",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Revisions are readable', function () { pm.response.to.have.status(200); });",
+         "var revisions = pm.response.json().revisions;",
+         "pm.test('Both revisions are listed, latest first', function () {",
+         "    pm.expect(revisions).to.have.lengthOf(2);",
+         "    pm.expect(revisions[0].revision).to.eql(2);",
+         "    pm.expect(revisions[0].version).to.eql(pm.collectionVariables.get('brokenVersion') + '@2');",
+         "    pm.expect(revisions[1].revision).to.eql(1);",
+         "    pm.expect(revisions[1].version).to.eql(pm.collectionVariables.get('brokenVersion') + '@1');",
+         "});",
+         "pm.test('Each errored revision stays marked', function () {",
+         "    pm.expect(revisions[0].hasErrors).to.eql(true);",
+         "    pm.expect(revisions[1].hasErrors).to.eql(true);",
+         "});",
+         "pm.test('Revisions without a baseline report no changelog flag', function () {",
+         "    pm.expect(revisions[0]).to.not.have.property('changelogHasErrors');",
+         "    pm.expect(revisions[1]).to.not.have.property('changelogHasErrors');",
+         "});"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v3/packages/{{pkgAId}}/versions/{{brokenVersion}}/revisions"
+     },
+     "response": []
     }
    ]
   },
@@ -2653,6 +2733,37 @@
        }
       ],
       "url": "{{baseUrl}}/api/v3/packages/{{pkgBId}}/versions?limit=100"
+     },
+     "response": []
+    },
+    {
+     "name": "The revisions list reports both flags as sound",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Revisions are readable', function () { pm.response.to.have.status(200); });",
+         "var revisions = pm.response.json().revisions;",
+         "pm.test('The single revision is listed', function () { pm.expect(revisions).to.have.lengthOf(1); });",
+         "pm.test('The revision has no document errors', function () { pm.expect(revisions[0].hasErrors).to.eql(false); });",
+         "pm.test('The revision reports a sound changelog against its baseline', function () {",
+         "    pm.expect(revisions[0].changelogHasErrors).to.eql(false);",
+         "});"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v3/packages/{{pkgBId}}/versions/{{baselineDependentVersion}}/revisions"
      },
      "response": []
     },
