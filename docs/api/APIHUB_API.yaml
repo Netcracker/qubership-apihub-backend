@@ -3955,13 +3955,7 @@ paths:
   "/api/v2/packages/{packageId}/versions/{version}/sources":
     parameters:
       - $ref: "#/components/parameters/packageId"
-      - name: version
-        in: path
-        description: Package version. The mask <version>@<revision> may be used to get resouces of the specific revision. If the @revision is not provided, the latest version's revision will be used.
-        required: true
-        schema:
-          type: string
-          example: "2022.3"
+      - $ref: "#/components/parameters/version"
     get:
       tags:
         - Export
@@ -4011,13 +4005,7 @@ paths:
   "/api/v2/packages/{packageId}/versions/{version}/config":
     parameters:
       - $ref: "#/components/parameters/packageId"
-      - name: version
-        in: path
-        description: Package version. The mask <version>@<revision> may be used to get resouces of the specific revision. If the @revision is not provided, the latest version's revision will be used.
-        required: true
-        schema:
-          type: string
-          example: "2022.3"
+      - $ref: "#/components/parameters/version"
     get:
       tags:
         - Versions
@@ -11489,7 +11477,9 @@ components:
     version:
       name: version
       in: path
-      description: Package version
+      description: |
+        Package version. The mask <version>@<revision> may be used to address a specific revision.
+        If the @revision is not provided, the latest revision of the version is used.
       required: true
       schema:
         type: string
