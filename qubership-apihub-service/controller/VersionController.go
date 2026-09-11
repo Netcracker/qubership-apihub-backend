@@ -29,6 +29,8 @@ type VersionController interface {
 	GetVersionedContentFileRaw(w http.ResponseWriter, r *http.Request)
 	GetVersionedDocument(w http.ResponseWriter, r *http.Request)
 	GetVersionDocuments(w http.ResponseWriter, r *http.Request)
+	GetVersionNotifications(w http.ResponseWriter, r *http.Request)
+	GetComparisonNotifications(w http.ResponseWriter, r *http.Request)
 	GetSharedContentFile(w http.ResponseWriter, r *http.Request)
 	SharePublishedFile(w http.ResponseWriter, r *http.Request)
 	GetVersionChanges_deprecated(w http.ResponseWriter, r *http.Request)
@@ -172,6 +174,188 @@ func (v versionControllerImpl) GetVersionedDocument(w http.ResponseWriter, r *ht
 		return
 	}
 	utils.RespondWithJson(w, http.StatusOK, document)
+}
+
+func (v versionControllerImpl) GetVersionNotifications(w http.ResponseWriter, r *http.Request) {
+	packageId := getStringParam(r, "packageId")
+	ctx := secctx.MakeUserContext(r)
+	sufficientPrivileges, err := v.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
+	if err != nil {
+		handlePkgRedirectOrRespondWithError(w, r, v.ptHandler, packageId, "Failed to check user privileges", err)
+		return
+	}
+	if !sufficientPrivileges {
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusForbidden,
+			Code:    exception.InsufficientPrivileges,
+			Message: exception.InsufficientPrivilegesMsg,
+		})
+		return
+	}
+	versionName, err := getUnescapedStringParam(r, "version")
+	if err != nil {
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidURLEscape,
+			Message: exception.InvalidURLEscapeMsg,
+			Params:  map[string]interface{}{"param": "version"},
+			Debug:   err.Error(),
+		})
+		return
+	}
+	severities, customError := getRepeatedListFromParam(r, "severity")
+	if customError != nil {
+		utils.RespondWithCustomError(w, customError)
+		return
+	}
+	for _, severity := range severities {
+		if !view.ValidNotificationSeverity(severity) {
+			utils.RespondWithCustomError(w, &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.InvalidParameterValue,
+				Message: exception.InvalidParameterValueMsg,
+				Params:  map[string]interface{}{"param": "severity", "value": severity},
+			})
+			return
+		}
+	}
+	categories, customError := getRepeatedListFromParam(r, "category")
+	if customError != nil {
+		utils.RespondWithCustomError(w, customError)
+		return
+	}
+	filter, customError := getNotificationsFilter(r, severities, categories)
+	if customError != nil {
+		utils.RespondWithCustomError(w, customError)
+		return
+	}
+
+	notifications, err := v.versionService.GetVersionNotifications(ctx, packageId, versionName, *filter)
+	if err != nil {
+		handlePkgRedirectOrRespondWithError(w, r, v.ptHandler, packageId, "Failed to get version notifications", err)
+		return
+	}
+	utils.RespondWithJson(w, http.StatusOK, notifications)
+}
+
+func (v versionControllerImpl) GetComparisonNotifications(w http.ResponseWriter, r *http.Request) {
+	packageId := getStringParam(r, "packageId")
+	ctx := secctx.MakeUserContext(r)
+	sufficientPrivileges, err := v.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
+	if err != nil {
+		handlePkgRedirectOrRespondWithError(w, r, v.ptHandler, packageId, "Failed to check user privileges", err)
+		return
+	}
+	if !sufficientPrivileges {
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusForbidden,
+			Code:    exception.InsufficientPrivileges,
+			Message: exception.InsufficientPrivilegesMsg,
+		})
+		return
+	}
+	versionName, err := getUnescapedStringParam(r, "version")
+	if err != nil {
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidURLEscape,
+			Message: exception.InvalidURLEscapeMsg,
+			Params:  map[string]interface{}{"param": "version"},
+			Debug:   err.Error(),
+		})
+		return
+	}
+	previousVersion, err := url.QueryUnescape(r.URL.Query().Get("previousVersion"))
+	if err != nil {
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidURLEscape,
+			Message: exception.InvalidURLEscapeMsg,
+			Params:  map[string]interface{}{"param": "previousVersion"},
+			Debug:   err.Error(),
+		})
+		return
+	}
+	previousVersionPackageId, err := url.QueryUnescape(r.URL.Query().Get("previousVersionPackageId"))
+	if err != nil {
+		utils.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidURLEscape,
+			Message: exception.InvalidURLEscapeMsg,
+			Params:  map[string]interface{}{"param": "previousVersionPackageId"},
+			Debug:   err.Error(),
+		})
+		return
+	}
+	severities, customError := getRepeatedListFromParam(r, "severity")
+	if customError != nil {
+		utils.RespondWithCustomError(w, customError)
+		return
+	}
+	for _, severity := range severities {
+		if !view.ValidNotificationSeverity(severity) {
+			utils.RespondWithCustomError(w, &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.InvalidParameterValue,
+				Message: exception.InvalidParameterValueMsg,
+				Params:  map[string]interface{}{"param": "severity", "value": severity},
+			})
+			return
+		}
+	}
+	categories, customError := getRepeatedListFromParam(r, "category")
+	if customError != nil {
+		utils.RespondWithCustomError(w, customError)
+		return
+	}
+	filter, customError := getNotificationsFilter(r, severities, categories)
+	if customError != nil {
+		utils.RespondWithCustomError(w, customError)
+		return
+	}
+
+	notifications, err := v.versionService.GetComparisonNotifications(ctx, packageId, versionName, previousVersionPackageId, previousVersion, *filter)
+	if err != nil {
+		handlePkgRedirectOrRespondWithError(w, r, v.ptHandler, packageId, "Failed to get comparison notifications", err)
+		return
+	}
+	utils.RespondWithJson(w, http.StatusOK, notifications)
+}
+
+func getNotificationsFilter(r *http.Request, severities []string, categories []string) (*view.NotificationsFilter, *exception.CustomError) {
+	limit, customError := getLimitQueryParam(r)
+	if customError != nil {
+		return nil, customError
+	}
+	page := 0
+	if r.URL.Query().Get("page") != "" {
+		parsedPage, err := strconv.Atoi(r.URL.Query().Get("page"))
+		if err != nil {
+			return nil, &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.IncorrectParamType,
+				Message: exception.IncorrectParamTypeMsg,
+				Params:  map[string]interface{}{"param": "page", "type": "int"},
+				Debug:   err.Error(),
+			}
+		}
+		if parsedPage < 0 {
+			return nil, &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.InvalidParameterValue,
+				Message: exception.InvalidParameterValueMsg,
+				Params:  map[string]interface{}{"param": "page", "value": parsedPage},
+			}
+		}
+		page = parsedPage
+	}
+	return &view.NotificationsFilter{
+		DocumentId: r.URL.Query().Get("documentId"),
+		Severities: severities,
+		Categories: categories,
+		Limit:      limit,
+		Offset:     limit * page,
+	}, nil
 }
 
 func (v versionControllerImpl) GetVersionDocuments(w http.ResponseWriter, r *http.Request) {

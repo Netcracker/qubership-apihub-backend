@@ -133,6 +133,44 @@ func getListFromParam(r *http.Request, param string) ([]string, *exception.Custo
 	return strings.Split(listStr, ","), nil
 }
 
+func getRepeatedListFromParam(r *http.Request, param string) ([]string, *exception.CustomError) {
+	values := r.URL.Query()[param]
+	if len(values) == 0 {
+		return []string{}, nil
+	}
+	//validations were added based on security scan results to avoid resource exhaustion
+	totalLen := 0
+	for _, value := range values {
+		totalLen += len(value)
+	}
+	if totalLen > maxParamLen {
+		return nil, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidParameterValue,
+			Message: exception.InvalidParameterValueLengthMsg,
+			Params:  map[string]interface{}{"param": param, "value": strings.Join(values, ","), "maxLen": maxParamLen},
+		}
+	}
+	items := make([]string, 0, len(values))
+	for _, value := range values {
+		for _, item := range strings.Split(value, ",") {
+			if item == "" {
+				continue
+			}
+			items = append(items, item)
+		}
+	}
+	if len(items) > maxParamItems {
+		return nil, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidParameterValue,
+			Message: exception.InvalidItemsNumberMsg,
+			Params:  map[string]interface{}{"param": param, "maxItems": maxParamItems},
+		}
+	}
+	return items, nil
+}
+
 func parseVersionStatusQueryParam(r *http.Request) ([]string, *exception.CustomError) {
 	statusParts, customError := getListFromParam(r, "status")
 	if customError != nil {

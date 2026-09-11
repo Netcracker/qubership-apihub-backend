@@ -65,7 +65,11 @@ options:
 * documents.json - list of documents with metadata
 * operations.json - list of operatrions with metadata
 * comparisons.json - list of comparisons with metadata
-* notifications.json - warnings from builder
+* notifications.json - messages raised while building the version's own documents and operations, each with a
+  severity, a category and, when the message concerns a document, its slug
+* comparison-notifications.json - messages raised while calculating a changelog, grouped by the version pair
+  they belong to. Present for a build with a previousVersion and for a changelog build. A comparison reused
+  from the backend carries no entry
 
 
 ## build sequences

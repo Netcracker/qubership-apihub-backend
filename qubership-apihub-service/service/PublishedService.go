@@ -39,7 +39,7 @@ type PublishedService interface {
 	GetLatestContentDataBySlug(ctx context.Context, packageId string, versionName string, slug string) (*view.PublishedContent, *view.ContentData, error)
 	VersionPublished(ctx context.Context, packageId string, versionName string) (bool, error)
 	DeleteVersion(ctx context.Context, packageId string, versionName string) error
-	GetVersionStatus(ctx context.Context, packageId string, versionName string) (status string, found bool, err error)
+	GetVersionStatus(ctx context.Context, packageId string, versionName string) (status string, hasErrors bool, found bool, err error)
 	CheckNoReleaseDependentVersions(ctx context.Context, packageId string, version string) error
 
 	PublishPackage(ctx context.Context, buildArc *archive.BuildResultArchive, buildSrcEnt *entity.BuildSourceEntity,
@@ -321,20 +321,35 @@ func (p publishedServiceImpl) VersionPublished(ctx context.Context, packageId st
 	return ent != nil, nil
 }
 
-func (p publishedServiceImpl) GetVersionStatus(ctx context.Context, packageId string, versionName string) (string, bool, error) {
+func VersionHasAnyErrors(ctx context.Context, publishedRepo repository.PublishedRepository, packageId string, version string, revision int) (bool, error) {
+	errorSummary, err := publishedRepo.GetVersionErrorSummary(ctx, packageId, version, revision, false)
+	if err != nil {
+		return false, err
+	}
+	if errorSummary == nil {
+		return false, nil
+	}
+	return errorSummary.HasAnyErrors(), nil
+}
+
+func (p publishedServiceImpl) GetVersionStatus(ctx context.Context, packageId string, versionName string) (status string, hasErrors bool, found bool, err error) {
 	version, _, err := SplitVersionRevision(versionName)
 	if err != nil {
-		return "", false, err
+		return "", false, false, err
 	}
 
 	latestEnt, err := p.publishedRepo.GetVersion(ctx, packageId, version)
 	if err != nil {
-		return "", false, err
+		return "", false, false, err
 	}
 	if latestEnt == nil {
-		return "", false, nil
+		return "", false, false, nil
 	}
-	return latestEnt.Status, true, nil
+	hasErrors, err = VersionHasAnyErrors(ctx, p.publishedRepo, latestEnt.PackageId, latestEnt.Version, latestEnt.Revision)
+	if err != nil {
+		return "", false, false, err
+	}
+	return latestEnt.Status, hasErrors, true, nil
 }
 
 func (p publishedServiceImpl) CheckNoReleaseDependentVersions(ctx context.Context, packageId string, version string) error {
@@ -367,6 +382,79 @@ func (p publishedServiceImpl) CheckNoReleaseDependentVersions(ctx context.Contex
 		}
 	}
 	return nil
+}
+
+// buildErrorFlags reports what the build produced, for the publish status
+func buildErrorFlags(buildArc *archive.BuildResultArchive) view.BuildErrorFlags {
+	return view.BuildErrorFlags{
+		HasErrors:          buildArc.PackageInfo.HasErrors,
+		ChangelogHasErrors: buildArc.ComparisonsHaveErrors(),
+	}
+}
+
+func (p publishedServiceImpl) checkNoDependentVersionsForErroredVersion(ctx context.Context, buildArc *archive.BuildResultArchive) error {
+	if !buildArc.PackageInfo.HasErrors && !buildArc.ComparisonsHaveErrors() {
+		return nil
+	}
+	packageId := buildArc.PackageInfo.PackageId
+	// A migration build carries the version in the "version@revision" form, while the previous version of a
+	// dependent version is stored as a plain version name.
+	version, _, err := SplitVersionRevision(buildArc.PackageInfo.Version)
+	if err != nil {
+		return err
+	}
+
+	dependentKeys, err := p.publishedRepo.GetVersionRevisionsByPreviousVersion(ctx, packageId, version)
+	if err != nil {
+		return err
+	}
+	if len(dependentKeys) == 0 {
+		return nil
+	}
+	accessible, hiddenCount, err := p.roleService.FilterVersionsByPublisherReadAccess(ctx, buildArc.PackageInfo.CreatedBy, dependentKeys)
+	if err != nil {
+		return err
+	}
+	log.Warnf("Refusing publication of %v@%v requested by %v: the build produced errors and the version is referenced as a previous version by %s",
+		packageId, version, buildArc.PackageInfo.CreatedBy, entity.FormatVersionKeys(dependentKeys))
+
+	return &exception.CustomError{
+		Status:  http.StatusBadRequest,
+		Code:    exception.VersionHasErrors,
+		Message: exception.ErroredVersionUsedAsPreviousMsg,
+		Params: map[string]interface{}{
+			"packageId":         packageId,
+			"version":           version,
+			"dependentVersions": entity.FormatVersionKeysWithHidden(accessible, hiddenCount, "package version"),
+		},
+	}
+}
+
+func (p publishedServiceImpl) checkPreviousVersionHasNoErrors(ctx context.Context, info view.PackageInfoFile, previousVersionRevision int) error {
+	if info.PreviousVersion == "" {
+		return nil
+	}
+	previousVersionPackageId := info.PreviousVersionPackageId
+	if previousVersionPackageId == "" {
+		previousVersionPackageId = info.PackageId
+	}
+	hasErrors, err := VersionHasAnyErrors(ctx, p.publishedRepo, previousVersionPackageId, info.PreviousVersion, previousVersionRevision)
+	if err != nil {
+		return err
+	}
+	if !hasErrors {
+		return nil
+	}
+
+	return &exception.CustomError{
+		Status:  http.StatusBadRequest,
+		Code:    exception.VersionHasErrors,
+		Message: exception.PreviousVersionHasErrorsMsg,
+		Params: map[string]interface{}{
+			"previousVersionPackageId": previousVersionPackageId,
+			"previousVersion":          info.PreviousVersion,
+		},
+	}
 }
 
 func readZipFile(zf *zip.File) ([]byte, error) {
@@ -422,7 +510,11 @@ func (p publishedServiceImpl) PublishPackage(ctx context.Context, buildArc *arch
 	if err != nil {
 		return err
 	}
-	err = buildArc.ReadBuilderNotifications(false)
+	err = buildArc.ReadBuildNotifications(false)
+	if err != nil {
+		return err
+	}
+	err = buildArc.ReadComparisonNotifications(false)
 	if err != nil {
 		return err
 	}
@@ -454,6 +546,18 @@ func (p publishedServiceImpl) PublishPackage(ctx context.Context, buildArc *arch
 	}
 	log.Debugf("Publishing package with packageId: %v; version: %v", buildArc.PackageInfo.PackageId, buildArc.PackageInfo.Version)
 	if err = validation.ValidatePublishBuildResult(buildArc); err != nil {
+		return err
+	}
+	if err = p.publishedValidator.ValidateBuildNotifications(buildArc); err != nil {
+		return err
+	}
+	if err = p.publishedValidator.ValidateComparisonNotifications(buildArc); err != nil {
+		return err
+	}
+	if err = p.publishedValidator.ValidateErroredVersionNotPublishedAsRelease(buildArc); err != nil {
+		return err
+	}
+	if err = p.checkNoDependentVersionsForErroredVersion(ctx, buildArc); err != nil {
 		return err
 	}
 
@@ -516,6 +620,9 @@ func (p publishedServiceImpl) PublishPackage(ctx context.Context, buildArc *arch
 			previousVersionRevision = previousVersionEnt.Revision
 		}
 	}
+	if err := p.checkPreviousVersionHasNoErrors(ctx, buildArc.PackageInfo, previousVersionRevision); err != nil {
+		return err
+	}
 
 	refEntities, err := p.makePublishedReferencesEntities(ctx, buildArc.PackageInfo, buildArc.PackageInfo.Refs)
 	if err != nil {
@@ -524,7 +631,7 @@ func (p publishedServiceImpl) PublishPackage(ctx context.Context, buildArc *arch
 
 	buildArcEntitiesReader := archive.NewBuildResultToEntitiesReader(buildArc)
 
-	fileEntities, fileDataEntities, err := buildArcEntitiesReader.ReadDocumentsToEntities()
+	fileEntities, fileDataEntities, err := buildArcEntitiesReader.ReadDocumentsToEntities(buildConfig)
 	if err != nil {
 		return err
 	}
@@ -575,7 +682,7 @@ func (p publishedServiceImpl) PublishPackage(ctx context.Context, buildArc *arch
 		return err
 	}
 
-	operationsComparisonEntities, changedOperationEntities, versionComparisonsFromCache, comparisonFileIdToKeyMap, err := buildArcEntitiesReader.ReadOperationComparisonsToEntities(ctx, operationsInfo, p.operationRepo)
+	operationsComparisonEntities, changedOperationEntities, cachedOperationComparisons, comparisonFileIdToKeyMap, err := buildArcEntitiesReader.ReadOperationComparisonsToEntities(ctx, operationsInfo, p.operationRepo)
 	if err != nil {
 		return err
 	}
@@ -597,26 +704,35 @@ func (p publishedServiceImpl) PublishPackage(ctx context.Context, buildArc *arch
 	// DDL comparisons share version_comparison with REST. Read the DDL index/per-pair files, then
 	// merge the version-comparison rows by comparison_id (REST + DDL contractTypes on the same row;
 	// DDL-only pairs are appended so the ddl_comparison FK is satisfied for pure DDL changelogs).
-	ddlVersionComparisonEntities, ddlContractComparisonEntities, ddlComparisonsFromCache, ddlComparisonFileIdToKeyMap, err := buildArcEntitiesReader.ReadDdlContractComparisonsToEntities(ctx, publishingDdlDataHashes, p.ddlContractRepo)
+	ddlVersionComparisonEntities, ddlContractComparisonEntities, cachedDdlComparisons, ddlComparisonFileIdToKeyMap, err := buildArcEntitiesReader.ReadDdlContractComparisonsToEntities(ctx, publishingDdlDataHashes, p.ddlContractRepo)
 	if err != nil {
 		return err
 	}
 	// A comparison id only ever appears in these lists when it was actually rebuilt (not served from
-	// cache) on that side, so they double as the rebuild sets saveVersionChangesTx/saveDdlComparisonsTx
+	// cache) in that index, so they double as the rebuild sets saveVersionChangesTx/saveDdlComparisonsTx
 	// scope their operation_types/contract_types writes to.
 	operationComparisonIdsToRebuild := comparisonIds(operationsComparisonEntities)
 	ddlComparisonIdsToRebuild := comparisonIds(ddlVersionComparisonEntities)
-	operationsComparisonEntities = mergeVersionComparisons(operationsComparisonEntities, ddlVersionComparisonEntities)
+	cachedComparisons := append(cachedOperationComparisons, cachedDdlComparisons...)
+	operationsComparisonEntities = mergeVersionComparisons(operationsComparisonEntities, ddlVersionComparisonEntities, cachedComparisons)
 	// migration re-validation treats a comparison id as legitimately absent from the build archive
-	// only if it appears here, so the DDL-side cache hits must be included, not just the operation side.
-	versionComparisonsFromCache = mergeUniqueStrings(versionComparisonsFromCache, ddlComparisonsFromCache)
+	// only if it appears here, so the DDL cache hits must be included, not just the operation ones.
+	versionComparisonsFromCache := comparisonIds(cachedComparisons)
 	for fileId, key := range ddlComparisonFileIdToKeyMap {
 		if _, ok := comparisonFileIdToKeyMap[fileId]; !ok {
 			comparisonFileIdToKeyMap[fileId] = key
 		}
 	}
 
-	builderNotificationsEntities := buildArcEntitiesReader.ReadBuilderNotificationsToEntities(buildSrcEnt.BuildId)
+	versionNotificationEntities, err := buildArcEntitiesReader.ReadBuildNotificationsToEntities()
+	if err != nil {
+		return err
+	}
+
+	comparisonNotificationEntities, err := buildArcEntitiesReader.ReadComparisonNotificationsToEntities()
+	if err != nil {
+		return err
+	}
 
 	versionInternalDocEntities, versionInternalDocDataEntities, err := buildArcEntitiesReader.ReadVersionInternalDocumentsToEntities()
 	if err != nil {
@@ -722,6 +838,9 @@ func (p publishedServiceImpl) PublishPackage(ctx context.Context, buildArc *arch
 	if buildArc.PackageInfo.CurrentVersionBuilderVersion != "" {
 		versionMetadata.SetCurrentVersionBuilderVersion(buildArc.PackageInfo.CurrentVersionBuilderVersion)
 	}
+	if buildArc.PackageInfo.HasErrors {
+		versionMetadata.SetHasErrors(true)
+	}
 
 	publishedAt := time.Now()
 	if buildArc.PackageInfo.MigrationBuild && buildArc.PackageInfo.PublishedAt != nil &&
@@ -780,7 +899,8 @@ func (p publishedServiceImpl) PublishPackage(ctx context.Context, buildArc *arch
 		operationEntities,
 		operationDataEntities,
 		changedOperationEntities,
-		builderNotificationsEntities,
+		versionNotificationEntities,
+		comparisonNotificationEntities,
 		operationsComparisonEntities,
 		newServiceName,
 		existingPackage,
@@ -799,6 +919,7 @@ func (p publishedServiceImpl) PublishPackage(ctx context.Context, buildArc *arch
 		mcpContractEntities,
 		mcpContractDataEntities,
 		mcpContractSearchTexts,
+		buildErrorFlags(buildArc),
 	)
 	utils.PerfLog(time.Since(start).Milliseconds(), 15000, "publishPackage: CreateVersionWithData")
 	if err != nil {
@@ -890,6 +1011,21 @@ func (p publishedServiceImpl) makePublishedReferencesEntities(ctx context.Contex
 				Params:  map[string]interface{}{"package": ref.RefId, "version": ref.Version},
 			}
 		}
+		// An excluded reference is not part of the dashboard's content, so it cannot make the dashboard unsound.
+		if !ref.Excluded {
+			refHasErrors, err := VersionHasAnyErrors(ctx, p.publishedRepo, refVersion.PackageId, refVersion.Version, refVersion.Revision)
+			if err != nil {
+				return nil, err
+			}
+			if refHasErrors {
+				return nil, &exception.CustomError{
+					Status:  http.StatusBadRequest,
+					Code:    exception.VersionHasErrors,
+					Message: exception.ReferencedVersionHasErrorsMsg,
+					Params:  map[string]interface{}{"packageId": ref.RefId, "version": ref.Version},
+				}
+			}
+		}
 		refEntity := &entity.PublishedReferenceEntity{
 			PackageId:    packageInfo.PackageId,
 			Version:      packageInfo.Version,
@@ -939,7 +1075,13 @@ func makePublishedReferenceUniqueKey(entity *entity.PublishedReferenceEntity) st
 // mergeVersionComparisons combines the operation and DDL version_comparison rows of one build by
 // comparison_id so a single row carries both operation and contract types. DDL-only pairs are
 // appended so the ddl_comparison FK is satisfied for pure DDL changelogs.
-func mergeVersionComparisons(operationComparisons []*entity.VersionComparisonEntity, ddlComparisons []*entity.VersionComparisonEntity) []*entity.VersionComparisonEntity {
+//
+// refs and the error flag describe the comparison as a whole, but each index reports only what it
+// covers, so both are a union over every entry the build listed for the pair. cachedComparisons
+// carries the entries taken from cache, from either index. They produce no row of their own, but a
+// comparison can be cached in one index and recalculated in the other, and what the cached index
+// reported about the pair still belongs to it.
+func mergeVersionComparisons(operationComparisons []*entity.VersionComparisonEntity, ddlComparisons []*entity.VersionComparisonEntity, cachedComparisons []*entity.VersionComparisonEntity) []*entity.VersionComparisonEntity {
 	versionComparisonByComparisonId := make(map[string]*entity.VersionComparisonEntity, len(operationComparisons))
 	for _, comparison := range operationComparisons {
 		versionComparisonByComparisonId[comparison.ComparisonId] = comparison
@@ -948,12 +1090,32 @@ func mergeVersionComparisons(operationComparisons []*entity.VersionComparisonEnt
 		if existing, exists := versionComparisonByComparisonId[ddlComparison.ComparisonId]; exists {
 			existing.ContractTypes = ddlComparison.ContractTypes
 			// A dashboard can reference a package with only operation changes and another with only
-			// DDL changes; each side's reader only records refs for the comparisons it produced, so
-			// the merged row must carry both, or the DDL-only referenced comparison is never fetched.
+			// DDL changes; each index only records refs for the comparisons it covers, so the merged
+			// row must carry both, or the DDL-only referenced comparison is never fetched.
 			existing.Refs = mergeUniqueStrings(existing.Refs, ddlComparison.Refs)
+			if ddlComparison.Metadata.GetHasErrors() {
+				if existing.Metadata == nil {
+					existing.Metadata = entity.Metadata{}
+				}
+				existing.Metadata.SetHasErrors(true)
+			}
 		} else {
 			operationComparisons = append(operationComparisons, ddlComparison)
 			versionComparisonByComparisonId[ddlComparison.ComparisonId] = ddlComparison
+		}
+	}
+	// A comparison cached in both indexes has no row to merge into and keeps the one it already has.
+	for _, cachedComparison := range cachedComparisons {
+		existing, exists := versionComparisonByComparisonId[cachedComparison.ComparisonId]
+		if !exists {
+			continue
+		}
+		existing.Refs = mergeUniqueStrings(existing.Refs, cachedComparison.Refs)
+		if cachedComparison.Metadata.GetHasErrors() {
+			if existing.Metadata == nil {
+				existing.Metadata = entity.Metadata{}
+			}
+			existing.Metadata.SetHasErrors(true)
 		}
 	}
 	return operationComparisons
@@ -1016,14 +1178,20 @@ func (p publishedServiceImpl) reCalculateChangelogs(ctx context.Context, package
 
 func (p publishedServiceImpl) PublishChanges(ctx context.Context, buildArc *archive.BuildResultArchive, publishId string) error {
 	var err error
-	if err = buildArc.ReadPackageComparisons(false); err != nil {
+	err = buildArc.ReadPackageComparisons(false)
+	if err != nil {
+		return err
+	}
+	err = buildArc.ReadPackageDdlContractComparisons(false)
+	if err != nil {
 		return err
 	}
 	err = buildArc.ReadComparisonInternalDocuments(false)
 	if err != nil {
 		return err
 	}
-	if err = buildArc.ReadPackageDdlContractComparisons(false); err != nil {
+	err = buildArc.ReadComparisonNotifications(false)
+	if err != nil {
 		return err
 	}
 
@@ -1043,12 +1211,18 @@ func (p publishedServiceImpl) PublishChanges(ctx context.Context, buildArc *arch
 	if err := p.publishedValidator.ValidateChanges(ctx, buildArc); err != nil {
 		return err
 	}
+	if err := p.checkPreviousVersionHasNoErrors(ctx, buildArc.PackageInfo, buildArc.PackageInfo.PreviousVersionRevision); err != nil {
+		return err
+	}
+	if err := p.publishedValidator.ValidateComparisonNotifications(buildArc); err != nil {
+		return err
+	}
 	if len(buildArc.PackageComparisons.Comparisons) == 0 && len(buildArc.PackageDdlComparisons.Comparisons) == 0 {
 		return nil
 	}
 
 	buildArcEntitiesReader := archive.NewBuildResultToEntitiesReader(buildArc)
-	versionComparisonEntities, operationComparisonEntities, versionComparisonsFromCache, comparisonFileIdToKeyMap, err := buildArcEntitiesReader.ReadOperationComparisonsToEntities(ctx, nil, p.operationRepo)
+	versionComparisonEntities, operationComparisonEntities, cachedComparisons, comparisonFileIdToKeyMap, err := buildArcEntitiesReader.ReadOperationComparisonsToEntities(ctx, nil, p.operationRepo)
 	if err != nil {
 		return err
 	}
@@ -1065,15 +1239,15 @@ func (p publishedServiceImpl) PublishChanges(ctx context.Context, buildArc *arch
 		if ddlErr != nil {
 			return ddlErr
 		}
-		var ddlComparisonsFromCache []string
+		var cachedDdlComparisons []*entity.VersionComparisonEntity
 		var ddlComparisonFileIdToKeyMap map[string]view.ComparisonKey
-		ddlVersionComparisonEntities, ddlContractComparisonEntities, ddlComparisonsFromCache, ddlComparisonFileIdToKeyMap, err = buildArcEntitiesReader.ReadDdlContractComparisonsToEntities(ctx, currentDdlDataHashes, p.ddlContractRepo)
+		ddlVersionComparisonEntities, ddlContractComparisonEntities, cachedDdlComparisons, ddlComparisonFileIdToKeyMap, err = buildArcEntitiesReader.ReadDdlContractComparisonsToEntities(ctx, currentDdlDataHashes, p.ddlContractRepo)
 		if err != nil {
 			return err
 		}
 		// migration re-validation treats a comparison id as legitimately absent from the build archive
-		// only if it appears here, so the DDL-side cache hits must be included, not just the operation side.
-		versionComparisonsFromCache = mergeUniqueStrings(versionComparisonsFromCache, ddlComparisonsFromCache)
+		// only if it appears here, so the DDL cache hits must be included, not just the operation ones.
+		cachedComparisons = append(cachedComparisons, cachedDdlComparisons...)
 		for fileId, key := range ddlComparisonFileIdToKeyMap {
 			if _, ok := comparisonFileIdToKeyMap[fileId]; !ok {
 				comparisonFileIdToKeyMap[fileId] = key
@@ -1082,14 +1256,19 @@ func (p publishedServiceImpl) PublishChanges(ctx context.Context, buildArc *arch
 	}
 	operationComparisonIdsToRebuild := comparisonIds(versionComparisonEntities)
 	ddlComparisonIdsToRebuild := comparisonIds(ddlVersionComparisonEntities)
-	versionComparisonEntities = mergeVersionComparisons(versionComparisonEntities, ddlVersionComparisonEntities)
+	versionComparisonEntities = mergeVersionComparisons(versionComparisonEntities, ddlVersionComparisonEntities, cachedComparisons)
+	versionComparisonsFromCache := comparisonIds(cachedComparisons)
 
 	comparisonInternalDocEntities, comparisonInternalDocDataEntities, err := buildArcEntitiesReader.ReadComparisonInternalDocumentsToEntities(comparisonFileIdToKeyMap)
 	if err != nil {
 		return err
 	}
+	comparisonNotificationEntities, err := buildArcEntitiesReader.ReadComparisonNotificationsToEntities()
+	if err != nil {
+		return err
+	}
 
-	err = p.publishedRepo.SaveVersionChanges(ctx, buildArc.PackageInfo, publishId, operationComparisonEntities, versionComparisonEntities, versionComparisonsFromCache, operationComparisonIdsToRebuild, ddlComparisonIdsToRebuild, comparisonInternalDocEntities, comparisonInternalDocDataEntities, ddlContractComparisonEntities)
+	err = p.publishedRepo.SaveVersionChanges(ctx, buildArc.PackageInfo, publishId, operationComparisonEntities, versionComparisonEntities, versionComparisonsFromCache, operationComparisonIdsToRebuild, ddlComparisonIdsToRebuild, comparisonInternalDocEntities, comparisonInternalDocDataEntities, ddlContractComparisonEntities, comparisonNotificationEntities, buildErrorFlags(buildArc))
 	if err != nil {
 		return err
 	}

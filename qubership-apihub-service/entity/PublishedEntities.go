@@ -104,11 +104,11 @@ type PublishedVersionSearchQueryEntity struct {
 	PackageId  string   `pg:"package_id, type:varchar, use_zero"`
 	Statuses   []string `pg:"statuses, type:varchar[], use_zero"`
 	Label      string   `pg:"label, type:varchar, use_zero"`
-	TextFilter string `pg:"text_filter, type:varchar, use_zero"`
-	SortBy     string `pg:"sort_by, type:varchar, use_zero"`
-	SortOrder  string `pg:"sort_order, type:varchar, use_zero"`
-	Limit      int    `pg:"limit, type:integer, use_zero"`
-	Offset     int    `pg:"offset, type:integer, use_zero"`
+	TextFilter string   `pg:"text_filter, type:varchar, use_zero"`
+	SortBy     string   `pg:"sort_by, type:varchar, use_zero"`
+	SortOrder  string   `pg:"sort_order, type:varchar, use_zero"`
+	Limit      int      `pg:"limit, type:integer, use_zero"`
+	Offset     int      `pg:"offset, type:integer, use_zero"`
 }
 
 func GetVersionSortOrderPG(sortOrder string) string {
@@ -206,6 +206,39 @@ type PublishedContentEntity struct {
 	Filename     string   `pg:"filename, type:varchar"`
 	Shareability string   `pg:"shareability_status, type:varchar"`
 	ApiKind      string   `pg:"api_kind, type:varchar"`
+}
+
+type DocumentErrorSummaryEntity struct {
+	DataType    string `pg:"data_type, type:varchar, use_zero"`
+	McpEndpoint string `pg:"mcp_endpoint, type:varchar, use_zero"`
+	HasErrors   bool   `pg:"has_errors, type:boolean, use_zero"`
+}
+
+type VersionErrorSummaryEntity struct {
+	HasErrors                           bool `pg:"has_errors, type:boolean, use_zero"`
+	ChangelogHasErrors                  bool `pg:"changelog_has_errors, type:boolean, use_zero"`
+	ReferencedVersionHasErrors          bool `pg:"referenced_version_has_errors, type:boolean, use_zero"`
+	ReferencedVersionChangelogHasErrors bool `pg:"referenced_version_changelog_has_errors, type:boolean, use_zero"`
+	ComparisonRefsHaveErrors            bool `pg:"comparison_refs_have_errors, type:boolean, use_zero"`
+}
+
+func (v VersionErrorSummaryEntity) HasAnyErrors() bool {
+	return v.ContentHasErrors() || v.ChangelogHasAnyErrors() || v.ReferencedVersionChangelogHasErrors
+}
+
+func (v VersionErrorSummaryEntity) ContentHasErrors() bool {
+	return v.HasErrors || v.ReferencedVersionHasErrors
+}
+
+func (v VersionErrorSummaryEntity) ChangelogHasAnyErrors() bool {
+	return v.ChangelogHasErrors || v.ComparisonRefsHaveErrors
+}
+
+type VersionErrorSummaryRowEntity struct {
+	PackageId string `pg:"package_id, type:varchar"`
+	Version   string `pg:"version, type:varchar"`
+	Revision  int    `pg:"revision, type:integer"`
+	VersionErrorSummaryEntity
 }
 
 type PublishedContentWithDataEntity struct {
@@ -385,6 +418,7 @@ func MakePublishedDocumentView(ent *PublishedContentEntity) *view.PublishedDocum
 		Title:        ent.Title,
 		Filename:     ent.Filename,
 		Tags:         ent.Metadata.GetDocTags(),
+		HasErrors:    ent.Metadata.GetHasErrors(),
 	}
 }
 
@@ -421,6 +455,7 @@ func MakePublishedDocumentRefView2(ent *PublishedContentEntity) *view.PublishedD
 		Title:        ent.Title,
 		Filename:     ent.Filename,
 		PackageRef:   view.MakePackageRefKey(ent.PackageId, ent.Version, ent.Revision),
+		HasErrors:    ent.Metadata.GetHasErrors(),
 	}
 }
 
