@@ -506,6 +506,10 @@ func (p publishedServiceImpl) PublishPackage(ctx context.Context, buildArc *arch
 	if err != nil {
 		return err
 	}
+	err = buildArc.ReadCachedComparisons(false)
+	if err != nil {
+		return err
+	}
 	err = buildArc.ReadPackageOperations(false)
 	if err != nil {
 		return err
@@ -682,7 +686,9 @@ func (p publishedServiceImpl) PublishPackage(ctx context.Context, buildArc *arch
 		return err
 	}
 
-	operationsComparisonEntities, changedOperationEntities, cachedOperationComparisons, comparisonFileIdToKeyMap, err := buildArcEntitiesReader.ReadOperationComparisonsToEntities(ctx, operationsInfo, p.operationRepo)
+	cachedComparisonIds := buildArcEntitiesReader.ReadCachedComparisonIds()
+
+	operationsComparisonEntities, changedOperationEntities, comparisonFileIdToKeyMap, err := buildArcEntitiesReader.ReadOperationComparisonsToEntities(ctx, operationsInfo, p.operationRepo, cachedComparisonIds)
 	if err != nil {
 		return err
 	}
@@ -704,20 +710,11 @@ func (p publishedServiceImpl) PublishPackage(ctx context.Context, buildArc *arch
 	// DDL comparisons share version_comparison with REST. Read the DDL index/per-pair files, then
 	// merge the version-comparison rows by comparison_id (REST + DDL contractTypes on the same row;
 	// DDL-only pairs are appended so the ddl_comparison FK is satisfied for pure DDL changelogs).
-	ddlVersionComparisonEntities, ddlContractComparisonEntities, cachedDdlComparisons, ddlComparisonFileIdToKeyMap, err := buildArcEntitiesReader.ReadDdlContractComparisonsToEntities(ctx, publishingDdlDataHashes, p.ddlContractRepo)
+	ddlVersionComparisonEntities, ddlContractComparisonEntities, ddlComparisonFileIdToKeyMap, err := buildArcEntitiesReader.ReadDdlContractComparisonsToEntities(ctx, publishingDdlDataHashes, p.ddlContractRepo, cachedComparisonIds)
 	if err != nil {
 		return err
 	}
-	// A comparison id only ever appears in these lists when it was actually rebuilt (not served from
-	// cache) in that index, so they double as the rebuild sets saveVersionChangesTx/saveDdlComparisonsTx
-	// scope their operation_types/contract_types writes to.
-	operationComparisonIdsToRebuild := comparisonIds(operationsComparisonEntities)
-	ddlComparisonIdsToRebuild := comparisonIds(ddlVersionComparisonEntities)
-	cachedComparisons := append(cachedOperationComparisons, cachedDdlComparisons...)
-	operationsComparisonEntities = mergeVersionComparisons(operationsComparisonEntities, ddlVersionComparisonEntities, cachedComparisons)
-	// migration re-validation treats a comparison id as legitimately absent from the build archive
-	// only if it appears here, so the DDL cache hits must be included, not just the operation ones.
-	versionComparisonsFromCache := comparisonIds(cachedComparisons)
+	operationsComparisonEntities = mergeVersionComparisons(operationsComparisonEntities, ddlVersionComparisonEntities)
 	for fileId, key := range ddlComparisonFileIdToKeyMap {
 		if _, ok := comparisonFileIdToKeyMap[fileId]; !ok {
 			comparisonFileIdToKeyMap[fileId] = key
@@ -904,9 +901,7 @@ func (p publishedServiceImpl) PublishPackage(ctx context.Context, buildArc *arch
 		operationsComparisonEntities,
 		newServiceName,
 		existingPackage,
-		versionComparisonsFromCache,
-		operationComparisonIdsToRebuild,
-		ddlComparisonIdsToRebuild,
+		cachedComparisonIds,
 		versionInternalDocEntities,
 		versionInternalDocDataEntities,
 		comparisonInternalDocEntities,
@@ -1077,11 +1072,8 @@ func makePublishedReferenceUniqueKey(entity *entity.PublishedReferenceEntity) st
 // appended so the ddl_comparison FK is satisfied for pure DDL changelogs.
 //
 // refs and the error flag describe the comparison as a whole, but each index reports only what it
-// covers, so both are a union over every entry the build listed for the pair. cachedComparisons
-// carries the entries taken from cache, from either index. They produce no row of their own, but a
-// comparison can be cached in one index and recalculated in the other, and what the cached index
-// reported about the pair still belongs to it.
-func mergeVersionComparisons(operationComparisons []*entity.VersionComparisonEntity, ddlComparisons []*entity.VersionComparisonEntity, cachedComparisons []*entity.VersionComparisonEntity) []*entity.VersionComparisonEntity {
+// covers, so both are a union over every entry the build listed for the pair.
+func mergeVersionComparisons(operationComparisons []*entity.VersionComparisonEntity, ddlComparisons []*entity.VersionComparisonEntity) []*entity.VersionComparisonEntity {
 	versionComparisonByComparisonId := make(map[string]*entity.VersionComparisonEntity, len(operationComparisons))
 	for _, comparison := range operationComparisons {
 		versionComparisonByComparisonId[comparison.ComparisonId] = comparison
@@ -1104,20 +1096,6 @@ func mergeVersionComparisons(operationComparisons []*entity.VersionComparisonEnt
 			versionComparisonByComparisonId[ddlComparison.ComparisonId] = ddlComparison
 		}
 	}
-	// A comparison cached in both indexes has no row to merge into and keeps the one it already has.
-	for _, cachedComparison := range cachedComparisons {
-		existing, exists := versionComparisonByComparisonId[cachedComparison.ComparisonId]
-		if !exists {
-			continue
-		}
-		existing.Refs = mergeUniqueStrings(existing.Refs, cachedComparison.Refs)
-		if cachedComparison.Metadata.GetHasErrors() {
-			if existing.Metadata == nil {
-				existing.Metadata = entity.Metadata{}
-			}
-			existing.Metadata.SetHasErrors(true)
-		}
-	}
 	return operationComparisons
 }
 
@@ -1135,17 +1113,6 @@ func mergeUniqueStrings(a []string, b []string) []string {
 		}
 	}
 	return merged
-}
-
-// comparisonIds returns the ComparisonId of every entity in the list. A comparison id only appears
-// in a Read*ComparisonsToEntities result when it was not served from cache, so this list doubles as
-// "which comparison ids were rebuilt on this side this publish".
-func comparisonIds(comparisons []*entity.VersionComparisonEntity) []string {
-	ids := make([]string, 0, len(comparisons))
-	for _, comparison := range comparisons {
-		ids = append(ids, comparison.ComparisonId)
-	}
-	return ids
 }
 
 func (p publishedServiceImpl) reCalculateChangelogs(ctx context.Context, packageInfo view.PackageInfoFile) error {
@@ -1179,6 +1146,10 @@ func (p publishedServiceImpl) reCalculateChangelogs(ctx context.Context, package
 func (p publishedServiceImpl) PublishChanges(ctx context.Context, buildArc *archive.BuildResultArchive, publishId string) error {
 	var err error
 	err = buildArc.ReadPackageComparisons(false)
+	if err != nil {
+		return err
+	}
+	err = buildArc.ReadCachedComparisons(false)
 	if err != nil {
 		return err
 	}
@@ -1222,7 +1193,8 @@ func (p publishedServiceImpl) PublishChanges(ctx context.Context, buildArc *arch
 	}
 
 	buildArcEntitiesReader := archive.NewBuildResultToEntitiesReader(buildArc)
-	versionComparisonEntities, operationComparisonEntities, cachedComparisons, comparisonFileIdToKeyMap, err := buildArcEntitiesReader.ReadOperationComparisonsToEntities(ctx, nil, p.operationRepo)
+	cachedComparisonIds := buildArcEntitiesReader.ReadCachedComparisonIds()
+	versionComparisonEntities, operationComparisonEntities, comparisonFileIdToKeyMap, err := buildArcEntitiesReader.ReadOperationComparisonsToEntities(ctx, nil, p.operationRepo, cachedComparisonIds)
 	if err != nil {
 		return err
 	}
@@ -1239,25 +1211,18 @@ func (p publishedServiceImpl) PublishChanges(ctx context.Context, buildArc *arch
 		if ddlErr != nil {
 			return ddlErr
 		}
-		var cachedDdlComparisons []*entity.VersionComparisonEntity
 		var ddlComparisonFileIdToKeyMap map[string]view.ComparisonKey
-		ddlVersionComparisonEntities, ddlContractComparisonEntities, cachedDdlComparisons, ddlComparisonFileIdToKeyMap, err = buildArcEntitiesReader.ReadDdlContractComparisonsToEntities(ctx, currentDdlDataHashes, p.ddlContractRepo)
+		ddlVersionComparisonEntities, ddlContractComparisonEntities, ddlComparisonFileIdToKeyMap, err = buildArcEntitiesReader.ReadDdlContractComparisonsToEntities(ctx, currentDdlDataHashes, p.ddlContractRepo, cachedComparisonIds)
 		if err != nil {
 			return err
 		}
-		// migration re-validation treats a comparison id as legitimately absent from the build archive
-		// only if it appears here, so the DDL cache hits must be included, not just the operation ones.
-		cachedComparisons = append(cachedComparisons, cachedDdlComparisons...)
 		for fileId, key := range ddlComparisonFileIdToKeyMap {
 			if _, ok := comparisonFileIdToKeyMap[fileId]; !ok {
 				comparisonFileIdToKeyMap[fileId] = key
 			}
 		}
 	}
-	operationComparisonIdsToRebuild := comparisonIds(versionComparisonEntities)
-	ddlComparisonIdsToRebuild := comparisonIds(ddlVersionComparisonEntities)
-	versionComparisonEntities = mergeVersionComparisons(versionComparisonEntities, ddlVersionComparisonEntities, cachedComparisons)
-	versionComparisonsFromCache := comparisonIds(cachedComparisons)
+	versionComparisonEntities = mergeVersionComparisons(versionComparisonEntities, ddlVersionComparisonEntities)
 
 	comparisonInternalDocEntities, comparisonInternalDocDataEntities, err := buildArcEntitiesReader.ReadComparisonInternalDocumentsToEntities(comparisonFileIdToKeyMap)
 	if err != nil {
@@ -1268,7 +1233,7 @@ func (p publishedServiceImpl) PublishChanges(ctx context.Context, buildArc *arch
 		return err
 	}
 
-	err = p.publishedRepo.SaveVersionChanges(ctx, buildArc.PackageInfo, publishId, operationComparisonEntities, versionComparisonEntities, versionComparisonsFromCache, operationComparisonIdsToRebuild, ddlComparisonIdsToRebuild, comparisonInternalDocEntities, comparisonInternalDocDataEntities, ddlContractComparisonEntities, comparisonNotificationEntities, buildErrorFlags(buildArc))
+	err = p.publishedRepo.SaveVersionChanges(ctx, buildArc.PackageInfo, publishId, operationComparisonEntities, versionComparisonEntities, cachedComparisonIds, comparisonInternalDocEntities, comparisonInternalDocDataEntities, ddlContractComparisonEntities, comparisonNotificationEntities, buildErrorFlags(buildArc))
 	if err != nil {
 		return err
 	}

@@ -190,6 +190,19 @@ type PackageComparisonsFile struct {
 	Comparisons []VersionComparison `json:"comparisons" validate:"dive,required"`
 }
 
+type PackageCachedComparisonsFile struct {
+	CachedComparisons []CachedVersionComparison `json:"cachedComparisons" validate:"dive,required"`
+}
+
+type CachedVersionComparison struct {
+	PackageId                string `json:"packageId" validate:"required"`
+	Version                  string `json:"version" validate:"required"`
+	Revision                 int    `json:"revision" validate:"required"`
+	PreviousVersionPackageId string `json:"previousVersionPackageId" validate:"required"`
+	PreviousVersion          string `json:"previousVersion" validate:"required"`
+	PreviousVersionRevision  int    `json:"previousVersionRevision" validate:"required"`
+}
+
 // --- Contract archive types ---
 
 const DdlEntityKindTable = "table"
@@ -227,7 +240,6 @@ type DdlVersionComparison struct {
 	PreviousVersionPackageId string `json:"previousVersionPackageId"`
 	PreviousVersion          string `json:"previousVersion"`
 	PreviousVersionRevision  int    `json:"previousVersionRevision"`
-	FromCache                bool   `json:"fromCache"`
 	HasErrors                bool   `json:"hasErrors"`
 	// ContractsChangesSummary is the builder format: a map keyed by contract type name.
 	ContractsChangesSummary map[string]ContractTypeSummary `json:"contractsChangesSummary"`
@@ -241,7 +253,10 @@ type ContractTypeSummary struct {
 
 // ToContractTypes converts the builder map format to the internal []ContractType slice.
 func (d DdlVersionComparison) ToContractTypes() []ContractType {
-	result := make([]ContractType, 0, len(d.ContractsChangesSummary)) // return empty slice rather than nil - that is how the DDL side of a version_comparison row is told apart from a side that was never calculated.
+	if len(d.ContractsChangesSummary) == 0 {
+		return nil
+	}
+	result := make([]ContractType, 0, len(d.ContractsChangesSummary))
 	for typeName, summary := range d.ContractsChangesSummary {
 		result = append(result, ContractType{
 			ContractType:             typeName,
@@ -323,7 +338,6 @@ type VersionComparison struct {
 	PreviousVersion          string          `json:"previousVersion"`
 	PreviousVersionRevision  int             `json:"previousVersionRevision"`
 	OperationTypes           []OperationType `json:"operationTypes" validate:"required,dive,required"`
-	FromCache                bool            `json:"fromCache"`
 	ComparisonFileId         string          `json:"comparisonFileId"`
 	HasErrors                bool            `json:"hasErrors"`
 }
