@@ -12585,7 +12585,7 @@ components:
         notLatestRevision:
           type: boolean
           default: false
-        apiProcessorVerson:
+        apiProcessorVersion:
           description: Version of api-processor with which current version was built.
           type: string
         hasErrors:
@@ -12610,7 +12610,7 @@ components:
         - revision
         - revisionsCount
         - status
-        - apiProcessorVerson
+        - apiProcessorVersion
       properties:
         packageId:
           description: Package unique string identifier (full alias)
@@ -12650,7 +12650,7 @@ components:
           example: 3
         status:
           $ref: "#/components/schemas/VersionStatusEnum"
-        apiProcessorVerson:
+        apiProcessorVersion:
           description: Version of api-processor with which current version was built.
           type: string
         hasErrors:
