@@ -359,29 +359,28 @@ func (a *BuildResultToEntitiesReader) ReadOperationsToEntities() ([]*entity.Oper
 				}
 			}
 		}
-		
+
 		if len(searchTextData) > 0 {
-			metadataJson, marshalErr := json.Marshal(metadata)
-			if marshalErr != nil {
+
+			var searchText []byte
+			searchText = append(searchText, searchTextData...)
+
+			searchText, err = enrichSearchTextWithMetadata(searchText, operation.Title, metadata)
+			if err != nil {
 				return nil, nil, nil, nil, &exception.CustomError{
 					Status:  http.StatusBadRequest,
 					Code:    exception.InvalidPackagedFile,
 					Message: exception.InvalidPackagedFileMsg,
 					Params: map[string]interface{}{"file": "operations.json",
-						"error": fmt.Sprintf("Unable to serialize metadata of operation %s: %s", operation.OperationId, marshalErr.Error())},
+						"error": fmt.Sprintf("Unable to serialize metadata of operation %s: %s", operation.OperationId, err.Error())},
 				}
 			}
-			searchText := make([]byte, 0, len(searchTextData)+len(metadataJson)+1)
-			searchText = append(searchText, searchTextData...)
-			searchText = append(searchText, ' ')
-			searchText = append(searchText, metadataJson...)
 
 			operationSearchTexts = append(operationSearchTexts, &entity.OperationSearchTextEntity{
 				OperationId:    operation.OperationId,
 				ApiType:        operation.ApiType,
-				Title:          operation.Title,
 				SearchTextData: searchText,
-				SearchDataHash: utils.GetEncodedXXHash128(searchText, []byte(operation.Title)),
+				SearchDataHash: utils.GetEncodedXXHash128(searchText),
 			})
 		}
 
@@ -756,6 +755,7 @@ func (a *BuildResultToEntitiesReader) ReadDdlContractsToEntities() ([]*entity.DD
 			if contract.Search != nil && contract.Search.UseEntityDataAsSearchText {
 				searchText = string(fileData)
 			}
+
 			searchDataHash := utils.GetEncodedXXHash128([]byte(searchText))
 			searchTextEntities = append(searchTextEntities, &entity.DDLContractSearchTextEntity{
 				PackageId:      a.PackageInfo.PackageId,
@@ -784,7 +784,7 @@ func (a *BuildResultToEntitiesReader) ReadDdlContractsToEntities() ([]*entity.DD
 			SchemaName:                contract.SchemaName,
 			Name:                      contract.Name,
 			Description:               contract.Description,
-			Metadata:                  entity.Metadata(contract.Metadata),
+			Metadata:                  contract.Metadata,
 			DataHash:                  dataHash,
 			DocumentId:                contract.DocumentId,
 			VersionInternalDocumentId: contract.VersionInternalDocumentId,
@@ -1025,6 +1025,7 @@ func (a *BuildResultToEntitiesReader) ReadMcpContractsToEntities() ([]*entity.MC
 			if contract.Search != nil && contract.Search.UseEntityDataAsSearchText {
 				searchText = string(fileData)
 			}
+
 			searchDataHash := utils.GetEncodedXXHash128([]byte(searchText))
 			searchTextEntities = append(searchTextEntities, &entity.MCPContractSearchTextEntity{
 				PackageId:      a.PackageInfo.PackageId,
@@ -1077,4 +1078,20 @@ func (a *BuildResultToEntitiesReader) calculateOperationsExternalMetadataMap() m
 	}
 
 	return result
+}
+
+func enrichSearchTextWithMetadata(searchText []byte, title string, metadata entity.Metadata) ([]byte, error) {
+	if title != "" {
+		searchText = append(searchText, ' ')
+		searchText = append(searchText, title...)
+	}
+
+	metadataJson, err := json.Marshal(metadata)
+	if err != nil {
+		return nil, fmt.Errorf("failed to serialize metadata %v: %w", metadata, err)
+	}
+	searchText = append(searchText, ' ')
+	searchText = append(searchText, metadataJson...)
+
+	return searchText, nil
 }
