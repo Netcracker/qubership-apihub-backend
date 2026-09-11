@@ -300,7 +300,7 @@ func main() {
 	ddlContractService := ddlContractServiceForVersion
 	mcpContractService := mcpContractServiceForVersion
 
-	mcpService := service.NewMCPService(systemInfoService, operationService, packageService, versionService, monitoringService, roleService)
+	mcpService := service.NewMCPService(systemInfoService, operationService, packageService, versionService, monitoringService, roleService, ddlContractService, mcpContractService)
 
 	responder := responder.NewResponder(systemInfoService.ShowDebugInResponse())
 	authenticator, err := security.NewAuthenticator(userService, roleService, apihubApiKeyService, personalAccessTokenService, systemInfoService, tokenRevocationService, responder)
@@ -369,7 +369,7 @@ func main() {
 	logoutController := controller.NewLogoutController(tokenRevocationService, systemInfoService, responder)
 	operationController := controller.NewOperationController(roleService, operationService, buildService, monitoringService, ptHandler, responder)
 	operationGroupController := controller.NewOperationGroupController(roleService, operationGroupService, versionService, systemInfoService, packageService, responder)
-	searchController := controller.NewSearchController(operationService, versionService, monitoringService, ddlContractService, mcpContractService, responder)
+	searchController := controller.NewSearchController(operationService, versionService, monitoringService, ddlContractService, mcpContractService, roleService, responder)
 	dataMigrationController := mController.NewTempMigrationController(dbMigrationService, responder)
 	activityTrackingController := controller.NewActivityTrackingController(activityTrackingService, roleService, ptHandler, responder)
 	comparisonController := controller.NewComparisonController(operationService, versionService, buildService, roleService, comparisonService, monitoringService, ptHandler, responder)
@@ -397,8 +397,8 @@ func main() {
 	r.HandleFunc("/api/v1/debug/logs/checkLevel", authenticator.Secure(logsController.CheckLogLevel)).Methods(http.MethodGet)
 
 	//Search
-	r.HandleFunc("/api/v3/search/{searchLevel}", authenticator.SecureUser(searchController.Search_deprecated)).Methods(http.MethodPost) //TODO: add API key strategy after authorization fix
-	r.HandleFunc("/api/v4/search/{searchLevel}", authenticator.SecureUser(searchController.Search)).Methods(http.MethodPost)            //TODO: add API key strategy after authorization fix
+	r.HandleFunc("/api/v3/search/{searchLevel}", authenticator.Secure(searchController.Search_deprecated)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v4/search/{searchLevel}", authenticator.Secure(searchController.Search)).Methods(http.MethodPost)
 
 	r.HandleFunc("/api/v2/builders/{builderId}/tasks", authenticator.Secure(publishV2Controller.GetFreeBuild)).Methods(http.MethodPost)
 

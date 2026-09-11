@@ -47,7 +47,7 @@ type Authenticator struct {
 	userAuthStrategy     union.Union
 	jwtAuthStrategy      union.Union
 	proxyAuthStrategy    union.Union
-	apiKeyStrategy       auth.Strategy
+	mcpAuthStrategy      union.Union
 	publicKey            []byte
 	keeper               jwt.SecretsKeeper
 }
@@ -93,7 +93,7 @@ func NewAuthenticator(userService service.UserService, roleService service.RoleS
 	jwtAuthStrategy := union.New(bearerTokenStrategy, cookieTokenStrategy)
 	customJwtStrategy := NewCustomJWTStrategy(cache, jwtValidator)
 	proxyAuthStrategy := union.New(customJwtStrategy, cookieTokenStrategy)
-	apiKeyStrategy := apihubApiKeyStrategy
+	mcpAuthStrategy := union.New(apihubApiKeyStrategy, personalAccessTokenStrategy)
 	return Authenticator{
 		responder:            responder,
 		userService:          userService,
@@ -107,7 +107,7 @@ func NewAuthenticator(userService service.UserService, roleService service.RoleS
 		userAuthStrategy:     userAuthStrategy,
 		jwtAuthStrategy:      jwtAuthStrategy,
 		proxyAuthStrategy:    proxyAuthStrategy,
-		apiKeyStrategy:       apiKeyStrategy,
+		mcpAuthStrategy:      mcpAuthStrategy,
 		publicKey:            publicKey,
 		keeper:               keeper,
 	}, nil

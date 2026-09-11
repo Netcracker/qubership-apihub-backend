@@ -228,7 +228,7 @@ func (a Authenticator) SecureMCP(next http.Handler) http.Handler {
 				return
 			}
 		}()
-		user, err := authenticate(a.apiKeyStrategy, r)
+		user, err := authenticate(a.mcpAuthStrategy, r)
 		if err != nil {
 			a.respondWithAuthFailedError(w, r, err)
 			return
