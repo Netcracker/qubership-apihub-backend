@@ -470,3 +470,11 @@ func TestResolveMCPSearchVersions(t *testing.T) {
 	require.Empty(t, resolveMCPSearchVersions(""))
 	require.Equal(t, []string{"linter@2"}, resolveMCPSearchVersions("linter@2"))
 }
+
+func TestGetPackagesListFailsClosedWithoutSecurityContext(t *testing.T) {
+	m := mcpService{}
+
+	_, err := m.GetPackagesList(context.Background(), "WORKSPACE")
+
+	require.Error(t, err)
+}
