@@ -118,6 +118,8 @@ func (d dbMigrationServiceImpl) GetMigrationReport(ctx context.Context, migratio
 	}
 	if mRunEnt.PostCheckResult != nil {
 		result.PostCheckResult = mEntity.MakePostCheckResultView(*mRunEnt.PostCheckResult)
+		result.NotMigratedVersionsCount = len(mRunEnt.PostCheckResult.NotMigratedVersions)
+		result.NotMigratedComparisonsCount = len(mRunEnt.PostCheckResult.NotMigratedComparisons)
 	}
 	if !mRunEnt.FinishedAt.IsZero() {
 		result.ElapsedTime = mRunEnt.FinishedAt.Sub(mRunEnt.StartedAt).String()
