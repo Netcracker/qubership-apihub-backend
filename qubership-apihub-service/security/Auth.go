@@ -121,12 +121,11 @@ func (a Authenticator) respondWithAuthFailedError(w http.ResponseWriter, r *http
 		return
 	}
 	log.Tracef("Authentication failed: %+v", err)
-	customErr := &exception.CustomError{
+	a.responder.RespondWithCustomError(w, &exception.CustomError{
 		Status:  http.StatusUnauthorized,
 		Message: http.StatusText(http.StatusUnauthorized),
 		Debug:   fmt.Sprintf("%v", err),
-	}
-	a.responder.RespondWithJson(w, customErr.Status, customErr)
+	})
 }
 
 func (a Authenticator) CreateLocalUserToken_deprecated(w http.ResponseWriter, r *http.Request) {
