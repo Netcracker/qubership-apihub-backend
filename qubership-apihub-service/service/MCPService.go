@@ -96,7 +96,6 @@ func (m mcpService) MakeMCPServer() *mcpserver.MCPServer {
 	toolHandlers := map[string]func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error){
 		ToolNameSearchOperations:           m.ExecuteSearchTool,
 		ToolNameSearchOperationsV2:         m.ExecuteSearchToolV2,
-		ToolNameSearchOperationsInGroups:   m.ExecuteSearchToolInGroups,
 		ToolNameGetOperationSpec:           m.ExecuteGetSpecTool,
 		ToolNameGetOperationDiff:           m.ExecuteGetOperationDiffTool,
 		ToolNameGetDocument:                m.ExecuteGetDocumentTool,
@@ -329,13 +328,13 @@ WORKSPACE SELECTION (mandatory before search and workspace-scoped tools):
 - Never invent or silently pick a workspaceId
 - If the user already named a workspace (workspaceId, alias, or name), use that value as workspace
 - Otherwise: call list_workspaces, show the accessible workspaces, and ask which one to use
-- Call search_api_operations_v2, search_api_operations_in_groups, or list_workspace_packages only after the user has confirmed a workspace
+- Call search_api_operations_v2 or list_workspace_packages only after the user has confirmed a workspace
 
 WORKSPACE-FIRST FLOW (use this for new integrations):
 1. Resolve the workspace with the user (see WORKSPACE SELECTION above)
 2. Use list_workspace_packages with the confirmed workspaceId to browse its packages (metadata only; no versions)
 3. Use list_package_versions with a packageId to see that package's available release versions
-4. Use search_api_operations_v2 with the confirmed workspace to search for operations, search_api_operations_in_groups when the user named several packages to search in, or list_api_operations/list_ddl_entities/list_mcp_contract_entities to browse a version's operations, DDL, or MCP contract entities directly
+4. Use search_api_operations_v2 with the confirmed workspace to search for operations, or list_api_operations/list_ddl_entities/list_mcp_contract_entities to browse a version's operations, DDL, or MCP contract entities directly
 
 WHEN TO USE THIS SERVER:
 Use apihub-mcp when the user asks about:
@@ -348,18 +347,17 @@ Use apihub-mcp when the user asks about:
 AVAILABLE TOOLS:
 1. list_workspaces - list workspaces the caller can access (call this before workspace-scoped tools when the user has not named a workspace)
 2. search_api_operations_v2 - search for REST, GraphQL, or AsyncAPI operations, or DDL/MCP contract entities, within a given workspace (see tool description for details)
-3. search_api_operations_in_groups - search within an explicit list of packages in a workspace; use it when the user named several packages to search in (see tool description for details)
-4. list_workspace_packages - list packages within a workspace (metadata only; use list_package_versions for versions)
-5. list_package_versions - list release versions available for a specific package
-6. get_api_operation_specification - get operation-level specification data extracted from an OpenAPI or AsyncAPI specification (use only when user explicitly requests details)
-7. get_api_operation_diff - get list of changes of the specific operation from OpenAPI or AsyncAPI specification from the specific package and version to the previous version (use then user asks for changes of the specific operation)
-8. get_document - get a source API specification or contract document by slug for REST, GraphQL, AsyncAPI, DDL, or MCP (use this tool when the user needs the source document or a document-level diff built by comparing two fetched versions)
-9. list_api_operations - list REST, GraphQL, or AsyncAPI operations in a specific package version, without a search query
-10. list_ddl_entities - list DDL database contract entities (tables/views) in a specific package version
-11. get_ddl_entity - get full details, including the DDL SQL definition, of a single DDL database contract entity
-12. get_ddl_entity_diff - get list of changes for a single DDL database contract entity between two versions
-13. list_mcp_contract_entities - list entities (init/tools/prompts/resources) of a published MCP server contract in a specific package version
-14. get_mcp_contract_entity - get full details of a single entity from a published MCP server contract
+3. list_workspace_packages - list packages within a workspace (metadata only; use list_package_versions for versions)
+4. list_package_versions - list release versions available for a specific package
+5. get_api_operation_specification - get operation-level specification data extracted from an OpenAPI or AsyncAPI specification (use only when user explicitly requests details)
+6. get_api_operation_diff - get list of changes of the specific operation from OpenAPI or AsyncAPI specification from the specific package and version to the previous version (use then user asks for changes of the specific operation)
+7. get_document - get a source API specification or contract document by slug for REST, GraphQL, AsyncAPI, DDL, or MCP (use this tool when the user needs the source document or a document-level diff built by comparing two fetched versions)
+8. list_api_operations - list REST, GraphQL, or AsyncAPI operations in a specific package version, without a search query
+9. list_ddl_entities - list DDL database contract entities (tables/views) in a specific package version
+10. get_ddl_entity - get full details, including the DDL SQL definition, of a single DDL database contract entity
+11. get_ddl_entity_diff - get list of changes for a single DDL database contract entity between two versions
+12. list_mcp_contract_entities - list entities (init/tools/prompts/resources) of a published MCP server contract in a specific package version
+13. get_mcp_contract_entity - get full details of a single entity from a published MCP server contract
 
 DEPRECATED (kept for backward compatibility; do not use in new integrations):
 - search_api_operations - predecessor of search_api_operations_v2, scoped to a single preconfigured workspace instead of a caller-supplied one
@@ -393,15 +391,14 @@ ACCESS CONTROL AND AUTHORIZATION ERRORS:
 
 // Tool names constants
 const (
-	ToolNameSearchOperations         = "search_api_operations"
-	ToolNameSearchOperationsV2       = "search_api_operations_v2"
-	ToolNameSearchOperationsInGroups = "search_api_operations_in_groups"
-	ToolNameGetOperationSpec         = "get_api_operation_specification"
-	ToolNameGetOperationDiff         = "get_api_operation_diff"
-	ToolNameGetDocument              = "get_document"
-	ToolNameListWorkspaces           = "list_workspaces"
-	ToolNameListWorkspacePackages    = "list_workspace_packages"
-	ToolNameListPackageVersions      = "list_package_versions"
+	ToolNameSearchOperations      = "search_api_operations"
+	ToolNameSearchOperationsV2    = "search_api_operations_v2"
+	ToolNameGetOperationSpec      = "get_api_operation_specification"
+	ToolNameGetOperationDiff      = "get_api_operation_diff"
+	ToolNameGetDocument           = "get_document"
+	ToolNameListWorkspaces        = "list_workspaces"
+	ToolNameListWorkspacePackages = "list_workspace_packages"
+	ToolNameListPackageVersions   = "list_package_versions"
 
 	ToolNameListDdlEntities         = "list_ddl_entities"
 	ToolNameGetDdlEntity            = "get_ddl_entity"
@@ -492,44 +489,7 @@ LLM INSTRUCTIONS:
 - DO NOT use get_api_operation_specification in advance - first show a list of operations to choose from, even if only one is found
 - Use get_api_operation_specification only when user explicitly requests details about a REST or AsyncAPI operation
 - VERSION: when 'release' is omitted, search is not filtered by version (all release-status versions in scope are considered; ranking prefers higher versions). Pass 'release' only when the user names a version or you need to narrow to one published version
-- GROUP: pass 'group' only when the user explicitly asks to search within a specific package. Use that package's packageId; never pass the workspaceId as 'group'. When the user names several packages, use search_api_operations_in_groups instead`
-
-	ToolDescriptionSearchOperationsInGroupsMCP = `Search for API operations, or DDL/MCP contract entities, by text query across an explicit list of packages within a given workspace.
-
-Supported apiType values: rest, graphql, asyncapi, ddl, mcp.
-
-This tool behaves like search_api_operations_v2, except that the search scope is the union of the packages listed in 'groups' and everything nested under them. Use it when the user named several packages to search in; use search_api_operations_v2 when the scope is the whole workspace or a single package.
-
-IMPORTANT: Search is lexical full-text search, not semantic, fuzzy, or substring search. Plain words are treated as required terms, so try shorter and longer query variations.
-IMPORTANT: Search matches only terms included in the operation search index. If a query returns too few or irrelevant results, retry with alternative terms such as operation names, titles, REST path segments, AsyncAPI channel/message names, GraphQL input/output type names, or domain keywords.
-IMPORTANT: apiType=ddl searches DDL database contract entities (tables/views) and apiType=mcp searches MCP server contract entities (tools/prompts/resources) instead of API operations; results carry entityId/kind/schemaName/tableName or entityName/mcpEndpoint instead of operation-specific fields. Use entityId with get_ddl_entity/get_ddl_entity_diff or get_mcp_contract_entity for details.
-
-LLM INSTRUCTIONS:
-- Always pass apiType and workspace
-- WORKSPACE IS MANDATORY FROM THE USER: if the user has not named a workspace, call list_workspaces, show the accessible workspaces, and ask which one to use before calling this tool. Never invent or silently pick a workspaceId
-- If the user already named a workspace (workspaceId, alias, or name), pass that value as workspace
-- Resolve the packages the user named to packageIds with list_workspace_packages before the first call; never invent a packageId
-- For the first call, use a large limit (100) to find as many options as possible. Paging starts from 0
-- Consider simplifying the query to a single keyword (e.g., if query is "create customer", also try "customer")
-- For REST, search by HTTP method, operation path, distinctive path segment, title, summary/description terms, and domain nouns. If a full path or server-base-prefixed path fails, retry with the operation path only or shorter path segments
-- For AsyncAPI, search by operation id, action (send/receive), channel address, message name/title, payload/schema name, and important payload field names. If the first query fails, retry with shorter terms from the user request
-- For GraphQL, search by operation name, operation type (query/mutation/subscription), description terms, input/output type names, and domain nouns. If the first query fails, retry with shorter terms from the user request
-- Query string has special features: -word to force exclude a word from the search - it can help if search results are flooded with irrelevant results; "something certain" - double quotes to strict search of a phrase/word
-- Group results by packageId when displaying
-- Return all metadata that MCP returns (operationId, packageId, packageName, version, title, apiKind, apiType, apiAudience, documentId, and API-specific fields)
-- documentId is the specification slug to pass as get_document.slug
-- Return the most recent versions of operations from the ranked results; pass 'release' only to narrow to one published version
-- If the first call returned few or no unique operations - make repeated calls:
-	* Increase page number for pagination
-	* Simplify or generalize the search query, or try alternative/synonym terms
-	* Widen 'groups' with more packageIds from list_workspace_packages, or drop 'groups' to cover the whole workspace
-	* If results are too broad, narrow 'groups' to the packages the user cares about, or pass 'release' from list_package_versions for the target package (prefer the newest unless the user named one). Packages may use YYYY.Q (e.g., 2024.3), semver (0.0.1, 0.1.0), or other schemes
-- If user asks for more results - increment page, simplify query, or search in other packages/versions
-- DO NOT use get_api_operation_specification in advance - first show a list of operations to choose from, even if only one is found
-- Use get_api_operation_specification only when user explicitly requests details about a REST or AsyncAPI operation
-- VERSION: when 'release' is omitted, search is not filtered by version (all release-status versions in scope are considered; ranking prefers higher versions). Pass 'release' only when the user names a version or you need to narrow to one published version
-- GROUPS: pass one packageId per package the user asked to search. Every entry must belong to the given workspace; an entry from another workspace is rejected and the whole call fails
-- GROUPS: an entry covers that package and every package nested under it, so listing a parent together with its own child adds nothing. To search the whole workspace, omit 'groups' rather than passing the workspaceId as an entry`
+- GROUP: pass 'group' only when the user explicitly asks to search within a specific package. Use that package's packageId; never pass the workspaceId as 'group'`
 
 	ToolDescriptionGetOperationSpecMCP = `Get operation-level specification data extracted from an OpenAPI or AsyncAPI specification.
 
@@ -1132,43 +1092,6 @@ var (
 		"required": ["apiType","query","workspace"]
 	}`)
 
-	searchOperationsInGroupsSchema = json.RawMessage(`{
-		"type": "object",
-		"properties": {
-			"apiType": {
-				"type": "string",
-				"enum": ["rest", "graphql", "asyncapi", "ddl", "mcp"]
-			},
-			"query": {
-				"type": "string"
-			},
-			"workspace": {
-				"type": "string"
-			},
-			"limit": {
-				"type": "integer",
-				"minimum": 10,
-				"maximum": 100
-			},
-			"page": {
-				"type": "integer",
-				"minimum": 0
-			},
-			"release": {
-				"type": "string"
-			},
-			"groups": {
-				"type": "array",
-				"description": "Package IDs (groups) to search in. Each must be the workspace itself or a package under it",
-				"minItems": 1,
-				"items": {
-					"type": "string"
-				}
-			}
-		},
-		"required": ["apiType","query","workspace"]
-	}`)
-
 	listWorkspacesSchema = json.RawMessage(`{
 		"type": "object",
 		"properties": {},
@@ -1360,11 +1283,6 @@ func getMCPServerToolMetadata() []view.ToolMetadata {
 			Name:           ToolNameSearchOperationsV2,
 			Schema:         searchOperationsV2Schema,
 			DescriptionMCP: ToolDescriptionSearchOperationsV2MCP,
-		},
-		view.ToolMetadata{
-			Name:           ToolNameSearchOperationsInGroups,
-			Schema:         searchOperationsInGroupsSchema,
-			DescriptionMCP: ToolDescriptionSearchOperationsInGroupsMCP,
 		},
 		view.ToolMetadata{
 			Name:           ToolNameListWorkspacePackages,
