@@ -337,10 +337,13 @@ func TestGetToolMetadataUsesGenericToolNames(t *testing.T) {
 
 	require.ElementsMatch(t, []string{
 		ToolNameSearchOperations,
+		ToolNameSearchOperationsV2,
 		ToolNameGetOperationSpec,
 		ToolNameGetOperationDiff,
 		ToolNameGetDocument,
 		ToolNameListWorkspaces,
+		ToolNameListWorkspacePackages,
+		ToolNameListPackageVersions,
 		ToolNameListApiOperations,
 		ToolNameListDdlEntities,
 		ToolNameGetDdlEntity,
@@ -361,9 +364,11 @@ func TestGetMCPServerToolMetadataIncludesV2AndNavigationTools(t *testing.T) {
 	require.Contains(t, names, ToolNameSearchOperationsV2)
 	require.Contains(t, names, ToolNameListWorkspacePackages)
 	require.Contains(t, names, ToolNameListPackageVersions)
-	// list_workspaces is shared with AI Chat; workspace-aware search/navigation stay MCP-server-only.
+	// Workspace-aware search and navigation tools are now shared with AI Chat, not MCP-server-only.
 	require.Contains(t, getToolMetadataNames(t), ToolNameListWorkspaces)
-	require.NotContains(t, getToolMetadataNames(t), ToolNameSearchOperationsV2)
+	require.Contains(t, getToolMetadataNames(t), ToolNameSearchOperationsV2)
+	require.Contains(t, getToolMetadataNames(t), ToolNameListWorkspacePackages)
+	require.Contains(t, getToolMetadataNames(t), ToolNameListPackageVersions)
 }
 
 func getToolMetadataNames(t *testing.T) []string {

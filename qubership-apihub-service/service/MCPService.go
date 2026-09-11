@@ -649,7 +649,9 @@ It behaves like get_api_operation_diff with apiType=rest and should not be used 
 
 // Tool descriptions for OpenAI
 const (
-	ToolDescriptionSearchOperationsOpenAI = `Search for API operations, or DDL/MCP contract entities, by text query.
+	ToolDescriptionSearchOperationsOpenAI = `Deprecated: use search_api_operations_v2 instead. This tool searches only the preconfigured legacy workspace and does not accept a workspace parameter.
+
+Search for API operations, or DDL/MCP contract entities, by text query.
 
 Supported apiType values: rest, graphql, asyncapi, ddl, mcp.
 
@@ -684,16 +686,75 @@ LLM INSTRUCTIONS:
 	* operationId -> [operationId](/portal/packages/<packageId>/<version>/operations/<apiType>/<operationId>)
 - Format responses in markdown with well-readable markup (headings, lists, tables)`
 
+	ToolDescriptionSearchOperationsV2OpenAI = `Search for API operations, or DDL/MCP contract entities, by text query within a given workspace.
+
+Supported apiType values: rest, graphql, asyncapi, ddl, mcp.
+
+IMPORTANT: Search is lexical full-text search, not semantic, fuzzy, or substring search. Plain words are treated as required terms, so try shorter and longer query variations.
+IMPORTANT: Search matches only terms included in the operation search index. If a query returns too few or irrelevant results, retry with alternative terms such as operation names, titles, REST path segments, AsyncAPI channel/message names, GraphQL input/output type names, or domain keywords.
+IMPORTANT: apiType=ddl searches DDL database contract entities (tables/views) and apiType=mcp searches MCP server contract entities (tools/prompts/resources) instead of API operations; results carry entityId/kind/schemaName/tableName or entityName/mcpEndpoint instead of operation-specific fields. Use entityId with get_ddl_entity/get_ddl_entity_diff or get_mcp_contract_entity for details.
+
+LLM INSTRUCTIONS:
+- Always pass apiType and workspace
+- WORKSPACE IS MANDATORY FROM THE USER: if the user has not named a workspace, call list_workspaces, present the accessible workspaces, and ask which one to use before calling this tool. Never invent or silently pick a workspaceId
+- If the user already named a workspace (workspaceId, alias, or name), pass that value as workspace
+- For the first call, use a large limit (100) to find as many options as possible. Paging starts from 0
+- Consider simplifying the query to a single keyword (e.g., if query is "create customer", also try "customer")
+- For REST, search by HTTP method, operation path, distinctive path segment, title, summary/description terms, and domain nouns. If a full path or server-base-prefixed path fails, retry with the operation path only or shorter path segments
+- For AsyncAPI, search by operation id, action (send/receive), channel address, message name/title, payload/schema name, and important payload field names. If the first query fails, retry with shorter terms from the user request
+- For GraphQL, search by operation name, operation type (query/mutation/subscription), description terms, input/output type names, and domain nouns. If the first query fails, retry with shorter terms from the user request
+- Query string has special features: -word to force exclude a word from the search - it can help if search results are flooded with irrelevant results; "something certain" - double quotes to strict search of a phrase/word
+- Group results by packageId when displaying in markdown format
+- Return all metadata that MCP returns (operationId, packageId, packageName, version, title, apiKind, apiType, apiAudience, documentId, and API-specific fields)
+- documentId is the specification slug to pass as get_document.slug
+- Return the most recent versions of operations from the ranked results; pass 'release' only to narrow to one published version
+- If the first call returned few or no unique operations - make repeated calls:
+	* Increase page number for pagination
+	* Simplify or generalize the search query, or try alternative/synonym terms
+	* Search in a specific package only when the user asked for that package (use 'group' with packageId from list_workspace_packages)
+	* If results are too broad, pass 'release' from list_package_versions for the target package (prefer the newest unless the user named one). Packages may use YYYY.Q (e.g., 2024.3), semver (0.0.1, 0.1.0), or other schemes
+- If user asks for more results - increment page, simplify query, or search in other packages/versions
+- DO NOT use get_api_operation_specification in advance - first show a list of operations to choose from in markdown format, even if only one is found
+- Use get_api_operation_specification only when user explicitly requests details about a REST or AsyncAPI operation
+- VERSION: when 'release' is omitted, search is not filtered by version (all release-status versions in scope are considered; ranking prefers higher versions). Pass 'release' only when the user names a version or you need to narrow to one published version
+- GROUP: pass 'group' only when the user explicitly asks to search within a specific package. Use that package's packageId; never pass the workspaceId as 'group'
+- REQUIRED: Convert metadata to markdown links (relative, without baseUrl):
+	* packageId -> [packageId](/portal/packages/<packageId>)
+	* operationId -> [operationId](/portal/packages/<packageId>/<version>/operations/<apiType>/<operationId>)
+- Format responses in markdown with well-readable markup (headings, lists, tables)`
+
 	ToolDescriptionListWorkspacesOpenAI = `List workspaces the caller can access.
 
 Returns a JSON object with a 'workspaces' array; each item includes workspace metadata (workspaceId, alias, kind, name, description).
 
 LLM INSTRUCTIONS:
-- Call this tool when the user asks which workspaces are available, or when they have not named a workspace and you need to present options
+- Call this tool when the user asks which workspaces are available, or when they have not named a workspace and you need a workspaceId for search_api_operations_v2 or list_workspace_packages
 - Present the returned workspaces as a markdown list (workspaceId, name, description when present)
 - If the user already named a workspace (workspaceId, alias, or name), you may use that value directly without calling this tool first
-- Workspaces the caller cannot read are not returned
-- Note: search_api_operations in AI Chat remains scoped to the preconfigured workspace and mcp://api-packages-list; list_workspaces does not change that scope`
+- Workspaces the caller cannot read are not returned`
+
+	ToolDescriptionListWorkspacePackagesOpenAI = `List packages within a workspace (metadata only, no versions).
+
+LLM INSTRUCTIONS:
+- Always pass workspace
+- WORKSPACE IS MANDATORY FROM THE USER: if the user has not named a workspace, call list_workspaces, present the accessible workspaces, and ask which one to use before calling this tool. Never invent or silently pick a workspaceId
+- If the user already named a workspace (workspaceId, alias, or name), pass that value as workspace
+- Use textFilter to narrow results by package name or ID substring
+- Use page/limit for pagination when a workspace has many packages
+- Use a package's packageId with list_package_versions to see its release versions, and with search_api_operations_v2's 'group' parameter only when the user asked to search that specific package
+- Packages the caller cannot read are not returned; an empty result does not necessarily mean the workspace has no packages
+- Format the package list as a markdown table (name, packageId, kind)
+- Convert packageId to a markdown link: [packageId](/portal/packages/<packageId>)`
+
+	ToolDescriptionListPackageVersionsOpenAI = `List release versions available for a specific package.
+
+LLM INSTRUCTIONS:
+- Always pass packageId. Use packageId from list_workspace_packages or search results
+- status defaults to release; pass a different status only if the user explicitly asks for draft or archived versions
+- Use page/limit for pagination when a package has many versions
+- Version strings are package-specific (YYYY.Q such as 2024.3, semver such as 0.1.0, v1, etc.) — do not assume a calendar default exists for every package
+- Format the version list as a markdown list or table, newest first
+- If the result reports an authorization problem (a message starting with "Failed to check user privileges" or stating you lack "privileges"/access), STOP. Do not retry, call other tools, or search other packages or versions to work around it. Tell the user they do not have access to this package and may need to request it`
 
 	ToolDescriptionGetOperationSpecOpenAI = `Get operation-level specification data extracted from an OpenAPI or AsyncAPI specification.
 
@@ -743,7 +804,7 @@ LLM INSTRUCTIONS:
 
 	ToolDescriptionListApiOperationsOpenAI = `List REST, GraphQL, or AsyncAPI operations published in a specific package version.
 
-Use this tool to browse a version's operations without a search query, e.g. before fetching an operation's specification or diff. For keyword-based lookup across packages, use search_api_operations instead.
+Use this tool to browse a version's operations without a search query, e.g. before fetching an operation's specification or diff. For keyword-based lookup across packages, use search_api_operations_v2 instead.
 
 LLM INSTRUCTIONS:
 - Always pass packageId, version, and apiType
@@ -1238,6 +1299,24 @@ func getToolMetadata() []view.ToolMetadata {
 			DescriptionOpenAI: ToolDescriptionListWorkspacesOpenAI,
 		},
 		{
+			Name:              ToolNameSearchOperationsV2,
+			Schema:            searchOperationsV2Schema,
+			DescriptionMCP:    ToolDescriptionSearchOperationsV2MCP,
+			DescriptionOpenAI: ToolDescriptionSearchOperationsV2OpenAI,
+		},
+		{
+			Name:              ToolNameListWorkspacePackages,
+			Schema:            listWorkspacePackagesSchema,
+			DescriptionMCP:    ToolDescriptionListWorkspacePackagesMCP,
+			DescriptionOpenAI: ToolDescriptionListWorkspacePackagesOpenAI,
+		},
+		{
+			Name:              ToolNameListPackageVersions,
+			Schema:            listPackageVersionsSchema,
+			DescriptionMCP:    ToolDescriptionListPackageVersionsMCP,
+			DescriptionOpenAI: ToolDescriptionListPackageVersionsOpenAI,
+		},
+		{
 			Name:              ToolNameListApiOperations,
 			Schema:            listApiOperationsSchema,
 			DescriptionMCP:    ToolDescriptionListApiOperationsMCP,
@@ -1277,23 +1356,10 @@ func getToolMetadata() []view.ToolMetadata {
 }
 
 func getMCPServerToolMetadata() []view.ToolMetadata {
+	// search_api_operations_v2, list_workspace_packages, and list_package_versions are already
+	// part of getToolMetadata() (shared with AI Chat); only the REST-only legacy aliases are added here.
 	metadata := append([]view.ToolMetadata{}, getToolMetadata()...)
 	metadata = append(metadata,
-		view.ToolMetadata{
-			Name:           ToolNameSearchOperationsV2,
-			Schema:         searchOperationsV2Schema,
-			DescriptionMCP: ToolDescriptionSearchOperationsV2MCP,
-		},
-		view.ToolMetadata{
-			Name:           ToolNameListWorkspacePackages,
-			Schema:         listWorkspacePackagesSchema,
-			DescriptionMCP: ToolDescriptionListWorkspacePackagesMCP,
-		},
-		view.ToolMetadata{
-			Name:           ToolNameListPackageVersions,
-			Schema:         listPackageVersionsSchema,
-			DescriptionMCP: ToolDescriptionListPackageVersionsMCP,
-		},
 		view.ToolMetadata{
 			Name:           LegacyToolNameSearchRestOperations,
 			Schema:         legacySearchOperationsSchema,
@@ -1353,6 +1419,27 @@ func getParameterDescription(toolName, paramName string) string {
 			"page":    "Page number for pagination (starts from 0). Use to get additional results",
 			"release": "Optional package release version to search in (exact string from mcp://api-packages-list, e.g. 2024.3, 0.1.0, v1). When omitted, search is not filtered by version. Pass only when the user names a version or you need to narrow results.",
 			"group":   "Optional package ID (packageId) to filter search to one package. Pass only when the user explicitly asks to search that package. Use packageId from mcp://api-packages-list, not packageName, and never pass the workspace ID.",
+		},
+		ToolNameSearchOperationsV2: {
+			"apiType":   "API type to search. Allowed values: rest, graphql, asyncapi, ddl, mcp. ddl and mcp search DDL database contract and MCP server contract entities instead of API operations",
+			"query":     "Text search query for finding API operations. Important: search is lexical and index-bound, so try different query variations (simplified, with keywords)",
+			"workspace": "WorkspaceId to search in. Mandatory. If the user has not named a workspace, call list_workspaces first, present the accessible workspaces, and ask which one to use; never invent or silently pick one",
+			"limit":     "Maximum number of results to return (10-100). For the first search, it's recommended to use 100",
+			"page":      "Page number for pagination (starts from 0). Use to get additional results",
+			"release":   "Optional package release version to search in (exact string from list_package_versions, e.g. 2024.3, 0.1.0, v1). When omitted, search is not filtered by version. Pass only when the user names a version or you need to narrow results.",
+			"group":     "Optional package ID (packageId) to filter search to one package. Pass only when the user explicitly asks to search that package. Use packageId from list_workspace_packages, not packageName, and never pass the workspace ID.",
+		},
+		ToolNameListWorkspacePackages: {
+			"workspace":  "WorkspaceId to list packages from. Mandatory. If the user has not named a workspace, call list_workspaces first, present the accessible workspaces, and ask which one to use; never invent or silently pick one",
+			"textFilter": "Optional text filter matching package name or ID",
+			"limit":      "Maximum number of results to return (1-100)",
+			"page":       "Page number for pagination (starts from 0)",
+		},
+		ToolNameListPackageVersions: {
+			"packageId": "Package ID (packageId) whose release versions to list. Use packageId from list_workspace_packages or search results",
+			"status":    "Optional version status filter. Allowed values: release, draft, archived. Defaults to release; pass a different value only if the user explicitly asks for draft or archived versions",
+			"limit":     "Maximum number of results to return (1-100)",
+			"page":      "Page number for pagination (starts from 0)",
 		},
 		ToolNameGetOperationSpec: {
 			"apiType":     "API type for operation-level specification data. Allowed values: rest, asyncapi. GraphQL is unsupported",
