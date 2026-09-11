@@ -19,7 +19,7 @@ $$
     BEGIN
         FOR r IN SELECT workspace_id FROM tmp_target_excluded_ws
             LOOP
-                slug := 'p_' || md5(r.workspace_id);
+                slug := 'p_' || left(md5(r.workspace_id), 16);
                 INSERT INTO global_search.workspace_registry (workspace_id, partition_slug)
                 VALUES (r.workspace_id, slug)
                 ON CONFLICT (workspace_id) DO NOTHING;

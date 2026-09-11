@@ -32,6 +32,7 @@ type SearchQueryReq_deprecated struct {
 	Page                    int                     `json:"-"`
 	Workspace               string                  `json:"-"`
 	VisiblePackageRoots     []string                `json:"-"`
+	InvisiblePackageRoots   []string                `json:"-"`
 }
 
 func MakeSearchQueryReq(deprecated SearchQueryReq_deprecated) SearchQueryReq {
@@ -58,6 +59,7 @@ func MakeSearchQueryReq(deprecated SearchQueryReq_deprecated) SearchQueryReq {
 		Page:                    deprecated.Page,
 		Workspace:               deprecated.Workspace,
 		VisiblePackageRoots:     deprecated.VisiblePackageRoots,
+		InvisiblePackageRoots:   deprecated.InvisiblePackageRoots,
 	}
 }
 
@@ -72,6 +74,7 @@ type SearchQueryReq struct {
 	Limit                   int                     `json:"-"`
 	Page                    int                     `json:"-"`
 	VisiblePackageRoots     []string                `json:"-"`
+	InvisiblePackageRoots   []string                `json:"-"`
 }
 
 func (r SearchQueryReq) ToDeprecated() SearchQueryReq_deprecated {
@@ -85,6 +88,7 @@ func (r SearchQueryReq) ToDeprecated() SearchQueryReq_deprecated {
 		Page:                    r.Page,
 		Workspace:               r.Workspace,
 		VisiblePackageRoots:     r.VisiblePackageRoots,
+		InvisiblePackageRoots:   r.InvisiblePackageRoots,
 	}
 	if r.Status != "" {
 		req.Statuses = []string{r.Status}

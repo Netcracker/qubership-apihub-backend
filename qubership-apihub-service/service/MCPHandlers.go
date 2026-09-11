@@ -228,11 +228,12 @@ func (m mcpService) executeSearchCore(ctx context.Context, req mcp.CallToolReque
 		Limit:        limit,
 		Page:         page,
 	}
-	visibleRoots, err := m.roleService.GetWorkspacePackageVisibilityRoots(ctx, workspace)
+	visibility, err := m.roleService.GetWorkspacePackageVisibilityRoots(ctx, workspace)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to resolve package visibility: %s", err.Error())), nil
 	}
-	searchReq.VisiblePackageRoots = visibleRoots
+	searchReq.VisiblePackageRoots = visibility.VisibleRoots
+	searchReq.InvisiblePackageRoots = visibility.InvisibleRoots
 
 	var payload map[string]any
 	switch apiType {
@@ -379,9 +380,9 @@ func (m mcpService) ExecuteListPackageVersionsTool(ctx context.Context, req mcp.
 		return nil, err
 	}
 
-	var versions []view.PublishedVersionListView
+	var versions []view.PublishedVersionListMCPView
 	if versionsView != nil {
-		versions = versionsView.Versions
+		versions = projectPublishedVersionsForMCP(versionsView.Versions)
 	}
 	payload := map[string]any{"versions": versions}
 

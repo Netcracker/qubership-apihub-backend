@@ -26,7 +26,7 @@ type RoleService interface {
 	GetPermissionsForPackage(ctx context.Context, packageId string) ([]string, error)
 	FilterVersionsByPackageReadAccess(ctx context.Context, keys []entity.PublishedVersionKeyEntity) (accessible []entity.PublishedVersionKeyEntity, hiddenCount int, err error)
 	GetPermissionsForReadScope(ctx context.Context, scope view.PackageReadScope) ([]string, error)
-	GetWorkspacePackageVisibilityRoots(ctx context.Context, workspaceId string) ([]string, error)
+	GetWorkspacePackageVisibilityRoots(ctx context.Context, workspaceId string) (*view.PackageVisibilityRoots, error)
 	GetUserPackagePromoteStatuses(ctx context.Context, packageIds []string, userId string) (*view.AvailablePackagePromoteStatuses, error)
 	GetAvailableVersionPublishStatuses(ctx context.Context, packageId string) ([]string, error)
 	HasRequiredPermissions(ctx context.Context, packageId string, requiredPermissions ...view.RolePermission) (bool, error)
@@ -641,7 +641,7 @@ func (r roleServiceImpl) FilterVersionsByPackageReadAccess(ctx context.Context, 
 	return accessible, hiddenCount, nil
 }
 
-func (r roleServiceImpl) GetWorkspacePackageVisibilityRoots(ctx context.Context, workspaceId string) ([]string, error) {
+func (r roleServiceImpl) GetWorkspacePackageVisibilityRoots(ctx context.Context, workspaceId string) (*view.PackageVisibilityRoots, error) {
 	if workspaceId == "" {
 		return nil, &exception.CustomError{
 			Status:  http.StatusBadRequest,
@@ -663,29 +663,42 @@ func (r roleServiceImpl) GetWorkspacePackageVisibilityRoots(ctx context.Context,
 		}
 	}
 
-	if secctx.IsSysadm(ctx) {
-		return []string{workspaceId}, nil
-	}
-
 	principal, err := r.resolveVisibilityPrincipal(ctx, workspaceId)
 	if err != nil {
 		return nil, err
+	}
+
+	if principal.Kind == entity.VisibilityPrincipalSysadmin {
+		return &view.PackageVisibilityRoots{
+			WorkspaceId:    workspaceId,
+			VisibleRoots:   []string{workspaceId},
+			InvisibleRoots: []string{},
+		}, nil
 	}
 
 	accessRows, err := r.roleRepository.GetWorkspacePackageReadAccess(ctx, workspaceId, principal)
 	if err != nil {
 		return nil, err
 	}
+	allIds := make([]string, 0, len(accessRows))
 	readableIds := make([]string, 0, len(accessRows))
 	for _, row := range accessRows {
+		allIds = append(allIds, row.PackageId)
 		if row.CanRead {
 			readableIds = append(readableIds, row.PackageId)
 		}
 	}
-	return utils.CompressVisibleRoots(readableIds), nil
+	return &view.PackageVisibilityRoots{
+		WorkspaceId:    workspaceId,
+		VisibleRoots:   utils.CompressVisibleRoots(readableIds),
+		InvisibleRoots: utils.CompressInvisibleRoots(allIds, readableIds),
+	}, nil
 }
 
 func (r roleServiceImpl) resolveVisibilityPrincipal(ctx context.Context, workspaceId string) (entity.VisibilityPrincipal, error) {
+	if secctx.IsSysadm(ctx) {
+		return entity.VisibilityPrincipal{Kind: entity.VisibilityPrincipalSysadmin}, nil
+	}
 	if apikeyPackageId := secctx.GetApiKeyPackageId(ctx); apikeyPackageId != "" {
 		inWorkspace := apikeyPackageId == "*" ||
 			apikeyPackageId == workspaceId ||
@@ -700,11 +713,13 @@ func (r roleServiceImpl) resolveVisibilityPrincipal(ctx context.Context, workspa
 			}
 		}
 		return entity.VisibilityPrincipal{
+			Kind:          entity.VisibilityPrincipalApiKey,
 			ApiKeyScopeId: apikeyPackageId,
 			ApiKeyRoleIds: secctx.GetApiKeyRoles(ctx),
 		}, nil
 	}
 	return entity.VisibilityPrincipal{
+		Kind:   entity.VisibilityPrincipalUser,
 		UserId: secctx.GetUserId(ctx),
 	}, nil
 }

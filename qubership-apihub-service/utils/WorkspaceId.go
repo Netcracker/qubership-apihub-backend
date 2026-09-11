@@ -9,7 +9,7 @@ import (
 // PartitionSlug returns a short, identifier-safe suffix for global_search partition table names.
 func PartitionSlug(workspaceId string) string {
 	sum := md5.Sum([]byte(workspaceId))
-	return "p_" + hex.EncodeToString(sum[:])
+	return "p_" + hex.EncodeToString(sum[:])[:16]
 }
 
 // GlobalSearchOperationPartitionTable returns the relation name for a workspace operations FTS partition.

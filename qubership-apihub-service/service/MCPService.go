@@ -232,6 +232,10 @@ func (m mcpService) GetPackagesList(ctx context.Context, workspaceId string) ([]
 		return nil, fmt.Errorf("missing security context for api-packages-list request")
 	}
 
+	if secctx.GetUserId(ctx) == "" {
+		return nil, fmt.Errorf("missing security context for api-packages-list request")
+	}
+
 	packageListReq := view.PackageListReq{
 		Kind:               []string{entity.KIND_PACKAGE}, // As specified: kind=package
 		ShowAllDescendants: true,
@@ -1360,6 +1364,21 @@ func getMCPServerToolMetadata() []view.ToolMetadata {
 	// part of getToolMetadata() (shared with AI Chat); only the REST-only legacy aliases are added here.
 	metadata := append([]view.ToolMetadata{}, getToolMetadata()...)
 	metadata = append(metadata,
+		view.ToolMetadata{
+			Name:           ToolNameSearchOperationsV2,
+			Schema:         searchOperationsV2Schema,
+			DescriptionMCP: ToolDescriptionSearchOperationsV2MCP,
+		},
+		view.ToolMetadata{
+			Name:           ToolNameListWorkspacePackages,
+			Schema:         listWorkspacePackagesSchema,
+			DescriptionMCP: ToolDescriptionListWorkspacePackagesMCP,
+		},
+		view.ToolMetadata{
+			Name:           ToolNameListPackageVersions,
+			Schema:         listPackageVersionsSchema,
+			DescriptionMCP: ToolDescriptionListPackageVersionsMCP,
+		},
 		view.ToolMetadata{
 			Name:           LegacyToolNameSearchRestOperations,
 			Schema:         legacySearchOperationsSchema,

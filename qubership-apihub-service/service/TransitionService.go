@@ -23,14 +23,15 @@ type TransitionService interface {
 	ListPackageTransitions(ctx context.Context) ([]view.PackageTransition, error)
 }
 
-func NewTransitionService(transRepo repository.TransitionRepository, pubRepo repository.PublishedRepository, systemInfoService SystemInfoService) TransitionService {
-	return &transitionServiceImpl{transRepo: transRepo, pubRepo: pubRepo, systemInfoService: systemInfoService}
+func NewTransitionService(transRepo repository.TransitionRepository, pubRepo repository.PublishedRepository, systemInfoService SystemInfoService, globalSearchPartitionService GlobalSearchPartitionService) TransitionService {
+	return &transitionServiceImpl{transRepo: transRepo, pubRepo: pubRepo, systemInfoService: systemInfoService, globalSearchPartitionService: globalSearchPartitionService}
 }
 
 type transitionServiceImpl struct {
-	transRepo         repository.TransitionRepository
-	pubRepo           repository.PublishedRepository
-	systemInfoService SystemInfoService
+	transRepo                    repository.TransitionRepository
+	pubRepo                      repository.PublishedRepository
+	systemInfoService            SystemInfoService
+	globalSearchPartitionService GlobalSearchPartitionService
 }
 
 // runTransitionMove runs a transition move under a safety-net bound, then persists the terminal
@@ -195,9 +196,17 @@ func (p transitionServiceImpl) MoveOrRenamePackage(ctx context.Context, fromId s
 		}
 		// TODO: implement async job that will take non-finished transition tasks from DB instead of a direct call
 		utils.SafeAsync(func() {
+			var onSuccess func()
+			if toWorkspace {
+				onSuccess = func() {
+					if renameErr := p.globalSearchPartitionService.RenameWorkspacePartitions(fromId, toId); renameErr != nil {
+						log.Errorf("failed to rename global_search partitions from %s to %s: %s", fromId, toId, renameErr)
+					}
+				}
+			}
 			p.runTransitionMove(ctx, id, func(ctx context.Context) (int, error) {
 				return p.transRepo.MoveGroupingPackage(ctx, fromId, toId)
-			}, nil)
+			}, onSuccess)
 		})
 		return id, nil
 	case entity.KIND_PACKAGE:

@@ -218,13 +218,19 @@ func main() {
 
 	lockRepo := repository.NewLockRepository(cp)
 
+	globalSearchPartitionRepository := repository.NewGlobalSearchPartitionRepository(cp)
+
+	ddlTableGroupRepository := repository.NewDDLTableGroupRepository(cp)
+
 	olricProvider, err := cache.NewOlricProvider(systemInfoService.GetOlricConfig())
 	if err != nil {
 		log.Error("Failed to create olricProvider: " + err.Error())
 		panic("Failed to create olricProvider: " + err.Error())
 	}
 
-	privateUserPackageService := service.NewPrivateUserPackageService(publishedRepository, usersRepository, roleRepository, favoritesRepository)
+	globalSearchPartitionService := service.NewGlobalSearchPartitionService(globalSearchPartitionRepository)
+
+	privateUserPackageService := service.NewPrivateUserPackageService(publishedRepository, usersRepository, roleRepository, favoritesRepository, globalSearchPartitionService)
 	userService := service.NewUserService(usersRepository, systemInfoService, privateUserPackageService)
 
 	lockService := service.NewLockService(lockRepo, systemInfoService.GetInstanceId())
@@ -261,7 +267,7 @@ func main() {
 	ddlContractServiceForVersion := service.NewDDLContractService(ddlContractRepository, publishedRepository, packageVersionEnrichmentService)
 	mcpContractServiceForVersion := service.NewMCPContractService(mcpContractRepository, publishedRepository, packageVersionEnrichmentService)
 	versionService := service.NewVersionService(favoritesRepository, publishedRepository, publishedService, operationRepository, exportRepository, operationService, activityTrackingService, systemInfoService, packageVersionEnrichmentService, portalService, versionCleanupRepository, operationGroupService, monitoringService, roleService, ddlContractServiceForVersion, mcpContractServiceForVersion)
-	packageService := service.NewPackageService(favoritesRepository, publishedRepository, versionService, roleService, activityTrackingService, monitoringService, operationGroupService, usersRepository, ptHandler, systemInfoService)
+	packageService := service.NewPackageService(favoritesRepository, publishedRepository, versionService, roleService, activityTrackingService, monitoringService, operationGroupService, usersRepository, ptHandler, systemInfoService, globalSearchPartitionService)
 
 	logsService := service.NewLogsService()
 	apihubApiKeyService := service.NewApihubApiKeyService(apihubApiKeyRepository, publishedRepository, activityTrackingService, userService, roleRepository, systemInfoService)
@@ -278,7 +284,9 @@ func main() {
 	versionService.SetBuildService(buildService)
 	operationGroupService.SetBuildService(buildService)
 
-	excelService := service.NewExcelService(publishedRepository, versionService, operationService, packageService, ddlContractServiceForVersion, mcpContractServiceForVersion)
+	//declared before excelService rather than at the end of the block because excelService consumes it
+	ddlTableGroupService := service.NewDDLTableGroupService(ddlTableGroupRepository, publishedRepository, packageVersionEnrichmentService)
+	excelService := service.NewExcelService(publishedRepository, versionService, operationService, packageService, ddlContractServiceForVersion, mcpContractServiceForVersion, ddlTableGroupService)
 	comparisonService := service.NewComparisonService(publishedRepository, operationRepository, packageVersionEnrichmentService, ddlContractServiceForVersion)
 	businessMetricService := service.NewBusinessMetricService(businessMetricRepository)
 
@@ -287,7 +295,7 @@ func main() {
 		log.Error("Failed to start cleaning job" + err.Error())
 	}
 
-	transitionService := service.NewTransitionService(transitionRepository, publishedRepository, systemInfoService)
+	transitionService := service.NewTransitionService(transitionRepository, publishedRepository, systemInfoService, globalSearchPartitionService)
 	transformationService := service.NewTransformationService(publishedRepository, operationRepository, packageVersionEnrichmentService)
 
 	zeroDayAdminService := service.NewZeroDayAdminService(userService, roleService, usersRepository, systemInfoService)
@@ -387,6 +395,7 @@ func main() {
 	mcpController := controller.NewMCPController(mcpService)
 	buildController := controller.NewBuildController(buildResultService, buildService, responder)
 	adminPublishedController := controller.NewAdminPublishedController(publishedService, systemInfoService.GetPublishArchiveSizeLimitMB(), responder)
+	ddlTableGroupController := controller.NewDDLTableGroupController(roleService, ddlTableGroupService, versionService, ptHandler, responder)
 
 	r.HandleFunc("/api/v1/system/info", authenticator.Secure(systemInfoController.GetSystemInfo)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/system/configuration", samlAuthController.GetSystemSSOInfo_deprecated).Methods(http.MethodGet) //deprecated
@@ -504,6 +513,13 @@ func main() {
 	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/entities/{ddlEntityId}", authenticator.Secure(ddlContractController.GetDdlEntity)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/entities/{ddlEntityId}/changes", authenticator.Secure(ddlContractController.GetDdlEntityChanges)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/entities/{ddlEntityId}/changes/summary", authenticator.Secure(ddlContractController.GetDdlEntityChangesSummary)).Methods(http.MethodGet)
+
+	// Manual DDL table groups.
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/groups", authenticator.Secure(ddlTableGroupController.ListDdlTableGroups)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/groups", authenticator.Secure(ddlTableGroupController.CreateDdlTableGroup)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/groups/{groupName}", authenticator.Secure(ddlTableGroupController.GetGroupedDdlEntities)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/groups/{groupName}", authenticator.Secure(ddlTableGroupController.UpdateDdlTableGroup)).Methods(http.MethodPatch)
+	r.HandleFunc("/api/v1/packages/{packageId}/versions/{version}/ddl/groups/{groupName}", authenticator.Secure(ddlTableGroupController.DeleteDdlTableGroup)).Methods(http.MethodDelete)
 
 	// MCP Contract routes ({entity} ∈ {inits, tools, prompts, resources}).
 	// mcp/export/{entity} is registered before mcp/{entity}/{mcpEntityId} so it is not shadowed.

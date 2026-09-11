@@ -31,7 +31,7 @@ func TestValidateObjectErrors(t *testing.T) {
 	var packageOperationsFile view.PackageOperationsFile
 	var operations = make([]view.Operation, 2)
 	packageOperationsFile.Operations = operations
-	packageOperationsFileExpectedError := "Required parameters are missing: operations[0].operationId, operations[0].title, operations[0].apiType, operations[0].dataHash, operations[0].apiKind, operations[0].metadata, operations[0].searchScopes, operations[0].apiAudience, operations[1].operationId, operations[1].title, operations[1].apiType, operations[1].dataHash, operations[1].apiKind, operations[1].metadata, operations[1].searchScopes, operations[1].apiAudience"
+	packageOperationsFileExpectedError := "Required parameters are missing: operations[0].operationId, operations[0].title, operations[0].apiType, operations[0].apiKind, operations[0].metadata, operations[0].apiAudience, operations[0].documentId, operations[0].versionInternalDocumentId, operations[1].operationId, operations[1].title, operations[1].apiType, operations[1].apiKind, operations[1].metadata, operations[1].apiAudience, operations[1].documentId, operations[1].versionInternalDocumentId"
 	if err := utils.ValidateObject(packageOperationsFile); err != nil {
 		if packageOperationsFileExpectedError != err.Error() {
 			t.Fatalf("Package Operations File Validation errors test is failed. Actual error: %v", err.Error())
