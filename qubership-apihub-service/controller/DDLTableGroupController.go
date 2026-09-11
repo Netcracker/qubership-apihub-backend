@@ -10,6 +10,7 @@ import (
 	"strconv"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
@@ -27,12 +28,14 @@ type DDLTableGroupController interface {
 func NewDDLTableGroupController(roleService service.RoleService,
 	ddlTableGroupService service.DDLTableGroupService,
 	versionService service.VersionService,
-	ptHandler service.PackageTransitionHandler) DDLTableGroupController {
+	ptHandler service.PackageTransitionHandler,
+	responder responder.Responder) DDLTableGroupController {
 	return &ddlTableGroupControllerImpl{
 		roleService:          roleService,
 		ddlTableGroupService: ddlTableGroupService,
 		versionService:       versionService,
 		ptHandler:            ptHandler,
+		responder:            responder,
 	}
 }
 
@@ -41,16 +44,17 @@ type ddlTableGroupControllerImpl struct {
 	ddlTableGroupService service.DDLTableGroupService
 	versionService       service.VersionService
 	ptHandler            service.PackageTransitionHandler
+	responder            responder.Responder
 }
 
 func (c *ddlTableGroupControllerImpl) checkReadAccess(w http.ResponseWriter, r *http.Request, ctx context.Context, packageId string) bool {
 	ok, err := c.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, c.ptHandler, packageId, "Failed to check user privileges", err)
+		handlePkgRedirectOrRespondWithError(w, r, c.responder, c.ptHandler, packageId, "Failed to check user privileges", err)
 		return false
 	}
 	if !ok {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -63,16 +67,16 @@ func (c *ddlTableGroupControllerImpl) checkReadAccess(w http.ResponseWriter, r *
 func (c *ddlTableGroupControllerImpl) checkManageVersionAccess(w http.ResponseWriter, r *http.Request, ctx context.Context, packageId, versionName string) bool {
 	versionStatus, err := c.versionService.GetVersionStatus(ctx, packageId, versionName)
 	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, c.ptHandler, packageId, "Failed to check user privileges", err)
+		handlePkgRedirectOrRespondWithError(w, r, c.responder, c.ptHandler, packageId, "Failed to check user privileges", err)
 		return false
 	}
 	ok, err := c.roleService.HasManageVersionPermission(ctx, packageId, versionStatus)
 	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, c.ptHandler, packageId, "Failed to check user privileges", err)
+		handlePkgRedirectOrRespondWithError(w, r, c.responder, c.ptHandler, packageId, "Failed to check user privileges", err)
 		return false
 	}
 	if !ok {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -82,14 +86,14 @@ func (c *ddlTableGroupControllerImpl) checkManageVersionAccess(w http.ResponseWr
 	return true
 }
 
-func getVersionPathParam(w http.ResponseWriter, r *http.Request) (string, bool) {
-	return getUnescapedPathParam(w, r, "version")
+func (c *ddlTableGroupControllerImpl) getVersionPathParam(w http.ResponseWriter, r *http.Request) (string, bool) {
+	return c.getUnescapedPathParam(w, r, "version")
 }
 
-func getUnescapedPathParam(w http.ResponseWriter, r *http.Request, param string) (string, bool) {
+func (c *ddlTableGroupControllerImpl) getUnescapedPathParam(w http.ResponseWriter, r *http.Request, param string) (string, bool) {
 	value, err := getUnescapedStringParam(r, param)
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -101,11 +105,11 @@ func getUnescapedPathParam(w http.ResponseWriter, r *http.Request, param string)
 	return value, true
 }
 
-func readJsonRequestBody(w http.ResponseWriter, r *http.Request, req interface{}) bool {
+func (c *ddlTableGroupControllerImpl) readJsonRequestBody(w http.ResponseWriter, r *http.Request, req interface{}) bool {
 	defer r.Body.Close()
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.BadRequestBody,
 			Message: exception.BadRequestBodyMsg,
@@ -114,7 +118,7 @@ func readJsonRequestBody(w http.ResponseWriter, r *http.Request, req interface{}
 		return false
 	}
 	if err = json.Unmarshal(body, req); err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.BadRequestBody,
 			Message: exception.BadRequestBodyMsg,
@@ -125,10 +129,10 @@ func readJsonRequestBody(w http.ResponseWriter, r *http.Request, req interface{}
 	if validationErr := utils.ValidateObject(req); validationErr != nil {
 		var customError *exception.CustomError
 		if errors.As(validationErr, &customError) {
-			utils.RespondWithCustomError(w, customError)
+			c.responder.RespondWithCustomError(w, customError)
 			return false
 		}
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.BadRequestBody,
 			Message: exception.BadRequestBodyMsg,
@@ -145,16 +149,16 @@ func (c *ddlTableGroupControllerImpl) ListDdlTableGroups(w http.ResponseWriter, 
 	if !c.checkReadAccess(w, r, ctx, packageId) {
 		return
 	}
-	versionName, ok := getVersionPathParam(w, r)
+	versionName, ok := c.getVersionPathParam(w, r)
 	if !ok {
 		return
 	}
 	result, err := c.ddlTableGroupService.ListDdlTableGroups(ctx, packageId, versionName)
 	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, c.ptHandler, packageId, "Failed to list DDL table groups", err)
+		handlePkgRedirectOrRespondWithError(w, r, c.responder, c.ptHandler, packageId, "Failed to list DDL table groups", err)
 		return
 	}
-	utils.RespondWithJson(w, http.StatusOK, result)
+	c.responder.RespondWithJson(w, http.StatusOK, result)
 }
 
 func (c *ddlTableGroupControllerImpl) GetGroupedDdlEntities(w http.ResponseWriter, r *http.Request) {
@@ -163,11 +167,11 @@ func (c *ddlTableGroupControllerImpl) GetGroupedDdlEntities(w http.ResponseWrite
 	if !c.checkReadAccess(w, r, ctx, packageId) {
 		return
 	}
-	versionName, ok := getVersionPathParam(w, r)
+	versionName, ok := c.getVersionPathParam(w, r)
 	if !ok {
 		return
 	}
-	groupName, ok := getUnescapedPathParam(w, r, "groupName")
+	groupName, ok := c.getUnescapedPathParam(w, r, "groupName")
 	if !ok {
 		return
 	}
@@ -175,7 +179,7 @@ func (c *ddlTableGroupControllerImpl) GetGroupedDdlEntities(w http.ResponseWrite
 	refPackageId := r.URL.Query().Get("refPackageId")
 	limit, limErr := getLimitQueryParam(r)
 	if limErr != nil {
-		utils.RespondWithCustomError(w, limErr)
+		c.responder.RespondWithCustomError(w, limErr)
 		return
 	}
 	offset := 0
@@ -184,16 +188,16 @@ func (c *ddlTableGroupControllerImpl) GetGroupedDdlEntities(w http.ResponseWrite
 	}
 	result, err := c.ddlTableGroupService.GetGroupedDdlEntities(ctx, packageId, versionName, groupName, refPackageId, textFilter, limit, offset)
 	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, c.ptHandler, packageId, "Failed to get DDL entities of the group", err)
+		handlePkgRedirectOrRespondWithError(w, r, c.responder, c.ptHandler, packageId, "Failed to get DDL entities of the group", err)
 		return
 	}
-	utils.RespondWithJson(w, http.StatusOK, result)
+	c.responder.RespondWithJson(w, http.StatusOK, result)
 }
 
 func (c *ddlTableGroupControllerImpl) CreateDdlTableGroup(w http.ResponseWriter, r *http.Request) {
 	ctx := secctx.MakeUserContext(r)
 	packageId := getStringParam(r, "packageId")
-	versionName, ok := getVersionPathParam(w, r)
+	versionName, ok := c.getVersionPathParam(w, r)
 	if !ok {
 		return
 	}
@@ -201,11 +205,11 @@ func (c *ddlTableGroupControllerImpl) CreateDdlTableGroup(w http.ResponseWriter,
 		return
 	}
 	var req view.CreateDdlTableGroupReq
-	if !readJsonRequestBody(w, r, &req) {
+	if !c.readJsonRequestBody(w, r, &req) {
 		return
 	}
 	if err := c.ddlTableGroupService.CreateDdlTableGroup(ctx, packageId, versionName, req); err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, c.ptHandler, packageId, "Failed to create DDL table group", err)
+		handlePkgRedirectOrRespondWithError(w, r, c.responder, c.ptHandler, packageId, "Failed to create DDL table group", err)
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
@@ -214,11 +218,11 @@ func (c *ddlTableGroupControllerImpl) CreateDdlTableGroup(w http.ResponseWriter,
 func (c *ddlTableGroupControllerImpl) UpdateDdlTableGroup(w http.ResponseWriter, r *http.Request) {
 	ctx := secctx.MakeUserContext(r)
 	packageId := getStringParam(r, "packageId")
-	versionName, ok := getVersionPathParam(w, r)
+	versionName, ok := c.getVersionPathParam(w, r)
 	if !ok {
 		return
 	}
-	groupName, ok := getUnescapedPathParam(w, r, "groupName")
+	groupName, ok := c.getUnescapedPathParam(w, r, "groupName")
 	if !ok {
 		return
 	}
@@ -226,11 +230,11 @@ func (c *ddlTableGroupControllerImpl) UpdateDdlTableGroup(w http.ResponseWriter,
 		return
 	}
 	var req view.UpdateDdlTableGroupReq
-	if !readJsonRequestBody(w, r, &req) {
+	if !c.readJsonRequestBody(w, r, &req) {
 		return
 	}
 	if err := c.ddlTableGroupService.UpdateDdlTableGroup(ctx, packageId, versionName, groupName, req); err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, c.ptHandler, packageId, "Failed to update DDL table group", err)
+		handlePkgRedirectOrRespondWithError(w, r, c.responder, c.ptHandler, packageId, "Failed to update DDL table group", err)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -239,11 +243,11 @@ func (c *ddlTableGroupControllerImpl) UpdateDdlTableGroup(w http.ResponseWriter,
 func (c *ddlTableGroupControllerImpl) DeleteDdlTableGroup(w http.ResponseWriter, r *http.Request) {
 	ctx := secctx.MakeUserContext(r)
 	packageId := getStringParam(r, "packageId")
-	versionName, ok := getVersionPathParam(w, r)
+	versionName, ok := c.getVersionPathParam(w, r)
 	if !ok {
 		return
 	}
-	groupName, ok := getUnescapedPathParam(w, r, "groupName")
+	groupName, ok := c.getUnescapedPathParam(w, r, "groupName")
 	if !ok {
 		return
 	}
@@ -251,7 +255,7 @@ func (c *ddlTableGroupControllerImpl) DeleteDdlTableGroup(w http.ResponseWriter,
 		return
 	}
 	if err := c.ddlTableGroupService.DeleteDdlTableGroup(ctx, packageId, versionName, groupName); err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, c.ptHandler, packageId, "Failed to delete DDL table group", err)
+		handlePkgRedirectOrRespondWithError(w, r, c.responder, c.ptHandler, packageId, "Failed to delete DDL table group", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
