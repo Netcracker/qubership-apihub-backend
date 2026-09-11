@@ -226,7 +226,7 @@ func (m mcpService) GetPackagesList(ctx context.Context, workspaceId string) ([]
 	// Resource reads do not go through the tool handlers, so they need the same per-operation bound
 	ctx, cancel := context.WithTimeout(ctx, MCPToolCallTimeout)
 	defer cancel()
-	log.Infof("Getting packages list for workspace: %s", workspaceId)
+	log.Debugf("Getting packages list for workspace: %s", workspaceId)
 
 	if secctx.GetUserId(ctx) == "" {
 		return nil, fmt.Errorf("missing security context for api-packages-list request")
