@@ -14154,6 +14154,9 @@ components:
               description: Namespace of Agent's publication.
               type: string
               example: cloudQSS-release2
+        apiProcessorVersion:
+          description: Version of api-processor with which this revision was built.
+          type: string
         hasErrors:
           description: |
             Flag showing that at least one document of the revision has a critical problem detected during the
