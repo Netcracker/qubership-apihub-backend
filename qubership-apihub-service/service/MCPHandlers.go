@@ -241,7 +241,7 @@ func (m mcpService) ExecuteListWorkspacePackagesTool(ctx context.Context, req mc
 	limit := req.GetInt("limit", mcpListDefaultLimit)
 	textFilter := req.GetString("textFilter", "")
 
-	log.Infof("list_workspace_packages: workspace=%s, page=%d, limit=%d, textFilter=%s", workspace, page, limit, textFilter)
+	log.Debugf("list_workspace_packages: workspace=%s, page=%d, limit=%d, textFilter=%s", workspace, page, limit, textFilter)
 
 	userID := secctx.GetUserId(ctx)
 	m.monitoringService.IncreaseBusinessMetricCounter(userID, metrics.MCPListWorkspacePackagesToolCalled, workspace)
@@ -288,7 +288,7 @@ func (m mcpService) ExecuteListPackageVersionsTool(ctx context.Context, req mcp.
 	page := req.GetInt("page", 0)
 	limit := req.GetInt("limit", mcpListDefaultLimit)
 
-	log.Infof("list_package_versions: packageId=%s, status=%s, page=%d, limit=%d", packageId, status, page, limit)
+	log.Debugf("list_package_versions: packageId=%s, status=%s, page=%d, limit=%d", packageId, status, page, limit)
 
 	userID := secctx.GetUserId(ctx)
 	m.monitoringService.IncreaseBusinessMetricCounter(userID, metrics.MCPListPackageVersionsToolCalled, packageId)
@@ -306,9 +306,9 @@ func (m mcpService) ExecuteListPackageVersionsTool(ctx context.Context, req mcp.
 		return nil, err
 	}
 
-	var versions []view.PublishedVersionListMCPView
+	var versions []view.PublishedVersionListView
 	if versionsView != nil {
-		versions = projectPublishedVersionsForMCP(versionsView.Versions)
+		versions = versionsView.Versions
 	}
 	payload := map[string]any{"versions": versions}
 
