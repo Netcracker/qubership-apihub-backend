@@ -9,17 +9,17 @@ const (
 )
 
 type VisibilityPrincipal struct {
-	Kind           VisibilityPrincipalKind
-	UserId         string
-	ApiKeyScopeId  string
-	ApiKeyRoleIds  []string
+	Kind          VisibilityPrincipalKind
+	UserId        string
+	ApiKeyScopeId string
+	ApiKeyRoleIds []string
 }
 
 type PackageReadAccessEntity struct {
 	tableName struct{} `pg:",discard_unknown_columns"`
 
-	PackageId          string `pg:"id"`
-	ParentId           string `pg:"parent_id"`
-	CanRead            bool   `pg:"can_read"`
-	ExcludeFromSearch  bool   `pg:"exclude_from_search"`
+	PackageId         string `pg:"id"`
+	ParentId          string `pg:"parent_id"`
+	CanRead           bool   `pg:"can_read"`
+	ExcludeFromSearch bool   `pg:"exclude_from_search"`
 }

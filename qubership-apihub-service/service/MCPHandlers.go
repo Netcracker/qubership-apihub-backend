@@ -83,7 +83,7 @@ func (m mcpService) ExecuteLegacyRestSearchTool(ctx context.Context, req mcp.Cal
 		metrics.MCPLegacySearchToolCalled,
 		mcpLegacyMetricKey(ctx, group),
 	)
-	log.Infof("%s: delegating to %s with apiType=rest", LegacyToolNameSearchRestOperations, ToolNameSearchOperations)
+	log.Debugf("%s: delegating to %s with apiType=rest", LegacyToolNameSearchRestOperations, ToolNameSearchOperations)
 	return m.ExecuteSearchTool(ctx, withInjectedMCPArg(req, "apiType", string(view.RestApiType)))
 }
 
@@ -96,7 +96,7 @@ func (m mcpService) ExecuteLegacyRestGetSpecTool(ctx context.Context, req mcp.Ca
 			mcpLegacyMetricKey(ctx, packageId),
 		)
 	}
-	log.Infof("%s: delegating to %s with apiType=rest", LegacyToolNameGetRestOperationSpec, ToolNameGetOperationSpec)
+	log.Debugf("%s: delegating to %s with apiType=rest", LegacyToolNameGetRestOperationSpec, ToolNameGetOperationSpec)
 	return m.ExecuteGetSpecTool(ctx, withInjectedMCPArg(req, "apiType", string(view.RestApiType)))
 }
 
@@ -109,7 +109,7 @@ func (m mcpService) ExecuteLegacyRestGetOperationDiffTool(ctx context.Context, r
 			mcpLegacyMetricKey(ctx, packageId),
 		)
 	}
-	log.Infof("%s: delegating to %s with apiType=rest", LegacyToolNameGetRestOperationDiff, ToolNameGetOperationDiff)
+	log.Debugf("%s: delegating to %s with apiType=rest", LegacyToolNameGetRestOperationDiff, ToolNameGetOperationDiff)
 	return m.ExecuteGetOperationDiffTool(ctx, withInjectedMCPArg(req, "apiType", string(view.RestApiType)))
 }
 
@@ -144,7 +144,7 @@ func (m mcpService) ExecuteGetSpecTool(ctx context.Context, req mcp.CallToolRequ
 	userID := secctx.GetUserId(ctx)
 	m.monitoringService.IncreaseBusinessMetricCounter(userID, metrics.MCPGetSpecToolCalled, mcpMetricKey(ctx, apiType, packageId))
 
-	log.Infof("get_api_operation_specification: apiType=%s, operationId=%s, packageId=%s, version=%s", apiType, operationId, packageId, version)
+	log.Debugf("get_api_operation_specification: apiType=%s, operationId=%s, packageId=%s, version=%s", apiType, operationId, packageId, version)
 
 	searchReq := view.OperationBasicSearchReq{
 		PackageId:   packageId,
@@ -210,7 +210,7 @@ func (m mcpService) executeSearchCore(ctx context.Context, req mcp.CallToolReque
 	packageIds := resolveMCPSearchPackageIds(group, workspace)
 	versions := resolveMCPSearchVersions(releaseVersion)
 
-	log.Infof("search_api_operations: apiType=%s, query=%s, limit=%d, page=%d, group=%s, releaseVersion=%s, workspace=%s", apiType, q, limit, page, group, releaseVersion, workspace)
+	log.Debugf("search_api_operations: apiType=%s, query=%s, limit=%d, page=%d, group=%s, releaseVersion=%s, workspace=%s", apiType, q, limit, page, group, releaseVersion, workspace)
 
 	metricPackage := group
 	if metricPackage == "" {
@@ -282,7 +282,7 @@ func (m mcpService) executeSearchCore(ctx context.Context, req mcp.CallToolReque
 
 // ExecuteListWorkspacesTool executes the list_workspaces tool
 func (m mcpService) ExecuteListWorkspacesTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	log.Infof("list_workspaces: listing accessible workspaces")
+	log.Debugf("list_workspaces: listing accessible workspaces")
 
 	m.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.MCPListWorkspacesToolCalled, mcpListWorkspacesMetricKey)
 
@@ -317,7 +317,7 @@ func (m mcpService) ExecuteListWorkspacePackagesTool(ctx context.Context, req mc
 	limit := req.GetInt("limit", mcpListDefaultLimit)
 	textFilter := req.GetString("textFilter", "")
 
-	log.Infof("list_workspace_packages: workspace=%s, page=%d, limit=%d, textFilter=%s", workspace, page, limit, textFilter)
+	log.Debugf("list_workspace_packages: workspace=%s, page=%d, limit=%d, textFilter=%s", workspace, page, limit, textFilter)
 
 	m.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.MCPListWorkspacePackagesToolCalled, workspace)
 
@@ -363,7 +363,7 @@ func (m mcpService) ExecuteListPackageVersionsTool(ctx context.Context, req mcp.
 	page := req.GetInt("page", 0)
 	limit := req.GetInt("limit", mcpListDefaultLimit)
 
-	log.Infof("list_package_versions: packageId=%s, status=%s, page=%d, limit=%d", packageId, status, page, limit)
+	log.Debugf("list_package_versions: packageId=%s, status=%s, page=%d, limit=%d", packageId, status, page, limit)
 
 	m.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.MCPListPackageVersionsToolCalled, packageId)
 
@@ -428,7 +428,7 @@ func (m mcpService) ExecuteGetOperationDiffTool(ctx context.Context, req mcp.Cal
 	userID := secctx.GetUserId(ctx)
 	m.monitoringService.IncreaseBusinessMetricCounter(userID, metrics.MCPGetDiffToolCalled, mcpMetricKey(ctx, apiType, packageId))
 
-	log.Infof("get_api_operation_diff: apiType=%s, operationId=%s, packageId=%s, version=%s, previousVersion=%s", apiType, operationId, packageId, version, previousVersion)
+	log.Debugf("get_api_operation_diff: apiType=%s, operationId=%s, packageId=%s, version=%s, previousVersion=%s", apiType, operationId, packageId, version, previousVersion)
 
 	operationChangesView, err := m.operationService.GetOperationChanges(ctx, packageId, version, operationId, packageId, previousVersion, []string{})
 	if err != nil {
@@ -475,7 +475,7 @@ func (m mcpService) ExecuteGetDocumentTool(ctx context.Context, req mcp.CallTool
 	userID := secctx.GetUserId(ctx)
 	m.monitoringService.IncreaseBusinessMetricCounter(userID, metrics.MCPGetDocumentToolCalled, mcpMetricKey(ctx, apiType, packageId))
 
-	log.Infof("get_document: apiType=%s, packageId=%s, version=%s, slug=%s", apiType, packageId, version, slug)
+	log.Debugf("get_document: apiType=%s, packageId=%s, version=%s, slug=%s", apiType, packageId, version, slug)
 
 	document, documentData, err := m.versionService.GetLatestContentDataBySlug(ctx, packageId, version, slug)
 	if err != nil {
@@ -487,6 +487,55 @@ func (m mcpService) ExecuteGetDocumentTool(ctx context.Context, req mcp.CallTool
 	}
 
 	log.Debugf("MCP tool get_document response: packageId=%s, version=%s, slug=%s, dataBytes=%d", packageId, version, slug, len(documentData.Data))
+
+	return mcp.NewToolResultStructuredOnly(payload), nil
+}
+
+// ExecuteListApiOperationsTool executes the list_api_operations tool
+func (m mcpService) ExecuteListApiOperationsTool(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, MCPToolCallTimeout)
+	defer cancel()
+	packageId, err := req.RequireString("packageId")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	sufficientPrivileges, err := m.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to check user privileges: %s", err.Error())), nil
+	}
+	if !sufficientPrivileges {
+		return mcp.NewToolResultError(exception.InsufficientPrivilegesMsg), nil
+	}
+	version, err := req.RequireString("version")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	apiType, err := requireMCPApiType(req, view.RestApiType, view.GraphqlApiType, view.AsyncapiApiType)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	textFilter := req.GetString("textFilter", "")
+	limit := req.GetInt("limit", mcpListDefaultLimit)
+	page := req.GetInt("page", 0)
+
+	m.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.MCPListApiOperationsToolCalled, mcpMetricKey(ctx, apiType, packageId))
+
+	log.Debugf("list_api_operations: packageId=%s, version=%s, apiType=%s, textFilter=%s, limit=%d, page=%d", packageId, version, apiType, textFilter, limit, page)
+
+	result, err := m.operationService.GetOperations(ctx, packageId, version, false, view.OperationListReq{
+		ApiType:    apiType,
+		TextFilter: textFilter,
+		Limit:      limit,
+		Page:       page,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	payload := map[string]any{"operations": result.Operations, "packages": result.Packages}
+
+	payloadJSON, _ := json.Marshal(payload)
+	log.Debugf("MCP tool list_api_operations response: %s", string(payloadJSON))
 
 	return mcp.NewToolResultStructuredOnly(payload), nil
 }
@@ -514,7 +563,7 @@ func (m mcpService) ExecuteListDdlEntitiesTool(ctx context.Context, req mcp.Call
 
 	m.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.MCPListDdlEntitiesToolCalled, mcpMetricKey(ctx, view.ContractTypeDdl, packageId))
 
-	log.Infof("list_ddl_entities: packageId=%s, version=%s, textFilter=%s, limit=%d, page=%d", packageId, version, textFilter, limit, page)
+	log.Debugf("list_ddl_entities: packageId=%s, version=%s, textFilter=%s, limit=%d, page=%d", packageId, version, textFilter, limit, page)
 
 	result, err := m.ddlContractService.ListDdlEntities(ctx, packageId, version, "", textFilter, limit, page*limit)
 	if err != nil {
@@ -554,7 +603,7 @@ func (m mcpService) ExecuteGetDdlEntityTool(ctx context.Context, req mcp.CallToo
 
 	m.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.MCPGetDdlEntityToolCalled, mcpMetricKey(ctx, view.ContractTypeDdl, packageId))
 
-	log.Infof("get_ddl_entity: packageId=%s, version=%s, ddlEntityId=%s, includeData=%t", packageId, version, ddlEntityId, includeData)
+	log.Debugf("get_ddl_entity: packageId=%s, version=%s, ddlEntityId=%s, includeData=%t", packageId, version, ddlEntityId, includeData)
 
 	result, err := m.ddlContractService.GetDdlEntity(ctx, packageId, version, ddlEntityId, includeData)
 	if err != nil {
@@ -602,7 +651,7 @@ func (m mcpService) ExecuteGetDdlEntityDiffTool(ctx context.Context, req mcp.Cal
 
 	m.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.MCPGetDdlEntityDiffToolCalled, mcpMetricKey(ctx, view.ContractTypeDdl, packageId))
 
-	log.Infof("get_ddl_entity_diff: packageId=%s, version=%s, ddlEntityId=%s, previousVersion=%s, previousVersionPackageId=%s", packageId, version, ddlEntityId, previousVersion, previousVersionPackageId)
+	log.Debugf("get_ddl_entity_diff: packageId=%s, version=%s, ddlEntityId=%s, previousVersion=%s, previousVersionPackageId=%s", packageId, version, ddlEntityId, previousVersion, previousVersionPackageId)
 
 	result, err := m.ddlContractService.GetDdlEntityChanges(ctx, packageId, version, ddlEntityId, "", previousVersion, previousVersionPackageId, "", severities)
 	if err != nil {
@@ -642,7 +691,7 @@ func (m mcpService) ExecuteListMcpContractEntitiesTool(ctx context.Context, req 
 
 	m.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.MCPListMcpContractEntitiesToolCalled, mcpMetricKey(ctx, view.ContractTypeMcp, packageId))
 
-	log.Infof("list_mcp_contract_entities: packageId=%s, version=%s, kind=%s, mcpEndpoint=%s, textFilter=%s, limit=%d, page=%d", packageId, version, kind, mcpEndpoint, textFilter, limit, page)
+	log.Debugf("list_mcp_contract_entities: packageId=%s, version=%s, kind=%s, mcpEndpoint=%s, textFilter=%s, limit=%d, page=%d", packageId, version, kind, mcpEndpoint, textFilter, limit, page)
 
 	result, err := m.mcpContractService.ListMcpEntities(ctx, packageId, version, kind, mcpEndpoint, "", textFilter, limit, page*limit)
 	if err != nil {
@@ -682,7 +731,7 @@ func (m mcpService) ExecuteGetMcpContractEntityTool(ctx context.Context, req mcp
 
 	m.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.MCPGetMcpContractEntityToolCalled, mcpMetricKey(ctx, view.ContractTypeMcp, packageId))
 
-	log.Infof("get_mcp_contract_entity: packageId=%s, version=%s, mcpEntityId=%s, includeData=%t", packageId, version, mcpEntityId, includeData)
+	log.Debugf("get_mcp_contract_entity: packageId=%s, version=%s, mcpEntityId=%s, includeData=%t", packageId, version, mcpEntityId, includeData)
 
 	result, err := m.mcpContractService.GetMcpEntity(ctx, packageId, version, mcpEntityId, includeData)
 	if err != nil {

@@ -1820,19 +1820,19 @@ func (p publishedRepositoryImpl) CreateVersionWithData(ctx context.Context, pack
 					// Deprecated: public.fts_operation_search_text dual-write; prefer global_search.fts_operation_search_text.
 					insertFtsSearchTextQuery := `
 						INSERT INTO fts_operation_search_text (package_id, version, revision, operation_id, api_type, status, search_data_hash, data_vector)
-						VALUES (?, ?, ?, ?, ?, ?, ?, to_tsvector(convert_from(?, 'UTF-8') || ' ' || coalesce(?, '')))
+						VALUES (?, ?, ?, ?, ?, ?, ?, to_tsvector(convert_from(?, 'UTF-8')))
 						ON CONFLICT (package_id, version, revision, operation_id) DO UPDATE
 							SET search_data_hash = EXCLUDED.search_data_hash,
 								data_vector = EXCLUDED.data_vector`
 					_, err = tx.Exec(insertFtsSearchTextQuery,
 						version.PackageId, version.Version, version.Revision, st.OperationId,
-						st.ApiType, version.Status, st.SearchDataHash, st.SearchTextData, st.Title)
+						st.ApiType, version.Status, st.SearchDataHash, st.SearchTextData)
 					if err != nil {
 						return fmt.Errorf("failed to insert fts_operation_search_text for operation %s: %w", st.OperationId, err)
 					}
 					insertGsFtsQuery := `
 						INSERT INTO global_search.fts_operation_search_text (workspace_id, package_id, version, revision, operation_id, api_type, status, search_data_hash, data_vector)
-						VALUES (?, ?, ?, ?, ?, ?, ?, ?, to_tsvector(convert_from(?, 'UTF-8') || ' ' || coalesce(?, '')))
+						VALUES (?, ?, ?, ?, ?, ?, ?, ?, to_tsvector(convert_from(?, 'UTF-8')))
 						ON CONFLICT (workspace_id, package_id, version, revision, operation_id) DO UPDATE
 							SET search_data_hash = EXCLUDED.search_data_hash,
 								data_vector = EXCLUDED.data_vector,
@@ -1840,7 +1840,7 @@ func (p publishedRepositoryImpl) CreateVersionWithData(ctx context.Context, pack
 								api_type = EXCLUDED.api_type`
 					_, err = tx.Exec(insertGsFtsQuery,
 						workspaceId, version.PackageId, version.Version, version.Revision, st.OperationId,
-						st.ApiType, version.Status, st.SearchDataHash, st.SearchTextData, st.Title)
+						st.ApiType, version.Status, st.SearchDataHash, st.SearchTextData)
 					if err != nil {
 						return fmt.Errorf("failed to insert global_search.fts_operation_search_text for operation %s: %w", st.OperationId, err)
 					}
@@ -1853,8 +1853,8 @@ func (p publishedRepositoryImpl) CreateVersionWithData(ctx context.Context, pack
 					for _, st := range operationSearchTexts {
 						insertTmpQuery := fmt.Sprintf(`
 							INSERT INTO migration."fts_operation_search_text_tmp_%s"
-								(package_id, version, revision, operation_id, api_type, status, search_data_hash, search_text_data, title)
-							SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+								(package_id, version, revision, operation_id, api_type, status, search_data_hash, search_text_data)
+							SELECT ?, ?, ?, ?, ?, ?, ?, ?
 							WHERE NOT EXISTS (
 								SELECT 1 FROM fts_operation_search_text
 								WHERE package_id = ? AND version = ? AND revision = ? AND operation_id = ?
@@ -1862,11 +1862,10 @@ func (p publishedRepositoryImpl) CreateVersionWithData(ctx context.Context, pack
 							)
 							ON CONFLICT (package_id, version, revision, operation_id) DO UPDATE
 								SET search_data_hash = EXCLUDED.search_data_hash,
-									search_text_data = EXCLUDED.search_text_data,
-									title = EXCLUDED.title`, packageInfo.MigrationId)
+									search_text_data = EXCLUDED.search_text_data`, packageInfo.MigrationId)
 						_, err = tx.Exec(insertTmpQuery,
 							version.PackageId, version.Version, version.Revision, st.OperationId,
-							st.ApiType, version.Status, st.SearchDataHash, st.SearchTextData, st.Title,
+							st.ApiType, version.Status, st.SearchDataHash, st.SearchTextData,
 							version.PackageId, version.Version, version.Revision, st.OperationId,
 							st.SearchDataHash)
 						if err != nil {
@@ -2223,7 +2222,7 @@ func (p publishedRepositoryImpl) CreateVersionWithData(ctx context.Context, pack
 					// Deprecated: public.fts_mcp_search_text dual-write; prefer global_search.fts_mcp_search_text.
 					insertFtsSearchTextQuery := `
 						INSERT INTO fts_mcp_search_text (package_id, version, revision, mcp_entity_id, status, kind, search_data_hash, data_vector)
-						VALUES (?, ?, ?, ?, ?, ?, ?, to_tsvector(convert_from(?, 'UTF-8') || ' '))
+						VALUES (?, ?, ?, ?, ?, ?, ?, to_tsvector(convert_from(?, 'UTF-8')))
 						ON CONFLICT (package_id, version, revision, mcp_entity_id) DO UPDATE
 							SET search_data_hash = EXCLUDED.search_data_hash,
 								data_vector = EXCLUDED.data_vector`
@@ -2234,7 +2233,7 @@ func (p publishedRepositoryImpl) CreateVersionWithData(ctx context.Context, pack
 					}
 					_, err = tx.Exec(`
 						INSERT INTO global_search.fts_mcp_search_text (workspace_id, package_id, version, revision, mcp_entity_id, status, kind, search_data_hash, data_vector)
-						VALUES (?, ?, ?, ?, ?, ?, ?, ?, to_tsvector(convert_from(?, 'UTF-8') || ' '))
+						VALUES (?, ?, ?, ?, ?, ?, ?, ?, to_tsvector(convert_from(?, 'UTF-8')))
 						ON CONFLICT (workspace_id, package_id, version, revision, mcp_entity_id) DO UPDATE
 							SET search_data_hash = EXCLUDED.search_data_hash,
 								data_vector = EXCLUDED.data_vector,
@@ -3244,6 +3243,11 @@ func (p publishedRepositoryImpl) CreatePackage(ctx context.Context, packageEntit
 				return err
 			}
 		}
+		if packageEntity.Kind == entity.KIND_WORKSPACE {
+			if err := EnsureGlobalSearchPartitionsTx(tx, packageEntity.Id); err != nil {
+				return fmt.Errorf("failed to ensure global search partitions for workspace %s: %w", packageEntity.Id, err)
+			}
+		}
 		return err
 	})
 	if err != nil {
@@ -3261,6 +3265,11 @@ func (p publishedRepositoryImpl) CreatePrivatePackageForUser(ctx context.Context
 		_, err = tx.Model(userRoleEntity).Insert()
 		if err != nil {
 			return err
+		}
+		if packageEntity.Kind == entity.KIND_WORKSPACE {
+			if err := EnsureGlobalSearchPartitionsTx(tx, packageEntity.Id); err != nil {
+				return fmt.Errorf("failed to ensure global search partitions for workspace %s: %w", packageEntity.Id, err)
+			}
 		}
 		return nil
 	})
@@ -3435,6 +3444,11 @@ func (p publishedRepositoryImpl) UpdatePackage(ctx context.Context, ent *entity.
 		_, err := p.updatePackage(tx, ent, excludeFromSearchChanged)
 		if err != nil {
 			return err
+		}
+		if ent.Kind == entity.KIND_WORKSPACE {
+			if err := EnsureGlobalSearchPartitionsTx(tx, ent.Id); err != nil {
+				return fmt.Errorf("failed to ensure global search partitions for workspace %s: %w", ent.Id, err)
+			}
 		}
 		return nil
 	})
@@ -3964,8 +3978,7 @@ func (p publishedRepositoryImpl) SearchForVersions(ctx context.Context, searchQu
 		coalesce(pkg_name_tf + pkg_description_tf + pkg_id_tf + pkg_service_name_tf + version_tf + version_labels_tf, 0) init_rank,
 		coalesce(
 			?version_status_release_weight * (pv.status = ?version_status_release)::int +
-			?version_status_draft_weight * (pv.status = ?version_status_draft)::int +
-			?version_status_archived_weight * (pv.status = ?version_status_archived)::int) version_status_tf,
+			?version_status_draft_weight * (pv.status = ?version_status_draft)::int) version_status_tf,
 		coalesce(?open_count_weight * coalesce(oc.open_count), 0) version_open_count
 		where pv.deleted_at is null
 		and (?statuses = '{}' or pv.status = ANY(?statuses))
@@ -4090,8 +4103,7 @@ func (p publishedRepositoryImpl) SearchForDocuments(ctx context.Context, searchQ
 		coalesce(content_tf + title_tf + labels_tf, 0) init_rank,
 		coalesce(
 			?version_status_release_weight * (v.status = ?version_status_release)::int +
-			?version_status_draft_weight * (v.status = ?version_status_draft)::int +
-			?version_status_archived_weight * (v.status = ?version_status_archived)::int) version_status_tf,
+			?version_status_draft_weight * (v.status = ?version_status_draft)::int) version_status_tf,
 		coalesce(?open_count_weight * coalesce(oc.open_count), 0) document_open_count
 		where init_rank > 0
 		and (
