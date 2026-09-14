@@ -1,0 +1,65 @@
+# Delete old docker images on Branch or Tag deletion
+name: Cleanup old docker images
+run-name: Cleanup for ${{ github.event.ref_type }} '${{ github.event.ref }}' deleted
+
+on:
+  delete:
+    branches: ["**"]
+    tags: ["**"]
+
+env:
+  REF_NAME: ${{ github.event.ref }}
+
+jobs:
+  handle-deletion:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log deletion info
+        run: |
+          echo "Deleted ${{ github.event.ref_type }}: ${REF_NAME}"
+          echo "Deleted by: ${{ github.actor }}"
+
+      - name: Prepare branch tag
+        if: github.event.ref_type == 'branch'
+        id: prepare_branch_tag
+        run: |
+          BRANCH_TAG=$(echo "${REF_NAME}" | sed 's@refs/tags/@@;s@refs/heads/@@;s@refs/pull/@pull/@;s@^develop$@dev@;s@^release$@next@;s@/@-@g')
+          echo  "BRANCH_TAG=$BRANCH_TAG"
+          echo  "BRANCH_TAG=$BRANCH_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Determine tags to delete
+        id: determine_tags
+        run: |
+          if [ "${{ github.event.ref_type }}" = "branch" ]; then
+            TAGS_TO_DELETE=timestamp-*-${{ steps.prepare_branch_tag.outputs.BRANCH_TAG }}
+          fi
+          if [ "${{ github.event.ref_type }}" = "tag" ]; then
+            TAGS_TO_DELETE=${REF_NAME#refs/tags/}
+          fi
+          echo "TAGS_TO_DELETE=$TAGS_TO_DELETE"
+          echo "TAGS_TO_DELETE=$TAGS_TO_DELETE" >> "$GITHUB_OUTPUT"
+
+      - name: Summary
+        run: |
+          echo "=== Deletion Summary ==="
+          echo "Event: ${{ github.event_name }}"
+          echo "Ref Type: ${{ github.event.ref_type }}"
+          echo "Deleted Ref: ${REF_NAME}"
+          echo "Tags to Delete: ${{ steps.determine_tags.outputs.TAGS_TO_DELETE }}"
+          echo "Actor: ${{ github.actor }}"
+          echo "Threshold Days: 0"
+          echo "Excluded Tags: dev"
+          echo "Dry Run: false"
+
+      - name: Execute package cleanup
+        uses: netcracker/qubership-workflow-hub/actions/container-package-cleanup@main
+        with:
+          threshold-days: "0"
+          included-tags: "${{ steps.determine_tags.outputs.TAGS_TO_DELETE }}"
+          excluded-tags: "dev"
+          dry-run: "false"
+        env:
+          PACKAGE_TOKEN: ${{ secrets.GH_ACCESS_TOKEN }}
