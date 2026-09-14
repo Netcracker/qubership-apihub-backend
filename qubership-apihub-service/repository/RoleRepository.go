@@ -470,16 +470,7 @@ func (r roleRepositoryImpl) GetWorkspacePackageReadAccess(ctx context.Context, w
 	var result []entity.PackageReadAccessEntity
 	var query string
 	var err error
-	switch principal.Kind {
-	case entity.VisibilityPrincipalSysadmin:
-		query = `
-		SELECT id, parent_id, true AS can_read, exclude_from_search
-		FROM package_group
-		WHERE deleted_at IS NULL
-		  AND (id = ? OR (id ~>=~ (? || '.') AND id ~<~ (? || '/')))
-		`
-		_, err = r.cp.GetConnection().WithContext(ctx).Query(&result, query, workspaceId, workspaceId, workspaceId)
-	case entity.VisibilityPrincipalApiKey:
+	if principal.ApiKeyScopeId != "" {
 		query = `
 		SELECT wp.id, wp.parent_id,
 			(
@@ -499,7 +490,7 @@ func (r roleRepositoryImpl) GetWorkspacePackageReadAccess(ctx context.Context, w
 			principal.ApiKeyScopeId, principal.ApiKeyScopeId, principal.ApiKeyScopeId, principal.ApiKeyScopeId,
 			pg.Array(principal.ApiKeyRoleIds),
 			workspaceId, workspaceId, workspaceId)
-	default:
+	} else {
 		query = `
 		SELECT wp.id, wp.parent_id,
 			EXISTS (

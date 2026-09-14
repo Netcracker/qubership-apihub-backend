@@ -1,15 +1,6 @@
 package entity
 
-type VisibilityPrincipalKind int
-
-const (
-	VisibilityPrincipalUser VisibilityPrincipalKind = iota
-	VisibilityPrincipalApiKey
-	VisibilityPrincipalSysadmin
-)
-
 type VisibilityPrincipal struct {
-	Kind          VisibilityPrincipalKind
 	UserId        string
 	ApiKeyScopeId string
 	ApiKeyRoleIds []string

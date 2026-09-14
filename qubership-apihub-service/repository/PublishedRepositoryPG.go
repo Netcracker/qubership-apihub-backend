@@ -3873,9 +3873,6 @@ func (p publishedRepositoryImpl) SearchForVersions(ctx context.Context, searchQu
 	if len(searchQuery.VisibleRoots) == 0 {
 		return nil, nil
 	}
-	if searchQuery.InvisibleRoots == nil {
-		searchQuery.InvisibleRoots = make([]string, 0)
-	}
 	searchQuery.TextFilter = "%" + utils.LikeEscaped(searchQuery.TextFilter) + "%"
 	var result []entity.PackageSearchResult
 	versionsSearchQuery := `
@@ -3902,10 +3899,6 @@ func (p publishedRepositoryImpl) SearchForVersions(ctx context.Context, searchQu
 						select id from unnest(?visible_roots::text[]) id
 						union
 						select id||'.%' from unnest(?visible_roots::text[]) id))
-					and not (?invisible_roots <> '{}' and pv.package_id like ANY(
-						select id from unnest(?invisible_roots::text[]) id
-						union
-						select id||'.%' from unnest(?invisible_roots::text[]) id))
 					and (?versions = '{}' or pv.version = ANY(?versions))
 					group by pv.package_id, pv.version
 					union
@@ -3919,10 +3912,6 @@ func (p publishedRepositoryImpl) SearchForVersions(ctx context.Context, searchQu
 						select id from unnest(?visible_roots::text[]) id
 						union
 						select id||'.%' from unnest(?visible_roots::text[]) id))
-					and not (?invisible_roots <> '{}' and pv.package_id like ANY(
-						select id from unnest(?invisible_roots::text[]) id
-						union
-						select id||'.%' from unnest(?invisible_roots::text[]) id))
 					and (?versions = '{}' or pv.version = ANY(?versions))
 					and array_to_string(pv.labels,',') ilike ?text_filter
 					group by pv.package_id, pv.version
@@ -4015,9 +4004,6 @@ func (p publishedRepositoryImpl) SearchForDocuments(ctx context.Context, searchQ
 	if len(searchQuery.VisibleRoots) == 0 {
 		return nil, nil
 	}
-	if searchQuery.InvisibleRoots == nil {
-		searchQuery.InvisibleRoots = make([]string, 0)
-	}
 	searchQuery.TextFilter = "%" + utils.LikeEscaped(searchQuery.TextFilter) + "%"
 	var result []entity.DocumentSearchResult
 	documentsSearchQuery := `
@@ -4041,10 +4027,6 @@ func (p publishedRepositoryImpl) SearchForDocuments(ctx context.Context, searchQ
 							select id from unnest(?visible_roots::text[]) id
 							union
 							select id||'.%' from unnest(?visible_roots::text[]) id))
-						and not (?invisible_roots <> '{}' and pv.package_id like ANY(
-							select id from unnest(?invisible_roots::text[]) id
-							union
-							select id||'.%' from unnest(?invisible_roots::text[]) id))
 						and (?versions = '{}' or pv.version = ANY(?versions))
 						group by pv.package_id, pv.version
 				),

@@ -17,23 +17,6 @@ func TestCompressVisibleRoots(t *testing.T) {
 	}
 }
 
-func TestCompressInvisibleRoots(t *testing.T) {
-	all := []string{"ws", "ws.public", "ws.secret", "ws.secret.child"}
-	readable := []string{"ws", "ws.public"}
-	got := CompressInvisibleRoots(all, readable)
-	if len(got) != 1 || got[0] != "ws.secret" {
-		t.Fatalf("expected [ws.secret], got %v", got)
-	}
-
-	// private workspace with visible child: no invisible subtree root
-	all = []string{"ws", "ws.shared", "ws.other"}
-	readable = []string{"ws.shared"}
-	got = CompressInvisibleRoots(all, readable)
-	if len(got) != 1 || got[0] != "ws.other" {
-		t.Fatalf("expected [ws.other], got %v", got)
-	}
-}
-
 func TestPartitionSlug(t *testing.T) {
 	slug := PartitionSlug("acme-corp")
 	if len(slug) != 18 || slug[:2] != "p_" {

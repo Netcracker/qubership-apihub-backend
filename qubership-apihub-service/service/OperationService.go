@@ -602,7 +602,6 @@ func (o operationServiceImpl) GlobalSearchForOperations(ctx context.Context, sea
 		WorkspaceId:       searchReq.Workspace,
 		Packages:          packages,
 		VisibleRoots:      searchReq.VisiblePackageRoots,
-		InvisibleRoots:    searchReq.InvisiblePackageRoots,
 		Versions:          versions,
 		Status:            searchReq.Status,
 		StartDate:         startDate,
@@ -612,9 +611,6 @@ func (o operationServiceImpl) GlobalSearchForOperations(ctx context.Context, sea
 	}
 	if searchQuery.VisibleRoots == nil {
 		searchQuery.VisibleRoots = make([]string, 0)
-	}
-	if searchQuery.InvisibleRoots == nil {
-		searchQuery.InvisibleRoots = make([]string, 0)
 	}
 
 	repoSearchStart := time.Now()
