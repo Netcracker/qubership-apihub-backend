@@ -162,7 +162,17 @@ func TestGetPackageVersionsViewQueriesTheSummaryForPackagesToo(t *testing.T) {
 	}
 }
 
-const revisionsPreviousVersion = "2025.4"
+const (
+	revisionsPreviousVersion      = "2025.4"
+	revisionsLatestBuilderVersion = "2.1.0"
+	revisionsFirstBuilderVersion  = "2.0.0"
+)
+
+func revisionMetadata(builderVersion string) entity.Metadata {
+	metadata := entity.Metadata{}
+	metadata.SetBuilderVersion(builderVersion)
+	return metadata
+}
 
 type revisionsListRepoStub struct {
 	repository.PublishedRepository
@@ -178,8 +188,8 @@ func (s *revisionsListRepoStub) GetVersion(context.Context, string, string) (*en
 // Revision 1 was published against a baseline, revision 2 without one.
 func (s *revisionsListRepoStub) GetVersionRevisionsList(context.Context, entity.PackageVersionSearchQueryEntity) ([]entity.PackageVersionRevisionEntity, error) {
 	return []entity.PackageVersionRevisionEntity{
-		{PublishedVersionEntity: entity.PublishedVersionEntity{PackageId: listPackageId, Version: listVersion, Revision: 2}},
-		{PublishedVersionEntity: entity.PublishedVersionEntity{PackageId: listPackageId, Version: listVersion, Revision: 1, PreviousVersion: revisionsPreviousVersion}},
+		{PublishedVersionEntity: entity.PublishedVersionEntity{PackageId: listPackageId, Version: listVersion, Revision: 2, Metadata: revisionMetadata(revisionsLatestBuilderVersion)}},
+		{PublishedVersionEntity: entity.PublishedVersionEntity{PackageId: listPackageId, Version: listVersion, Revision: 1, PreviousVersion: revisionsPreviousVersion, Metadata: revisionMetadata(revisionsFirstBuilderVersion)}},
 	}, nil
 }
 
@@ -225,5 +235,8 @@ func TestGetVersionRevisionsListReportsFlagsPerRevision(t *testing.T) {
 	}
 	if first.ChangelogHasErrors == nil || !*first.ChangelogHasErrors {
 		t.Error("expected the errored revision to report its changelog flag")
+	}
+	if latest.ApiProcessorVersion != revisionsLatestBuilderVersion || first.ApiProcessorVersion != revisionsFirstBuilderVersion {
+		t.Errorf("expected each revision to report its own api-processor version, got %q and %q", latest.ApiProcessorVersion, first.ApiProcessorVersion)
 	}
 }
