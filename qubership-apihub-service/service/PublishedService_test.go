@@ -205,7 +205,7 @@ func TestMergeVersionComparisons(t *testing.T) {
 		{ComparisonId: ddlOnlyId, ContractTypes: []view.ContractType{{ContractType: view.ContractTypeDdl}}},
 	}
 
-	merged := mergeVersionComparisons(operationComparisons, ddlComparisons, nil)
+	merged := mergeVersionComparisons(operationComparisons, ddlComparisons)
 
 	byId := make(map[string]*entity.VersionComparisonEntity, len(merged))
 	for _, comparison := range merged {
@@ -218,10 +218,10 @@ func TestMergeVersionComparisons(t *testing.T) {
 		t.Errorf("shared comparison must carry the rebuilt DDL contract types")
 	}
 	if byId[opOnlyId].ContractTypes != nil {
-		t.Errorf("operation-only comparison must not gain contract types from the merge; the DB layer is responsible for preserving the stored value")
+		t.Errorf("operation-only comparison must not gain contract types from the merge")
 	}
 	if byId[ddlOnlyId].OperationTypes != nil {
-		t.Errorf("ddl-only comparison must not gain operation types from the merge; the DB layer is responsible for preserving the stored value")
+		t.Errorf("ddl-only comparison must not gain operation types from the merge")
 	}
 	if byId[mainId].ContractTypes != nil {
 		t.Errorf("main comparison has no DDL data, contract types must stay empty")
@@ -293,8 +293,7 @@ func TestMergeVersionComparisonsUnionsHasErrors(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			merged := mergeVersionComparisons(
 				[]*entity.VersionComparisonEntity{tc.operationSide},
-				[]*entity.VersionComparisonEntity{tc.ddlSide},
-				nil)
+				[]*entity.VersionComparisonEntity{tc.ddlSide})
 			if len(merged) != 1 {
 				t.Fatalf("merged %d comparisons, want 1", len(merged))
 			}
@@ -304,46 +303,8 @@ func TestMergeVersionComparisonsUnionsHasErrors(t *testing.T) {
 		})
 	}
 
-	t.Run("errors reported by a cached index are kept", func(t *testing.T) {
-		// The operation changes of a referenced comparison come from cache while its DDL changes are
-		// recalculated, so only the cached entry reports the errors found on the operation changes.
-		rebuiltDdl := &entity.VersionComparisonEntity{ComparisonId: sharedId, Metadata: entity.Metadata{}}
-		merged := mergeVersionComparisons(nil,
-			[]*entity.VersionComparisonEntity{rebuiltDdl},
-			[]*entity.VersionComparisonEntity{errored(sharedId)})
-		if len(merged) != 1 {
-			t.Fatalf("merged %d comparisons, want 1", len(merged))
-		}
-		if !merged[0].Metadata.GetHasErrors() {
-			t.Errorf("errors reported by the cached index must survive the merge")
-		}
-	})
-
-	t.Run("refs reported by a cached index are kept", func(t *testing.T) {
-		// The operation changes of the main comparison come from cache while its DDL changes are
-		// recalculated, so only the cached entry carries the refs collected from the operation index.
-		rebuiltDdl := &entity.VersionComparisonEntity{ComparisonId: sharedId, Metadata: entity.Metadata{}, Refs: []string{"ddl-ref"}}
-		cachedOperation := &entity.VersionComparisonEntity{ComparisonId: sharedId, Metadata: entity.Metadata{}, Refs: []string{"operation-ref"}}
-		merged := mergeVersionComparisons(nil,
-			[]*entity.VersionComparisonEntity{rebuiltDdl},
-			[]*entity.VersionComparisonEntity{cachedOperation})
-		if len(merged) != 1 {
-			t.Fatalf("merged %d comparisons, want 1", len(merged))
-		}
-		if !reflect.DeepEqual(merged[0].Refs, []string{"ddl-ref", "operation-ref"}) {
-			t.Errorf("merged refs = %v, want both indexes' refs", merged[0].Refs)
-		}
-	})
-
-	t.Run("a comparison cached in both indexes produces no row", func(t *testing.T) {
-		merged := mergeVersionComparisons(nil, nil, []*entity.VersionComparisonEntity{errored(ddlOnlyId)})
-		if len(merged) != 0 {
-			t.Errorf("merged %d comparisons, want 0", len(merged))
-		}
-	})
-
 	t.Run("ddl-only comparison keeps its own errors", func(t *testing.T) {
-		merged := mergeVersionComparisons(nil, []*entity.VersionComparisonEntity{errored(ddlOnlyId)}, nil)
+		merged := mergeVersionComparisons(nil, []*entity.VersionComparisonEntity{errored(ddlOnlyId)})
 		if len(merged) != 1 {
 			t.Fatalf("merged %d comparisons, want 1", len(merged))
 		}

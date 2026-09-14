@@ -37,8 +37,7 @@ type PublishedRepository interface {
 		operations []*entity.OperationEntity, operationsData []*entity.OperationDataEntity,
 		operationComparisons []*entity.OperationComparisonEntity, versionNotifications []*entity.PublishedVersionNotificationEntity,
 		comparisonNotifications []*entity.VersionComparisonNotificationEntity,
-		versionComparisonEntities []*entity.VersionComparisonEntity, serviceName string, pkg *entity.PackageEntity, versionComparisonsFromCache []string,
-		operationComparisonIdsToRebuild []string, ddlComparisonIdsToRebuild []string,
+		versionComparisonEntities []*entity.VersionComparisonEntity, serviceName string, pkg *entity.PackageEntity, cachedComparisonIds map[string]struct{},
 		versionInternalDocEntities []*entity.VersionInternalDocumentEntity, versionInternalDocDataEntities []*entity.VersionInternalDocumentDataEntity,
 		comparisonInternalDocEntities []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocDataEntities []*entity.ComparisonInternalDocumentDataEntity,
 		operationSearchTexts []*entity.OperationSearchTextEntity,
@@ -89,7 +88,7 @@ type PublishedRepository interface {
 	GetVersionRefsComparisons(ctx context.Context, comparisonId string) ([]entity.VersionComparisonEntity, error)
 	GetVersionComparisonsCleanupCandidates(ctx context.Context, limit int, offset int) ([]entity.VersionComparisonCleanupCandidateEntity, error)
 	DeleteVersionComparison(ctx context.Context, comparisonId string) (bool, error)
-	SaveVersionChanges(ctx context.Context, packageInfo view.PackageInfoFile, publishId string, operationComparisons []*entity.OperationComparisonEntity, versionComparisons []*entity.VersionComparisonEntity, versionComparisonsFromCache []string, operationComparisonIdsToRebuild []string, ddlComparisonIdsToRebuild []string, comparisonInternalDocEntities []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocDataEntities []*entity.ComparisonInternalDocumentDataEntity, ddlContractComparisons []*entity.DDLContractComparisonEntity, comparisonNotifications []*entity.VersionComparisonNotificationEntity, buildErrorFlags view.BuildErrorFlags) error
+	SaveVersionChanges(ctx context.Context, packageInfo view.PackageInfoFile, publishId string, operationComparisons []*entity.OperationComparisonEntity, versionComparisons []*entity.VersionComparisonEntity, cachedComparisonIds map[string]struct{}, comparisonInternalDocEntities []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocDataEntities []*entity.ComparisonInternalDocumentDataEntity, ddlContractComparisons []*entity.DDLContractComparisonEntity, comparisonNotifications []*entity.VersionComparisonNotificationEntity, buildErrorFlags view.BuildErrorFlags) error
 	GetLatestRevision(ctx context.Context, packageId, version string) (int, error)
 	GetDeletedPackageLatestRevision(ctx context.Context, packageId, version string) (int, error)
 
