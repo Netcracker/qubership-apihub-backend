@@ -115,14 +115,19 @@ func (e *loggingMetricExporter) Export(ctx context.Context, rm *metricdata.Resou
 		log.Errorf("OpenTelemetry metrics export to %s failed: %v", e.endpoint, err)
 		return err
 	}
-	log.Tracef("OpenTelemetry metrics exported to %s: %d metrics", e.endpoint, countMetrics(rm))
+	if log.IsLevelEnabled(log.TraceLevel) {
+		names := exportedMetricNames(rm)
+		log.Tracef("OpenTelemetry metrics exported to %s: %d metrics %v", e.endpoint, len(names), names)
+	}
 	return nil
 }
 
-func countMetrics(rm *metricdata.ResourceMetrics) int {
-	count := 0
+func exportedMetricNames(rm *metricdata.ResourceMetrics) []string {
+	names := make([]string, 0)
 	for _, scope := range rm.ScopeMetrics {
-		count += len(scope.Metrics)
+		for _, m := range scope.Metrics {
+			names = append(names, m.Name)
+		}
 	}
-	return count
+	return names
 }
