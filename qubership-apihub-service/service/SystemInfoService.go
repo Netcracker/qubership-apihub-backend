@@ -108,6 +108,7 @@ type SystemInfoService interface {
 	GetEphemeralFileTTLMinutes() int
 	GetEphemeralFilesCleanupSchedule() string
 	GetMinioMigrationTimeouts() config.S3MigrationTimeoutsConfig
+	GetOtelMetricsConfig() config.OtelMetricsConfig
 }
 
 func (g *systemInfoServiceImpl) GetCredsFromEnv() *view.DbCredentials {
@@ -182,6 +183,9 @@ func (g *systemInfoServiceImpl) Init() error {
 	if err := utils.ValidateConfig(g.config); err != nil {
 		return err
 	}
+	if err := validateOtelMetricsConfig(g.config.Monitoring); err != nil {
+		return err
+	}
 
 	authConfig, err := g.buildAuthConfig()
 	if err != nil {
@@ -189,6 +193,21 @@ func (g *systemInfoServiceImpl) Init() error {
 	}
 	g.authConfig = authConfig
 
+	return nil
+}
+
+// validateOtelMetricsConfig checks the cross-field rules the validator tags cannot express.
+// OTLP export reads the application metrics from the Prometheus registry, and those are only registered when monitoring is enabled.
+func validateOtelMetricsConfig(cfg config.MonitoringConfig) error {
+	if !cfg.Otel.Enabled {
+		return nil
+	}
+	if !cfg.Enabled {
+		return fmt.Errorf("monitoring.otel.enabled requires monitoring.enabled=true: application metrics are not registered otherwise")
+	}
+	if cfg.Otel.ServerUrl == "" {
+		return fmt.Errorf("monitoring.otel.serverUrl must be set when monitoring.otel.enabled=true")
+	}
 	return nil
 }
 
@@ -239,6 +258,14 @@ func (g *systemInfoServiceImpl) setDefaults() {
 	viper.SetDefault("businessParameters.externalLinks", []string{})
 	viper.SetDefault("businessParameters.failBuildOnBrokenRefs", true)
 	viper.SetDefault("monitoring.enabled", false)
+	viper.SetDefault("monitoring.otel.enabled", false)
+	viper.SetDefault("monitoring.otel.serverUrl", "")
+	viper.SetDefault("monitoring.otel.metricsPath", "/v1/metrics")
+	viper.SetDefault("monitoring.otel.token", "")
+	viper.SetDefault("monitoring.otel.namespace", "")
+	viper.SetDefault("monitoring.otel.exportIntervalSec", 60)
+	viper.SetDefault("monitoring.otel.timeoutSec", 10)
+	viper.SetDefault("monitoring.otel.metricPrefixes", []string{"apihub_ai_", "apihub_mcp_", "apihub_ephemeral_"})
 	viper.SetDefault("s3Storage.enabled", false)
 	viper.SetDefault("s3Storage.storeOnlyBuildResult", false)
 	viper.SetDefault("s3Storage.migrationTimeouts.s3OperationSec", 600)       // 10 minutes
@@ -675,6 +702,10 @@ func (g *systemInfoServiceImpl) GetExtensions() []view.Extension {
 
 func (g *systemInfoServiceImpl) GetAiChatConfig() config.ChatConfig {
 	return g.config.Ai.Chat
+}
+
+func (g *systemInfoServiceImpl) GetOtelMetricsConfig() config.OtelMetricsConfig {
+	return g.config.Monitoring.Otel
 }
 
 func (g *systemInfoServiceImpl) GetMinioMigrationTimeouts() config.S3MigrationTimeoutsConfig {

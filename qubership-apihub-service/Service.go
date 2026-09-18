@@ -19,6 +19,7 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/metrics"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
@@ -723,6 +724,14 @@ func main() {
 		utils.SafeAsync(func() {
 			metrics.RegisterAllPrometheusApplicationMetrics()
 		})
+		otelCfg := systemInfoService.GetOtelMetricsConfig()
+		if otelCfg.Enabled {
+			gatherer := metrics.NewPrefixGatherer(prometheus.DefaultGatherer, otelCfg.MetricPrefixes)
+			otelExport := service.NewOtelMetricsExportService(otelCfg, gatherer, systemInfoService.GetInstanceId())
+			if err := otelExport.Start(context.Background()); err != nil {
+				log.Fatalf("Failed to start OpenTelemetry metrics export: %v", err)
+			}
+		}
 	}
 
 	if systemInfoService.IsMinioStorageActive() {
