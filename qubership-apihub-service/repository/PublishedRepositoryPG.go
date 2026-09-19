@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1926,7 +1927,7 @@ func (p publishedRepositoryImpl) CreateVersionWithData(ctx context.Context, pack
 		}
 		utils.PerfLog(time.Since(start).Milliseconds(), 200, "CreateVersionWithData: version internal documents insert")
 		start = time.Now()
-		err = p.saveComparisonInternalDocumentsTx(tx, comparisonInternalDocEntities, comparisonInternalDocDataEntities, packageInfo.MigrationBuild, versionComparisons)
+		err = p.saveComparisonInternalDocumentsTx(tx, comparisonInternalDocEntities, comparisonInternalDocDataEntities, versionComparisons, versionComparisonsFromCache)
 		if err != nil {
 			return err
 		}
@@ -2535,7 +2536,7 @@ func (p publishedRepositoryImpl) SaveVersionChanges(ctx context.Context, package
 			return err
 		}
 
-		err = p.saveComparisonInternalDocumentsTx(tx, comparisonInternalDocEntities, comparisonInternalDocDataEntities, packageInfo.MigrationBuild, versionComparisons)
+		err = p.saveComparisonInternalDocumentsTx(tx, comparisonInternalDocEntities, comparisonInternalDocDataEntities, versionComparisons, versionComparisonsFromCache)
 		if err != nil {
 			return err
 		}
@@ -2649,7 +2650,7 @@ func (p publishedRepositoryImpl) saveDdlComparisonsTx(tx *pg.Tx, ddlContractComp
 	return nil
 }
 
-func (p publishedRepositoryImpl) saveComparisonInternalDocumentsTx(tx *pg.Tx, comparisonInternalDocEntities []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocDataEntities []*entity.ComparisonInternalDocumentDataEntity, migrationBuild bool, versionComparisons []*entity.VersionComparisonEntity) error {
+func (p publishedRepositoryImpl) saveComparisonInternalDocumentsTx(tx *pg.Tx, comparisonInternalDocEntities []*entity.ComparisonInternalDocumentEntity, comparisonInternalDocDataEntities []*entity.ComparisonInternalDocumentDataEntity, versionComparisons []*entity.VersionComparisonEntity, versionComparisonsFromCache []string) error {
 	for _, d := range comparisonInternalDocDataEntities {
 		exists, err := p.comparisonInternalDocumentDataExists(tx, d.Hash) // TODO: could be bulk select
 		if err != nil {
@@ -2662,31 +2663,30 @@ func (p publishedRepositoryImpl) saveComparisonInternalDocumentsTx(tx *pg.Tx, co
 			}
 		}
 	}
-	if migrationBuild {
-		// In case of migration, list of comparison internal documents may change
-		// so need to cleanup existing list before insert per comparison.
-		// Iterate over versionComparisons (not comparisonInternalDocEntities) to ensure
-		// that comparisons producing zero internal documents also get their stale rows deleted.
-		deletedComparisons := make(map[string]struct{})
-		for _, vc := range versionComparisons {
-			// Multiple internal documents may share the same comparison key, so dedup
-			// to avoid redundant DELETE queries for the same comparison.
-			key := fmt.Sprintf("%s|%s|%d|%s|%s|%d", vc.PackageId, vc.Version, vc.Revision, vc.PreviousPackageId, vc.PreviousVersion, vc.PreviousRevision)
-			if _, already := deletedComparisons[key]; already {
-				continue
-			}
-			deletedComparisons[key] = struct{}{}
-			_, err := tx.Model(&entity.ComparisonInternalDocumentEntity{}).
-				Where("package_id = ?", vc.PackageId).
-				Where("version = ?", vc.Version).
-				Where("revision = ?", vc.Revision).
-				Where("previous_package_id = ?", vc.PreviousPackageId).
-				Where("previous_version = ?", vc.PreviousVersion).
-				Where("previous_revision = ?", vc.PreviousRevision).
-				Delete()
-			if err != nil {
-				return fmt.Errorf("failed to cleanup comparison internal documents for migration: %w", err)
-			}
+	// Iterate over versionComparisons (not comparisonInternalDocEntities) to ensure
+	// that comparisons producing zero internal documents also get their stale rows deleted.
+	deletedComparisons := make(map[string]struct{})
+	for _, vc := range versionComparisons {
+		if slices.Contains(versionComparisonsFromCache, vc.ComparisonId) {
+			continue
+		}
+		// Multiple internal documents may share the same comparison key, so dedup
+		// to avoid redundant DELETE queries for the same comparison.
+		key := fmt.Sprintf("%s|%s|%d|%s|%s|%d", vc.PackageId, vc.Version, vc.Revision, vc.PreviousPackageId, vc.PreviousVersion, vc.PreviousRevision)
+		if _, already := deletedComparisons[key]; already {
+			continue
+		}
+		deletedComparisons[key] = struct{}{}
+		_, err := tx.Model(&entity.ComparisonInternalDocumentEntity{}).
+			Where("package_id = ?", vc.PackageId).
+			Where("version = ?", vc.Version).
+			Where("revision = ?", vc.Revision).
+			Where("previous_package_id = ?", vc.PreviousPackageId).
+			Where("previous_version = ?", vc.PreviousVersion).
+			Where("previous_revision = ?", vc.PreviousRevision).
+			Delete()
+		if err != nil {
+			return fmt.Errorf("failed to cleanup comparison internal documents: %w", err)
 		}
 	}
 	for _, c := range comparisonInternalDocEntities {
