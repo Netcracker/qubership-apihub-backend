@@ -10710,6 +10710,145 @@ paths:
               examples:
                 InternalServerError:
                   $ref: "#/components/examples/InternalServerError"
+  "/api/v2/packages/{packageId}/versions/{version}/export/notifications":
+    parameters:
+      - $ref: "#/components/parameters/packageId"
+      - $ref: "#/components/parameters/version"
+    get:
+      tags:
+        - Versions
+      summary: Export notifications to xlsx file
+      description: |
+        Export the messages produced by api-processor for the package version to an xlsx file. The file holds
+        the messages that `GET /api/v2/packages/{packageId}/versions/{version}/notifications` returns, and, by
+        default, the messages of the changelog against the version's previous version as well.
+
+        Both sets share one sheet with four columns: Severity, Category, Message, Document ID. Neither the
+        previous version nor the phase gets a column: a category belongs to one phase, so it already tells a
+        changelog message apart from a message about the version's own documents.
+
+        The exported changelog is the one against the previous version recorded on the version at publication,
+        which is the comparison the version page shows. An arbitrary comparison cannot be exported: unlike
+        `GET /api/v2/packages/{packageId}/versions/{version}/changes/notifications`, this endpoint takes no
+        previousVersion and no previousVersionPackageId, and no other endpoint exports the messages of a
+        comparison between two versions the caller names.
+
+        The file holds every message that matches the filters, so the endpoint takes no paging parameters. A
+        version with no messages returns a file that holds only the header row.
+
+        Requires read permission on the package.
+      operationId: getPackagesIdVersionsIdNotificationsExport
+      parameters:
+        - name: includeChangelogNotifications
+          in: query
+          description: |
+            Add the messages of the version's changelog to the file.\
+            The changelog is the one against the previous version recorded on the version at publication, compared against the package itself unless the version recorded a previous version package id of its own.\
+            A version that recorded no previous version, and a version whose changelog was never calculated, contribute no such messages, and the response is still 200.\
+            Set the flag to false to export the messages about the version's own documents alone.
+          schema:
+            type: boolean
+            default: true
+        - name: documentId
+          in: query
+          description: Filter by document slug. Returns the messages attributed to the document.
+          schema:
+            type: string
+            example: qitmf-v5-11-json
+        - name: severity
+          in: query
+          description: |
+            Filter by severity.\
+            Multiple severities separated by comma can be specified.
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                - error
+                - warning
+                - information
+                - hint
+          style: form
+          explode: false
+          example: ["error", "warning"]
+        - name: category
+          in: query
+          description: |
+            Filter by message category.\
+            Multiple categories separated by comma can be specified.
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/NotificationCategoryEnum"
+          style: form
+          explode: false
+          example: ["build-document", "version-not-resolved"]
+      responses:
+        "200":
+          description: Success
+          content:
+            application/xlsx:
+              schema:
+                type: string
+                format: binary
+                description: xlsx file to download
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                description: xlsx file name
+                example: attachment; filename="Notifications_package.id_version.xlsx"
+        "301":
+          description: Moved Permanently
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                IncorrectInputParams:
+                  $ref: "#/components/examples/IncorrectInputParameters"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - the user has no read permission on the package
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                PackageNotFound:
+                  $ref: "#/components/examples/PackageNotFound"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
   "/api/v1/ai-chat/chats":
     get:
       tags:
