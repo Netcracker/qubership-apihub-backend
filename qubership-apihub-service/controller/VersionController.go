@@ -184,11 +184,11 @@ func (v versionControllerImpl) GetVersionNotifications(w http.ResponseWriter, r 
 	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := v.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, v.ptHandler, packageId, "Failed to check user privileges", err)
+		handlePkgRedirectOrRespondWithError(w, r, v.responder, v.ptHandler, packageId, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		v.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -197,7 +197,7 @@ func (v versionControllerImpl) GetVersionNotifications(w http.ResponseWriter, r 
 	}
 	versionName, err := getUnescapedStringParam(r, "version")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		v.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -208,12 +208,12 @@ func (v versionControllerImpl) GetVersionNotifications(w http.ResponseWriter, r 
 	}
 	severities, customError := getRepeatedListFromParam(r, "severity")
 	if customError != nil {
-		utils.RespondWithCustomError(w, customError)
+		v.responder.RespondWithCustomError(w, customError)
 		return
 	}
 	for _, severity := range severities {
 		if !view.ValidNotificationSeverity(severity) {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			v.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.InvalidParameterValue,
 				Message: exception.InvalidParameterValueMsg,
@@ -224,21 +224,21 @@ func (v versionControllerImpl) GetVersionNotifications(w http.ResponseWriter, r 
 	}
 	categories, customError := getRepeatedListFromParam(r, "category")
 	if customError != nil {
-		utils.RespondWithCustomError(w, customError)
+		v.responder.RespondWithCustomError(w, customError)
 		return
 	}
 	filter, customError := getNotificationsFilter(r, severities, categories)
 	if customError != nil {
-		utils.RespondWithCustomError(w, customError)
+		v.responder.RespondWithCustomError(w, customError)
 		return
 	}
 
 	notifications, err := v.versionService.GetVersionNotifications(ctx, packageId, versionName, *filter)
 	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, v.ptHandler, packageId, "Failed to get version notifications", err)
+		handlePkgRedirectOrRespondWithError(w, r, v.responder, v.ptHandler, packageId, "Failed to get version notifications", err)
 		return
 	}
-	utils.RespondWithJson(w, http.StatusOK, notifications)
+	v.responder.RespondWithJson(w, http.StatusOK, notifications)
 }
 
 func (v versionControllerImpl) GetComparisonNotifications(w http.ResponseWriter, r *http.Request) {
@@ -246,11 +246,11 @@ func (v versionControllerImpl) GetComparisonNotifications(w http.ResponseWriter,
 	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := v.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, v.ptHandler, packageId, "Failed to check user privileges", err)
+		handlePkgRedirectOrRespondWithError(w, r, v.responder, v.ptHandler, packageId, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		v.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -259,7 +259,7 @@ func (v versionControllerImpl) GetComparisonNotifications(w http.ResponseWriter,
 	}
 	versionName, err := getUnescapedStringParam(r, "version")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		v.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -270,7 +270,7 @@ func (v versionControllerImpl) GetComparisonNotifications(w http.ResponseWriter,
 	}
 	previousVersion, err := url.QueryUnescape(r.URL.Query().Get("previousVersion"))
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		v.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -281,7 +281,7 @@ func (v versionControllerImpl) GetComparisonNotifications(w http.ResponseWriter,
 	}
 	previousVersionPackageId, err := url.QueryUnescape(r.URL.Query().Get("previousVersionPackageId"))
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		v.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -292,12 +292,12 @@ func (v versionControllerImpl) GetComparisonNotifications(w http.ResponseWriter,
 	}
 	severities, customError := getRepeatedListFromParam(r, "severity")
 	if customError != nil {
-		utils.RespondWithCustomError(w, customError)
+		v.responder.RespondWithCustomError(w, customError)
 		return
 	}
 	for _, severity := range severities {
 		if !view.ValidNotificationSeverity(severity) {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			v.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.InvalidParameterValue,
 				Message: exception.InvalidParameterValueMsg,
@@ -308,21 +308,21 @@ func (v versionControllerImpl) GetComparisonNotifications(w http.ResponseWriter,
 	}
 	categories, customError := getRepeatedListFromParam(r, "category")
 	if customError != nil {
-		utils.RespondWithCustomError(w, customError)
+		v.responder.RespondWithCustomError(w, customError)
 		return
 	}
 	filter, customError := getNotificationsFilter(r, severities, categories)
 	if customError != nil {
-		utils.RespondWithCustomError(w, customError)
+		v.responder.RespondWithCustomError(w, customError)
 		return
 	}
 
 	notifications, err := v.versionService.GetComparisonNotifications(ctx, packageId, versionName, previousVersionPackageId, previousVersion, *filter)
 	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, v.ptHandler, packageId, "Failed to get comparison notifications", err)
+		handlePkgRedirectOrRespondWithError(w, r, v.responder, v.ptHandler, packageId, "Failed to get comparison notifications", err)
 		return
 	}
-	utils.RespondWithJson(w, http.StatusOK, notifications)
+	v.responder.RespondWithJson(w, http.StatusOK, notifications)
 }
 
 func getNotificationsFilter(r *http.Request, severities []string, categories []string) (*view.NotificationsFilter, *exception.CustomError) {
