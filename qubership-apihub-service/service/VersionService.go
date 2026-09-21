@@ -1827,6 +1827,9 @@ func (v versionServiceImpl) CopyVersion(ctx context.Context, packageId string, v
 			},
 		}
 	}
+	if err := v.checkSourceVersionCanBeCopied(ctx, versionEnt, currentPackage.Kind, req.TargetStatus); err != nil {
+		return "", err
+	}
 	buildConfig, err := v.publishedService.GetPublishedVersionBuildConfig(ctx, packageId, version)
 	if err != nil {
 		return "", err
@@ -1868,6 +1871,54 @@ func (v versionServiceImpl) CopyVersion(ctx context.Context, packageId string, v
 		return "", err
 	}
 	return buildTask.PublishId, nil
+}
+
+func (v versionServiceImpl) checkSourceVersionCanBeCopied(ctx context.Context, versionEnt *entity.PublishedVersionEntity, packageKind string, targetStatus string) error {
+	if packageKind == entity.KIND_DASHBOARD {
+		refs, err := v.publishedRepo.GetVersionRefsV3(ctx, versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
+		if err != nil {
+			return err
+		}
+		for _, ref := range refs {
+			// An excluded reference is not part of the dashboard's content, so it cannot make the dashboard unsound.
+			if ref.Excluded {
+				continue
+			}
+			refHasErrors, err := VersionHasAnyErrors(ctx, v.publishedRepo, ref.RefPackageId, ref.RefVersion, ref.RefRevision)
+			if err != nil {
+				return err
+			}
+			if refHasErrors {
+				log.Debugf("Blocked copying version %s of package %s by user %s: referenced version %s of package %s contains errors",
+					versionEnt.Version, versionEnt.PackageId, secctx.GetUserId(ctx), ref.RefVersion, ref.RefPackageId)
+				return &exception.CustomError{
+					Status:  http.StatusBadRequest,
+					Code:    exception.VersionHasErrors,
+					Message: exception.ReferencedVersionHasErrorsMsg,
+					Params:  map[string]interface{}{"packageId": ref.RefPackageId, "version": ref.RefVersion},
+				}
+			}
+		}
+	}
+	if targetStatus != string(view.Release) {
+		return nil
+	}
+	
+	errorSummary, err := v.publishedRepo.GetVersionErrorSummary(ctx, versionEnt.PackageId, versionEnt.Version, versionEnt.Revision, false)
+	if err != nil {
+		return err
+	}
+	if errorSummary == nil || !errorSummary.HasErrors {
+		return nil
+	}
+	log.Debugf("Blocked copying version %s of package %s with 'release' status by user %s: the version contains errors",
+		versionEnt.Version, versionEnt.PackageId, secctx.GetUserId(ctx))
+	return &exception.CustomError{
+		Status:  http.StatusBadRequest,
+		Code:    exception.VersionHasErrors,
+		Message: exception.VersionCopyWithErrorsMsg,
+		Params:  map[string]interface{}{"packageId": versionEnt.PackageId, "version": versionEnt.Version},
+	}
 }
 
 func (v versionServiceImpl) GetPublishedVersionsHistory(ctx context.Context, filter view.PublishedVersionHistoryFilter) ([]view.PublishedVersionHistoryView, error) {
