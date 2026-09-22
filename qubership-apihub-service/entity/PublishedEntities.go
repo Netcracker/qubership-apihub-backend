@@ -650,7 +650,8 @@ func MakePackageVersionRevisionView(ent *PackageVersionRevisionEntity) *view.Pac
 			CloudUrl:      ent.Metadata.GetCloudUrl(),
 			Namespace:     ent.Metadata.GetNamespace(),
 		},
-		NotLatestRevision: ent.NotLatestRevision,
+		ApiProcessorVersion: ent.Metadata.GetBuilderVersion(),
+		NotLatestRevision:   ent.NotLatestRevision,
 	}
 	return &packageVersionRevision
 }

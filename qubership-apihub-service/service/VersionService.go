@@ -1339,12 +1339,10 @@ func (v versionServiceImpl) SearchForPackages(ctx context.Context, searchReq vie
 		OpenCountWeight:          0.2,
 	}
 	searchQuery.VersionStatusSearchWeight = entity.VersionStatusSearchWeight{
-		VersionReleaseStatus:        string(view.Release),
-		VersionReleaseStatusWeight:  4,
-		VersionDraftStatus:          string(view.Draft),
-		VersionDraftStatusWeight:    0.6,
-		VersionArchivedStatus:       string(view.Archived),
-		VersionArchivedStatusWeight: 0.1,
+		VersionReleaseStatus:       string(view.Release),
+		VersionReleaseStatusWeight: 4,
+		VersionDraftStatus:         string(view.Draft),
+		VersionDraftStatusWeight:   0.6,
 	}
 	versionEntities, err := v.publishedRepo.SearchForVersions(ctx, searchQuery)
 	if err != nil {
@@ -1384,12 +1382,10 @@ func (v versionServiceImpl) SearchForDocuments(ctx context.Context, searchReq vi
 		OpenCountWeight: 0.2,
 	}
 	searchQuery.VersionStatusSearchWeight = entity.VersionStatusSearchWeight{
-		VersionReleaseStatus:        string(view.Release),
-		VersionReleaseStatusWeight:  4,
-		VersionDraftStatus:          string(view.Draft),
-		VersionDraftStatusWeight:    0.6,
-		VersionArchivedStatus:       string(view.Archived),
-		VersionArchivedStatusWeight: 0.1,
+		VersionReleaseStatus:       string(view.Release),
+		VersionReleaseStatusWeight: 4,
+		VersionDraftStatus:         string(view.Draft),
+		VersionDraftStatusWeight:   0.6,
 	}
 	documentEntities, err := v.publishedRepo.SearchForDocuments(ctx, searchQuery)
 	if err != nil {
@@ -1614,10 +1610,31 @@ func (v versionServiceImpl) GetVersionRevisionsList(ctx context.Context, package
 	if err != nil {
 		return nil, err
 	}
-	revisions := make([]view.PackageVersionRevision, 0)
-
+	revisions := make([]view.PackageVersionRevision, 0, len(versionRevisionsEnts))
+	revisionKeys := make([]entity.PublishedVersionKeyEntity, 0, len(versionRevisionsEnts))
 	for _, ent := range versionRevisionsEnts {
 		revisions = append(revisions, *entity.MakePackageVersionRevisionView(&ent))
+		revisionKeys = append(revisionKeys, entity.PublishedVersionKeyEntity{
+			PackageId: ent.PackageId,
+			Version:   ent.Version,
+			Revision:  ent.Revision,
+		})
+	}
+
+	errorSummaries, err := v.publishedRepo.GetVersionsErrorSummary(ctx, revisionKeys, false)
+	if err != nil {
+		return nil, err
+	}
+	for i, key := range revisionKeys {
+		errorSummary, exists := errorSummaries[key]
+		if !exists {
+			continue
+		}
+		revisions[i].HasErrors = errorSummary.ContentHasErrors()
+		if versionRevisionsEnts[i].PreviousVersion != "" {
+			changelogHasErrors := errorSummary.ChangelogHasAnyErrors()
+			revisions[i].ChangelogHasErrors = &changelogHasErrors
+		}
 	}
 	return &view.PackageVersionRevisions{Revisions: revisions}, nil
 }
@@ -1806,6 +1823,9 @@ func (v versionServiceImpl) CopyVersion(ctx context.Context, packageId string, v
 			},
 		}
 	}
+	if err := v.checkSourceVersionCanBeCopied(ctx, versionEnt, currentPackage.Kind, req.TargetStatus); err != nil {
+		return "", err
+	}
 	buildConfig, err := v.publishedService.GetPublishedVersionBuildConfig(ctx, packageId, version)
 	if err != nil {
 		return "", err
@@ -1847,6 +1867,54 @@ func (v versionServiceImpl) CopyVersion(ctx context.Context, packageId string, v
 		return "", err
 	}
 	return buildTask.PublishId, nil
+}
+
+func (v versionServiceImpl) checkSourceVersionCanBeCopied(ctx context.Context, versionEnt *entity.PublishedVersionEntity, packageKind string, targetStatus string) error {
+	if packageKind == entity.KIND_DASHBOARD {
+		refs, err := v.publishedRepo.GetVersionRefsV3(ctx, versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
+		if err != nil {
+			return err
+		}
+		for _, ref := range refs {
+			// An excluded reference is not part of the dashboard's content, so it cannot make the dashboard unsound.
+			if ref.Excluded {
+				continue
+			}
+			refHasErrors, err := VersionHasAnyErrors(ctx, v.publishedRepo, ref.RefPackageId, ref.RefVersion, ref.RefRevision)
+			if err != nil {
+				return err
+			}
+			if refHasErrors {
+				log.Debugf("Blocked copying version %s of package %s by user %s: referenced version %s of package %s contains errors",
+					versionEnt.Version, versionEnt.PackageId, secctx.GetUserId(ctx), ref.RefVersion, ref.RefPackageId)
+				return &exception.CustomError{
+					Status:  http.StatusBadRequest,
+					Code:    exception.VersionHasErrors,
+					Message: exception.ReferencedVersionHasErrorsMsg,
+					Params:  map[string]interface{}{"packageId": ref.RefPackageId, "version": ref.RefVersion},
+				}
+			}
+		}
+	}
+	if targetStatus != string(view.Release) {
+		return nil
+	}
+	
+	errorSummary, err := v.publishedRepo.GetVersionErrorSummary(ctx, versionEnt.PackageId, versionEnt.Version, versionEnt.Revision, false)
+	if err != nil {
+		return err
+	}
+	if errorSummary == nil || !errorSummary.HasErrors {
+		return nil
+	}
+	log.Debugf("Blocked copying version %s of package %s with 'release' status by user %s: the version contains errors",
+		versionEnt.Version, versionEnt.PackageId, secctx.GetUserId(ctx))
+	return &exception.CustomError{
+		Status:  http.StatusBadRequest,
+		Code:    exception.VersionHasErrors,
+		Message: exception.VersionCopyWithErrorsMsg,
+		Params:  map[string]interface{}{"packageId": versionEnt.PackageId, "version": versionEnt.Version},
+	}
 }
 
 func (v versionServiceImpl) GetPublishedVersionsHistory(ctx context.Context, filter view.PublishedVersionHistoryFilter) ([]view.PublishedVersionHistoryView, error) {
