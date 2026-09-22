@@ -572,6 +572,7 @@ func main() {
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/export/operations", authenticator.Secure(exportController.GenerateOperationsExcelReport)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/export/operations/deprecated", authenticator.Secure(exportController.GenerateDeprecatedOperationsExcelReport)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/export/shareability-report", authenticator.Secure(exportController.GenerateShareabilityReport)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/export/notifications", authenticator.Secure(exportController.GenerateNotificationsExcelReport)).Methods(http.MethodGet)
 
 	r.Path("/metrics").Handler(promhttp.Handler())
 	r.HandleFunc("/api/v3/packages/{packageId}/versions/{version}/{apiType}/build/groups/{groupName}/buildType/{buildType}", authenticator.Secure(transformationController.TransformDocuments_deprecated_2)).Methods(http.MethodPost)             //deprecated

@@ -284,3 +284,29 @@ func validatePublishPackageKind(kind string, allowedKinds []string) *exception.C
 		},
 	}
 }
+
+func getNotificationsFilter(r *http.Request) (*view.NotificationsFilter, *exception.CustomError) {
+	severities, customError := getRepeatedListFromParam(r, "severity")
+	if customError != nil {
+		return nil, customError
+	}
+	for _, severity := range severities {
+		if !view.ValidNotificationSeverity(severity) {
+			return nil, &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.InvalidParameterValue,
+				Message: exception.InvalidParameterValueMsg,
+				Params:  map[string]interface{}{"param": "severity", "value": severity},
+			}
+		}
+	}
+	categories, customError := getRepeatedListFromParam(r, "category")
+	if customError != nil {
+		return nil, customError
+	}
+	return &view.NotificationsFilter{
+		DocumentId: r.URL.Query().Get("documentId"),
+		Severities: severities,
+		Categories: categories,
+	}, nil
+}

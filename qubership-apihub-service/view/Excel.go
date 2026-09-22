@@ -47,6 +47,11 @@ const NonBreakingChangesColumnName = "Non-breaking"
 const AnnotationChangesColumnName = "Annotation"
 const UnclassifiedChangesColumnName = "Unclassified"
 
+const NotificationsSheetName = "Notifications"
+const SeverityColumnName = "Severity"
+const CategoryColumnName = "Category"
+const MessageColumnName = "Message"
+
 const ShareabilityReportSheetName = "Shareability Report"
 const ShareabilityReportColPackageName = "Package Name"
 const ShareabilityReportColDocumentName = "Document Name"
