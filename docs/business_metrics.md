@@ -158,4 +158,4 @@ A failed export is logged by the OpenTelemetry SDK and retried on the next inter
 | Instrumentation call sites | Search for `IncreaseBusinessMetricCounter`. |
 | Report and export | `BusinessMetricRepository`, `BusinessMetricController`. |
 | Prometheus counters | `qubership-apihub-service/metrics/Metrics.go`, incremented in `MCPHandlers.go`, `MCPService.go`, `AiChatController.go`, `AiChatsService.go`. |
-| OpenTelemetry push | `qubership-apihub-service/metrics/PrefixGatherer.go`, `qubership-apihub-service/service/OtelMetricsExportService.go`. |
+| OpenTelemetry push | `qubership-apihub-service/metrics/PrefixGatherer.go`, `qubership-apihub-service/service/OTelMetricsExportService.go`. |

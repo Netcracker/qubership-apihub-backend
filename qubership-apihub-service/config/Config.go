@@ -115,13 +115,13 @@ type BusinessParameters struct {
 }
 
 type MonitoringConfig struct {
-	Enabled bool
-	Otel    OtelMetricsConfig
+	Enabled bool `validate:"required_if=OTel.Enabled true"` // OTLP export reads the application metrics that are registered only when monitoring is enabled
+	OTel    OTelMetricsConfig
 }
 
-type OtelMetricsConfig struct {
+type OTelMetricsConfig struct {
 	Enabled           bool
-	ServerUrl         string `validate:"omitempty,url"`
+	ServerUrl         string `validate:"required_if=Enabled true,omitempty,url"`
 	MetricsPath       string `validate:"required,startswith=/"`
 	Token             string `sensitive:"true"`
 	Namespace         string

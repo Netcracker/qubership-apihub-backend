@@ -19,34 +19,34 @@ import (
 )
 
 const (
-	otelServiceName     = "apihub-backend"
+	oTelServiceName     = "apihub-backend"
 	authorizationHeader = "Authorization"
 	bearerPrefix        = "Bearer "
 )
 
-// OtelMetricsExportService pushes the Prometheus metrics of the given gatherer to an OTLP/HTTP endpoint.
+// OTelMetricsExportService pushes the Prometheus metrics of the given gatherer to an OTLP/HTTP endpoint.
 // Shutdown flushes and stops the periodic export; nothing calls it today because the process has no graceful-shutdown path.
-type OtelMetricsExportService interface {
+type OTelMetricsExportService interface {
 	Start(ctx context.Context) error
 	Shutdown(ctx context.Context) error
 }
 
-func NewOtelMetricsExportService(cfg config.OtelMetricsConfig, gatherer prometheus.Gatherer, instanceId string) OtelMetricsExportService {
-	return &otelMetricsExportServiceImpl{
+func NewOTelMetricsExportService(cfg config.OTelMetricsConfig, gatherer prometheus.Gatherer, instanceId string) OTelMetricsExportService {
+	return &oTelMetricsExportServiceImpl{
 		cfg:        cfg,
 		gatherer:   gatherer,
 		instanceId: instanceId,
 	}
 }
 
-type otelMetricsExportServiceImpl struct {
-	cfg        config.OtelMetricsConfig
+type oTelMetricsExportServiceImpl struct {
+	cfg        config.OTelMetricsConfig
 	gatherer   prometheus.Gatherer
 	instanceId string
 	provider   *sdkmetric.MeterProvider
 }
 
-func (s *otelMetricsExportServiceImpl) Start(ctx context.Context) error {
+func (s *oTelMetricsExportServiceImpl) Start(ctx context.Context) error {
 	timeout := time.Duration(s.cfg.TimeoutSec) * time.Second
 	interval := time.Duration(s.cfg.ExportIntervalSec) * time.Second
 
@@ -85,9 +85,9 @@ func metricsEndpointURL(serverUrl string, metricsPath string) string {
 	return strings.TrimRight(serverUrl, "/") + metricsPath
 }
 
-func (s *otelMetricsExportServiceImpl) makeResource() *resource.Resource {
+func (s *oTelMetricsExportServiceImpl) makeResource() *resource.Resource {
 	attrs := []attribute.KeyValue{
-		semconv.ServiceName(otelServiceName),
+		semconv.ServiceName(oTelServiceName),
 		semconv.ServiceInstanceID(s.instanceId),
 	}
 	if s.cfg.Namespace != "" {
@@ -96,7 +96,7 @@ func (s *otelMetricsExportServiceImpl) makeResource() *resource.Resource {
 	return resource.NewSchemaless(attrs...)
 }
 
-func (s *otelMetricsExportServiceImpl) Shutdown(ctx context.Context) error {
+func (s *oTelMetricsExportServiceImpl) Shutdown(ctx context.Context) error {
 	if s.provider == nil {
 		return nil
 	}

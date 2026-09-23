@@ -724,11 +724,11 @@ func main() {
 		utils.SafeAsync(func() {
 			metrics.RegisterAllPrometheusApplicationMetrics()
 		})
-		otelCfg := systemInfoService.GetOtelMetricsConfig()
-		if otelCfg.Enabled {
-			gatherer := metrics.NewPrefixGatherer(prometheus.DefaultGatherer, otelCfg.MetricPrefixes)
-			otelExport := service.NewOtelMetricsExportService(otelCfg, gatherer, systemInfoService.GetInstanceId())
-			if err := otelExport.Start(context.Background()); err != nil {
+		oTelCfg := systemInfoService.GetOTelMetricsConfig()
+		if oTelCfg.Enabled {
+			gatherer := metrics.NewPrefixGatherer(prometheus.DefaultGatherer, oTelCfg.MetricPrefixes)
+			oTelExport := service.NewOTelMetricsExportService(oTelCfg, gatherer, systemInfoService.GetInstanceId())
+			if err := oTelExport.Start(context.Background()); err != nil {
 				log.Fatalf("Failed to start OpenTelemetry metrics export: %v", err)
 			}
 		}
