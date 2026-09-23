@@ -10474,7 +10474,7 @@ paths:
         message are marked with hasErrors = true as well.
 
         A message is not necessarily attributable to a document: problems that belong to the version as a whole,
-        e.g. an unresolvable previous version, have no documentId. Query the endpoint without filters to get
+        e.g. an unresolvable previous version, have no documentId. Set emptyDocumentId to true to get only
         those.
 
         Messages are denormalized by document: a problem that concerns several documents at once is returned as
@@ -10483,12 +10483,8 @@ paths:
         Requires read permission on the package.
       operationId: getPackagesIdVersionsIdNotifications
       parameters:
-        - name: documentId
-          in: query
-          description: Filter by document slug. Returns the messages attributed to the document.
-          schema:
-            type: string
-            example: qitmf-v5-11-json
+        - $ref: "#/components/parameters/notificationDocumentId"
+        - $ref: "#/components/parameters/notificationEmptyDocumentId"
         - name: severity
           in: query
           description: |
@@ -10553,6 +10549,8 @@ paths:
               examples:
                 IncorrectInputParams:
                   $ref: "#/components/examples/IncorrectInputParameters"
+                OverlappingDocumentIdParameters:
+                  $ref: "#/components/examples/OverlappingDocumentIdParameters"
         "401":
           description: Unauthorized
           content:
@@ -10603,19 +10601,16 @@ paths:
         `GET /api/v2/packages/{packageId}/versions/{version}/notifications` instead.
 
         Most comparison messages are not attributable to a document, e.g. the previous version could not be
-        resolved, so documentId is empty more often than for the version notifications.
+        resolved, so documentId is empty more often than for the version notifications. Set emptyDocumentId to
+        true to get only those messages.
 
         Requires read permission on the package.
       operationId: getPackagesIdVersionsIdChangesNotifications
       parameters:
         - $ref: "#/components/parameters/previousVersion"
         - $ref: "#/components/parameters/previousVersionPackageId"
-        - name: documentId
-          in: query
-          description: Filter by document slug. Returns the messages attributed to the document.
-          schema:
-            type: string
-            example: qitmf-v5-11-json
+        - $ref: "#/components/parameters/notificationDocumentId"
+        - $ref: "#/components/parameters/notificationEmptyDocumentId"
         - name: severity
           in: query
           description: |
@@ -10680,6 +10675,8 @@ paths:
               examples:
                 IncorrectInputParams:
                   $ref: "#/components/examples/IncorrectInputParameters"
+                OverlappingDocumentIdParameters:
+                  $ref: "#/components/examples/OverlappingDocumentIdParameters"
         "401":
           description: Unauthorized
           content:
@@ -10749,12 +10746,8 @@ paths:
           schema:
             type: boolean
             default: true
-        - name: documentId
-          in: query
-          description: Filter by document slug. Returns the messages attributed to the document.
-          schema:
-            type: string
-            example: qitmf-v5-11-json
+        - $ref: "#/components/parameters/notificationDocumentId"
+        - $ref: "#/components/parameters/notificationEmptyDocumentId"
         - name: severity
           in: query
           description: |
@@ -10819,6 +10812,8 @@ paths:
               examples:
                 IncorrectInputParams:
                   $ref: "#/components/examples/IncorrectInputParameters"
+                OverlappingDocumentIdParameters:
+                  $ref: "#/components/examples/OverlappingDocumentIdParameters"
         "401":
           description: Unauthorized
           content:
@@ -11653,6 +11648,24 @@ components:
         type: string
         format: uuid
         example: "e1a9f6d2-4a17-4a3b-9b91-4d7e9e8a0f11"
+    notificationDocumentId:
+      name: documentId
+      in: query
+      description: |
+        Filter by document slug. Returns the messages attributed to the document.\
+        Either "documentId" or "emptyDocumentId" (= true) can be sent in the request. If both are specified, 400 is returned in the response.
+      schema:
+        type: string
+        example: qitmf-v5-11-json
+    notificationEmptyDocumentId:
+      name: emptyDocumentId
+      in: query
+      description: |
+        Flag for filtering the messages that are not attributed to any document.\
+        Either "documentId" or "emptyDocumentId" (= true) can be sent in the request. If both are specified, 400 is returned in the response.
+      schema:
+        type: boolean
+        default: false
   schemas:
     SystemInfo:
       description: Information about the APIHUB product
@@ -14737,6 +14750,15 @@ components:
         status: 400
         code: "APIHUB-COMMON-4001"
         message: "Incorrect input parameters"
+    OverlappingDocumentIdParameters:
+      description: Both documentId and emptyDocumentId = true are specified in the request
+      value:
+        status: 400
+        code: "6013"
+        message: "Query parameter '$param2' cannot be used in addition to '$param1' parameter"
+        params:
+          param1: "emptyDocumentId"
+          param2: "documentId"
     PreviousVersionNotRelease:
       description: A release version cannot reference a draft previous version
       value:
