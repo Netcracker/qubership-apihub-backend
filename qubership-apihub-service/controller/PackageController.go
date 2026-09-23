@@ -8,10 +8,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/metrics"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -37,7 +38,7 @@ func NewPackageController(packageService service.PackageService,
 	portalService service.PortalService,
 	roleService service.RoleService,
 	monitoringService service.MonitoringService,
-	ptHandler service.PackageTransitionHandler) PackageController {
+	ptHandler service.PackageTransitionHandler, responder responder.Responder) PackageController {
 	return &packageControllerImpl{
 		publishedService:  versionService,
 		portalService:     portalService,
@@ -45,6 +46,7 @@ func NewPackageController(packageService service.PackageService,
 		roleService:       roleService,
 		monitoringService: monitoringService,
 		ptHandler:         ptHandler,
+		responder:         responder,
 	}
 }
 
@@ -55,18 +57,19 @@ type packageControllerImpl struct {
 	roleService       service.RoleService
 	monitoringService service.MonitoringService
 	ptHandler         service.PackageTransitionHandler
+	responder         responder.Responder
 }
 
 func (p packageControllerImpl) DeletePackage(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := p.roleService.HasRequiredPermissions(ctx, packageId, view.DeletePackagePermission)
 	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, p.ptHandler, packageId, "Failed to check user privileges", err)
+		handlePkgRedirectOrRespondWithError(w, r, p.responder, p.ptHandler, packageId, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		p.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -75,7 +78,7 @@ func (p packageControllerImpl) DeletePackage(w http.ResponseWriter, r *http.Requ
 	}
 	err = p.packageService.DeletePackage(ctx, packageId)
 	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, p.ptHandler, packageId, "Failed to delete package", err)
+		handlePkgRedirectOrRespondWithError(w, r, p.responder, p.ptHandler, packageId, "Failed to delete package", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -83,14 +86,14 @@ func (p packageControllerImpl) DeletePackage(w http.ResponseWriter, r *http.Requ
 
 func (p packageControllerImpl) DisfavorPackage(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := p.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, p.ptHandler, packageId, "Failed to check user privileges", err)
+		handlePkgRedirectOrRespondWithError(w, r, p.responder, p.ptHandler, packageId, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		p.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -99,7 +102,7 @@ func (p packageControllerImpl) DisfavorPackage(w http.ResponseWriter, r *http.Re
 	}
 	err = p.packageService.DisfavorPackage(ctx, packageId)
 	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, p.ptHandler, packageId, "Failed to remove group from favorites", err)
+		handlePkgRedirectOrRespondWithError(w, r, p.responder, p.ptHandler, packageId, "Failed to remove group from favorites", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -107,14 +110,14 @@ func (p packageControllerImpl) DisfavorPackage(w http.ResponseWriter, r *http.Re
 
 func (p packageControllerImpl) FavorPackage(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := p.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, p.ptHandler, packageId, "Failed to check user privileges", err)
+		handlePkgRedirectOrRespondWithError(w, r, p.responder, p.ptHandler, packageId, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		p.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -123,7 +126,7 @@ func (p packageControllerImpl) FavorPackage(w http.ResponseWriter, r *http.Reque
 	}
 	err = p.packageService.FavorPackage(ctx, packageId)
 	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, p.ptHandler, packageId, "Failed to add package to favorites", err)
+		handlePkgRedirectOrRespondWithError(w, r, p.responder, p.ptHandler, packageId, "Failed to add package to favorites", err)
 		return
 	}
 
@@ -132,15 +135,15 @@ func (p packageControllerImpl) FavorPackage(w http.ResponseWriter, r *http.Reque
 
 func (p packageControllerImpl) GetPackage(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 
 	sufficientPrivileges, err := p.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, p.ptHandler, packageId, "Failed to check user privileges", err)
+		handlePkgRedirectOrRespondWithError(w, r, p.responder, p.ptHandler, packageId, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		p.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -152,34 +155,34 @@ func (p packageControllerImpl) GetPackage(w http.ResponseWriter, r *http.Request
 
 	packageInfo, err := p.packageService.GetPackage(ctx, packageId, showParents)
 	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, p.ptHandler, packageId, "Failed to get package info", err)
+		handlePkgRedirectOrRespondWithError(w, r, p.responder, p.ptHandler, packageId, "Failed to get package info", err)
 		return
 	}
-	utils.RespondWithJson(w, http.StatusOK, packageInfo)
+	p.responder.RespondWithJson(w, http.StatusOK, packageInfo)
 }
 
 func (p packageControllerImpl) GetPackageStatus(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := p.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, p.ptHandler, packageId, "Failed to check user privileges", err)
+		handlePkgRedirectOrRespondWithError(w, r, p.responder, p.ptHandler, packageId, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		p.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
 		})
 		return
 	}
-	packageStatus, err := p.packageService.GetPackageStatus(packageId)
+	packageStatus, err := p.packageService.GetPackageStatus(ctx, packageId)
 	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, p.ptHandler, packageId, "Failed to get package status", err)
+		handlePkgRedirectOrRespondWithError(w, r, p.responder, p.ptHandler, packageId, "Failed to get package status", err)
 		return
 	}
-	utils.RespondWithJson(w, http.StatusOK, packageStatus)
+	p.responder.RespondWithJson(w, http.StatusOK, packageStatus)
 }
 
 func (p packageControllerImpl) GetPackagesList(w http.ResponseWriter, r *http.Request) {
@@ -188,14 +191,14 @@ func (p packageControllerImpl) GetPackagesList(w http.ResponseWriter, r *http.Re
 	parentId := r.URL.Query().Get("parentId")
 	kind, customErr := getListFromParam(r, "kind")
 	if customErr != nil {
-		utils.RespondWithCustomError(w, customErr)
+		p.responder.RespondWithCustomError(w, customErr)
 		return
 	}
 	onlyFavorite := false
 	if r.URL.Query().Get("onlyFavorite") != "" {
 		onlyFavorite, err = strconv.ParseBool(r.URL.Query().Get("onlyFavorite"))
 		if err != nil {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			p.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -210,7 +213,7 @@ func (p packageControllerImpl) GetPackagesList(w http.ResponseWriter, r *http.Re
 	if r.URL.Query().Get("onlyShared") != "" {
 		onlyShared, err = strconv.ParseBool(r.URL.Query().Get("onlyShared"))
 		if err != nil {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			p.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -225,7 +228,7 @@ func (p packageControllerImpl) GetPackagesList(w http.ResponseWriter, r *http.Re
 	if r.URL.Query().Get("showParents") != "" {
 		showParents, err = strconv.ParseBool(r.URL.Query().Get("showParents"))
 		if err != nil {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			p.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -240,7 +243,7 @@ func (p packageControllerImpl) GetPackagesList(w http.ResponseWriter, r *http.Re
 	if r.URL.Query().Get("lastReleaseVersionDetails") != "" {
 		lastReleaseVersionDetails, err = strconv.ParseBool(r.URL.Query().Get("lastReleaseVersionDetails"))
 		if err != nil {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			p.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -253,7 +256,7 @@ func (p packageControllerImpl) GetPackagesList(w http.ResponseWriter, r *http.Re
 
 	limit, customError := getLimitQueryParam(r)
 	if customError != nil {
-		utils.RespondWithCustomError(w, customError)
+		p.responder.RespondWithCustomError(w, customError)
 		return
 	}
 
@@ -261,7 +264,7 @@ func (p packageControllerImpl) GetPackagesList(w http.ResponseWriter, r *http.Re
 	if r.URL.Query().Get("page") != "" {
 		page, err = strconv.Atoi(r.URL.Query().Get("page"))
 		if err != nil {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			p.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -277,7 +280,7 @@ func (p packageControllerImpl) GetPackagesList(w http.ResponseWriter, r *http.Re
 	if r.URL.Query().Get("showAllDescendants") != "" {
 		showAllDescendants, err = strconv.ParseBool(r.URL.Query().Get("showAllDescendants"))
 		if err != nil {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			p.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -302,20 +305,20 @@ func (p packageControllerImpl) GetPackagesList(w http.ResponseWriter, r *http.Re
 		ShowAllDescendants:        showAllDescendants,
 	}
 
-	packages, err := p.packageService.GetPackagesList(context.Create(r), packageListReq, false)
+	packages, err := p.packageService.GetPackagesList(secctx.MakeUserContext(r), packageListReq)
 
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get packages", err)
+		p.responder.RespondWithError(w, r, "Failed to get packages", err)
 		return
 	}
-	utils.RespondWithJson(w, http.StatusOK, packages)
+	p.responder.RespondWithJson(w, http.StatusOK, packages)
 }
 
 func (p packageControllerImpl) GetDeletedPackagesList(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Create(r)
-	sufficientPrivileges := p.roleService.IsSysadm(ctx)
+	ctx := secctx.MakeUserContext(r)
+	sufficientPrivileges := secctx.IsSysadm(ctx)
 	if !sufficientPrivileges {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		p.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -327,7 +330,7 @@ func (p packageControllerImpl) GetDeletedPackagesList(w http.ResponseWriter, r *
 	parentId := r.URL.Query().Get("parentId")
 	kind, customErr := getListFromParam(r, "kind")
 	if customErr != nil {
-		utils.RespondWithCustomError(w, customErr)
+		p.responder.RespondWithCustomError(w, customErr)
 		return
 	}
 
@@ -335,7 +338,7 @@ func (p packageControllerImpl) GetDeletedPackagesList(w http.ResponseWriter, r *
 	if r.URL.Query().Get("showParents") != "" {
 		showParents, err = strconv.ParseBool(r.URL.Query().Get("showParents"))
 		if err != nil {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			p.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -348,7 +351,7 @@ func (p packageControllerImpl) GetDeletedPackagesList(w http.ResponseWriter, r *
 
 	limit, customError := getLimitQueryParam(r)
 	if customError != nil {
-		utils.RespondWithCustomError(w, customError)
+		p.responder.RespondWithCustomError(w, customError)
 		return
 	}
 
@@ -356,7 +359,7 @@ func (p packageControllerImpl) GetDeletedPackagesList(w http.ResponseWriter, r *
 	if r.URL.Query().Get("page") != "" {
 		page, err = strconv.Atoi(r.URL.Query().Get("page"))
 		if err != nil {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			p.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -371,7 +374,7 @@ func (p packageControllerImpl) GetDeletedPackagesList(w http.ResponseWriter, r *
 	if r.URL.Query().Get("showAllDescendants") != "" {
 		showAllDescendants, err = strconv.ParseBool(r.URL.Query().Get("showAllDescendants"))
 		if err != nil {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			p.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -391,20 +394,20 @@ func (p packageControllerImpl) GetDeletedPackagesList(w http.ResponseWriter, r *
 		ShowAllDescendants: showAllDescendants,
 	}
 
-	packages, err := p.packageService.GetPackagesList(context.Create(r), packageListReq, true)
+	packages, err := p.packageService.GetDeletedPackagesList(ctx, packageListReq)
 
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get packages", err)
+		p.responder.RespondWithError(w, r, "Failed to get packages", err)
 		return
 	}
-	utils.RespondWithJson(w, http.StatusOK, packages)
+	p.responder.RespondWithJson(w, http.StatusOK, packages)
 }
 
 func (p packageControllerImpl) CreatePackage(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		p.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.BadRequestBody,
 			Message: exception.BadRequestBodyMsg,
@@ -415,7 +418,7 @@ func (p packageControllerImpl) CreatePackage(w http.ResponseWriter, r *http.Requ
 	var packg view.SimplePackage
 	err = json.Unmarshal(body, &packg)
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		p.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.BadRequestBody,
 			Message: exception.BadRequestBodyMsg,
@@ -426,24 +429,24 @@ func (p packageControllerImpl) CreatePackage(w http.ResponseWriter, r *http.Requ
 	validationErr := utils.ValidateObject(packg)
 	if validationErr != nil {
 		if customError, ok := validationErr.(*exception.CustomError); ok {
-			utils.RespondWithCustomError(w, customError)
+			p.responder.RespondWithCustomError(w, customError)
 			return
 		}
 	}
 
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	var sufficientPrivileges bool
 	if packg.ParentId == "" {
-		sufficientPrivileges = p.roleService.IsSysadm(ctx)
+		sufficientPrivileges = secctx.IsSysadm(ctx)
 	} else {
 		sufficientPrivileges, err = p.roleService.HasRequiredPermissions(ctx, packg.ParentId, view.CreateAndUpdatePackagePermission)
 		if err != nil {
-			utils.RespondWithError(w, "Failed to check user privileges", err)
+			p.responder.RespondWithError(w, r, "Failed to check user privileges", err)
 			return
 		}
 	}
 	if !sufficientPrivileges {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		p.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -452,7 +455,7 @@ func (p packageControllerImpl) CreatePackage(w http.ResponseWriter, r *http.Requ
 	}
 
 	if !IsAcceptableAlias(packg.Alias) {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		p.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.AliasContainsForbiddenChars,
 			Message: exception.AliasContainsForbiddenCharsMsg,
@@ -460,8 +463,8 @@ func (p packageControllerImpl) CreatePackage(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if !strings.Contains(packg.ParentId, ".") && strings.ToLower(packg.Alias) == "runenv" && !p.roleService.IsSysadm(ctx) {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+	if !strings.Contains(packg.ParentId, ".") && strings.ToLower(packg.Alias) == "runenv" && !secctx.IsSysadm(ctx) {
+		p.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.AliasContainsRunenvChars,
 			Message: exception.AliasContainsRunenvCharsMsg,
@@ -471,26 +474,26 @@ func (p packageControllerImpl) CreatePackage(w http.ResponseWriter, r *http.Requ
 
 	newPackage, err := p.packageService.CreatePackage(ctx, packg)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to create package", err)
+		p.responder.RespondWithError(w, r, "Failed to create package", err)
 		return
 	}
 	if newPackage.ParentId != "" && (newPackage.Kind == entity.KIND_PACKAGE || newPackage.Kind == entity.KIND_DASHBOARD) {
-		p.monitoringService.IncreaseBusinessMetricCounter(ctx.GetUserId(), metrics.PackagesAndDashboardsCreated, newPackage.ParentId)
+		p.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.PackagesAndDashboardsCreated, newPackage.ParentId)
 	}
 
-	utils.RespondWithJson(w, http.StatusCreated, newPackage)
+	p.responder.RespondWithJson(w, http.StatusCreated, newPackage)
 }
 
 func (p packageControllerImpl) UpdatePackage(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := p.roleService.HasRequiredPermissions(ctx, packageId, view.CreateAndUpdatePackagePermission)
 	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, p.ptHandler, packageId, "Failed to check user privileges", err)
+		handlePkgRedirectOrRespondWithError(w, r, p.responder, p.ptHandler, packageId, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		p.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -500,7 +503,7 @@ func (p packageControllerImpl) UpdatePackage(w http.ResponseWriter, r *http.Requ
 	defer r.Body.Close()
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		p.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.BadRequestBody,
 			Message: exception.BadRequestBodyMsg,
@@ -512,7 +515,7 @@ func (p packageControllerImpl) UpdatePackage(w http.ResponseWriter, r *http.Requ
 
 	err = json.Unmarshal(body, &patchPackage)
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		p.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.BadRequestBody,
 			Message: exception.BadRequestBodyMsg,
@@ -523,23 +526,23 @@ func (p packageControllerImpl) UpdatePackage(w http.ResponseWriter, r *http.Requ
 
 	updatedPackage, err := p.packageService.UpdatePackage(ctx, &patchPackage, packageId)
 	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, p.ptHandler, packageId, "Failed to update Package info", err)
+		handlePkgRedirectOrRespondWithError(w, r, p.responder, p.ptHandler, packageId, "Failed to update Package info", err)
 		return
 	}
 
-	utils.RespondWithJson(w, http.StatusOK, updatedPackage)
+	p.responder.RespondWithJson(w, http.StatusOK, updatedPackage)
 }
 
 func (p packageControllerImpl) GetAvailableVersionStatusesForPublish_deprecated(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := p.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, p.ptHandler, packageId, "Failed to check user privileges", err)
+		handlePkgRedirectOrRespondWithError(w, r, p.responder, p.ptHandler, packageId, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		p.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -548,22 +551,22 @@ func (p packageControllerImpl) GetAvailableVersionStatusesForPublish_deprecated(
 	}
 	availableVersionStatusesForPublish, err := p.packageService.GetAvailableVersionPublishStatuses_deprecated(ctx, packageId)
 	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, p.ptHandler, packageId, "Failed to get available version statuses for publish", err)
+		handlePkgRedirectOrRespondWithError(w, r, p.responder, p.ptHandler, packageId, "Failed to get available version statuses for publish", err)
 		return
 	}
-	utils.RespondWithJson(w, http.StatusOK, availableVersionStatusesForPublish)
+	p.responder.RespondWithJson(w, http.StatusOK, availableVersionStatusesForPublish)
 }
 
 func (p packageControllerImpl) RecalculateOperationGroups(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := p.roleService.HasRequiredPermissions(ctx, packageId, view.CreateAndUpdatePackagePermission)
 	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, p.ptHandler, packageId, "Failed to check user privileges", err)
+		handlePkgRedirectOrRespondWithError(w, r, p.responder, p.ptHandler, packageId, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		p.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -572,7 +575,7 @@ func (p packageControllerImpl) RecalculateOperationGroups(w http.ResponseWriter,
 	}
 	err = p.packageService.RecalculateOperationGroups(ctx, packageId)
 	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, p.ptHandler, packageId, "Failed to recalculate operation groups", err)
+		handlePkgRedirectOrRespondWithError(w, r, p.responder, p.ptHandler, packageId, "Failed to recalculate operation groups", err)
 		return
 	}
 
@@ -581,14 +584,14 @@ func (p packageControllerImpl) RecalculateOperationGroups(w http.ResponseWriter,
 
 func (p packageControllerImpl) CalculateOperationGroups(w http.ResponseWriter, r *http.Request) {
 	packageId := getStringParam(r, "packageId")
-	ctx := context.Create(r)
+	ctx := secctx.MakeUserContext(r)
 	sufficientPrivileges, err := p.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
 	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, p.ptHandler, packageId, "Failed to check user privileges", err)
+		handlePkgRedirectOrRespondWithError(w, r, p.responder, p.ptHandler, packageId, "Failed to check user privileges", err)
 		return
 	}
 	if !sufficientPrivileges {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		p.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -597,7 +600,7 @@ func (p packageControllerImpl) CalculateOperationGroups(w http.ResponseWriter, r
 	}
 	groupingPrefix, err := url.QueryUnescape(r.URL.Query().Get("groupingPrefix"))
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		p.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -607,11 +610,11 @@ func (p packageControllerImpl) CalculateOperationGroups(w http.ResponseWriter, r
 		return
 	}
 
-	groups, err := p.packageService.CalculateOperationGroups(packageId, groupingPrefix)
+	groups, err := p.packageService.CalculateOperationGroups(ctx, packageId, groupingPrefix)
 	if err != nil {
-		handlePkgRedirectOrRespondWithError(w, r, p.ptHandler, packageId, "Failed to calculate operation groups", err)
+		handlePkgRedirectOrRespondWithError(w, r, p.responder, p.ptHandler, packageId, "Failed to calculate operation groups", err)
 		return
 	}
 
-	utils.RespondWithJson(w, http.StatusOK, groups)
+	p.responder.RespondWithJson(w, http.StatusOK, groups)
 }

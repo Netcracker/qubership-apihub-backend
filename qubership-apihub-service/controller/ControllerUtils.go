@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -9,11 +10,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	"github.com/gorilla/mux"
 )
 
@@ -131,6 +133,29 @@ func getListFromParam(r *http.Request, param string) ([]string, *exception.Custo
 	return strings.Split(listStr, ","), nil
 }
 
+func parseVersionStatusQueryParam(r *http.Request) ([]string, *exception.CustomError) {
+	statusParts, customError := getListFromParam(r, "status")
+	if customError != nil {
+		return nil, customError
+	}
+	statuses, err := view.ParseVersionStatuses(statusParts)
+	if err != nil {
+		value := statusParts[0]
+		var invalidStatusErr *view.InvalidVersionStatusError
+		if errors.As(err, &invalidStatusErr) {
+			value = invalidStatusErr.Value
+		}
+		return nil, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidParameterValue,
+			Message: exception.InvalidParameterValueMsg,
+			Params:  map[string]interface{}{"param": "status", "value": value},
+			Debug:   err.Error(),
+		}
+	}
+	return statuses, nil
+}
+
 func getLimitQueryParam(r *http.Request) (int, *exception.CustomError) {
 	return getLimitQueryParamBase(r, 100, 100)
 }
@@ -169,15 +194,16 @@ func getLimitQueryParamBase(r *http.Request, defaultLimit, maxLimit int) (int, *
 }
 
 // TODO: duplicate in v2
-func handlePkgRedirectOrRespondWithError(w http.ResponseWriter, r *http.Request, ptHandler service.PackageTransitionHandler, packageId, msg string, err error) {
+func handlePkgRedirectOrRespondWithError(w http.ResponseWriter, r *http.Request, responder responder.Responder, ptHandler service.PackageTransitionHandler, packageId, msg string, err error) {
+	ctx := r.Context()
 	if customError, ok := err.(*exception.CustomError); ok {
 		if strings.Contains(r.URL.Path, packageId) &&
 			(customError.Code == exception.PackageNotFound ||
 				customError.Code == exception.PublishedPackageVersionNotFound ||
 				customError.Code == exception.PublishedVersionNotFound) {
-			newPkg, err := ptHandler.HandleMissingPackageId(packageId)
+			newPkg, err := ptHandler.HandleMissingPackageId(ctx, packageId)
 			if err != nil {
-				utils.RespondWithError(w, "Package not found, failed to check package move", err)
+				responder.RespondWithError(w, r, "Package not found, failed to check package move", err)
 				return
 			}
 			if newPkg != "" {
@@ -191,7 +217,7 @@ func handlePkgRedirectOrRespondWithError(w http.ResponseWriter, r *http.Request,
 			}
 		}
 	}
-	utils.RespondWithError(w, msg, err)
+	responder.RespondWithError(w, r, msg, err)
 }
 
 func getTemplatePath(r *http.Request) string {

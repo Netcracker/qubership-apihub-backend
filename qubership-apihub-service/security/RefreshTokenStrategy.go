@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/shaj13/go-guardian/v2/auth"
 	"github.com/shaj13/go-guardian/v2/auth/strategies/jwt"
 	"github.com/shaj13/libcache"
@@ -19,16 +19,20 @@ const (
 	refreshTokenCachePrefix = "ref:"
 )
 
-func NewRefreshTokenStrategy(cache libcache.Cache, jwtValidator JWTValidator) auth.Strategy {
+func NewRefreshTokenStrategy(cache libcache.Cache, jwtValidator JWTValidator, accessTokenDuration time.Duration, keeper jwt.SecretsKeeper) auth.Strategy {
 	return &refreshTokenStrategyImpl{
-		cache:        cache,
-		jwtValidator: jwtValidator,
+		cache:               cache,
+		jwtValidator:        jwtValidator,
+		accessTokenDuration: accessTokenDuration,
+		keeper:              keeper,
 	}
 }
 
 type refreshTokenStrategyImpl struct {
-	cache        libcache.Cache
-	jwtValidator JWTValidator
+	cache               libcache.Cache
+	jwtValidator        JWTValidator
+	accessTokenDuration time.Duration
+	keeper              jwt.SecretsKeeper
 }
 
 func (r refreshTokenStrategyImpl) Authenticate(ctx goctx.Context, req *http.Request) (auth.Info, error) {
@@ -46,14 +50,18 @@ func (r refreshTokenStrategyImpl) Authenticate(ctx goctx.Context, req *http.Requ
 			return nil, auth.NewTypeError("authentication failed:", (*auth.Info)(nil), v)
 		}
 		tokenCreationTimestamp, _ := strconv.ParseInt(info.GetExtensions().Get(TokenIssuedAtExt), 0, 64)
-		if r.jwtValidator.IsTokenRevoked(info.GetID(), tokenCreationTimestamp) {
+		revoked, err := r.jwtValidator.IsTokenRevoked(ctx, info.GetID(), tokenCreationTimestamp)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check refresh token revocation for %s: %w", info.GetID(), err)
+		}
+		if revoked {
 			return nil, fmt.Errorf("authentication failed for %s: refresh token is revoked", info.GetID())
 		}
 	}
 	if info == nil {
 		var t time.Time
 		var err error
-		info, t, err = r.jwtValidator.ValidateToken(refreshToken, RefreshTokenType)
+		info, t, err = r.jwtValidator.ValidateToken(ctx, refreshToken, RefreshTokenType)
 		if err != nil {
 			return nil, fmt.Errorf("authentication failed: %w", err)
 		}
@@ -71,11 +79,11 @@ func (r refreshTokenStrategyImpl) Authenticate(ctx goctx.Context, req *http.Requ
 func (r refreshTokenStrategyImpl) refreshAccessToken(userInfo auth.Info) (auth.Info, error) {
 	user := auth.NewUserInfo(userInfo.GetUserName(), userInfo.GetID(), []string{}, auth.Extensions{})
 	extensions := user.GetExtensions()
-	extensions.Set(context.SystemRoleExt, userInfo.GetExtensions().Get(context.SystemRoleExt))
+	extensions.Set(secctx.SystemRoleExt, userInfo.GetExtensions().Get(secctx.SystemRoleExt))
 	extensions.Set(TokenTypeExt, AccessTokenType)
-	accessDuration := jwt.SetExpDuration(accessTokenDuration)
+	accessDuration := jwt.SetExpDuration(r.accessTokenDuration)
 
-	accessToken, err := jwt.IssueAccessToken(user, keeper, accessDuration)
+	accessToken, err := jwt.IssueAccessToken(user, r.keeper, accessDuration)
 	if err != nil {
 		return nil, err
 	}

@@ -1,18 +1,20 @@
 package controller
 
 import (
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
+	"net/http"
+
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/security"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
-	"net/http"
 )
 
 type LogoutController interface {
 	Logout(http.ResponseWriter, *http.Request)
 }
 
-func NewLogoutController(tokenRevocationService service.TokenRevocationService, systemInfoService service.SystemInfoService) LogoutController {
+func NewLogoutController(tokenRevocationService service.TokenRevocationService, systemInfoService service.SystemInfoService, responder responder.Responder) LogoutController {
 	authConfig := systemInfoService.GetAuthConfig()
 	var refreshTokenPaths []string
 	for _, idp := range authConfig.Providers {
@@ -23,20 +25,21 @@ func NewLogoutController(tokenRevocationService service.TokenRevocationService, 
 		}
 	}
 
-	return &logoutControllerImpl{tokenRevocationService: tokenRevocationService, refreshTokenPaths: refreshTokenPaths, productionMode: systemInfoService.IsProductionMode()}
+	return &logoutControllerImpl{tokenRevocationService: tokenRevocationService, refreshTokenPaths: refreshTokenPaths, productionMode: systemInfoService.IsProductionMode(), responder: responder}
 }
 
 type logoutControllerImpl struct {
 	tokenRevocationService service.TokenRevocationService
 	refreshTokenPaths      []string
 	productionMode         bool
+	responder              responder.Responder
 }
 
 func (l *logoutControllerImpl) Logout(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Create(r)
-	err := l.tokenRevocationService.RevokeUserTokens(ctx.GetUserId())
+	ctx := secctx.MakeUserContext(r)
+	err := l.tokenRevocationService.RevokeUserTokens(ctx, secctx.GetUserId(ctx))
 	if err != nil {
-		utils.RespondWithError(w, "Failed to perform user logout", err)
+		l.responder.RespondWithError(w, r, "Failed to perform user logout", err)
 		return
 	}
 

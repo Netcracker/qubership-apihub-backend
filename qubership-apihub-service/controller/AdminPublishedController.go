@@ -4,36 +4,36 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 )
 
 type AdminPublishedController interface {
 	ReplaceVersionSources(w http.ResponseWriter, r *http.Request)
 }
 
-func NewAdminPublishedController(publishedService service.PublishedService, isSysadm func(ctx context.SecurityContext) bool, publishArchiveSizeLimit int64) AdminPublishedController {
+func NewAdminPublishedController(publishedService service.PublishedService, publishArchiveSizeLimit int64, responder responder.Responder) AdminPublishedController {
 	return &adminPublishedControllerImpl{
 		publishedService:        publishedService,
-		isSysadm:                isSysadm,
 		publishArchiveSizeLimit: publishArchiveSizeLimit,
+		responder:               responder,
 	}
 }
 
 type adminPublishedControllerImpl struct {
 	publishedService        service.PublishedService
-	isSysadm                func(ctx context.SecurityContext) bool
 	publishArchiveSizeLimit int64
+	responder               responder.Responder
 }
 
 func (c adminPublishedControllerImpl) ReplaceVersionSources(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Create(r)
-	if !c.isSysadm(ctx) {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+	ctx := secctx.MakeUserContext(r)
+	if !secctx.IsSysadm(ctx) {
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
@@ -42,7 +42,7 @@ func (c adminPublishedControllerImpl) ReplaceVersionSources(w http.ResponseWrite
 	}
 
 	if r.ContentLength > c.publishArchiveSizeLimit {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.ArchiveSizeExceeded,
 			Message: exception.ArchiveSizeExceededMsg,
@@ -54,7 +54,7 @@ func (c adminPublishedControllerImpl) ReplaceVersionSources(w http.ResponseWrite
 	packageId := getStringParam(r, "packageId")
 	versionName, err := getUnescapedStringParam(r, "version")
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidURLEscape,
 			Message: exception.InvalidURLEscapeMsg,
@@ -67,7 +67,7 @@ func (c adminPublishedControllerImpl) ReplaceVersionSources(w http.ResponseWrite
 	r.Body = http.MaxBytesReader(w, r.Body, c.publishArchiveSizeLimit)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.BadRequestBody,
 			Message: exception.BadRequestBodyMsg,
@@ -76,7 +76,7 @@ func (c adminPublishedControllerImpl) ReplaceVersionSources(w http.ResponseWrite
 		return
 	}
 	if len(body) == 0 {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		c.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.EmptyParameter,
 			Message: exception.EmptyParameterMsg,
@@ -89,7 +89,7 @@ func (c adminPublishedControllerImpl) ReplaceVersionSources(w http.ResponseWrite
 
 	err = c.publishedService.ReplaceVersionSources(ctx, packageId, versionName, body)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to replace version sources", err)
+		c.responder.RespondWithError(w, r, "Failed to replace version sources", err)
 		return
 	}
 

@@ -9,8 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/metrics"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
@@ -23,13 +24,15 @@ type SearchController interface {
 	Search(w http.ResponseWriter, r *http.Request)
 }
 
-func NewSearchController(operationService service.OperationService, versionService service.VersionService, monitoringService service.MonitoringService, ddlContractService service.DDLContractService, mcpContractService service.MCPContractService) SearchController {
+func NewSearchController(operationService service.OperationService, versionService service.VersionService, monitoringService service.MonitoringService, ddlContractService service.DDLContractService, mcpContractService service.MCPContractService, roleService service.RoleService, responder responder.Responder) SearchController {
 	return &searchControllerImpl{
 		operationService:   operationService,
 		versionService:     versionService,
 		monitoringService:  monitoringService,
 		ddlContractService: ddlContractService,
 		mcpContractService: mcpContractService,
+		roleService:        roleService,
+		responder:          responder,
 	}
 }
 
@@ -39,13 +42,15 @@ type searchControllerImpl struct {
 	monitoringService  service.MonitoringService
 	ddlContractService service.DDLContractService
 	mcpContractService service.MCPContractService
+	roleService        service.RoleService
+	responder          responder.Responder
 }
 
 func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		s.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.BadRequestBody,
 			Message: exception.BadRequestBodyMsg,
@@ -55,14 +60,14 @@ func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, customError := getLimitQueryParam(r)
 	if customError != nil {
-		utils.RespondWithCustomError(w, customError)
+		s.responder.RespondWithCustomError(w, customError)
 		return
 	}
 	page := 0
 	if r.URL.Query().Get("page") != "" {
 		page, err = strconv.Atoi(r.URL.Query().Get("page"))
 		if err != nil {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			s.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -76,7 +81,7 @@ func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
 	var searchQuery view.SearchQueryReq
 	err = json.Unmarshal(body, &searchQuery)
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		s.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.BadRequestBody,
 			Message: exception.BadRequestBodyMsg,
@@ -86,7 +91,7 @@ func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if searchQuery.Workspace == "" {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		s.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidSearchParameters,
 			Message: exception.InvalidSearchParametersMsg,
@@ -95,7 +100,7 @@ func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if strings.Contains(searchQuery.Workspace, ".") {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		s.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidSearchParameters,
 			Message: exception.InvalidSearchParametersMsg,
@@ -109,7 +114,7 @@ func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
 	} else {
 		for _, pkgId := range searchQuery.PackageIds {
 			if pkgId != searchQuery.Workspace && !strings.HasPrefix(pkgId, searchQuery.Workspace+".") {
-				utils.RespondWithCustomError(w, &exception.CustomError{
+				s.responder.RespondWithCustomError(w, &exception.CustomError{
 					Status:  http.StatusBadRequest,
 					Code:    exception.InvalidSearchParameters,
 					Message: exception.InvalidSearchParametersMsg,
@@ -126,11 +131,8 @@ func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
 	//// metrics
 	s.monitoringService.AddEndpointCall(getTemplatePath(r), view.SearchEndpointOpts{SearchLevel: searchLevel, ApiType: searchQuery.ApiType})
 
-	ctx := context.Create(r)
-	user := ctx.GetUserId()
-	if user == "" {
-		user = ctx.GetApiKeyId()
-	}
+	ctx := secctx.MakeUserContext(r)
+	user := secctx.GetUserId(ctx)
 	pkgPostfix := "-" + searchQuery.Workspace //TODO: should we count metric per package ?
 	s.monitoringService.IncreaseBusinessMetricCounter(user, metrics.GlobalSearchCalled, searchLevel+pkgPostfix)
 
@@ -143,23 +145,30 @@ func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
 	}
 	////
 
+	visible, err := s.roleService.GetWorkspacePackageVisibilityRoots(ctx, searchQuery.Workspace)
+	if err != nil {
+		s.responder.RespondWithError(w, r, "Failed to resolve package visibility for search", err)
+		return
+	}
+	searchQuery.VisiblePackageRoots = visible
+
 	switch searchLevel {
 	case view.SearchLevelOperations:
 		{
 			validationErr := utils.ValidateObject(searchQuery)
 			if validationErr != nil {
 				if customError, ok := validationErr.(*exception.CustomError); ok {
-					utils.RespondWithCustomError(w, customError)
+					s.responder.RespondWithCustomError(w, customError)
 					return
 				}
 			}
 
-			result, err := s.operationService.GlobalSearchForOperations(r.Context(), searchQuery)
+			result, err := s.operationService.GlobalSearchForOperations(ctx, searchQuery)
 			if err != nil {
-				utils.RespondWithError(w, "Failed to perform search for operations", err)
+				s.responder.RespondWithError(w, r, "Failed to perform search for operations", err)
 				return
 			}
-			utils.RespondWithJson(w, http.StatusOK, result)
+			s.responder.RespondWithJson(w, http.StatusOK, result)
 		}
 	case view.SearchLevelPackages:
 		{
@@ -167,17 +176,17 @@ func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
 			validationErr := utils.ValidateObject(searchQueryReq)
 			if validationErr != nil {
 				if customError, ok := validationErr.(*exception.CustomError); ok {
-					utils.RespondWithCustomError(w, customError)
+					s.responder.RespondWithCustomError(w, customError)
 					return
 				}
 			}
 
-			result, err := s.versionService.SearchForPackages(searchQueryReq)
+			result, err := s.versionService.SearchForPackages(ctx, searchQueryReq)
 			if err != nil {
-				utils.RespondWithError(w, "Failed to perform search for packages", err)
+				s.responder.RespondWithError(w, r, "Failed to perform search for packages", err)
 				return
 			}
-			utils.RespondWithJson(w, http.StatusOK, result)
+			s.responder.RespondWithJson(w, http.StatusOK, result)
 		}
 	case view.SearchLevelDocuments:
 		{
@@ -185,22 +194,22 @@ func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
 			validationErr := utils.ValidateObject(searchQueryReq)
 			if validationErr != nil {
 				if customError, ok := validationErr.(*exception.CustomError); ok {
-					utils.RespondWithCustomError(w, customError)
+					s.responder.RespondWithCustomError(w, customError)
 					return
 				}
 			}
 
-			result, err := s.versionService.SearchForDocuments(searchQueryReq)
+			result, err := s.versionService.SearchForDocuments(ctx, searchQueryReq)
 			if err != nil {
-				utils.RespondWithError(w, "Failed to perform search for documents", err)
+				s.responder.RespondWithError(w, r, "Failed to perform search for documents", err)
 				return
 			}
-			utils.RespondWithJson(w, http.StatusOK, result)
+			s.responder.RespondWithJson(w, http.StatusOK, result)
 		}
 	case view.SearchLevelDDL:
 		{
 			if searchQuery.SearchString == "" {
-				utils.RespondWithCustomError(w, &exception.CustomError{
+				s.responder.RespondWithCustomError(w, &exception.CustomError{
 					Status:  http.StatusBadRequest,
 					Code:    exception.InvalidSearchParameters,
 					Message: exception.InvalidSearchParametersMsg,
@@ -209,7 +218,7 @@ func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if searchQuery.Status == "" {
-				utils.RespondWithCustomError(w, &exception.CustomError{
+				s.responder.RespondWithCustomError(w, &exception.CustomError{
 					Status:  http.StatusBadRequest,
 					Code:    exception.InvalidSearchParameters,
 					Message: exception.InvalidSearchParametersMsg,
@@ -217,17 +226,17 @@ func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
 				})
 				return
 			}
-			result, err := s.ddlContractService.GlobalSearchForDDL(searchQuery)
+			result, err := s.ddlContractService.GlobalSearchForDDL(ctx, searchQuery)
 			if err != nil {
-				utils.RespondWithError(w, "Failed to perform search for DDL contracts", err)
+				s.responder.RespondWithError(w, r, "Failed to perform search for DDL contracts", err)
 				return
 			}
-			utils.RespondWithJson(w, http.StatusOK, result)
+			s.responder.RespondWithJson(w, http.StatusOK, result)
 		}
 	case view.SearchLevelMCP:
 		{
 			if searchQuery.SearchString == "" {
-				utils.RespondWithCustomError(w, &exception.CustomError{
+				s.responder.RespondWithCustomError(w, &exception.CustomError{
 					Status:  http.StatusBadRequest,
 					Code:    exception.InvalidSearchParameters,
 					Message: exception.InvalidSearchParametersMsg,
@@ -236,7 +245,7 @@ func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if searchQuery.Status == "" {
-				utils.RespondWithCustomError(w, &exception.CustomError{
+				s.responder.RespondWithCustomError(w, &exception.CustomError{
 					Status:  http.StatusBadRequest,
 					Code:    exception.InvalidSearchParameters,
 					Message: exception.InvalidSearchParametersMsg,
@@ -244,15 +253,15 @@ func (s searchControllerImpl) Search(w http.ResponseWriter, r *http.Request) {
 				})
 				return
 			}
-			result, err := s.mcpContractService.GlobalSearchForMCP(searchQuery)
+			result, err := s.mcpContractService.GlobalSearchForMCP(ctx, searchQuery)
 			if err != nil {
-				utils.RespondWithError(w, "Failed to perform search for MCP contracts", err)
+				s.responder.RespondWithError(w, r, "Failed to perform search for MCP contracts", err)
 				return
 			}
-			utils.RespondWithJson(w, http.StatusOK, result)
+			s.responder.RespondWithJson(w, http.StatusOK, result)
 		}
 	default:
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		s.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidParameterValue,
 			Message: exception.InvalidParameterValueMsg,
@@ -266,7 +275,7 @@ func (s searchControllerImpl) Search_deprecated(w http.ResponseWriter, r *http.R
 	defer r.Body.Close()
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		s.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.BadRequestBody,
 			Message: exception.BadRequestBodyMsg,
@@ -278,7 +287,7 @@ func (s searchControllerImpl) Search_deprecated(w http.ResponseWriter, r *http.R
 
 	err = json.Unmarshal(body, &searchQuery)
 	if err != nil {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		s.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.BadRequestBody,
 			Message: exception.BadRequestBodyMsg,
@@ -289,20 +298,20 @@ func (s searchControllerImpl) Search_deprecated(w http.ResponseWriter, r *http.R
 	validationErr := utils.ValidateObject(searchQuery)
 	if validationErr != nil {
 		if customError, ok := validationErr.(*exception.CustomError); ok {
-			utils.RespondWithCustomError(w, customError)
+			s.responder.RespondWithCustomError(w, customError)
 			return
 		}
 	}
 	limit, customError := getLimitQueryParam(r)
 	if customError != nil {
-		utils.RespondWithCustomError(w, customError)
+		s.responder.RespondWithCustomError(w, customError)
 		return
 	}
 	page := 0
 	if r.URL.Query().Get("page") != "" {
 		page, err = strconv.Atoi(r.URL.Query().Get("page"))
 		if err != nil {
-			utils.RespondWithCustomError(w, &exception.CustomError{
+			s.responder.RespondWithCustomError(w, &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -315,14 +324,22 @@ func (s searchControllerImpl) Search_deprecated(w http.ResponseWriter, r *http.R
 	searchQuery.Limit = limit
 	searchQuery.Page = page
 
+	if len(searchQuery.PackageIds) == 0 {
+		s.responder.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.InvalidSearchParameters,
+			Message: exception.InvalidSearchParametersMsg,
+			Params:  map[string]interface{}{"error": "packageIds is required for deprecated search"},
+		})
+		return
+	}
+	searchQuery.Workspace = utils.GetPackageWorkspaceId(searchQuery.PackageIds[0])
+
 	//// metrics
 	s.monitoringService.AddEndpointCall(getTemplatePath(r), view.MakeSearchEndpointOptions(searchLevel, searchQuery.OperationSearchParams))
 
-	ctx := context.Create(r)
-	user := ctx.GetUserId()
-	if user == "" {
-		user = ctx.GetApiKeyId()
-	}
+	ctx := secctx.MakeUserContext(r)
+	user := secctx.GetUserId(ctx)
 	pkgPostfix := ""
 	if len(searchQuery.PackageIds) > 0 {
 		pkgPostfix += "-" + searchQuery.PackageIds[0] // enrich the search level with pkg id (workspace, group, package). Currently only one item supported in the array.
@@ -339,37 +356,44 @@ func (s searchControllerImpl) Search_deprecated(w http.ResponseWriter, r *http.R
 	}
 	////
 
+	visible, err := s.roleService.GetWorkspacePackageVisibilityRoots(ctx, searchQuery.Workspace)
+	if err != nil {
+		s.responder.RespondWithError(w, r, "Failed to resolve package visibility for search", err)
+		return
+	}
+	searchQuery.VisiblePackageRoots = visible
+
 	switch searchLevel {
 	case view.SearchLevelOperations:
 		{
 			searchQueryReq := view.MakeSearchQueryReq(searchQuery)
-			result, err := s.operationService.GlobalSearchForOperations(r.Context(), searchQueryReq)
+			result, err := s.operationService.GlobalSearchForOperations(ctx, searchQueryReq)
 			if err != nil {
-				utils.RespondWithError(w, "Failed to perform search for operations", err)
+				s.responder.RespondWithError(w, r, "Failed to perform search for operations", err)
 				return
 			}
-			utils.RespondWithJson(w, http.StatusOK, result)
+			s.responder.RespondWithJson(w, http.StatusOK, result)
 		}
 	case view.SearchLevelPackages:
 		{
-			result, err := s.versionService.SearchForPackages(searchQuery)
+			result, err := s.versionService.SearchForPackages(ctx, searchQuery)
 			if err != nil {
-				utils.RespondWithError(w, "Failed to perform search for packages", err)
+				s.responder.RespondWithError(w, r, "Failed to perform search for packages", err)
 				return
 			}
-			utils.RespondWithJson(w, http.StatusOK, result)
+			s.responder.RespondWithJson(w, http.StatusOK, result)
 		}
 	case view.SearchLevelDocuments:
 		{
-			result, err := s.versionService.SearchForDocuments(searchQuery)
+			result, err := s.versionService.SearchForDocuments(ctx, searchQuery)
 			if err != nil {
-				utils.RespondWithError(w, "Failed to perform search for documents", err)
+				s.responder.RespondWithError(w, r, "Failed to perform search for documents", err)
 				return
 			}
-			utils.RespondWithJson(w, http.StatusOK, result)
+			s.responder.RespondWithJson(w, http.StatusOK, result)
 		}
 	default:
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		s.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusBadRequest,
 			Code:    exception.InvalidParameterValue,
 			Message: exception.InvalidParameterValueMsg,

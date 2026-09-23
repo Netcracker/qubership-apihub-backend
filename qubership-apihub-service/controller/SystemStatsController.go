@@ -3,43 +3,43 @@ package controller
 import (
 	"net/http"
 
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/context"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/exception"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/responder"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/secctx"
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/service"
-	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 )
 
 type SystemStatsController interface {
 	GetSystemStats(w http.ResponseWriter, r *http.Request)
 }
 
-func NewSystemStatsController(statsService service.SystemStatsService, roleService service.RoleService) SystemStatsController {
+func NewSystemStatsController(statsService service.SystemStatsService, responder responder.Responder) SystemStatsController {
 	return &systemStatsControllerImpl{
 		statsService: statsService,
-		roleService:  roleService,
+		responder:    responder,
 	}
 }
 
 type systemStatsControllerImpl struct {
 	statsService service.SystemStatsService
-	roleService  service.RoleService
+	responder    responder.Responder
 }
 
 func (s systemStatsControllerImpl) GetSystemStats(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Create(r)
-	sufficientPrivileges := s.roleService.IsSysadm(ctx)
+	ctx := secctx.MakeUserContext(r)
+	sufficientPrivileges := secctx.IsSysadm(ctx)
 	if !sufficientPrivileges {
-		utils.RespondWithCustomError(w, &exception.CustomError{
+		s.responder.RespondWithCustomError(w, &exception.CustomError{
 			Status:  http.StatusForbidden,
 			Code:    exception.InsufficientPrivileges,
 			Message: exception.InsufficientPrivilegesMsg,
 		})
 		return
 	}
-	stats, err := s.statsService.GetSystemStats(r.Context())
+	stats, err := s.statsService.GetSystemStats(ctx)
 	if err != nil {
-		utils.RespondWithError(w, "Failed to get system statistics", err)
+		s.responder.RespondWithError(w, r, "Failed to get system statistics", err)
 		return
 	}
-	utils.RespondWithJson(w, http.StatusOK, stats)
+	s.responder.RespondWithJson(w, http.StatusOK, stats)
 }

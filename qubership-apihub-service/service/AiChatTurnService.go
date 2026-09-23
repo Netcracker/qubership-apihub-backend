@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -25,10 +24,10 @@ import (
 
 const (
 	// Intentional hardcode — product decision, matches the FE limit; not operator-tunable.
-	MaxAiPinnedChatsPerUser = 3
-	MaxAiUserMessageRunes   = 32000
+	MaxAiPinnedChatsPerUser          = 3
+	MaxAiUserMessageRunes            = 32000
 	minRecentMessagesAfterCompaction = 8
-	maxToolLoopIterations   = 10
+	maxToolLoopIterations            = 10
 	maxCompactionSummaryPreviewRunes = 240
 )
 
@@ -63,8 +62,15 @@ func errAiPinLimit() *exception.CustomError {
 	}
 }
 
+func aiChatTurnTimedOut(ctx context.Context, err error) bool {
+	return errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded)
+}
+
 // aiChatStreamErrorPayload maps a turn failure to a single terminal SSE error frame.
-func aiChatStreamErrorPayload(err error) (code string, message string) {
+func aiChatStreamErrorPayload(ctx context.Context, err error) (code string, message string) {
+	if aiChatTurnTimedOut(ctx, err) {
+		return exception.AiChatTurnTimedOut, exception.AiChatTurnTimedOutMsg
+	}
 	var ce *exception.CustomError
 	if errors.As(err, &ce) && ce.Code != "" {
 		return ce.Code, ce.Error()
@@ -141,12 +147,6 @@ type aiChatTurnServiceImpl struct {
 	mintFileToken  FileTokenMinter
 	llm            client.LlmClient
 	mcpTools       []client.LLMTool
-
-	packagesListCache struct {
-		mu        sync.RWMutex
-		data      string
-		expiresAt time.Time
-	}
 }
 
 func NewAiChatTurnService(
@@ -186,6 +186,8 @@ func NewAiChatTurnService(
 }
 
 func (s *aiChatTurnServiceImpl) SendMessage(ctx context.Context, userID, chatID string, req *view.AiChatSendMessageRequest) (*view.AiChatSendMessageResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, AiChatTurnTimeout)
+	defer cancel()
 	chat, err := mustGetAiChat(ctx, s.repo, userID, chatID)
 	if err != nil {
 		return nil, err
@@ -203,33 +205,51 @@ func (s *aiChatTurnServiceImpl) SendMessage(ctx context.Context, userID, chatID 
 	um, am, e := s.runTurn(ctx, userID, chat, req, nil)
 	s.observeTurn(AiChatTurnModeSync, started, e)
 	if e != nil {
+		if aiChatTurnTimedOut(ctx, e) {
+			return nil, &exception.CustomError{
+				Status:  http.StatusInternalServerError,
+				Code:    exception.AiChatTurnTimedOut,
+				Message: exception.AiChatTurnTimedOutMsg,
+			}
+		}
 		return nil, e
 	}
 	return &view.AiChatSendMessageResponse{UserMessage: *um, AssistantMessage: *am}, nil
 }
 
 func (s *aiChatTurnServiceImpl) SendMessageStream(ctx context.Context, userID, chatID string, req *view.AiChatSendMessageRequest) (<-chan AiChatStreamChunk, error) {
+	ctx, cancel := context.WithTimeout(ctx, AiChatTurnTimeout)
 	chat, err := mustGetAiChat(ctx, s.repo, userID, chatID)
 	if err != nil {
+		cancel()
 		return nil, err
 	}
 	if utf8.RuneCountInString(req.Content) > MaxAiUserMessageRunes {
+		cancel()
 		return nil, &exception.CustomError{Status: http.StatusBadRequest, Code: exception.AiChatValidationFailed, Message: exception.AiChatMessageTooLongMsg, Params: map[string]interface{}{"max": MaxAiUserMessageRunes}}
 	}
 
 	out := make(chan AiChatStreamChunk, AiChatStreamChannelBuffer)
 	go func() {
+		defer cancel()
 		defer close(out)
 		started := time.Now()
 		_, _, err := s.runTurn(ctx, userID, chat, req, out)
 		s.observeTurn(AiChatTurnModeStream, started, err)
 		if err != nil {
-			code, message := aiChatStreamErrorPayload(err)
-			_ = s.emitStream(ctx, out, aiChatSSEError, map[string]interface{}{
+			// Decide which code and message the terminal error event carries.
+			code, message := aiChatStreamErrorPayload(ctx, err)
+			// ctx is often already cancelled here, and emitStream sends nothing on a cancelled context.
+			// emitCtx ignores the cancellation so the error still reaches the client.
+			emitCtx, emitCancel := context.WithTimeout(context.WithoutCancel(ctx), AiChatStreamTerminalEmitTimeout)
+			defer emitCancel()
+			if emitErr := s.emitStream(emitCtx, out, aiChatSSEError, map[string]interface{}{
 				aiChatSSEFieldType: aiChatSSEError,
 				"code":             code,
 				"message":          message,
-			})
+			}); emitErr != nil {
+				log.Warnf("ai-chat: terminal SSE error frame (code=%s) not delivered: %v", code, emitErr)
+			}
 		}
 	}()
 	return out, nil
@@ -358,10 +378,10 @@ func (s *aiChatTurnServiceImpl) runLLMTurn(ctx context.Context, userID string, c
 			OnToolCompleted: func(rec toolCallRecord) {
 				_ = s.emitStream(ctx, stream, aiChatSSEToolCompleted, map[string]interface{}{
 					aiChatSSEFieldType: aiChatSSEToolCompleted,
-					"toolCallId": rec.ToolCallID,
-					"name":       rec.Inv.Name,
-					"status":     rec.Inv.Status,
-					"durationMs": rec.Inv.DurationMs,
+					"toolCallId":       rec.ToolCallID,
+					"name":             rec.Inv.Name,
+					"status":           rec.Inv.Status,
+					"durationMs":       rec.Inv.DurationMs,
 				})
 			},
 		}
@@ -463,7 +483,7 @@ func (s *aiChatTurnServiceImpl) serveCachedPair(ctx context.Context, u, a *entit
 }
 
 func (s *aiChatTurnServiceImpl) runToolLoop(ctx context.Context, history []client.ChatMessage, streaming bool, hooks chatStreamHooks) (*chatTurnResult, error) {
-	systemMsg := s.buildSystemMessage(ctx)
+	systemMsg := systemMessageBaseContent
 	messages := append([]client.ChatMessage(nil), history...)
 
 	var totalUsage client.ChatUsage
@@ -602,12 +622,30 @@ func (s *aiChatTurnServiceImpl) executeToolCalls(ctx context.Context, toolCalls 
 		switch toolCall.Name {
 		case ToolNameSearchOperations:
 			result, err = s.mcpService.ExecuteSearchTool(ctx, mcpReq)
+		case ToolNameSearchOperationsV2:
+			result, err = s.mcpService.ExecuteSearchToolV2(ctx, mcpReq)
+		case ToolNameListWorkspacePackages:
+			result, err = s.mcpService.ExecuteListWorkspacePackagesTool(ctx, mcpReq)
+		case ToolNameListPackageVersions:
+			result, err = s.mcpService.ExecuteListPackageVersionsTool(ctx, mcpReq)
 		case ToolNameGetOperationSpec:
 			result, err = s.mcpService.ExecuteGetSpecTool(ctx, mcpReq)
 		case ToolNameGetOperationDiff:
 			result, err = s.mcpService.ExecuteGetOperationDiffTool(ctx, mcpReq)
 		case ToolNameGetDocument:
 			result, err = s.mcpService.ExecuteGetDocumentTool(ctx, mcpReq)
+		case ToolNameListWorkspaces:
+			result, err = s.mcpService.ExecuteListWorkspacesTool(ctx, mcpReq)
+		case ToolNameListDdlEntities:
+			result, err = s.mcpService.ExecuteListDdlEntitiesTool(ctx, mcpReq)
+		case ToolNameGetDdlEntity:
+			result, err = s.mcpService.ExecuteGetDdlEntityTool(ctx, mcpReq)
+		case ToolNameGetDdlEntityDiff:
+			result, err = s.mcpService.ExecuteGetDdlEntityDiffTool(ctx, mcpReq)
+		case ToolNameListMcpContractEntities:
+			result, err = s.mcpService.ExecuteListMcpContractEntitiesTool(ctx, mcpReq)
+		case ToolNameGetMcpContractEntity:
+			result, err = s.mcpService.ExecuteGetMcpContractEntityTool(ctx, mcpReq)
 		case toolNameStartIDSGeneration:
 			result, err = s.executeStartIDSGeneration(ctx, args)
 		case toolNameSaveGeneratedFile:
@@ -750,56 +788,11 @@ func (s *aiChatTurnServiceImpl) maybeCompactBefore(ctx context.Context, chat *en
 	}
 	return true, map[string]interface{}{
 		aiChatSSEFieldType: aiChatSSEContextCompacted,
-		"compactedUpTo":   boundary.UTC().Format(time.RFC3339),
-		"summaryPreview":  truncateRunes(summary, maxCompactionSummaryPreviewRunes),
-		"messagesBefore":  len(hist),
-		"messagesKeptRaw": keep,
+		"compactedUpTo":    boundary.UTC().Format(time.RFC3339),
+		"summaryPreview":   truncateRunes(summary, maxCompactionSummaryPreviewRunes),
+		"messagesBefore":   len(hist),
+		"messagesKeptRaw":  keep,
 	}
-}
-
-func (s *aiChatTurnServiceImpl) buildSystemMessage(ctx context.Context) string {
-	mcpWorkspace := s.sis.GetAiMCPConfig().Workspace
-	if mcpWorkspace == "" {
-		return systemMessageBaseContent
-	}
-
-	s.packagesListCache.mu.RLock()
-	cachedData := s.packagesListCache.data
-	cacheExpired := time.Now().After(s.packagesListCache.expiresAt)
-	s.packagesListCache.mu.RUnlock()
-
-	if cachedData != "" && !cacheExpired {
-		log.Debugf("Using cached api-packages-list resource (expires at: %v)", s.packagesListCache.expiresAt)
-		return systemMessageBaseContent + "\n\nCURRENT WORKSPACE PACKAGES (from api-packages-list resource):\n" + cachedData
-	}
-
-	log.Debugf("Cache expired or empty, fetching fresh api-packages-list resource")
-	resourceContents, err := s.mcpService.GetPackagesList(ctx, mcpWorkspace)
-	if err != nil {
-		log.Warnf("Failed to read api-packages-list resource: %v", err)
-		if cachedData != "" {
-			log.Debugf("Using expired cache as fallback")
-			return systemMessageBaseContent + "\n\nCURRENT WORKSPACE PACKAGES (from api-packages-list resource):\n" + cachedData
-		}
-		return systemMessageBaseContent
-	}
-
-	var resourceData string
-	if len(resourceContents) > 0 {
-		if textContent, ok := resourceContents[0].(*mcpgo.TextResourceContents); ok {
-			resourceData = textContent.Text
-		}
-	}
-
-	if resourceData != "" {
-		s.packagesListCache.mu.Lock()
-		s.packagesListCache.data = resourceData
-		s.packagesListCache.expiresAt = time.Now().Add(PackagesListCacheTTL)
-		s.packagesListCache.mu.Unlock()
-		log.Debugf("Updated api-packages-list cache (expires at: %v)", s.packagesListCache.expiresAt)
-		return systemMessageBaseContent + "\n\nCURRENT WORKSPACE PACKAGES (from api-packages-list resource):\n" + resourceData
-	}
-	return systemMessageBaseContent
 }
 
 func (s *aiChatTurnServiceImpl) generateChatTitle(ctx context.Context, userText, assistantText string) string {
