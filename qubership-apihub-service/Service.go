@@ -91,7 +91,9 @@ func main() {
 	migrationPassedChan := make(chan bool)
 	initSrvStoppedChan := make(chan bool)
 	r := mux.NewRouter()
-	r.Use(midldleware.PrometheusMiddleware)
+	if systemInfoService.MonitoringEnabled() {
+		r.Use(midldleware.PrometheusMiddleware)
+	}
 	r.Use(midldleware.WriteDeadlineMiddleware)
 	r.Use(midldleware.RequestTimeoutMiddleware(systemInfoService.GetRequestTimeout()))
 	r.SkipClean(true)

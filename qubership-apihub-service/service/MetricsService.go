@@ -15,6 +15,7 @@ type MetricsService interface {
 func NewMetricsService(metricsRepository repository.MetricsRepository) MetricsService {
 	return &metricsServiceImpl{
 		metricsRepository: metricsRepository,
+		cron:              cron.New(cron.WithLocation(time.UTC)),
 	}
 }
 
@@ -24,11 +25,6 @@ type metricsServiceImpl struct {
 }
 
 func (c *metricsServiceImpl) CreateJob(schedule string) error {
-	if c.cron == nil {
-		c.cron = cron.New(cron.WithLocation(time.UTC))
-		c.cron.Start()
-	}
-
 	job := cron.NewChain(cron.SkipIfStillRunning(cron.DefaultLogger)).Then(&metricsGetterJob{
 		metricsRepository: c.metricsRepository,
 	})
@@ -36,6 +32,7 @@ func (c *metricsServiceImpl) CreateJob(schedule string) error {
 		log.Warnf("[Metrics service] Job wasn't added for schedule - %s. With error - %s", schedule, err)
 		return err
 	}
+	c.cron.Start()
 	log.Infof("[Metrics service] Job was created with schedule - %s", schedule)
 	return nil
 }
