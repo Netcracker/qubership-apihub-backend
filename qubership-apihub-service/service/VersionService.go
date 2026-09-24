@@ -714,7 +714,7 @@ func (v versionServiceImpl) GetPackageVersionsView(ctx context.Context, req view
 		if !exists {
 			continue
 		}
-		versions[i].HasErrors = errorSummary.ContentHasErrors()
+		versions[i].HasErrors = errorSummary.VersionHasErrors()
 		if ents[i].PreviousVersion != "" {
 			changelogHasErrors := errorSummary.ChangelogHasAnyErrors()
 			versions[i].ChangelogHasErrors = &changelogHasErrors
@@ -800,7 +800,7 @@ func (v versionServiceImpl) GetPackageVersionContent(ctx context.Context, packag
 		Version:                  view.MakeVersionRefKey(versionEnt.Version, versionEnt.Revision),
 		RevisionsCount:           latestRevision,
 		ApiProcessorVersion:      versionEnt.Metadata.GetBuilderVersion(),
-		HasErrors:                errorSummary.ContentHasErrors(),
+		HasErrors:                errorSummary.VersionHasErrors(),
 	}
 
 	versionOperationTypes, err := v.getVersionOperationTypes(ctx, versionEnt, includeSummary, includeOperations, showOnlyDeleted, apiTypeHasErrors)
@@ -1630,7 +1630,7 @@ func (v versionServiceImpl) GetVersionRevisionsList(ctx context.Context, package
 		if !exists {
 			continue
 		}
-		revisions[i].HasErrors = errorSummary.ContentHasErrors()
+		revisions[i].HasErrors = errorSummary.VersionHasErrors()
 		if versionRevisionsEnts[i].PreviousVersion != "" {
 			changelogHasErrors := errorSummary.ChangelogHasAnyErrors()
 			revisions[i].ChangelogHasErrors = &changelogHasErrors
@@ -1870,6 +1870,10 @@ func (v versionServiceImpl) CopyVersion(ctx context.Context, packageId string, v
 }
 
 func (v versionServiceImpl) checkSourceVersionCanBeCopied(ctx context.Context, versionEnt *entity.PublishedVersionEntity, packageKind string, targetStatus string) error {
+	// A draft copy may carry errors and reference unsound versions; only a release copy must be sound.
+	if targetStatus != string(view.Release) {
+		return nil
+	}
 	if packageKind == entity.KIND_DASHBOARD {
 		refs, err := v.publishedRepo.GetVersionRefsV3(ctx, versionEnt.PackageId, versionEnt.Version, versionEnt.Revision)
 		if err != nil {
@@ -1885,7 +1889,7 @@ func (v versionServiceImpl) checkSourceVersionCanBeCopied(ctx context.Context, v
 				return err
 			}
 			if refHasErrors {
-				log.Debugf("Blocked copying version %s of package %s by user %s: referenced version %s of package %s contains errors",
+				log.Debugf("Blocked copying version %s of package %s with 'release' status by user %s: referenced version %s of package %s contains errors",
 					versionEnt.Version, versionEnt.PackageId, secctx.GetUserId(ctx), ref.RefVersion, ref.RefPackageId)
 				return &exception.CustomError{
 					Status:  http.StatusBadRequest,
@@ -1896,10 +1900,6 @@ func (v versionServiceImpl) checkSourceVersionCanBeCopied(ctx context.Context, v
 			}
 		}
 	}
-	if targetStatus != string(view.Release) {
-		return nil
-	}
-	
 	errorSummary, err := v.publishedRepo.GetVersionErrorSummary(ctx, versionEnt.PackageId, versionEnt.Version, versionEnt.Revision, false)
 	if err != nil {
 		return err

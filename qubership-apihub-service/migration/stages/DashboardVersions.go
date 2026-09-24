@@ -157,8 +157,8 @@ func makeDashboardVersionsQuery(packageIds []string, versionsIn []string, migrat
 				and (coalesce((prev_ver.metadata ->> 'has_errors')::boolean, false)
 					or coalesce((prev_ver_changelog.metadata ->> 'has_errors')::boolean, false))
 		)
-		/* a dashboard that references a version with errors cannot be published */
-		and not exists (
+		/* a release dashboard that references a version with errors cannot be published; a draft one can */
+		and not (pv.status = '%s' and exists (
 			select 1 from published_version_reference ref_src
 			inner join published_version ref_ver
 				on ref_ver.package_id = ref_src.reference_id
@@ -185,11 +185,11 @@ func makeDashboardVersionsQuery(packageIds []string, versionsIn []string, migrat
 				and ref_src.excluded = false
 				and (coalesce((ref_ver.metadata ->> 'has_errors')::boolean, false)
 					or coalesce((ref_ver_changelog.metadata ->> 'has_errors')::boolean, false))
-		)
+		))
 		order by pv.published_at asc, pv.package_id asc, pv.version asc, pv.revision asc
 	`, migrationId, view.StatusComplete,
 		migrationId, view.StatusComplete,
-		migrationId)
+		migrationId, string(view.Release))
 
 	return query, params
 }
