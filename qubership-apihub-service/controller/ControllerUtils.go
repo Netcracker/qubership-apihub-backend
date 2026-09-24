@@ -304,9 +304,33 @@ func getNotificationsFilter(r *http.Request) (*view.NotificationsFilter, *except
 	if customError != nil {
 		return nil, customError
 	}
+	documentId := r.URL.Query().Get("documentId")
+	emptyDocumentId := false
+	if emptyDocumentIdStr := r.URL.Query().Get("emptyDocumentId"); emptyDocumentIdStr != "" {
+		var err error
+		emptyDocumentId, err = strconv.ParseBool(emptyDocumentIdStr)
+		if err != nil {
+			return nil, &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.IncorrectParamType,
+				Message: exception.IncorrectParamTypeMsg,
+				Params:  map[string]interface{}{"param": "emptyDocumentId", "type": "boolean"},
+				Debug:   err.Error(),
+			}
+		}
+	}
+	if emptyDocumentId && documentId != "" {
+		return nil, &exception.CustomError{
+			Status:  http.StatusBadRequest,
+			Code:    exception.OverlappingQueryParameter,
+			Message: exception.OverlappingQueryParameterMsg,
+			Params:  map[string]interface{}{"param1": "emptyDocumentId", "param2": "documentId"},
+		}
+	}
 	return &view.NotificationsFilter{
-		DocumentId: r.URL.Query().Get("documentId"),
-		Severities: severities,
-		Categories: categories,
+		DocumentId:      documentId,
+		EmptyDocumentId: emptyDocumentId,
+		Severities:      severities,
+		Categories:      categories,
 	}, nil
 }

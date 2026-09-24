@@ -12,9 +12,10 @@ type Notification struct {
 }
 
 type NotificationsFilter struct {
-	DocumentId string
-	Severities []string
-	Categories []string
-	Limit      int
-	Offset     int
+	DocumentId      string
+	EmptyDocumentId bool
+	Severities      []string
+	Categories      []string
+	Limit           int
+	Offset          int
 }
