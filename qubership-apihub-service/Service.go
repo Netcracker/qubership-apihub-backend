@@ -92,7 +92,9 @@ func main() {
 	migrationPassedChan := make(chan bool)
 	initSrvStoppedChan := make(chan bool)
 	r := mux.NewRouter()
-	// r.Use(midldleware.PrometheusMiddleware) todo figure out why breaks streaming
+	if systemInfoService.MonitoringEnabled() {
+		r.Use(midldleware.PrometheusMiddleware)
+	}
 	r.Use(midldleware.WriteDeadlineMiddleware)
 	r.Use(midldleware.RequestTimeoutMiddleware(systemInfoService.GetRequestTimeout()))
 	r.SkipClean(true)
@@ -218,6 +220,7 @@ func main() {
 	unreferencedDataCleanupRepository := repository.NewUnreferencedDataCleanupRepository(cp)
 
 	lockRepo := repository.NewLockRepository(cp)
+	metricsRepository := repository.NewMetricsRepository(cp)
 
 	olricProvider, err := cache.NewOlricProvider(systemInfoService.GetOlricConfig())
 	if err != nil {
@@ -311,6 +314,7 @@ func main() {
 	}
 	ephemeralFileRepository := repository.NewEphemeralFileRepositoryPG(cp)
 	ephemeralFileService := service.NewEphemeralFileService(systemInfoService, ephemeralFileRepository)
+	metricsService := service.NewMetricsService(metricsRepository)
 	ephemeralFileController := controller.NewEphemeralFileController(ephemeralFileService, responder, authenticator)
 	ephemeralFileCleanup := service.NewEphemeralFileCleanupService(ephemeralFileRepository, lockService)
 	if err := ephemeralFileCleanup.StartCleanupJob(systemInfoService.GetEphemeralFilesCleanupSchedule(), systemInfoService.GetEphemeralFileDirectory()); err != nil {
@@ -724,6 +728,9 @@ func main() {
 		utils.SafeAsync(func() {
 			metrics.RegisterAllPrometheusApplicationMetrics()
 		})
+		if err := metricsService.CreateJob(systemInfoService.GetMetricsGetterSchedule()); err != nil {
+			log.Errorf("Failed to start metrics getter job: %s", err)
+		}
 		oTelCfg := systemInfoService.GetOTelMetricsConfig()
 		if oTelCfg.Enabled {
 			gatherer := metrics.NewPrefixGatherer(prometheus.DefaultGatherer, oTelCfg.MetricPrefixes)
