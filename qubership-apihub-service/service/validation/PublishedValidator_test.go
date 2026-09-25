@@ -1,7 +1,9 @@
 package validation
 
 import (
+	"archive/zip"
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/archive"
@@ -213,6 +215,17 @@ func builtComparison(previousVersion string) view.VersionComparison {
 	}
 }
 
+func cachedComparison(previousVersion string) view.CachedVersionComparison {
+	return view.CachedVersionComparison{
+		PackageId:                comparisonPackageId,
+		Version:                  comparisonVersion,
+		Revision:                 comparisonRevision,
+		PreviousVersionPackageId: comparisonPackageId,
+		PreviousVersion:          previousVersion,
+		PreviousVersionRevision:  1,
+	}
+}
+
 func TestValidateComparisonNotifications(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -280,15 +293,10 @@ func TestValidateComparisonNotifications(t *testing.T) {
 			name: "entry names a comparison the build reused from cache",
 			buildArc: &archive.BuildResultArchive{
 				PackageComparisons: view.PackageComparisonsFile{
-					Comparisons: []view.VersionComparison{{
-						PackageId:                comparisonPackageId,
-						Version:                  comparisonVersion,
-						Revision:                 comparisonRevision,
-						PreviousVersionPackageId: comparisonPackageId,
-						PreviousVersion:          previousVersionName,
-						PreviousVersionRevision:  1,
-						FromCache:                true,
-					}},
+					Comparisons: []view.VersionComparison{builtComparison(previousVersionName)},
+				},
+				CachedComparisons: view.PackageCachedComparisonsFile{
+					CachedComparisons: []view.CachedVersionComparison{cachedComparison(previousVersionName)},
 				},
 				ComparisonNotifications: view.ComparisonNotificationsFile{
 					Comparisons: []view.ComparisonNotifications{
@@ -604,76 +612,192 @@ func (s versionComparisonRepoStub) GetVersionComparison(context.Context, string)
 	return s.comparison, nil
 }
 
-func TestValidateCachedComparisonChanges(t *testing.T) {
-	operationTypes := []view.OperationType{{ApiType: "rest"}}
-	contractTypes := []view.ContractType{{ContractType: view.ContractTypeDdl}}
+func TestValidateCachedComparisons(t *testing.T) {
+	// The publish path validates before the version being published is split into name and revision,
+	// so the archive still carries the "version@revision" form here.
+	packageInfo := view.PackageInfoFile{
+		PackageId: comparisonPackageId,
+		Version:   fmt.Sprintf("%v@%v", comparisonVersion, comparisonRevision),
+	}
+	refCached := view.CachedVersionComparison{
+		PackageId:                "QS.REF",
+		Version:                  "1.2",
+		Revision:                 4,
+		PreviousVersionPackageId: "QS.REF",
+		PreviousVersion:          "1.1",
+		PreviousVersionRevision:  2,
+	}
+	refComparison := view.VersionComparison{
+		PackageId:                refCached.PackageId,
+		Version:                  refCached.Version,
+		Revision:                 refCached.Revision,
+		PreviousVersionPackageId: refCached.PreviousVersionPackageId,
+		PreviousVersion:          refCached.PreviousVersion,
+		PreviousVersionRevision:  refCached.PreviousVersionRevision,
+	}
+	refDdlComparison := view.DdlVersionComparison{
+		PackageId:                refCached.PackageId,
+		Version:                  refCached.Version,
+		Revision:                 refCached.Revision,
+		PreviousVersionPackageId: refCached.PreviousVersionPackageId,
+		PreviousVersion:          refCached.PreviousVersion,
+		PreviousVersionRevision:  refCached.PreviousVersionRevision,
+	}
 
 	tests := []struct {
-		name        string
-		ddl         bool
-		comparison  *entity.VersionComparisonEntity
-		wantCode    string
-		wantMessage string
+		name             string
+		filePresent      bool
+		comparisonsFile  bool
+		cached           []view.CachedVersionComparison
+		comparisons      []view.VersionComparison
+		ddlComparisons   []view.DdlVersionComparison
+		storedComparison *entity.VersionComparisonEntity
+		wantErrorCode    string
 	}{
 		{
-			name:        "comparison row does not exist",
-			comparison:  nil,
-			wantCode:    exception.ComparisonNotFound,
-			wantMessage: exception.ComparisonNotFoundMsg,
+			name:             "a reused reference pair listed in comparisons.json is accepted",
+			filePresent:      true,
+			comparisonsFile:  true,
+			cached:           []view.CachedVersionComparison{refCached},
+			comparisons:      []view.VersionComparison{builtComparison(previousVersionName), refComparison},
+			storedComparison: &entity.VersionComparisonEntity{OperationTypes: []view.OperationType{{ApiType: "rest"}}},
 		},
 		{
-			name:        "ddl changes were never calculated",
-			ddl:         true,
-			comparison:  &entity.VersionComparisonEntity{OperationTypes: operationTypes},
-			wantCode:    exception.ComparisonChangesNotCalculated,
-			wantMessage: exception.ComparisonChangesNotCalculatedMsg,
+			name:             "a reused reference pair listed only in ddl-comparisons.json is accepted",
+			filePresent:      true,
+			comparisonsFile:  true,
+			cached:           []view.CachedVersionComparison{refCached},
+			ddlComparisons:   []view.DdlVersionComparison{refDdlComparison},
+			storedComparison: &entity.VersionComparisonEntity{ContractTypes: []view.ContractType{{ContractType: view.ContractTypeDdl}}},
 		},
 		{
-			name:       "ddl changes were calculated without contract changes",
-			ddl:        true,
-			comparison: &entity.VersionComparisonEntity{OperationTypes: operationTypes, ContractTypes: []view.ContractType{}},
+			name:            "an empty list is accepted",
+			filePresent:     true,
+			comparisonsFile: true,
+			comparisons:     []view.VersionComparison{builtComparison(previousVersionName)},
 		},
 		{
-			name:       "ddl changes were calculated with contract changes",
-			ddl:        true,
-			comparison: &entity.VersionComparisonEntity{ContractTypes: contractTypes},
+			name:            "the file is required once the archive carries comparisons",
+			filePresent:     false,
+			comparisonsFile: true,
+			comparisons:     []view.VersionComparison{builtComparison(previousVersionName)},
+			wantErrorCode:   exception.FileMissingFromSources,
 		},
 		{
-			name:        "operation changes were never calculated",
-			comparison:  &entity.VersionComparisonEntity{ContractTypes: contractTypes},
-			wantCode:    exception.ComparisonChangesNotCalculated,
-			wantMessage: exception.ComparisonChangesNotCalculatedMsg,
+			name:            "an archive without comparisons needs no cached comparisons file",
+			filePresent:     false,
+			comparisonsFile: false,
 		},
 		{
-			name:       "operation changes were calculated",
-			comparison: &entity.VersionComparisonEntity{OperationTypes: operationTypes, ContractTypes: contractTypes},
+			// The comparison id is a hash over both revisions, so an entry without them can only ever
+			// point at a row that does not exist.
+			name:            "an entry without a revision is rejected",
+			filePresent:     true,
+			comparisonsFile: true,
+			cached: []view.CachedVersionComparison{{
+				PackageId:                refCached.PackageId,
+				Version:                  refCached.Version,
+				PreviousVersionPackageId: refCached.PreviousVersionPackageId,
+				PreviousVersion:          refCached.PreviousVersion,
+				PreviousVersionRevision:  refCached.PreviousVersionRevision,
+			}},
+			comparisons:   []view.VersionComparison{refComparison},
+			wantErrorCode: exception.InvalidPackagedFile,
+		},
+		{
+			name:            "an entry without a previous version revision is rejected",
+			filePresent:     true,
+			comparisonsFile: true,
+			cached: []view.CachedVersionComparison{{
+				PackageId:                refCached.PackageId,
+				Version:                  refCached.Version,
+				Revision:                 refCached.Revision,
+				PreviousVersionPackageId: refCached.PreviousVersionPackageId,
+				PreviousVersion:          refCached.PreviousVersion,
+			}},
+			comparisons:   []view.VersionComparison{refComparison},
+			wantErrorCode: exception.InvalidPackagedFile,
+		},
+		{
+			name:            "an entry listed in neither index is rejected",
+			filePresent:     true,
+			comparisonsFile: true,
+			cached:          []view.CachedVersionComparison{refCached},
+			comparisons:     []view.VersionComparison{builtComparison(previousVersionName)},
+			wantErrorCode:   exception.InvalidPackagedFile,
+		},
+		{
+			name:            "the pair the build was started for cannot be reused",
+			filePresent:     true,
+			comparisonsFile: true,
+			cached:          []view.CachedVersionComparison{cachedComparison(previousVersionName)},
+			comparisons:     []view.VersionComparison{builtComparison(previousVersionName)},
+			wantErrorCode:   exception.InvalidPackagedFile,
+		},
+		{
+			name:             "an entry with no stored comparison is rejected",
+			filePresent:      true,
+			comparisonsFile:  true,
+			cached:           []view.CachedVersionComparison{refCached},
+			comparisons:      []view.VersionComparison{refComparison},
+			storedComparison: nil,
+			wantErrorCode:    exception.ComparisonNotFound,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := publishedValidatorImpl{publishedRepo: versionComparisonRepoStub{comparison: tt.comparison}}
-			entry := comparisonEntry{
-				ComparisonKey: view.ComparisonKey{
-					PackageId:                comparisonPackageId,
-					Version:                  comparisonVersion,
-					Revision:                 comparisonRevision,
-					PreviousVersionPackageId: comparisonPackageId,
-					PreviousVersion:          previousVersionName,
-					PreviousVersionRevision:  1,
-				},
-				FromCache: true,
-				Ddl:       tt.ddl,
+			buildArc := &archive.BuildResultArchive{
+				PackageInfo:           packageInfo,
+				PackageComparisons:    view.PackageComparisonsFile{Comparisons: tt.comparisons},
+				PackageDdlComparisons: view.PackageDdlComparisonsFile{Comparisons: tt.ddlComparisons},
+				CachedComparisons:     view.PackageCachedComparisonsFile{CachedComparisons: tt.cached},
 			}
-			err := p.validateCachedComparisonChanges(context.Background(), entry)
-			if tt.wantMessage == "" {
+			if tt.filePresent {
+				buildArc.CachedComparisonsFile = &zip.File{}
+			}
+			if tt.comparisonsFile {
+				buildArc.ComparisonsFile = &zip.File{}
+			}
+
+			p := publishedValidatorImpl{publishedRepo: versionComparisonRepoStub{comparison: tt.storedComparison}}
+			err := p.validateCachedComparisons(context.Background(), buildArc)
+			if tt.wantErrorCode == "" {
 				assert.NoError(t, err)
 				return
 			}
 			customErr, ok := err.(*exception.CustomError)
 			assert.True(t, ok, "expected *exception.CustomError, got %T", err)
-			assert.Equal(t, tt.wantCode, customErr.Code)
-			assert.Equal(t, tt.wantMessage, customErr.Message)
+			assert.Equal(t, tt.wantErrorCode, customErr.Code)
 		})
 	}
+}
+
+func TestValidateCachedComparisonExists(t *testing.T) {
+	key := view.ComparisonKey{
+		PackageId:                comparisonPackageId,
+		Version:                  comparisonVersion,
+		Revision:                 comparisonRevision,
+		PreviousVersionPackageId: comparisonPackageId,
+		PreviousVersion:          previousVersionName,
+		PreviousVersionRevision:  1,
+	}
+
+	t.Run("comparison row does not exist", func(t *testing.T) {
+		p := publishedValidatorImpl{publishedRepo: versionComparisonRepoStub{comparison: nil}}
+		err := p.validateCachedComparisonExists(context.Background(), key)
+		customErr, ok := err.(*exception.CustomError)
+		assert.True(t, ok, "expected *exception.CustomError, got %T", err)
+		assert.Equal(t, exception.ComparisonNotFound, customErr.Code)
+		assert.Equal(t, exception.ComparisonNotFoundMsg, customErr.Message)
+	})
+
+	// A reused comparison is stored as a whole, so neither side of it has to be present for the reuse
+	// to be legitimate: a package with only DDL content stores no operation types and vice versa.
+	t.Run("comparison row exists with only one kind of changes", func(t *testing.T) {
+		p := publishedValidatorImpl{publishedRepo: versionComparisonRepoStub{
+			comparison: &entity.VersionComparisonEntity{OperationTypes: []view.OperationType{{ApiType: "rest"}}},
+		}}
+		assert.NoError(t, p.validateCachedComparisonExists(context.Background(), key))
+	})
 }
