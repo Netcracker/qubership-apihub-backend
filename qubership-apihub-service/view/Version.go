@@ -143,16 +143,18 @@ type CompareVersionsReq struct {
 }
 
 type PackageVersionRef struct {
-	RefPackageId      string     `json:"refId"`
-	Kind              string     `json:"kind"`
-	RefPackageName    string     `json:"name"`
-	RefPackageVersion string     `json:"version"`
-	Status            string     `json:"status"`
-	DeletedAt         *time.Time `json:"deletedAt,omitempty"`
-	DeletedBy         string     `json:"deletedBy,omitempty"`
-	ParentNames       []string   `json:"parentPackages,omitempty"`
-	ServiceName       string     `json:"-"`
-	NotLatestRevision bool       `json:"notLatestRevision,omitempty"`
+	RefPackageId       string     `json:"refId"`
+	Kind               string     `json:"kind"`
+	RefPackageName     string     `json:"name"`
+	RefPackageVersion  string     `json:"version"`
+	Status             string     `json:"status"`
+	HasErrors          bool       `json:"hasErrors"`
+	ChangelogHasErrors *bool      `json:"changelogHasErrors,omitempty"`
+	DeletedAt          *time.Time `json:"deletedAt,omitempty"`
+	DeletedBy          string     `json:"deletedBy,omitempty"`
+	ParentNames        []string   `json:"parentPackages,omitempty"`
+	ServiceName        string     `json:"-"`
+	NotLatestRevision  bool       `json:"notLatestRevision,omitempty"`
 }
 
 type PackageVersionRevisions struct {

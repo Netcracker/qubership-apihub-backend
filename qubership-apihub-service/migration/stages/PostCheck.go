@@ -13,7 +13,7 @@ import (
 
 const (
 	skipReasonPreviousVersionHasErrors   = "previous version has errors"
-	skipReasonReferenceHasErrors         = "referenced version has errors"
+	skipReasonReferenceHasErrors         = "release dashboard references a version with errors"
 	skipReasonPreviousVersionNotMigrated = "previous version not migrated"
 	skipReasonVersionNotMigrated         = "version not migrated"
 	skipReasonReferenceNotMigrated       = "referenced version not migrated"
@@ -143,7 +143,7 @@ func makeNotMigratedVersionsQuery(packageIds []string, versionsIn []string, migr
 					and (coalesce((prev_ver.metadata ->> 'has_errors')::boolean, false)
 						or coalesce((prev_ver_changelog.metadata ->> 'has_errors')::boolean, false))
 			) then '%s'
-			when exists (
+			when v.status = '%s' and exists (
 				select 1 from published_version_reference ref_src
 				inner join published_version ref_ver
 					on ref_ver.package_id = ref_src.reference_id
@@ -208,7 +208,7 @@ func makeNotMigratedVersionsQuery(packageIds []string, versionsIn []string, migr
 		inner join package_group pkg on v.package_id = pkg.id
 		where v.deleted_at is null and pkg.deleted_at is null
 		and (v.metadata is null or not (v.metadata \? 'migration_id') or v.metadata->>'migration_id' is distinct from ?)%s%s%s`,
-		skipReasonPreviousVersionHasErrors, skipReasonReferenceHasErrors,
+		skipReasonPreviousVersionHasErrors, string(view.Release), skipReasonReferenceHasErrors,
 		migrationId, skipReasonPreviousVersionNotMigrated,
 		migrationId, skipReasonReferenceNotMigrated,
 		view.PublishType, migrationId, view.StatusError, skipReasonVersionBuildFailed,

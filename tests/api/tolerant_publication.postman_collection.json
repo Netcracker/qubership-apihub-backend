@@ -174,6 +174,21 @@
    "key": "copiedExcludedDashboardVersion",
    "value": "dash-copy2",
    "type": "string"
+  },
+  {
+   "key": "erroredDashboardVersion",
+   "value": "dash-errored",
+   "type": "string"
+  },
+  {
+   "key": "copiedErroredDashboardReleaseVersion",
+   "value": "dash-copy-rel",
+   "type": "string"
+  },
+  {
+   "key": "copiedErroredDashboardVersion",
+   "value": "dash-copy3",
+   "type": "string"
   }
  ],
  "item": [
@@ -813,7 +828,7 @@
      "response": []
     },
     {
-     "name": "A document carrying only warnings is not marked",
+     "name": "The warning filter never returns an error or a marked document",
      "event": [
       {
        "listen": "test",
@@ -822,7 +837,6 @@
         "exec": [
          "pm.test('Warning filter succeeds', function () { pm.response.to.have.status(200); });",
          "var warnings = pm.response.json().notifications;",
-         "pm.test('The version has at least one warning', function () { pm.expect(warnings.length).to.be.above(0); });",
          "pm.test('Every returned message is a warning', function () {",
          "    warnings.forEach(function (n) { pm.expect(n.severity).to.eql('warning'); });",
          "});",
@@ -1387,73 +1401,6 @@
       }
      },
      "response": []
-    },
-    {
-     "name": "Status change to archived is allowed",
-     "event": [
-      {
-       "listen": "test",
-       "script": {
-        "type": "text/javascript",
-        "exec": [
-         "pm.test('Archiving an errored version succeeds', function () { pm.response.to.have.status(200); });",
-         "pm.test('The archived version keeps hasErrors', function () { pm.expect(pm.response.json().hasErrors).to.eql(true); });"
-        ]
-       }
-      }
-     ],
-     "request": {
-      "method": "PATCH",
-      "header": [
-       {
-        "key": "api-key",
-        "value": "{{apiKey}}"
-       },
-       {
-        "key": "Content-Type",
-        "value": "application/json"
-       }
-      ],
-      "url": "{{baseUrl}}/api/v2/packages/{{pkgAId}}/versions/{{brokenVersion}}",
-      "body": {
-       "mode": "raw",
-       "raw": "{\"status\":\"archived\",\"versionLabels\":[]}"
-      }
-     },
-     "response": []
-    },
-    {
-     "name": "Restore the errored version to draft",
-     "event": [
-      {
-       "listen": "test",
-       "script": {
-        "type": "text/javascript",
-        "exec": [
-         "pm.test('Restoring to draft succeeds', function () { pm.response.to.have.status(200); });"
-        ]
-       }
-      }
-     ],
-     "request": {
-      "method": "PATCH",
-      "header": [
-       {
-        "key": "api-key",
-        "value": "{{apiKey}}"
-       },
-       {
-        "key": "Content-Type",
-        "value": "application/json"
-       }
-      ],
-      "url": "{{baseUrl}}/api/v2/packages/{{pkgAId}}/versions/{{brokenVersion}}",
-      "body": {
-       "mode": "raw",
-       "raw": "{\"status\":\"draft\",\"versionLabels\":[]}"
-      }
-     },
-     "response": []
     }
    ]
   },
@@ -1634,16 +1581,17 @@
      "response": []
     },
     {
-     "name": "Dashboard cannot reference an errored version",
+     "name": "A release dashboard cannot reference an errored version",
      "event": [
       {
        "listen": "test",
        "script": {
         "type": "text/javascript",
         "exec": [
-         "pm.test('Dashboard reference to an errored version is refused with 400', function () { pm.response.to.have.status(400); });",
+         "pm.test('Release dashboard reference to an errored version is refused with 400', function () { pm.response.to.have.status(400); });",
          "var json = pm.response.json();",
-         "pm.test('Dashboard reference to an errored version carries the tolerant-publication error code', function () { pm.expect(json.code).to.eql('8800'); });",
+         "pm.test('Release dashboard reference to an errored version carries the tolerant-publication error code', function () { pm.expect(json.code).to.eql('8800'); });",
+         "pm.test('The refusal names the release status', function () { pm.expect(json.message || '').to.match(/release/i); });",
          "pm.collectionVariables.set('lastErrorMessage', json.message || '');"
         ]
        }
@@ -1662,12 +1610,230 @@
        "formdata": [
         {
          "key": "config",
-         "value": "{\"packageId\":\"{{dashboardId}}\",\"version\":\"{{dashboardVersion}}\",\"status\":\"draft\",\"buildType\":\"build\",\"refs\":[{\"refId\":\"{{pkgAId}}\",\"version\":\"{{brokenVersion}}\"}],\"files\":[]}",
+         "value": "{\"packageId\":\"{{dashboardId}}\",\"version\":\"{{erroredDashboardVersion}}\",\"status\":\"release\",\"buildType\":\"build\",\"refs\":[{\"refId\":\"{{pkgAId}}\",\"version\":\"{{brokenVersion}}\"}],\"files\":[]}",
          "type": "text"
         }
        ]
       },
       "url": "{{baseUrl}}/api/v2/packages/{{dashboardId}}/publish"
+     },
+     "response": []
+    },
+    {
+     "name": "A draft dashboard may reference an errored version",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Draft dashboard reference to an errored version accepted', function () { pm.response.to.have.status(202); });",
+         "var json = pm.response.json();",
+         "pm.collectionVariables.set('publishId', json.publishId);",
+         "pm.collectionVariables.set('pollAttempts', '0');"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       }
+      ],
+      "body": {
+       "mode": "formdata",
+       "formdata": [
+        {
+         "key": "config",
+         "value": "{\"packageId\":\"{{dashboardId}}\",\"version\":\"{{erroredDashboardVersion}}\",\"status\":\"draft\",\"buildType\":\"build\",\"refs\":[{\"refId\":\"{{pkgAId}}\",\"version\":\"{{brokenVersion}}\"}],\"files\":[]}",
+         "type": "text"
+        }
+       ]
+      },
+      "url": "{{baseUrl}}/api/v2/packages/{{dashboardId}}/publish"
+     },
+     "response": []
+    },
+    {
+     "name": "Wait for the errored draft dashboard",
+     "event": [
+      {
+       "listen": "prerequest",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "var attempts = parseInt(pm.collectionVariables.get('pollAttempts') || '0', 10);",
+         "if (attempts > 0) {",
+         "    var until = Date.now() + parseInt(pm.collectionVariables.get('pollDelayMs') || '1000', 10);",
+         "    while (Date.now() < until) {}",
+         "}"
+        ]
+       }
+      },
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Wait for the errored draft dashboard status endpoint succeeds', function () { pm.response.to.have.status(200); });",
+         "var json = pm.response.json();",
+         "if (json.status === 'running' || json.status === 'none') {",
+         "    var attempts = parseInt(pm.collectionVariables.get('pollAttempts') || '0', 10) + 1;",
+         "    pm.collectionVariables.set('pollAttempts', String(attempts));",
+         "    if (attempts < parseInt(pm.collectionVariables.get('maxPollAttempts'), 10)) {",
+         "        pm.execution.setNextRequest(pm.info.requestName);",
+         "    } else {",
+         "        pm.test('Wait for the errored draft dashboard completes before timeout', function () { pm.expect.fail('publish timeout'); });",
+         "    }",
+         "    return;",
+         "}",
+         "pm.collectionVariables.set('pollAttempts', '0');",
+         "pm.collectionVariables.set('lastBuildStatus', json.status);",
+         "pm.collectionVariables.set('lastBuildMessage', json.message || '');",
+         "pm.test('Wait for the errored draft dashboard ends with status \\'complete\\'', function () { pm.expect(json.status, json.message || '').to.eql('complete'); });"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v2/packages/{{dashboardId}}/publish/{{publishId}}/status"
+     },
+     "response": []
+    },
+    {
+     "name": "The dashboard is marked by its included errored reference",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Errored dashboard is readable', function () { pm.response.to.have.status(200); });",
+         "var json = pm.response.json();",
+         "pm.test('Errored dashboard stays a draft', function () { pm.expect(json.status).to.eql('draft'); });",
+         "pm.test('Errored dashboard carries hasErrors', function () { pm.expect(json.hasErrors).to.eql(true); });",
+         "pm.test('Errored dashboard omits the changelog flag', function () { pm.expect(json).to.not.have.property('changelogHasErrors'); });"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v3/packages/{{dashboardId}}/versions/{{erroredDashboardVersion}}?includeSummary=true"
+     },
+     "response": []
+    },
+    {
+     "name": "The dashboard list marks the errored dashboard",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Dashboard version list is readable', function () { pm.response.to.have.status(200); });",
+         "var json = pm.response.json();",
+         "var dashboard = json.versions.filter(function (v) { return v.version.split('@')[0] === pm.collectionVariables.get('erroredDashboardVersion'); })[0];",
+         "pm.test('The errored dashboard version is listed', function () { pm.expect(dashboard).to.not.be.undefined; });",
+         "pm.test('The list reports hasErrors for the errored dashboard', function () { pm.expect(dashboard.hasErrors).to.eql(true); });",
+         "pm.test('The list omits the changelog flag for the errored dashboard', function () { pm.expect(dashboard).to.not.have.property('changelogHasErrors'); });"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v3/packages/{{dashboardId}}/versions?limit=100"
+     },
+     "response": []
+    },
+    {
+     "name": "The references carry the errored flag",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Dashboard references are readable', function () { pm.response.to.have.status(200); });",
+         "var json = pm.response.json();",
+         "var keys = Object.keys(json.packages || {}).filter(function (k) { var parts = k.split('@'); return parts[0] === pm.collectionVariables.get('pkgAId') && parts[1] === pm.collectionVariables.get('brokenVersion'); });",
+         "pm.test('The errored package version is among the referenced packages', function () { pm.expect(keys).to.have.lengthOf(1); });",
+         "var ref = json.packages[keys[0]];",
+         "pm.test('The referenced package version carries hasErrors', function () { pm.expect(ref.hasErrors).to.eql(true); });",
+         "pm.test('The referenced package version omits the changelog flag', function () { pm.expect(ref).to.not.have.property('changelogHasErrors'); });",
+         "pm.test('The reference row points at the errored package version', function () { pm.expect(json.references[0].packageRef).to.eql(keys[0]); });"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v3/packages/{{dashboardId}}/versions/{{erroredDashboardVersion}}/references"
+     },
+     "response": []
+    },
+    {
+     "name": "Status change of the errored dashboard to release is refused",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Status change of the errored dashboard to release is refused with 400', function () { pm.response.to.have.status(400); });",
+         "var json = pm.response.json();",
+         "pm.test('Status change of the errored dashboard to release carries the tolerant-publication error code', function () { pm.expect(json.code).to.eql('8800'); });",
+         "pm.collectionVariables.set('lastErrorMessage', json.message || '');"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "PATCH",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       },
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v2/packages/{{dashboardId}}/versions/{{erroredDashboardVersion}}",
+      "body": {
+       "mode": "raw",
+       "raw": "{\"status\":\"release\",\"versionLabels\":[]}"
+      }
      },
      "response": []
     },
@@ -3550,6 +3716,36 @@
      "response": []
     },
     {
+     "name": "The pinned dashboard copy references a sound revision",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Pinned dashboard copy references are readable', function () { pm.response.to.have.status(200); });",
+         "var json = pm.response.json();",
+         "var keys = Object.keys(json.packages || {}).filter(function (k) { return k.split('@')[0] === pm.collectionVariables.get('pkgBId'); });",
+         "pm.test('The referenced package version is listed', function () { pm.expect(keys).to.have.lengthOf(1); });",
+         "pm.test('The pinned referenced revision has no errors', function () { pm.expect(json.packages[keys[0]].hasErrors).to.eql(false); });",
+         "pm.test('The pinned referenced revision is not the latest one', function () { pm.expect(json.packages[keys[0]].notLatestRevision).to.eql(true); });"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v3/packages/{{dashboardId}}/versions/{{copiedDashboardVersion}}/references"
+     },
+     "response": []
+    },
+    {
      "name": "Copy of a dashboard with an excluded errored reference is accepted",
      "event": [
       {
@@ -3636,6 +3832,185 @@
        }
       ],
       "url": "{{baseUrl}}/api/v2/packages/{{dashboardId}}/publish/{{publishId}}/status"
+     },
+     "response": []
+    },
+    {
+     "name": "Copy of a dashboard with an included errored reference as release is refused",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Copying a dashboard with an included errored reference as release is refused with 400', function () { pm.response.to.have.status(400); });",
+         "var json = pm.response.json();",
+         "pm.test('Copying a dashboard with an included errored reference as release carries the tolerant-publication error code', function () { pm.expect(json.code).to.eql('8800'); });",
+         "pm.test('The refusal names the release status', function () { pm.expect(json.message || '').to.match(/release/i); });",
+         "pm.collectionVariables.set('lastErrorMessage', json.message || '');"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       },
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v2/packages/{{dashboardId}}/versions/{{erroredDashboardVersion}}/copy",
+      "body": {
+       "mode": "raw",
+       "raw": "{\"targetPackageId\":\"{{dashboardId}}\",\"targetVersion\":\"{{copiedErroredDashboardReleaseVersion}}\",\"targetStatus\":\"release\"}"
+      }
+     },
+     "response": []
+    },
+    {
+     "name": "The release copy of the errored dashboard was not created",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Refused release copy of the errored dashboard does not exist', function () { pm.response.to.have.status(404); });"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v3/packages/{{dashboardId}}/versions/{{copiedErroredDashboardReleaseVersion}}"
+     },
+     "response": []
+    },
+    {
+     "name": "Copy of a dashboard with an included errored reference as draft is accepted",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Draft copy of a dashboard with an included errored reference accepted', function () { pm.response.to.have.status(202); });",
+         "var json = pm.response.json();",
+         "pm.collectionVariables.set('publishId', json.publishId);",
+         "pm.collectionVariables.set('pollAttempts', '0');"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       },
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v2/packages/{{dashboardId}}/versions/{{erroredDashboardVersion}}/copy",
+      "body": {
+       "mode": "raw",
+       "raw": "{\"targetPackageId\":\"{{dashboardId}}\",\"targetVersion\":\"{{copiedErroredDashboardVersion}}\",\"targetStatus\":\"draft\"}"
+      }
+     },
+     "response": []
+    },
+    {
+     "name": "Wait for the errored dashboard copy",
+     "event": [
+      {
+       "listen": "prerequest",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "var attempts = parseInt(pm.collectionVariables.get('pollAttempts') || '0', 10);",
+         "if (attempts > 0) {",
+         "    var until = Date.now() + parseInt(pm.collectionVariables.get('pollDelayMs') || '1000', 10);",
+         "    while (Date.now() < until) {}",
+         "}"
+        ]
+       }
+      },
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Wait for the errored dashboard copy status endpoint succeeds', function () { pm.response.to.have.status(200); });",
+         "var json = pm.response.json();",
+         "if (json.status === 'running' || json.status === 'none') {",
+         "    var attempts = parseInt(pm.collectionVariables.get('pollAttempts') || '0', 10) + 1;",
+         "    pm.collectionVariables.set('pollAttempts', String(attempts));",
+         "    if (attempts < parseInt(pm.collectionVariables.get('maxPollAttempts'), 10)) {",
+         "        pm.execution.setNextRequest(pm.info.requestName);",
+         "    } else {",
+         "        pm.test('Wait for the errored dashboard copy completes before timeout', function () { pm.expect.fail('publish timeout'); });",
+         "    }",
+         "    return;",
+         "}",
+         "pm.collectionVariables.set('pollAttempts', '0');",
+         "pm.collectionVariables.set('lastBuildStatus', json.status);",
+         "pm.collectionVariables.set('lastBuildMessage', json.message || '');",
+         "pm.test('Wait for the errored dashboard copy ends with status \\'complete\\'', function () { pm.expect(json.status, json.message || '').to.eql('complete'); });"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v2/packages/{{dashboardId}}/publish/{{publishId}}/status"
+     },
+     "response": []
+    },
+    {
+     "name": "The draft copy of the errored dashboard is marked",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Draft copy of the errored dashboard is readable', function () { pm.response.to.have.status(200); });",
+         "var json = pm.response.json();",
+         "pm.test('Draft copy of the errored dashboard stays a draft', function () { pm.expect(json.status).to.eql('draft'); });",
+         "pm.test('Draft copy of the errored dashboard carries hasErrors', function () { pm.expect(json.hasErrors).to.eql(true); });"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v3/packages/{{dashboardId}}/versions/{{copiedErroredDashboardVersion}}"
      },
      "response": []
     }

@@ -234,7 +234,7 @@ func (b *buildServiceImpl) PublishVersion(ctx context.Context, config view.Build
 		config.ResolveConflicts = resolveConflicts
 		config.ResolveRefs = resolveRefs
 	} else {
-		config.Refs, err = b.refResolverService.CalculateBuildConfigRefs(ctx, config.Refs, resolveRefs, resolveConflicts)
+		config.Refs, err = b.refResolverService.CalculateBuildConfigRefs(ctx, config.Refs, config.Status, resolveRefs, resolveConflicts)
 		if err != nil {
 			return nil, err
 		}

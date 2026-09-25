@@ -51,8 +51,8 @@ func (s *versionsListRepoStub) GetVersionsErrorSummary(_ context.Context, versio
 }
 
 // The versions list reports the same two flags as the version content endpoint, and reports them
-// separately. A fact that belongs to neither - a referenced version's own unreliable changelog - must move
-// neither flag, even though it does block the reference from being added.
+// separately. A referenced version's own unreliable changelog makes the reference unsound, so it moves the
+// dashboard's hasErrors and nothing else.
 func TestGetPackageVersionsViewSplitsErrorFlags(t *testing.T) {
 	tests := []struct {
 		name              string
@@ -92,9 +92,10 @@ func TestGetPackageVersionsViewSplitsErrorFlags(t *testing.T) {
 			expectedChangelog: true,
 		},
 		{
-			name:         "a referenced version's own changelog is unreliable",
-			kind:         entity.KIND_DASHBOARD,
-			errorSummary: entity.VersionErrorSummaryEntity{ReferencedVersionChangelogHasErrors: true},
+			name:            "a referenced version's own changelog is unreliable",
+			kind:            entity.KIND_DASHBOARD,
+			errorSummary:    entity.VersionErrorSummaryEntity{ReferencedVersionChangelogHasErrors: true},
+			expectedContent: true,
 		},
 	}
 
@@ -382,8 +383,8 @@ func TestCheckSourceVersionCanBeCopiedForPackages(t *testing.T) {
 	}
 }
 
-// A dashboard that references an unsound version is refused at publish time whatever its status, so the copy is
-// refused the same way, naming the reference rather than the dashboard.
+// A release dashboard that references an unsound version is refused at publish time, so a release copy is refused
+// the same way, naming the reference rather than the dashboard. A draft copy is allowed.
 func TestCheckSourceVersionCanBeCopiedForDashboards(t *testing.T) {
 	erroredRef := entity.PublishedReferenceEntity{RefPackageId: copyRefPackageId, RefVersion: copyRefVersion, RefRevision: 1}
 	excludedErroredRef := erroredRef
@@ -406,6 +407,12 @@ func TestCheckSourceVersionCanBeCopiedForDashboards(t *testing.T) {
 			refs:         []entity.PublishedReferenceEntity{erroredRef},
 			refSummaries: map[string]entity.VersionErrorSummaryEntity{copyRefPackageId: {HasErrors: true}},
 			targetStatus: string(view.Draft),
+		},
+		{
+			name:         "reference with errored documents copied as release",
+			refs:         []entity.PublishedReferenceEntity{erroredRef},
+			refSummaries: map[string]entity.VersionErrorSummaryEntity{copyRefPackageId: {HasErrors: true}},
+			targetStatus: string(view.Release),
 			wantRefusal:  true,
 		},
 		{
