@@ -304,14 +304,7 @@ paths:
   "/api/v3/packages/{packageId}/publish/{publishId}/status":
     parameters:
       - $ref: "#/components/parameters/packageId"
-      - name: publishId
-        description: Publish Id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          example: 9c8e9045-dd9c-4946-b9e4-e05e3f41c4cc
+      - $ref: "#/components/parameters/publishId"
     post:
       x-nc-api-audience: noBWC
       tags:
@@ -324,8 +317,13 @@ paths:
         description: |
           Store build result, depending on the process status.
           * **running** - build in progress, data object is not transmitted.
-          * **error** - build process will send a the list of errors.
+          * **error** - build process will send a the list of errors, and, in the `notifications` part, the messages it had raised before it failed.
           * **complete** - build process will send a result in a ZIP archive.
+
+          The `notifications` part is sent with **error** status only and is optional: a build that failed
+          outside the builder, e.g. on an unreachable registry, has nothing to report. A successful build
+          carries its messages in notifications.json and comparison-notifications.json inside the archive
+          instead, so the part is never sent with **complete**. See buildErrors schema.
 
           ZIP archive with build result can contain folders with sources, builded documents, JSON operation files, and contract files. In addition, several config files are provided. The structure of these files is described in buildResult schema.
           There are following build types:
@@ -971,6 +969,15 @@ components:
       schema:
         type: string
         example: QS.CloudQSS.CPQ.Q-TMF
+    publishId:
+      name: publishId
+      description: Publish Id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+        example: 9c8e9045-dd9c-4946-b9e4-e05e3f41c4cc
     builderId:
       name: builderId
       in: path
@@ -2097,6 +2104,49 @@ components:
         errors:
           type: string
           description: Build error message.
+        notifications:
+          $ref: "#/components/schemas/FailedBuildNotifications"
+    FailedBuildNotifications:
+      description: |
+        Messages the build had raised before it failed, sent as a separate part of the status request.
+
+        A failed build publishes no version and writes no archive, so notifications.json and
+        comparison-notifications.json are never produced for it and its messages would otherwise be lost.
+        The backend stores these against the build itself, and
+        `GET /api/v2/packages/{packageId}/versions/{version}/notifications` does not return them - the version
+        they were raised for does not exist.
+
+        The two streams keep the meaning they have in the archive. `notifications` holds the messages raised
+        while building the version's own documents, as notifications.json does; `comparisonNotifications`
+        holds the messages raised while calculating the changelog against the previous version, as
+        comparison-notifications.json does. A build that failed before it reached a phase carries nothing for
+        that phase: a build that failed while parsing documents sends an empty `comparisonNotifications`, and a
+        changelog build sends an empty `notifications`. The backend stores both lists as one:
+        `GET /api/v2/packages/{packageId}/publish/{publishId}/notifications` returns them together, and the
+        category of a message tells which phase raised it.
+
+        The changelog messages are not grouped by version pair, unlike comparison-notifications.json. The
+        backend stores the part only for a package of kind `package`, and a package build calculates at most
+        one comparison: its version against the previous version. A package version cannot have references,
+        so there are no reference pairs to tell apart.
+
+        A dashboard build is not covered. The part may still be sent for one, and the backend accepts the
+        request and stores nothing from it.
+
+        Severity is the integer of the builder contract here, as it is in the archive. The API returns the
+        string form.
+      type: object
+      properties:
+        notifications:
+          description: Messages raised while building the version's own documents and operations.
+          type: array
+          items:
+            $ref: "#/components/schemas/BuildResultNotificationMessage"
+        comparisonNotifications:
+          description: Messages raised while calculating the changelog against the previous version.
+          type: array
+          items:
+            $ref: "#/components/schemas/BuildResultNotificationMessage"
     ChangeSeverity:
       description: Severity of the particular change.
       type: string
