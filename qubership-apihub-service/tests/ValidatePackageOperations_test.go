@@ -60,14 +60,27 @@ func TestValidateObjectErrors(t *testing.T) {
 		}
 	}
 
-	var builderNotificationsFile view.BuilderNotificationsFile
+	var buildNotificationsFile view.BuildNotificationsFile
 	var builderNotification = make([]view.BuilderNotification, 2)
-	builderNotificationsFile.Notifications = builderNotification
+	buildNotificationsFile.Notifications = builderNotification
 	//no required params. empty error expected
-	builderNotificationsFileExpectedError := ""
-	if err := utils.ValidateObject(builderNotificationsFile); err != nil {
-		if builderNotificationsFileExpectedError != err.Error() {
+	buildNotificationsFileExpectedError := ""
+	if err := utils.ValidateObject(buildNotificationsFile); err != nil {
+		if buildNotificationsFileExpectedError != err.Error() {
 			t.Fatalf("Builder Notifications File Validation errors test is failed. Actual error: %v", err.Error())
+		}
+	}
+
+	var comparisonNotificationsFile view.ComparisonNotificationsFile
+	var comparisonNotifications = make([]view.ComparisonNotifications, 2)
+	comparisonNotifications[0].Notifications = builderNotification
+	comparisonNotifications[1].Notifications = builderNotification
+	comparisonNotificationsFile.Comparisons = comparisonNotifications
+	//no required params. empty error expected
+	comparisonNotificationsFileExpectedError := ""
+	if err := utils.ValidateObject(comparisonNotificationsFile); err != nil {
+		if comparisonNotificationsFileExpectedError != err.Error() {
+			t.Fatalf("Comparison Notifications File Validation errors test is failed. Actual error: %v", err.Error())
 		}
 	}
 

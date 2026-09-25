@@ -255,7 +255,7 @@ func main() {
 	packageVersionEnrichmentService := service.NewPackageVersionEnrichmentService(publishedRepository)
 	activityTrackingService := service.NewActivityTrackingService(activityTrackingRepository, publishedRepository, userService)
 	operationService := service.NewOperationService(operationRepository, publishedRepository, packageVersionEnrichmentService)
-	roleService := service.NewRoleService(roleRepository, userService, activityTrackingService, publishedRepository)
+	roleService := service.NewRoleService(roleRepository, userService, activityTrackingService, publishedRepository, apihubApiKeyRepository)
 	ptHandler := service.NewPackageTransitionHandler(transitionRepository)
 	publishNotificationService := service.NewPublishNotificationService(olricProvider)
 	publishedService := service.NewPublishedService(publishedRepository, buildRepository, favoritesRepository, operationRepository, ddlContractRepository, activityTrackingService, monitoringService, minioStorageService, systemInfoService, publishNotificationService, roleService)
@@ -488,6 +488,7 @@ func main() {
 	r.HandleFunc("/api/v2/user", authenticator.SecureUser(userController.GetExtendedUser)).Methods(http.MethodGet)
 
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/changes/summary", authenticator.Secure(comparisonController.GetComparisonChangesSummary)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/changes/notifications", authenticator.Secure(versionController.GetComparisonNotifications)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/operations", authenticator.Secure(operationController.GetOperationList)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/operations/{operationId}", authenticator.Secure(operationController.GetOperation)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/{apiType}/operations/{operationId}/changes", authenticator.Secure(operationController.GetOperationChanges)).Methods(http.MethodGet)
@@ -525,6 +526,7 @@ func main() {
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/sourceData", authenticator.Secure(publishedController.GetPublishedVersionSourceDataConfig)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/config", authenticator.Secure(publishedController.GetPublishedVersionBuildConfig)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/copy", authenticator.Secure(versionController.CopyVersion)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v2/packages/{packageId}/versions/{version}/notifications", authenticator.Secure(versionController.GetVersionNotifications)).Methods(http.MethodGet)
 
 	r.HandleFunc("/api/v4/packages/{packageId}/activity", authenticator.Secure(activityTrackingController.GetActivityHistoryForPackage)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v4/activity", authenticator.Secure(activityTrackingController.GetActivityHistory)).Methods(http.MethodGet)
