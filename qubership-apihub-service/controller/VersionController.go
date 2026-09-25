@@ -206,29 +206,12 @@ func (v versionControllerImpl) GetVersionNotifications(w http.ResponseWriter, r 
 		})
 		return
 	}
-	severities, customError := getRepeatedListFromParam(r, "severity")
+	filter, customError := getNotificationsFilter(r)
 	if customError != nil {
 		v.responder.RespondWithCustomError(w, customError)
 		return
 	}
-	for _, severity := range severities {
-		if !view.ValidNotificationSeverity(severity) {
-			v.responder.RespondWithCustomError(w, &exception.CustomError{
-				Status:  http.StatusBadRequest,
-				Code:    exception.InvalidParameterValue,
-				Message: exception.InvalidParameterValueMsg,
-				Params:  map[string]interface{}{"param": "severity", "value": severity},
-			})
-			return
-		}
-	}
-	categories, customError := getRepeatedListFromParam(r, "category")
-	if customError != nil {
-		v.responder.RespondWithCustomError(w, customError)
-		return
-	}
-	filter, customError := getNotificationsFilter(r, severities, categories)
-	if customError != nil {
+	if customError = applyNotificationsPaging(r, filter); customError != nil {
 		v.responder.RespondWithCustomError(w, customError)
 		return
 	}
@@ -290,29 +273,12 @@ func (v versionControllerImpl) GetComparisonNotifications(w http.ResponseWriter,
 		})
 		return
 	}
-	severities, customError := getRepeatedListFromParam(r, "severity")
+	filter, customError := getNotificationsFilter(r)
 	if customError != nil {
 		v.responder.RespondWithCustomError(w, customError)
 		return
 	}
-	for _, severity := range severities {
-		if !view.ValidNotificationSeverity(severity) {
-			v.responder.RespondWithCustomError(w, &exception.CustomError{
-				Status:  http.StatusBadRequest,
-				Code:    exception.InvalidParameterValue,
-				Message: exception.InvalidParameterValueMsg,
-				Params:  map[string]interface{}{"param": "severity", "value": severity},
-			})
-			return
-		}
-	}
-	categories, customError := getRepeatedListFromParam(r, "category")
-	if customError != nil {
-		v.responder.RespondWithCustomError(w, customError)
-		return
-	}
-	filter, customError := getNotificationsFilter(r, severities, categories)
-	if customError != nil {
+	if customError = applyNotificationsPaging(r, filter); customError != nil {
 		v.responder.RespondWithCustomError(w, customError)
 		return
 	}
@@ -325,16 +291,16 @@ func (v versionControllerImpl) GetComparisonNotifications(w http.ResponseWriter,
 	v.responder.RespondWithJson(w, http.StatusOK, notifications)
 }
 
-func getNotificationsFilter(r *http.Request, severities []string, categories []string) (*view.NotificationsFilter, *exception.CustomError) {
+func applyNotificationsPaging(r *http.Request, filter *view.NotificationsFilter) *exception.CustomError {
 	limit, customError := getLimitQueryParam(r)
 	if customError != nil {
-		return nil, customError
+		return customError
 	}
 	page := 0
 	if r.URL.Query().Get("page") != "" {
 		parsedPage, err := strconv.Atoi(r.URL.Query().Get("page"))
 		if err != nil {
-			return nil, &exception.CustomError{
+			return &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.IncorrectParamType,
 				Message: exception.IncorrectParamTypeMsg,
@@ -343,7 +309,7 @@ func getNotificationsFilter(r *http.Request, severities []string, categories []s
 			}
 		}
 		if parsedPage < 0 {
-			return nil, &exception.CustomError{
+			return &exception.CustomError{
 				Status:  http.StatusBadRequest,
 				Code:    exception.InvalidParameterValue,
 				Message: exception.InvalidParameterValueMsg,
@@ -352,13 +318,9 @@ func getNotificationsFilter(r *http.Request, severities []string, categories []s
 		}
 		page = parsedPage
 	}
-	return &view.NotificationsFilter{
-		DocumentId: r.URL.Query().Get("documentId"),
-		Severities: severities,
-		Categories: categories,
-		Limit:      limit,
-		Offset:     limit * page,
-	}, nil
+	filter.Limit = limit
+	filter.Offset = limit * page
+	return nil
 }
 
 func (v versionControllerImpl) GetVersionDocuments(w http.ResponseWriter, r *http.Request) {
