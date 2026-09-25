@@ -223,11 +223,11 @@ type VersionErrorSummaryEntity struct {
 }
 
 func (v VersionErrorSummaryEntity) HasAnyErrors() bool {
-	return v.ContentHasErrors() || v.ChangelogHasAnyErrors() || v.ReferencedVersionChangelogHasErrors
+	return v.VersionHasErrors() || v.ChangelogHasAnyErrors()
 }
 
-func (v VersionErrorSummaryEntity) ContentHasErrors() bool {
-	return v.HasErrors || v.ReferencedVersionHasErrors
+func (v VersionErrorSummaryEntity) VersionHasErrors() bool {
+	return v.HasErrors || v.ReferencedVersionHasErrors || v.ReferencedVersionChangelogHasErrors
 }
 
 func (v VersionErrorSummaryEntity) ChangelogHasAnyErrors() bool {

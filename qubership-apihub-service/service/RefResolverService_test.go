@@ -31,7 +31,7 @@ func TestCalculateBuildConfigRefsAllowsExcludedReferenceWithErrors(t *testing.T)
 	repo := referencesRepo("QS.SVC2")
 	resolver := refResolverServiceImpl{publishedRepo: repo}
 
-	refs, err := resolver.CalculateBuildConfigRefs(context.Background(), dashboardRefs("QS.SVC2"), false, false)
+	refs, err := resolver.CalculateBuildConfigRefs(context.Background(), dashboardRefs("QS.SVC2"), string(view.Release), false, false)
 	if err != nil {
 		t.Fatalf("expected the build config to be accepted, got %v", err)
 	}
@@ -53,7 +53,7 @@ func TestCalculateBuildConfigRefsAllowsReferenceExcludedByConflictResolution(t *
 		{RefId: "QS.SVC2", Version: "2.0"},
 	}
 
-	resolved, err := resolver.CalculateBuildConfigRefs(context.Background(), refs, false, true)
+	resolved, err := resolver.CalculateBuildConfigRefs(context.Background(), refs, string(view.Release), false, true)
 	if err != nil {
 		t.Fatalf("expected the build config to be accepted, got %v", err)
 	}
@@ -68,10 +68,10 @@ func TestCalculateBuildConfigRefsAllowsReferenceExcludedByConflictResolution(t *
 	}
 }
 
-func TestCalculateBuildConfigRefsRefusesIncludedReferenceWithErrors(t *testing.T) {
+func TestCalculateBuildConfigRefsRefusesIncludedReferenceWithErrorsForRelease(t *testing.T) {
 	resolver := refResolverServiceImpl{publishedRepo: referencesRepo("QS.SVC2")}
 
-	_, err := resolver.CalculateBuildConfigRefs(context.Background(), dashboardRefs(), false, false)
+	_, err := resolver.CalculateBuildConfigRefs(context.Background(), dashboardRefs(), string(view.Release), false, false)
 
 	customErr, ok := err.(*exception.CustomError)
 	if !ok {
@@ -85,5 +85,22 @@ func TestCalculateBuildConfigRefsRefusesIncludedReferenceWithErrors(t *testing.T
 	}
 	if customErr.Params["packageId"] != "QS.SVC2" || customErr.Params["version"] != "1.0@1" {
 		t.Fatalf("expected the resolved reference to be named in the params, got %v", customErr.Params)
+	}
+}
+
+// A draft dashboard may reference an unsound version, so the references are not even judged.
+func TestCalculateBuildConfigRefsAllowsIncludedReferenceWithErrorsForDraft(t *testing.T) {
+	repo := referencesRepo("QS.SVC2")
+	resolver := refResolverServiceImpl{publishedRepo: repo}
+
+	refs, err := resolver.CalculateBuildConfigRefs(context.Background(), dashboardRefs(), string(view.Draft), false, false)
+	if err != nil {
+		t.Fatalf("expected the build config to be accepted, got %v", err)
+	}
+	if len(refs) != 2 {
+		t.Fatalf("expected both references to be kept, got %d", len(refs))
+	}
+	if len(repo.errorSummaryCalls) != 0 {
+		t.Fatalf("expected no reference to be checked for a draft, got %v", repo.errorSummaryCalls)
 	}
 }

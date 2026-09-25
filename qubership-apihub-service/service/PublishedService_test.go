@@ -356,8 +356,8 @@ func TestVersionHasAnyErrors(t *testing.T) {
 			expected:     true,
 		},
 		{
-			// This one reaches no public flag: it describes the reference, not the dashboard. The refusals
-			// are the only thing that sees it, which is what stops the reference being added.
+			// A draft dashboard may hold such a reference, so the fact reaches the dashboard's hasErrors flag
+			// and blocks its promotion to release.
 			name:         "dashboard referencing a version whose own changelog is unreliable",
 			errorSummary: &entity.VersionErrorSummaryEntity{ReferencedVersionChangelogHasErrors: true},
 			expected:     true,
@@ -390,8 +390,8 @@ func TestVersionHasAnyErrors(t *testing.T) {
 	}
 }
 
-// The two public flags must stay apart: neither may report a fact that belongs to the other, and a
-// referenced version's own changelog must reach neither of them.
+// The two public flags must stay apart: neither may report a fact that belongs to the other. An unsound
+// reference, whichever of its flags is set, reaches the dashboard's hasErrors.
 func TestVersionErrorSummaryFlagsAreSplit(t *testing.T) {
 	tests := []struct {
 		name                   string
@@ -425,17 +425,18 @@ func TestVersionErrorSummaryFlagsAreSplit(t *testing.T) {
 			expectedVersionUnsound: true,
 		},
 		{
-			// The reference is unusable, but neither of this version's flags describes it.
+			// The reference is unsound, so the dashboard's hasErrors reports it.
 			name:                   "a referenced version's own changelog is unreliable",
 			summary:                entity.VersionErrorSummaryEntity{ReferencedVersionChangelogHasErrors: true},
+			expectedContent:        true,
 			expectedVersionUnsound: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.summary.ContentHasErrors(); got != tt.expectedContent {
-				t.Errorf("ContentHasErrors() = %v, want %v", got, tt.expectedContent)
+			if got := tt.summary.VersionHasErrors(); got != tt.expectedContent {
+				t.Errorf("VersionHasErrors() = %v, want %v", got, tt.expectedContent)
 			}
 			if got := tt.summary.ChangelogHasAnyErrors(); got != tt.expectedChangelog {
 				t.Errorf("ChangelogHasAnyErrors() = %v, want %v", got, tt.expectedChangelog)
@@ -794,7 +795,13 @@ func referencesRepo(erroredVersions ...string) *referencesRepoStub {
 	}
 }
 
-var dashboardInfo = view.PackageInfoFile{PackageId: "QS.DASH", Version: "2026.1", Revision: 1}
+var dashboardInfo = view.PackageInfoFile{PackageId: "QS.DASH", Version: "2026.1", Revision: 1, Status: string(view.Release)}
+
+func draftDashboardInfo() view.PackageInfoFile {
+	info := dashboardInfo
+	info.Status = string(view.Draft)
+	return info
+}
 
 func dashboardRefs(excludedPackageIds ...string) []view.BCRef {
 	excluded := make(map[string]struct{}, len(excludedPackageIds))
@@ -809,7 +816,7 @@ func dashboardRefs(excludedPackageIds ...string) []view.BCRef {
 	return refs
 }
 
-func TestMakePublishedReferencesEntitiesRefusesReferenceWithErrors(t *testing.T) {
+func TestMakePublishedReferencesEntitiesRefusesReferenceWithErrorsForRelease(t *testing.T) {
 	repo := referencesRepo("QS.SVC2")
 	service := publishedServiceImpl{publishedRepo: repo}
 
@@ -827,6 +834,23 @@ func TestMakePublishedReferencesEntitiesRefusesReferenceWithErrors(t *testing.T)
 	}
 	if customErr.Params["packageId"] != "QS.SVC2" || customErr.Params["version"] != "1.0" {
 		t.Fatalf("expected the reference to be named in the params, got %v", customErr.Params)
+	}
+}
+
+// A draft dashboard may reference an unsound version, so the references are not even judged.
+func TestMakePublishedReferencesEntitiesAllowsReferenceWithErrorsForDraft(t *testing.T) {
+	repo := referencesRepo("QS.SVC2")
+	service := publishedServiceImpl{publishedRepo: repo}
+
+	refEntities, err := service.makePublishedReferencesEntities(context.Background(), draftDashboardInfo(), dashboardRefs())
+	if err != nil {
+		t.Fatalf("expected the publication to be allowed, got %v", err)
+	}
+	if len(refEntities) != 2 {
+		t.Fatalf("expected both references to be stored, got %d", len(refEntities))
+	}
+	if len(repo.errorSummaryCalls) != 0 {
+		t.Fatalf("expected no reference to be checked for a draft, got %v", repo.errorSummaryCalls)
 	}
 }
 

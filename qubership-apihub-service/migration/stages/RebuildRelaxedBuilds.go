@@ -5,6 +5,7 @@ import (
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/entity"
 	mView "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/migration/view"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 	"github.com/go-pg/pg/v10"
 	log "github.com/sirupsen/logrus"
 )
@@ -107,8 +108,8 @@ func makeRelaxedVersionsQuery(packageIds []string, versionsIn []string, migratio
 		  		and (coalesce((prev_ver.metadata ->> 'has_errors')::boolean, false)
 		  			or coalesce((prev_ver_changelog.metadata ->> 'has_errors')::boolean, false))
 		  )
-		  /* only a dashboard carries references, and one that references a version with errors cannot be published */
-		  and not (pkg.kind = '%s' and exists (
+		  /* only a dashboard carries references, and a release one that references a version with errors cannot be published */
+		  and not (pkg.kind = '%s' and pv.status = '%s' and exists (
 		  	select 1 from published_version_reference ref_src
 		  	inner join published_version ref_ver
 		  		on ref_ver.package_id = ref_src.reference_id
@@ -142,7 +143,8 @@ func makeRelaxedVersionsQuery(packageIds []string, versionsIn []string, migratio
 		whereVersionIn,
 		migrationId,
 		string(mView.MigrationStageRebuildRelaxedBuilds),
-		entity.KIND_DASHBOARD)
+		entity.KIND_DASHBOARD,
+		string(view.Release))
 	return query, params
 }
 

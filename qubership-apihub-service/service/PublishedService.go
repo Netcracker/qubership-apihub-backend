@@ -1007,7 +1007,8 @@ func (p publishedServiceImpl) makePublishedReferencesEntities(ctx context.Contex
 			}
 		}
 		// An excluded reference is not part of the dashboard's content, so it cannot make the dashboard unsound.
-		if !ref.Excluded {
+		// A draft dashboard may reference an unsound version; only a release dashboard must be sound.
+		if !ref.Excluded && packageInfo.Status == string(view.Release) {
 			refHasErrors, err := VersionHasAnyErrors(ctx, p.publishedRepo, refVersion.PackageId, refVersion.Version, refVersion.Revision)
 			if err != nil {
 				return nil, err
