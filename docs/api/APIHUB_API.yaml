@@ -2475,14 +2475,7 @@ paths:
   "/api/v2/packages/{packageId}/publish/{publishId}/status":
     parameters:
       - $ref: "#/components/parameters/packageId"
-      - name: publishId
-        description: Publish Id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          example: 9c8e9045-dd9c-4946-b9e4-e05e3f41c4cc
+      - $ref: "#/components/parameters/publishId"
     get:
       tags:
         - Publish
@@ -2498,6 +2491,11 @@ paths:
               schema:
                 type: object
                 properties:
+                  publishId:
+                    description: Publish process id, echoing the one in the path.
+                    type: string
+                    format: uuid
+                    example: 9c8e9045-dd9c-4946-b9e4-e05e3f41c4cc
                   status:
                     description: Publish process status.
                     type: string
@@ -2509,6 +2507,12 @@ paths:
                   message:
                     description: The message for **error** status.
                     type: string
+                  hasErrors:
+                    $ref: "#/components/schemas/PublishHasErrors"
+                  changelogHasErrors:
+                    $ref: "#/components/schemas/ChangelogHasErrors"
+                  hasNotifications:
+                    $ref: "#/components/schemas/PublishHasNotifications"
         "301":
           description: Moved Permanently
           headers:
@@ -2534,6 +2538,222 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
               examples: {}
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+                RequestTimeout:
+                  $ref: "#/components/examples/RequestTimeout"
+  "/api/v2/packages/{packageId}/publish/{publishId}/notifications":
+    parameters:
+      - $ref: "#/components/parameters/packageId"
+      - $ref: "#/components/parameters/publishId"
+    get:
+      tags:
+        - Publish
+      summary: Get publish process notifications
+      description: |
+        Get the list of messages produced by api-processor while running a publish process that failed.
+
+        A failed publish creates no version, so its messages have no version to hang on and
+        `GET /api/v2/packages/{packageId}/versions/{version}/notifications` cannot return them. This endpoint
+        is where they are read, addressed by the publish id the publish request returned. The publish status
+        carries hasNotifications, so a client knows whether there is anything here without asking.
+
+        Only a failed publish has messages. A process that is running, one that completed, and one that failed
+        without raising any message return an empty list. A version published successfully, in draft status
+        and with errors, has its messages on the version endpoints instead.
+
+        The list holds the messages about the version's own documents and the messages about its changelog
+        against the previous version the publish declared. The category tells them apart: a changelog message
+        has a category such as risky-origins or version-not-resolved, and its documentId, when present, can be
+        the slug of a document of the previous version.
+
+        Messages are sorted by severity, most severe first (error, warning, information, hint), then by
+        category, then by message text. Messages that are equal on all three, such as one problem reported for
+        several documents, are sorted by documentId, with messages that have none first.
+
+        Only publish processes of packages are covered. A failed dashboard publish stores no messages: this
+        endpoint returns an empty list for it, and its hasNotifications stays false. The reason it failed is
+        in the message of its publish status.
+
+        Messages are kept for 30 days after the publish process failed, the retention of the process's sources,
+        and are then removed. A republish is a new publish process with its own id and its own messages; it
+        does not replace these.
+
+        Requires read permission on the package.
+      operationId: getPackagesIdPublishIdNotifications
+      parameters:
+        - $ref: "#/components/parameters/notificationDocumentId"
+        - $ref: "#/components/parameters/notificationEmptyDocumentId"
+        - $ref: "#/components/parameters/notificationSeverity"
+        - $ref: "#/components/parameters/notificationCategory"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/page"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notifications:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/VersionNotification"
+              examples: {}
+        "301":
+          description: Moved Permanently
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                IncorrectInputParams:
+                  $ref: "#/components/examples/IncorrectInputParameters"
+                OverlappingDocumentIdParameters:
+                  $ref: "#/components/examples/OverlappingDocumentIdParameters"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - the user has no read permission on the package
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                PackageNotFound:
+                  $ref: "#/components/examples/PackageNotFound"
+                PublishNotFound:
+                  $ref: "#/components/examples/PublishNotFound"
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                InternalServerError:
+                  $ref: "#/components/examples/InternalServerError"
+                RequestTimeout:
+                  $ref: "#/components/examples/RequestTimeout"
+  "/api/v2/packages/{packageId}/publish/{publishId}/export/notifications":
+    parameters:
+      - $ref: "#/components/parameters/packageId"
+      - $ref: "#/components/parameters/publishId"
+    get:
+      tags:
+        - Publish
+      summary: Export publish process notifications to xlsx file
+      description: |
+        Export the messages produced by api-processor for a publish process that failed to an xlsx file. The
+        file holds the messages that
+        `GET /api/v2/packages/{packageId}/publish/{publishId}/notifications` returns.
+
+        The sheet is the one the version notifications export produces, with four columns: Severity, Category,
+        Message, Document ID. Rows are in the order the JSON endpoint returns: by severity, most severe first,
+        then by category, then by message text, then by Document ID.
+
+        The file holds every message that matches the filters, so the endpoint takes no paging parameters. A
+        publish process with no messages returns a file that holds only the header row. That is what a
+        process that is running, one that completed, one that failed without raising any message, and a
+        dashboard publish all return, and what a failed one returns once its messages are removed 30 days
+        after it failed.
+
+        Requires read permission on the package.
+      operationId: getPackagesIdPublishIdNotificationsExport
+      parameters:
+        - $ref: "#/components/parameters/notificationDocumentId"
+        - $ref: "#/components/parameters/notificationEmptyDocumentId"
+        - $ref: "#/components/parameters/notificationSeverity"
+        - $ref: "#/components/parameters/notificationCategory"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/xlsx:
+              schema:
+                type: string
+                format: binary
+                description: xlsx file to download
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                description: xlsx file name
+                example: attachment; filename="Notifications_9c8e9045-dd9c-4946-b9e4-e05e3f41c4cc.xlsx"
+        "301":
+          description: Moved Permanently
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Current ednpoint with new packageId of moved package
+            X-New-Package-Id:
+              schema:
+                type: string
+              description: New packageId of moved package
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                IncorrectInputParams:
+                  $ref: "#/components/examples/IncorrectInputParameters"
+                OverlappingDocumentIdParameters:
+                  $ref: "#/components/examples/OverlappingDocumentIdParameters"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - the user has no read permission on the package
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                PackageNotFound:
+                  $ref: "#/components/examples/PackageNotFound"
+                PublishNotFound:
+                  $ref: "#/components/examples/PublishNotFound"
         "500":
           description: Internal Server Error
           content:
@@ -2681,14 +2901,7 @@ paths:
   "/api/v1/packages/{packageId}/publish/{publishId}/withOperationsGroup/status":
     parameters:
       - $ref: '#/components/parameters/packageId'
-      - name: publishId
-        description: Publish Id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          example: 9c8e9045-dd9c-4946-b9e4-e05e3f41c4cc
+      - $ref: "#/components/parameters/publishId"
     get:
       tags:
         - Publish
@@ -2760,14 +2973,7 @@ paths:
   "/api/v1/packages/{packageId}/publish/{publishId}/withOperationsGroup/status/report":
     parameters:
       - $ref: '#/components/parameters/packageId'
-      - name: publishId
-        description: Publish Id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          example: 9c8e9045-dd9c-4946-b9e4-e05e3f41c4cc
+      - $ref: "#/components/parameters/publishId"
     get:
       tags:
         - Publish
@@ -9382,14 +9588,7 @@ paths:
         description: Name of the operation group
         schema:
           type: string
-      - name: publishId
-        description: Publish Id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          example: 9c8e9045-dd9c-4946-b9e4-e05e3f41c4cc
+      - $ref: "#/components/parameters/publishId"
     get:
       tags:
         - Operation groups
@@ -10562,11 +10761,27 @@ paths:
                   type: object
                   properties:
                     publishId:
+                      description: Publish process id, identifying which of the requested processes this entry describes.
                       type: string
+                      format: uuid
+                      example: 9c8e9045-dd9c-4946-b9e4-e05e3f41c4cc
                     status:
+                      description: Publish process status.
                       type: string
+                      enum:
+                        - running
+                        - error
+                        - complete
+                        - none
                     message:
+                      description: The message for **error** status.
                       type: string
+                    hasErrors:
+                      $ref: "#/components/schemas/PublishHasErrors"
+                    changelogHasErrors:
+                      $ref: "#/components/schemas/ChangelogHasErrors"
+                    hasNotifications:
+                      $ref: "#/components/schemas/PublishHasNotifications"
         "400":
           description: Bad request
           content:
@@ -10758,35 +10973,8 @@ paths:
       parameters:
         - $ref: "#/components/parameters/notificationDocumentId"
         - $ref: "#/components/parameters/notificationEmptyDocumentId"
-        - name: severity
-          in: query
-          description: |
-            Filter by severity.\
-            Multiple severities separated by comma can be specified.
-          schema:
-            type: array
-            items:
-              type: string
-              enum:
-                - error
-                - warning
-                - information
-                - hint
-          style: form
-          explode: false
-          example: ["error", "warning"]
-        - name: category
-          in: query
-          description: |
-            Filter by message category.\
-            Multiple categories separated by comma can be specified.
-          schema:
-            type: array
-            items:
-              $ref: "#/components/schemas/NotificationCategoryEnum"
-          style: form
-          explode: false
-          example: ["build-document", "parse-file"]
+        - $ref: "#/components/parameters/notificationSeverity"
+        - $ref: "#/components/parameters/notificationCategory"
         - $ref: "#/components/parameters/limit"
         - $ref: "#/components/parameters/page"
       responses:
@@ -10886,35 +11074,8 @@ paths:
         - $ref: "#/components/parameters/previousVersionPackageId"
         - $ref: "#/components/parameters/notificationDocumentId"
         - $ref: "#/components/parameters/notificationEmptyDocumentId"
-        - name: severity
-          in: query
-          description: |
-            Filter by severity.\
-            Multiple severities separated by comma can be specified.
-          schema:
-            type: array
-            items:
-              type: string
-              enum:
-                - error
-                - warning
-                - information
-                - hint
-          style: form
-          explode: false
-          example: ["error", "warning"]
-        - name: category
-          in: query
-          description: |
-            Filter by message category.\
-            Multiple categories separated by comma can be specified.
-          schema:
-            type: array
-            items:
-              $ref: "#/components/schemas/NotificationCategoryEnum"
-          style: form
-          explode: false
-          example: ["version-not-resolved", "comparison-serialization"]
+        - $ref: "#/components/parameters/notificationSeverity"
+        - $ref: "#/components/parameters/notificationCategory"
         - $ref: "#/components/parameters/limit"
         - $ref: "#/components/parameters/page"
       responses:
@@ -11025,35 +11186,8 @@ paths:
             default: true
         - $ref: "#/components/parameters/notificationDocumentId"
         - $ref: "#/components/parameters/notificationEmptyDocumentId"
-        - name: severity
-          in: query
-          description: |
-            Filter by severity.\
-            Multiple severities separated by comma can be specified.
-          schema:
-            type: array
-            items:
-              type: string
-              enum:
-                - error
-                - warning
-                - information
-                - hint
-          style: form
-          explode: false
-          example: ["error", "warning"]
-        - name: category
-          in: query
-          description: |
-            Filter by message category.\
-            Multiple categories separated by comma can be specified.
-          schema:
-            type: array
-            items:
-              $ref: "#/components/schemas/NotificationCategoryEnum"
-          style: form
-          explode: false
-          example: ["build-document", "version-not-resolved"]
+        - $ref: "#/components/parameters/notificationSeverity"
+        - $ref: "#/components/parameters/notificationCategory"
       responses:
         "200":
           description: Success
@@ -11886,6 +12020,15 @@ components:
       schema:
         type: string
         example: QS.CloudQSS.CPQ.Q-TMF
+    publishId:
+      name: publishId
+      description: Publish Id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+        example: 9c8e9045-dd9c-4946-b9e4-e05e3f41c4cc
     version:
       name: version
       in: path
@@ -11971,6 +12114,37 @@ components:
       schema:
         type: boolean
         default: false
+    notificationSeverity:
+      name: severity
+      in: query
+      description: |
+        Filter by severity.\
+        Multiple severities separated by comma can be specified.
+      schema:
+        type: array
+        items:
+          type: string
+          enum:
+            - error
+            - warning
+            - information
+            - hint
+      style: form
+      explode: false
+      example: ["error", "warning"]
+    notificationCategory:
+      name: category
+      in: query
+      description: |
+        Filter by message category.\
+        Multiple categories separated by comma can be specified.
+      schema:
+        type: array
+        items:
+          $ref: "#/components/schemas/NotificationCategoryEnum"
+      style: form
+      explode: false
+      example: ["build-document", "version-not-resolved"]
   schemas:
     SystemInfo:
       description: Information about the APIHUB product
@@ -12257,7 +12431,9 @@ components:
       description: |
         Stable code identifying which check produced the message. There is one value per diagnostic, so the
         category is precise enough to filter on without matching message text. It describes the kind of
-        problem, not the build phase - the phase is defined by the endpoint the message is returned by.
+        problem, not the build phase - the phase is defined by the endpoint the message is returned by. The
+        publish notifications endpoints return both phases in one list. There, a category is raised in one phase
+        only, so it identifies the phase as well.
 
         Values share a domain prefix, so a coarse grouping can be derived without a second field:
           * **ref-*** - reference resolution (`ref-has-siblings`, `ref-not-allowed`, `ref-not-found`,
@@ -12347,6 +12523,30 @@ components:
             comparison could not be resolved.
           type: string
           example: "events-yaml"
+    PublishHasErrors:
+      description: |
+        Flag showing that at least one document of the version the process published has a critical problem
+        detected during the build. Such a version can only be published in `draft` status.
+
+        Set for a publish process that completed. A process that is running or that failed published no
+        version, so the flag is false - for a failed one, hasNotifications and
+        `GET /api/v2/packages/{packageId}/publish/{publishId}/notifications` are where its problems are.
+
+        Use `GET /api/v2/packages/{packageId}/versions/{version}/notifications` to get the details.
+      type: boolean
+      default: false
+    PublishHasNotifications:
+      description: |
+        Flag showing that the publish process stored messages that
+        `GET /api/v2/packages/{packageId}/publish/{publishId}/notifications` returns.
+
+        Only a failed publish of a package stores them. The flag is false for a process that is running, for
+        one that completed, for one that failed without raising any message, e.g. because the registry was
+        unreachable, and for a dashboard publish, whose messages are not stored. It turns false when the
+        messages are removed, 30 days after the process failed. A client polling the status uses it to decide
+        whether to offer the messages, rather than requesting them to find out.
+      type: boolean
+      default: false
     VersionContractsSummary:
       description: |
         Summary of contract entities published in a package version, keyed by contract type.
@@ -15014,6 +15214,12 @@ components:
         status: 404
         code: "APIHUB-3020"
         message: "package with packageId = $packageId not found"
+    PublishNotFound:
+      description: Publish process not found by ID. Response for the 404 error
+      value:
+        status: 404
+        code: "2611"
+        message: "Build with 9c8e9045-dd9c-4946-b9e4-e05e3f41c4cc not found"
     VersionNotFound:
       description: Version not found by number. Response for the 404 error
       value:
