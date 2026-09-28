@@ -46,6 +46,7 @@ const DeprecatedChangesColumnName = "Deprecated"
 const NonBreakingChangesColumnName = "Non-breaking"
 const AnnotationChangesColumnName = "Annotation"
 const UnclassifiedChangesColumnName = "Unclassified"
+const GroupColumnName = "Group"
 
 const ShareabilityReportSheetName = "Shareability Report"
 const ShareabilityReportColPackageName = "Package Name"
