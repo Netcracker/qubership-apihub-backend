@@ -2715,6 +2715,8 @@ func (p publishedRepositoryImpl) GetVersionNotifications(ctx context.Context, pa
 		Where("revision = ?", revision)
 	if filter.DocumentId != "" {
 		query.Where("document_id = ?", filter.DocumentId)
+	} else if filter.EmptyDocumentId {
+		query.Where("(document_id IS NULL OR document_id = '')")
 	}
 	if len(filter.Severities) > 0 {
 		query.Where("severity in (?)", pg.In(filter.Severities))
@@ -2739,6 +2741,8 @@ func (p publishedRepositoryImpl) GetComparisonNotifications(ctx context.Context,
 		Where("comparison_id = ?", comparisonId)
 	if filter.DocumentId != "" {
 		query.Where("document_id = ?", filter.DocumentId)
+	} else if filter.EmptyDocumentId {
+		query.Where("(document_id IS NULL OR document_id = '')")
 	}
 	if len(filter.Severities) > 0 {
 		query.Where("severity in (?)", pg.In(filter.Severities))
