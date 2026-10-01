@@ -316,14 +316,43 @@ paths:
       requestBody:
         description: |
           Store build result, depending on the process status.
-          * **running** - build in progress, data object is not transmitted.
-          * **error** - build process will send a the list of errors, and, in the `notifications` part, the messages it had raised before it failed.
-          * **complete** - build process will send a result in a ZIP archive.
+          * **running** - build in progress; only `status` and `builderId` are sent.
+          * **error** - the build, or the delivery of its result, failed. `errors` is required, `notifications`
+            is optional.
+          * **complete** - build completed. `data` is required.
 
-          The `notifications` part is sent with **error** status only and is optional: a build that failed
-          outside the builder, e.g. on an unreachable registry, has nothing to report. A successful build
-          carries its messages in notifications.json and comparison-notifications.json inside the archive
-          instead, so the part is never sent with **complete**. See buildErrors schema.
+          Every property is a part of its own at the top level of the form. The `oneOf` lists the parts each
+          status requires. The backend ignores the parts a status does not use and checks only that
+          **complete** carries `data`.
+
+          A builder may send `notifications` only when a `build` or `changelog` build failed after it had
+          started, including while packaging its result. A failure before the build starts and a rejected
+          **complete** request send no `notifications`, and the backend ignores the part for any other build
+          type. A successful build carries its messages in the archive instead.
+
+          An **error** request with `notifications` (body only):
+
+          ```text
+          --boundary
+          Content-Disposition: form-data; name="status"
+
+          error
+          --boundary
+          Content-Disposition: form-data; name="builderId"
+
+          builder-1
+          --boundary
+          Content-Disposition: form-data; name="errors"
+
+          Error: Cannot build document (document: orders). You can publish version in draft status for troubleshooting
+          --boundary
+          Content-Disposition: form-data; name="notifications"; filename="failed-build-notifications.json"
+          Content-Type: application/json
+
+          {"notifications": [{"category": "build-document", "severity": 0, "message": "Cannot build document",
+          "documentId": "orders"}], "comparisonNotifications": []}
+          --boundary--
+          ```
 
           ZIP archive with build result can contain folders with sources, builded documents, JSON operation files, and contract files. In addition, several config files are provided. The structure of these files is described in buildResult schema.
           There are following build types:
@@ -346,10 +375,6 @@ paths:
                 - status
                 - builderId
               properties:
-                data:
-                  oneOf:
-                    - $ref: "#/components/schemas/BuildResult"
-                    - $ref: "#/components/schemas/BuildErrors"
                 status:
                   description: Build process result status.
                   type: string
@@ -360,6 +385,67 @@ paths:
                 builderId:
                   description: Builder identifier.
                   type: string
+                data:
+                  description: |
+                    Build result, required with **complete** status and not sent otherwise.
+
+                    For an export build, it is the exported content: the exported file itself when the export
+                    produced a single file, or a ZIP archive of the exported files when it produced several. The
+                    backend stores the file name and uses it as the download name.
+
+                    For any other build type, it is a ZIP archive whose structure is described in the BuildResult
+                    schema, and its file name must end with `.zip`. The backend ignores the part's `Content-Type`.
+                  type: string
+                  format: binary
+                errors:
+                  description: |
+                    Build error message, required with **error** status and not sent otherwise. A single free-form
+                    string, not structured: it usually starts with the error's name, such as `Error:` or
+                    `TypeError:`, and may end with debug details in parentheses.
+                  type: string
+                notifications:
+                  description: |
+                    Messages the build had raised before it failed, sent with **error** status only. Builders should
+                    send a file part with a file name, such as `failed-build-notifications.json`; the backend must
+                    also accept a plain form field holding the same JSON, and ignores the part's `Content-Type`. The
+                    content follows the FailedBuildNotifications schema, not the archive's notifications.json.
+
+                    An invalid part (not JSON, not valid against FailedBuildNotifications, or sent more than once)
+                    must not fail the request: the backend applies the **error** status and drops the part, because
+                    a builder does not retry a 400. A new `category` or `severity` value must ship in this spec and
+                    the backend together with the builder that emits it.
+                  allOf:
+                    - $ref: "#/components/schemas/FailedBuildNotifications"
+              oneOf:
+                - properties:
+                    status:
+                      enum:
+                        - running
+                  required:
+                    - status
+                - properties:
+                    status:
+                      enum:
+                        - error
+                  required:
+                    - status
+                    - errors
+                - properties:
+                    status:
+                      enum:
+                        - complete
+                  required:
+                    - status
+                    - data
+            encoding:
+              notifications:
+                contentType: application/json
+                headers:
+                  Content-Disposition:
+                    description: Carries the file name that makes the part a file part.
+                    schema:
+                      type: string
+                      example: 'form-data; name="notifications"; filename="failed-build-notifications.json"'
       responses:
         "204":
           description: No content
@@ -2098,14 +2184,6 @@ components:
           description: Number of unclassified changes.
           type: integer
           default: 0
-    BuildErrors:
-      type: object
-      properties:
-        errors:
-          type: string
-          description: Build error message.
-        notifications:
-          $ref: "#/components/schemas/FailedBuildNotifications"
     FailedBuildNotifications:
       description: |
         Messages the build had raised before it failed, sent as a separate part of the status request.
@@ -2119,9 +2197,11 @@ components:
         The two streams keep the meaning they have in the archive. `notifications` holds the messages raised
         while building the version's own documents, as notifications.json does; `comparisonNotifications`
         holds the messages raised while calculating the changelog against the previous version, as
-        comparison-notifications.json does. A build that failed before it reached a phase carries nothing for
-        that phase: a build that failed while parsing documents sends an empty `comparisonNotifications`, and a
-        changelog build sends an empty `notifications`. The backend stores both lists as one:
+        comparison-notifications.json does. Calculating the changelog starts with resolving the previous
+        version, which happens before the documents are built, so a build that failed while building its
+        documents can already carry a `version-not-resolved` message in `comparisonNotifications`. Both lists
+        are always present, and either or both may be empty; a changelog build builds no documents, so its
+        `notifications` list is empty. The backend stores both lists as one:
         `GET /api/v2/packages/{packageId}/publish/{publishId}/notifications` returns them together, and the
         category of a message tells which phase raised it.
 
@@ -2136,6 +2216,9 @@ components:
         Severity is the integer of the builder contract here, as it is in the archive. The API returns the
         string form.
       type: object
+      required:
+        - notifications
+        - comparisonNotifications
       properties:
         notifications:
           description: Messages raised while building the version's own documents and operations.
