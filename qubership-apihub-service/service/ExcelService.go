@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -27,6 +28,7 @@ type ExcelService interface {
 	ExportDdlEntities(ctx context.Context, packageId, version string, req view.ExportDdlEntitiesRequestView) (*excelize.File, string, error)
 	ExportDdlChanges(ctx context.Context, packageId, version string, req view.ExportDdlChangesRequestView) (*excelize.File, string, error)
 	ExportMcpEntities(ctx context.Context, packageId, version, kind string, req view.ExportMcpEntitiesRequestView) (*excelize.File, string, error)
+	ExportNotifications(ctx context.Context, packageId, version string, includeChangelog bool, filter view.NotificationsFilter) (*excelize.File, string, error)
 	ExportBusinessMetrics(businessMetrics []view.BusinessMetric) (*excelize.File, string, error)
 	BuildShareabilityReport(ctx context.Context, groupId, versionName string) (*excelize.File, string, error)
 	ParseShareabilityReport(in io.Reader) ([]view.ShareabilityReportRow, error)
@@ -204,6 +206,112 @@ func (e excelServiceImpl) ExportDdlChanges(ctx context.Context, packageId, versi
 	}
 	file, err := buildDdlChangesWorkbook(changedEntities, packageName, versionName, versionStatus)
 	return file, versionName, err
+}
+
+func (e excelServiceImpl) ExportNotifications(ctx context.Context, packageId, version string, includeChangelog bool, filter view.NotificationsFilter) (*excelize.File, string, error) {
+	versionNotifications, err := e.versionService.GetVersionNotifications(ctx, packageId, version, filter)
+	if err != nil {
+		return nil, "", err
+	}
+	notifications := versionNotifications.Notifications
+	if includeChangelog {
+		comparisonNotifications, err := e.versionService.GetComparisonNotifications(ctx, packageId, version, "", "", filter)
+		if err != nil {
+			// a version without a recorded previous version, without a calculated changelog, or whose
+			// previous version was deleted has no changelog messages, and the export still succeeds
+			var customError *exception.CustomError
+			if !errors.As(err, &customError) ||
+				(customError.Code != exception.NoPreviousVersion && customError.Code != exception.ComparisonNotFound && customError.Code != exception.PublishedPackageVersionNotFound) {
+				return nil, "", err
+			}
+		} else {
+			notifications = append(notifications, comparisonNotifications.Notifications...)
+		}
+	}
+	versionName, err := e.getVersionNameForAttachmentName(ctx, packageId, version)
+	if err != nil {
+		return nil, "", err
+	}
+	versionStatus, err := e.versionService.GetVersionStatus(ctx, packageId, version)
+	if err != nil {
+		return nil, "", err
+	}
+	packageName, err := e.packageService.GetPackageName(ctx, packageId)
+	if err != nil {
+		return nil, "", err
+	}
+	file, err := buildNotificationsWorkbook(notifications, packageName, versionName, versionStatus)
+	return file, versionName, err
+}
+
+func buildNotificationsWorkbook(notifications []view.Notification, packageName, versionName, versionStatus string) (*excelize.File, error) {
+	workbook, err := excelize.OpenFile(ExcelTemplatePath)
+	defer func() {
+		if err := workbook.Close(); err != nil {
+			log.Errorf("Failed to close excel template file: %v", err.Error())
+		}
+	}()
+	if err != nil {
+		log.Errorf("Failed to open excel template file: %v", err.Error())
+		return nil, err
+	}
+
+	buildCoverPage(workbook, packageName, "Notifications", versionName, versionStatus)
+
+	headerStyle := getHeaderStyle(workbook)
+	evenCellStyle := getEvenCellStyle(workbook)
+	oddCellStyle := getOddCellStyle(workbook)
+
+	sheetIndex, err := workbook.NewSheet(view.NotificationsSheetName)
+	if err != nil {
+		return nil, err
+	}
+	if err = workbook.SetColWidth(view.NotificationsSheetName, "A", "D", 35); err != nil {
+		return nil, err
+	}
+	header := map[string]interface{}{
+		"A1": view.SeverityColumnName,
+		"B1": view.CategoryColumnName,
+		"C1": view.MessageColumnName,
+		"D1": view.DocumentIdColumnName,
+	}
+	if err = setCellsValues(workbook, view.NotificationsSheetName, header); err != nil {
+		return nil, err
+	}
+	if err = workbook.SetCellStyle(view.NotificationsSheetName, "A1", "D1", headerStyle); err != nil {
+		return nil, err
+	}
+	if err = workbook.AutoFilter(view.NotificationsSheetName, "A1:D1", []excelize.AutoFilterOptions{}); err != nil {
+		return nil, err
+	}
+
+	rowIndex := 2
+	for _, notification := range notifications {
+		cellsValues := map[string]interface{}{
+			fmt.Sprintf("A%d", rowIndex): notification.Severity,
+			fmt.Sprintf("B%d", rowIndex): notification.Category,
+			fmt.Sprintf("C%d", rowIndex): notification.Message,
+			fmt.Sprintf("D%d", rowIndex): notification.DocumentId,
+		}
+		if err = setCellsValues(workbook, view.NotificationsSheetName, cellsValues); err != nil {
+			return nil, err
+		}
+		if rowIndex%2 == 0 {
+			err = workbook.SetCellStyle(view.NotificationsSheetName, fmt.Sprintf("A%d", rowIndex), fmt.Sprintf("D%d", rowIndex), evenCellStyle)
+		} else {
+			err = workbook.SetCellStyle(view.NotificationsSheetName, fmt.Sprintf("A%d", rowIndex), fmt.Sprintf("D%d", rowIndex), oddCellStyle)
+		}
+		if err != nil {
+			return nil, err
+		}
+		rowIndex++
+	}
+
+	workbook.SetActiveSheet(sheetIndex)
+	if err = workbook.DeleteSheet("Sheet1"); err != nil {
+		return nil, err
+	}
+	return workbook, nil
 }
 
 func buildDdlEntitiesWorkbook(entities *view.DdlEntityListView, packageId, packageName, versionName, versionStatus string) (*excelize.File, error) {

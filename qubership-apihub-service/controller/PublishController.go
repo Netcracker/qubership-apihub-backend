@@ -339,25 +339,13 @@ func (p publishV2ControllerImpl) GetPublishStatus(w http.ResponseWriter, r *http
 	}
 	publishId := getStringParam(r, "publishId")
 
-	status, details, err := p.buildService.GetStatus(ctx, publishId)
+	publishStatus, err := p.buildService.GetStatus(ctx, publishId)
 	if err != nil {
 		p.responder.RespondWithError(w, r, "Failed to get publish status", err)
 		return
 	}
 
-	if status == "" && details == "" {
-		p.responder.RespondWithCustomError(w, &exception.CustomError{
-			Status:  http.StatusNotFound,
-			Message: "build not found",
-		})
-		return
-	}
-
-	p.responder.RespondWithJson(w, http.StatusOK, view.PublishStatusResponse{
-		PublishId: publishId,
-		Status:    status,
-		Message:   details,
-	})
+	p.responder.RespondWithJson(w, http.StatusOK, publishStatus)
 }
 
 func (p publishV2ControllerImpl) GetPublishStatuses(w http.ResponseWriter, r *http.Request) {
