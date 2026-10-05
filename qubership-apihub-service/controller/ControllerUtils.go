@@ -334,3 +334,35 @@ func getNotificationsFilter(r *http.Request) (*view.NotificationsFilter, *except
 		Categories:      categories,
 	}, nil
 }
+
+func applyNotificationsPaging(r *http.Request, filter *view.NotificationsFilter) *exception.CustomError {
+	limit, customError := getLimitQueryParam(r)
+	if customError != nil {
+		return customError
+	}
+	page := 0
+	if r.URL.Query().Get("page") != "" {
+		parsedPage, err := strconv.Atoi(r.URL.Query().Get("page"))
+		if err != nil {
+			return &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.IncorrectParamType,
+				Message: exception.IncorrectParamTypeMsg,
+				Params:  map[string]interface{}{"param": "page", "type": "int"},
+				Debug:   err.Error(),
+			}
+		}
+		if parsedPage < 0 {
+			return &exception.CustomError{
+				Status:  http.StatusBadRequest,
+				Code:    exception.InvalidParameterValue,
+				Message: exception.InvalidParameterValueMsg,
+				Params:  map[string]interface{}{"param": "page", "value": parsedPage},
+			}
+		}
+		page = parsedPage
+	}
+	filter.Limit = limit
+	filter.Offset = limit * page
+	return nil
+}

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -28,6 +29,8 @@ type BuildService interface {
 	GetStatus(ctx context.Context, buildId string) (*view.PublishStatusResponse, error)
 	GetStatuses(ctx context.Context, buildIds []string) ([]view.PublishStatusResponse, error)
 	UpdateBuildStatus(ctx context.Context, buildId string, status view.BuildStatusEnum, details string) error
+	FailBuild(ctx context.Context, packageId string, buildId string, details string, notificationsPart []byte) error
+	GetBuildNotifications(ctx context.Context, packageId string, buildId string, filter view.NotificationsFilter) (*view.Notifications, error)
 	GetFreeBuild(ctx context.Context, builderId string) ([]byte, error)
 	CreateChangelogBuild(ctx context.Context, config view.BuildConfig, isExternal bool, builderId string) (string, view.BuildConfig, error) //deprecated
 	GetBuildViewByChangelogSearchQuery(ctx context.Context, searchRequest view.ChangelogBuildSearchRequest) (*view.BuildView, error)
@@ -495,6 +498,70 @@ func (b *buildServiceImpl) UpdateBuildStatus(ctx context.Context, buildId string
 	}
 
 	return nil
+}
+
+func (b *buildServiceImpl) FailBuild(ctx context.Context, packageId string, buildId string, details string, notificationsPart []byte) error {
+	var notifications []entity.BuildNotificationEntity
+	if notificationsPart != nil {
+		var part view.FailedBuildNotifications
+		err := json.Unmarshal(notificationsPart, &part)
+		if err == nil {
+			err = validation.ValidateFailedBuildNotifications(part)
+		}
+		if err != nil {
+			log.Warnf("Build %s: dropping invalid notifications part: %v", buildId, err)
+		} else {
+			pkg, err := b.packageService.GetPackage(ctx, packageId, false)
+			if err != nil {
+				return err
+			}
+			// only package builds store the part: a dashboard build compares one version pair per reference, and the
+			// flat part cannot tell the pairs apart
+			if pkg.Kind == entity.KIND_PACKAGE {
+				notifications = make([]entity.BuildNotificationEntity, 0, len(part.Notifications)+len(part.ComparisonNotifications))
+				for _, notification := range slices.Concat(part.Notifications, part.ComparisonNotifications) {
+					severity, err := view.NotificationSeverityFromBuilder(notification.Severity)
+					if err != nil {
+						return fmt.Errorf("build %s: %w", buildId, err)
+					}
+					notifications = append(notifications, entity.BuildNotificationEntity{
+						BuildId:    buildId,
+						Severity:   severity,
+						Category:   notification.Category,
+						Message:    notification.Message,
+						DocumentId: notification.DocumentId,
+					})
+				}
+			} else {
+				log.Debugf("Build %s: notifications of a dashboard build are not stored", buildId)
+			}
+		}
+	}
+	return b.buildRepository.FailBuild(ctx, buildId, details, notifications)
+}
+
+func (b *buildServiceImpl) GetBuildNotifications(ctx context.Context, packageId string, buildId string, filter view.NotificationsFilter) (*view.Notifications, error) {
+	ent, err := b.buildRepository.GetBuild(ctx, buildId)
+	if err != nil {
+		return nil, err
+	}
+	if ent == nil || ent.PackageId != packageId {
+		return nil, &exception.CustomError{
+			Status:  http.StatusNotFound,
+			Code:    exception.BuildNotFoundById,
+			Message: exception.BuildNotFoundByIdMsg,
+			Params:  map[string]interface{}{"id": buildId},
+		}
+	}
+	ents, err := b.buildRepository.GetBuildNotifications(ctx, buildId, filter)
+	if err != nil {
+		return nil, err
+	}
+	result := view.Notifications{Notifications: make([]view.Notification, 0, len(ents))}
+	for _, notificationEnt := range ents {
+		result.Notifications = append(result.Notifications, entity.MakeBuildNotificationView(notificationEnt))
+	}
+	return &result, nil
 }
 
 func (b *buildServiceImpl) GetFreeBuild(ctx context.Context, builderId string) ([]byte, error) {

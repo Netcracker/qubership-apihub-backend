@@ -1173,6 +1173,23 @@ func (p publishedValidatorImpl) ValidateComparisonNotifications(buildArc *archiv
 	return nil
 }
 
+func ValidateFailedBuildNotifications(part view.FailedBuildNotifications) error {
+	if err := utils.ValidateObject(part); err != nil {
+		return err
+	}
+	for i, notification := range part.Notifications {
+		if err := validateNotification(notification); err != nil {
+			return fmt.Errorf("notifications[%v]: %w", i, err)
+		}
+	}
+	for i, notification := range part.ComparisonNotifications {
+		if err := validateNotification(notification); err != nil {
+			return fmt.Errorf("comparisonNotifications[%v]: %w", i, err)
+		}
+	}
+	return nil
+}
+
 func validateNotification(notification view.BuilderNotification) error {
 	if _, err := view.NotificationSeverityFromBuilder(notification.Severity); err != nil {
 		return err

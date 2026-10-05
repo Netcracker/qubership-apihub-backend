@@ -106,6 +106,7 @@ func MakePublishStatusResponse(buildEnt *BuildEntity) view.PublishStatusResponse
 		Message:            buildEnt.Details,
 		HasErrors:          metadata.GetHasErrors(),
 		ChangelogHasErrors: metadata.GetChangelogHasErrors(),
+		HasNotifications:   metadata.GetHasNotifications(),
 	}
 }
 

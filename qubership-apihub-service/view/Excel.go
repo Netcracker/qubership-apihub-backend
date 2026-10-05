@@ -48,6 +48,9 @@ const AnnotationChangesColumnName = "Annotation"
 const UnclassifiedChangesColumnName = "Unclassified"
 
 const NotificationsSheetName = "Notifications"
+const NotificationsReportName = "Notifications"
+const FailedPublishNotificationsReportName = "Failed publication notifications"
+
 const SeverityColumnName = "Severity"
 const CategoryColumnName = "Category"
 const MessageColumnName = "Message"

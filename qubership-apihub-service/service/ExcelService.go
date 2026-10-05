@@ -29,17 +29,20 @@ type ExcelService interface {
 	ExportDdlChanges(ctx context.Context, packageId, version string, req view.ExportDdlChangesRequestView) (*excelize.File, string, error)
 	ExportMcpEntities(ctx context.Context, packageId, version, kind string, req view.ExportMcpEntitiesRequestView) (*excelize.File, string, error)
 	ExportNotifications(ctx context.Context, packageId, version string, includeChangelog bool, filter view.NotificationsFilter) (*excelize.File, string, error)
+	ExportBuildNotifications(ctx context.Context, packageId, buildId string, filter view.NotificationsFilter) (*excelize.File, error)
 	ExportBusinessMetrics(businessMetrics []view.BusinessMetric) (*excelize.File, string, error)
 	BuildShareabilityReport(ctx context.Context, groupId, versionName string) (*excelize.File, string, error)
 	ParseShareabilityReport(in io.Reader) ([]view.ShareabilityReportRow, error)
 }
 
-func NewExcelService(publishedRepo repository.PublishedRepository, versionService VersionService, operationService OperationService, packageService PackageService, ddlContractService DDLContractService, mcpContractService MCPContractService) ExcelService {
-	return &excelServiceImpl{publishedRepo: publishedRepo, versionService: versionService, operationService: operationService, packageService: packageService, ddlContractService: ddlContractService, mcpContractService: mcpContractService}
+func NewExcelService(publishedRepo repository.PublishedRepository, versionService VersionService, operationService OperationService, packageService PackageService, ddlContractService DDLContractService, mcpContractService MCPContractService, buildService BuildService, buildRepository repository.BuildRepository) ExcelService {
+	return &excelServiceImpl{publishedRepo: publishedRepo, versionService: versionService, operationService: operationService, packageService: packageService, ddlContractService: ddlContractService, mcpContractService: mcpContractService, buildService: buildService, buildRepository: buildRepository}
 }
 
 type excelServiceImpl struct {
 	publishedRepo      repository.PublishedRepository
+	buildService       BuildService
+	buildRepository    repository.BuildRepository
 	versionService     VersionService
 	operationService   OperationService
 	packageService     PackageService
@@ -240,11 +243,38 @@ func (e excelServiceImpl) ExportNotifications(ctx context.Context, packageId, ve
 	if err != nil {
 		return nil, "", err
 	}
-	file, err := buildNotificationsWorkbook(notifications, packageName, versionName, versionStatus)
+	file, err := buildNotificationsWorkbook(notifications, view.NotificationsReportName, packageName, versionName, versionStatus)
 	return file, versionName, err
 }
 
-func buildNotificationsWorkbook(notifications []view.Notification, packageName, versionName, versionStatus string) (*excelize.File, error) {
+func (e excelServiceImpl) ExportBuildNotifications(ctx context.Context, packageId, buildId string, filter view.NotificationsFilter) (*excelize.File, error) {
+	notifications, err := e.buildService.GetBuildNotifications(ctx, packageId, buildId, filter)
+	if err != nil {
+		return nil, err
+	}
+	buildSrc, err := e.buildRepository.GetBuildSrc(ctx, buildId)
+	if err != nil {
+		return nil, err
+	}
+	// a failed build published no version: the cover page names the version and status the build was asked for and
+	// qualifies the status, so the workbook is not mistaken for the report of a published version
+	versionName, versionStatus := "", ""
+	if buildSrc != nil {
+		buildConfig, err := view.BuildConfigFromMap(buildSrc.Config, buildId)
+		if err != nil {
+			return nil, err
+		}
+		versionName, versionStatus = buildConfig.Version, buildConfig.Status
+	}
+	packageName, err := e.packageService.GetPackageName(ctx, packageId)
+	if err != nil {
+		return nil, err
+	}
+	return buildNotificationsWorkbook(notifications.Notifications, view.FailedPublishNotificationsReportName, packageName, versionName,
+		versionStatus)
+}
+
+func buildNotificationsWorkbook(notifications []view.Notification, reportName, packageName, versionName, versionStatus string) (*excelize.File, error) {
 	workbook, err := excelize.OpenFile(ExcelTemplatePath)
 	defer func() {
 		if err := workbook.Close(); err != nil {
@@ -256,7 +286,7 @@ func buildNotificationsWorkbook(notifications []view.Notification, packageName, 
 		return nil, err
 	}
 
-	buildCoverPage(workbook, packageName, "Notifications", versionName, versionStatus)
+	buildCoverPage(workbook, packageName, reportName, versionName, versionStatus)
 
 	headerStyle := getHeaderStyle(workbook)
 	evenCellStyle := getEvenCellStyle(workbook)

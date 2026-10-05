@@ -26,6 +26,7 @@ type PublishV2Controller interface {
 	GetPublishStatuses(w http.ResponseWriter, r *http.Request)
 	GetFreeBuild(w http.ResponseWriter, r *http.Request)
 	SetPublishStatus(w http.ResponseWriter, r *http.Request)
+	GetPublishNotifications(w http.ResponseWriter, r *http.Request)
 }
 
 func NewPublishV2Controller(buildService service.BuildService,
@@ -489,7 +490,12 @@ func (p publishV2ControllerImpl) SetPublishStatus(w http.ResponseWriter, r *http
 	switch status {
 	case view.StatusError:
 		details = r.FormValue("errors")
-		err = p.buildService.UpdateBuildStatus(ctx, buildId, status, details)
+		notificationsPart, err := readFailedBuildNotificationsPart(r)
+		if err != nil {
+			log.Warnf("Build %s: dropping invalid notifications part: %v", buildId, err)
+			notificationsPart = nil
+		}
+		err = p.buildService.FailBuild(ctx, packageId, buildId, details, notificationsPart)
 		if err != nil {
 			p.responder.RespondWithError(w, r, "Failed to update build status", err)
 			return
@@ -594,4 +600,59 @@ func (p publishV2ControllerImpl) GetFreeBuild(w http.ResponseWriter, r *http.Req
 		w.WriteHeader(http.StatusNoContent)
 	}
 	log.Debugf("GetFreeBuild took %dms", time.Since(start).Milliseconds())
+}
+
+const failedBuildNotificationsPart = "notifications"
+
+func readFailedBuildNotificationsPart(r *http.Request) ([]byte, error) {
+	if r.MultipartForm != nil && len(r.MultipartForm.File[failedBuildNotificationsPart]) > 1 {
+		return nil, fmt.Errorf("part '%s' is sent more than once", failedBuildNotificationsPart)
+	}
+	file, _, err := r.FormFile(failedBuildNotificationsPart)
+	if err != nil {
+		if err == http.ErrMissingFile {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to read part '%s': %w", failedBuildNotificationsPart, err)
+	}
+	defer file.Close()
+	content, err := ioutil.ReadAll(file)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read part '%s': %w", failedBuildNotificationsPart, err)
+	}
+	return content, nil
+}
+
+func (p publishV2ControllerImpl) GetPublishNotifications(w http.ResponseWriter, r *http.Request) {
+	packageId := getStringParam(r, "packageId")
+	publishId := getStringParam(r, "publishId")
+	ctx := secctx.MakeUserContext(r)
+	sufficientPrivileges, err := p.roleService.HasRequiredPermissions(ctx, packageId, view.ReadPermission)
+	if err != nil {
+		p.responder.RespondWithError(w, r, "Failed to check user privileges", err)
+		return
+	}
+	if !sufficientPrivileges {
+		p.responder.RespondWithCustomError(w, &exception.CustomError{
+			Status:  http.StatusForbidden,
+			Code:    exception.InsufficientPrivileges,
+			Message: exception.InsufficientPrivilegesMsg,
+		})
+		return
+	}
+	filter, customError := getNotificationsFilter(r)
+	if customError != nil {
+		p.responder.RespondWithCustomError(w, customError)
+		return
+	}
+	if customError = applyNotificationsPaging(r, filter); customError != nil {
+		p.responder.RespondWithCustomError(w, customError)
+		return
+	}
+	notifications, err := p.buildService.GetBuildNotifications(ctx, packageId, publishId, *filter)
+	if err != nil {
+		p.responder.RespondWithError(w, r, "Failed to get publish notifications", err)
+		return
+	}
+	p.responder.RespondWithJson(w, http.StatusOK, notifications)
 }

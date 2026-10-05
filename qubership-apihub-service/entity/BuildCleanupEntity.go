@@ -11,6 +11,7 @@ type BuildCleanupEntity struct {
 
 	BuildResult           int    `pg:"build_result, type:integer"`
 	BuildSrc              int    `pg:"build_src, type:integer"`
+	BuildNotification     int    `pg:"build_notification, type:integer"`
 	ExpiredS3FilesCount   int    `pg:"expired_s3_files_count, type:integer"`
 	ExpiredS3FilesDetails string `pg:"expired_s3_files_details, type:text"`
 }

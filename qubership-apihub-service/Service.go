@@ -278,7 +278,7 @@ func main() {
 	versionService.SetBuildService(buildService)
 	operationGroupService.SetBuildService(buildService)
 
-	excelService := service.NewExcelService(publishedRepository, versionService, operationService, packageService, ddlContractServiceForVersion, mcpContractServiceForVersion)
+	excelService := service.NewExcelService(publishedRepository, versionService, operationService, packageService, ddlContractServiceForVersion, mcpContractServiceForVersion, buildService, buildRepository)
 	comparisonService := service.NewComparisonService(publishedRepository, operationRepository, packageVersionEnrichmentService, ddlContractServiceForVersion)
 	businessMetricService := service.NewBusinessMetricService(businessMetricRepository)
 
@@ -431,6 +431,8 @@ func main() {
 	r.HandleFunc("/api/v2/packages/{packageId}/publish/statuses", authenticator.Secure(publishV2Controller.GetPublishStatuses)).Methods(http.MethodPost)
 	r.HandleFunc("/api/v2/packages/{packageId}/publish", authenticator.Secure(publishV2Controller.Publish)).Methods(http.MethodPost)
 	r.HandleFunc("/api/v3/packages/{packageId}/publish/{publishId}/status", authenticator.Secure(publishV2Controller.SetPublishStatus)).Methods(http.MethodPost)
+	r.HandleFunc("/api/v2/packages/{packageId}/publish/{publishId}/notifications", authenticator.Secure(publishV2Controller.GetPublishNotifications)).Methods(http.MethodGet)
+	r.HandleFunc("/api/v2/packages/{packageId}/publish/{publishId}/export/notifications", authenticator.Secure(exportController.GenerateBuildNotificationsExcelReport)).Methods(http.MethodGet)
 	r.HandleFunc("/api/v1/packages/{packageId}/publish/withOperationsGroup", authenticator.Secure(versionController.PublishFromCSV_deprecated)).Methods(http.MethodPost) //deprecated
 	r.HandleFunc("/api/v2/packages/{packageId}/publish/withOperationsGroup/{apiType}", authenticator.Secure(versionController.PublishFromCSV)).Methods(http.MethodPost)
 	r.HandleFunc("/api/v1/packages/{packageId}/publish/{publishId}/withOperationsGroup/status", authenticator.Secure(versionController.GetCSVDashboardPublishStatus)).Methods(http.MethodGet)

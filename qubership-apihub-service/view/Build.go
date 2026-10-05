@@ -152,6 +152,7 @@ type PublishStatusResponse struct {
 	Message            string `json:"message"`
 	HasErrors          bool   `json:"hasErrors"`
 	ChangelogHasErrors bool   `json:"changelogHasErrors"`
+	HasNotifications   bool   `json:"hasNotifications"`
 }
 
 type BuildErrorFlags struct {

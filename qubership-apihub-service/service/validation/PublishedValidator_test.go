@@ -192,6 +192,44 @@ func TestValidateBuildNotifications(t *testing.T) {
 	}
 }
 
+func TestValidateFailedBuildNotifications(t *testing.T) {
+	valid := view.BuilderNotification{Severity: view.BuilderNotificationSeverityError, Category: "parse-file", Message: "Cannot parse file", DocumentId: "spec"}
+
+	t.Run("both streams with valid messages pass", func(t *testing.T) {
+		part := view.FailedBuildNotifications{
+			Notifications:           []view.BuilderNotification{valid},
+			ComparisonNotifications: []view.BuilderNotification{{Severity: view.BuilderNotificationSeverityWarning, Category: "version-not-resolved", Message: "Previous version not found"}},
+		}
+		assert.NoError(t, ValidateFailedBuildNotifications(part))
+	})
+
+	t.Run("empty lists pass", func(t *testing.T) {
+		part := view.FailedBuildNotifications{Notifications: []view.BuilderNotification{}, ComparisonNotifications: []view.BuilderNotification{}}
+		assert.NoError(t, ValidateFailedBuildNotifications(part))
+	})
+
+	t.Run("a missing list is rejected", func(t *testing.T) {
+		part := view.FailedBuildNotifications{Notifications: []view.BuilderNotification{valid}}
+		assert.Error(t, ValidateFailedBuildNotifications(part))
+	})
+
+	t.Run("an unknown severity is rejected with its position", func(t *testing.T) {
+		bad := valid
+		bad.Severity = 7
+		part := view.FailedBuildNotifications{Notifications: []view.BuilderNotification{}, ComparisonNotifications: []view.BuilderNotification{valid, bad}}
+		err := ValidateFailedBuildNotifications(part)
+		assert.ErrorContains(t, err, "comparisonNotifications[1]")
+	})
+
+	t.Run("an empty category is rejected", func(t *testing.T) {
+		bad := valid
+		bad.Category = ""
+		part := view.FailedBuildNotifications{Notifications: []view.BuilderNotification{bad}, ComparisonNotifications: []view.BuilderNotification{}}
+		err := ValidateFailedBuildNotifications(part)
+		assert.ErrorContains(t, err, "notifications[0]: category is required")
+	})
+}
+
 func comparisonNotifications(previousVersion string, notifications ...view.BuilderNotification) view.ComparisonNotifications {
 	return view.ComparisonNotifications{
 		PackageId:                comparisonPackageId,

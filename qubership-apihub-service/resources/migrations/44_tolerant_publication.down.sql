@@ -1,3 +1,8 @@
+ALTER TABLE build_cleanup_run
+    DROP COLUMN IF EXISTS build_notification;
+
+DROP TABLE IF EXISTS build_notification;
+
 CREATE TABLE IF NOT EXISTS builder_notifications
 (
     build_id character varying NOT NULL,

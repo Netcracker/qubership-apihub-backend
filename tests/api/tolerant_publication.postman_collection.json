@@ -2,7 +2,7 @@
  "info": {
   "name": "Tolerant publication E2E",
   "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-  "description": "Verifies tolerant publication: a version whose documents fail to build is still published in draft\nstatus, is marked with hasErrors, exposes per-document error details through the notification\nendpoints, and is barred from every composition that would spread the error.\n\nEndpoints under test:\n  GET   /api/v2/packages/{packageId}/versions/{version}/notifications\n  GET   /api/v2/packages/{packageId}/versions/{version}/changes/notifications\n  GET   /api/v2/packages/{packageId}/versions/{version}/changes/summary    (hasErrors)\n  GET   /api/v3/packages/{packageId}/versions/{version}          (hasErrors, contract summaries)\n  GET   /api/v3/packages/{packageId}/versions                    (hasErrors)\n  GET   /api/v2/packages/{packageId}/versions/{version}/documents (hasErrors)\n  POST  /api/v2/packages/{packageId}/publish                     (release and baseline refusals)\n  POST  /api/v2/packages/{packageId}/versions/{version}/copy     (errored source and reference refusals)\n  PATCH /api/v2/packages/{packageId}/versions/{version}          (status change refusal)\n\nAuth: the api-key header carries a sysadm token; set apiKey to zeroDayConfiguration.accessToken\nof the running instance.\n\nPrerequisites: the backend and a tolerant-publication-capable build-task-consumer must be running.\n\nRun from the repository root so the multipart fixtures resolve:\n  newman run tests/api/tolerant_publication.postman_collection.json --working-dir . \\\n    --env-var baseUrl=http://localhost:8090 --env-var apiKey=<token>\n\nFolder 02 uses a mixed fixture: one version with two API types (rest, asyncapi) and two contract\ntypes (ddl, mcp over two endpoints), where three of its seven documents fail. It is there so the\nper-type roll-ups are checked for discrimination, not just for being set.\n\nFolder 09 checks that the two error flags stay apart: hasErrors describes the version's content and\nchangelogHasErrors describes its changelog, and neither reports the other's problem. It also checks\nthat the versions list and the version itself answer identically. A changelog that genuinely fails is\nnot constructible from source fixtures - every comparison-phase Error is an internal resolution\nfailure - so that half is covered by unit tests instead.\n\nFolder 10 covers copy version: an errored version can be copied as a draft but not as a release, a copy\nmay not name an errored previous version, and a dashboard copy keeps the reference revisions pinned by the source build config, so it stays\nsound when a later revision of a referenced version has errors. A dashboard pinned to an errored\nreference revision is not constructible through the API, because such a publication is refused; the\ncopy-time refusal for that case is covered by unit tests.\n\nA unique suffix is generated once per run, so the collection is safe to re-run. Package aliases\nstay within the API's 10-character limit."
+  "description": "Verifies tolerant publication: a version whose documents fail to build is still published in draft\nstatus, is marked with hasErrors, exposes per-document error details through the notification\nendpoints, and is barred from every composition that would spread the error.\n\nEndpoints under test:\n  GET   /api/v2/packages/{packageId}/versions/{version}/notifications\n  GET   /api/v2/packages/{packageId}/versions/{version}/changes/notifications\n  GET   /api/v2/packages/{packageId}/versions/{version}/changes/summary    (hasErrors)\n  GET   /api/v3/packages/{packageId}/versions/{version}          (hasErrors, contract summaries)\n  GET   /api/v3/packages/{packageId}/versions                    (hasErrors)\n  GET   /api/v2/packages/{packageId}/versions/{version}/documents (hasErrors)\n  POST  /api/v2/packages/{packageId}/publish                     (release and baseline refusals)\n  GET   /api/v2/packages/{packageId}/publish/{publishId}/status  (hasNotifications of a failed publish)\n  POST  /api/v2/packages/{packageId}/publish/statuses            (hasNotifications)\n  GET   /api/v2/packages/{packageId}/publish/{publishId}/notifications\n  GET   /api/v2/packages/{packageId}/publish/{publishId}/export/notifications\n  POST  /api/v2/packages/{packageId}/versions/{version}/copy     (errored source and reference refusals)\n  PATCH /api/v2/packages/{packageId}/versions/{version}          (status change refusal)\n\nAuth: the api-key header carries a sysadm token; set apiKey to zeroDayConfiguration.accessToken\nof the running instance.\n\nPrerequisites: the backend and a build-task-consumer built from feature/failed-build-notifications (or\nlater) must be running. That consumer sends the \"notifications\" part with a failed build's error status,\nwhich folder 04 relies on; an older tolerant-publication consumer fails folder 04's notification checks.\n\nRun from the repository root so the multipart fixtures resolve:\n  newman run tests/api/tolerant_publication.postman_collection.json --working-dir . \\\n    --env-var baseUrl=http://localhost:8090 --env-var apiKey=<token>\n\nFolder 02 uses a mixed fixture: one version with two API types (rest, asyncapi) and two contract\ntypes (ddl, mcp over two endpoints), where three of its seven documents fail. It is there so the\nper-type roll-ups are checked for discrimination, not just for being set.\n\nFolder 04 also checks that a refused release publish keeps the messages it raised: the publish status\ncarries hasNotifications, the publish notification endpoints return them with the filters and paging of\nthe version endpoints, sorted most severe first, and the xlsx export is named after the publish id. A\ncompleted publish stores nothing at the publish level. A failed dashboard build stores nothing either,\nbut it is not constructible through the API (a release dashboard with unsound references is refused\nbefore any build runs), so that rule is covered by unit tests.\n\nFolder 09 checks that the two error flags stay apart: hasErrors describes the version's content and\nchangelogHasErrors describes its changelog, and neither reports the other's problem. It also checks\nthat the versions list and the version itself answer identically. A changelog that genuinely fails is\nnot constructible from source fixtures - every comparison-phase Error is an internal resolution\nfailure - so that half is covered by unit tests instead.\n\nFolder 10 covers copy version: an errored version can be copied as a draft but not as a release, a copy\nmay not name an errored previous version, and a dashboard copy keeps the reference revisions pinned by the source build config, so it stays\nsound when a later revision of a referenced version has errors. A dashboard pinned to an errored\nreference revision is not constructible through the API, because such a publication is refused; the\ncopy-time refusal for that case is covered by unit tests.\n\nA unique suffix is generated once per run, so the collection is safe to re-run. Package aliases\nstay within the API's 10-character limit."
  },
  "variable": [
   {
@@ -189,6 +189,21 @@
    "key": "copiedErroredDashboardVersion",
    "value": "dash-copy3",
    "type": "string"
+  },
+  {
+   "key": "brokenDraftPublishId",
+   "value": "",
+   "type": "string"
+  },
+  {
+   "key": "unknownPublishId",
+   "value": "00000000-0000-0000-0000-000000000000",
+   "type": "string"
+  },
+  {
+   "key": "failedNotificationCount",
+   "value": "",
+   "type": "string"
   }
  ],
  "item": [
@@ -360,6 +375,7 @@
          "pm.test('Broken draft publish accepted', function () { pm.response.to.have.status(202); });",
          "var json = pm.response.json();",
          "pm.collectionVariables.set('publishId', json.publishId);",
+         "pm.collectionVariables.set('brokenDraftPublishId', json.publishId);",
          "pm.collectionVariables.set('pollAttempts', '0');"
         ]
        }
@@ -1324,7 +1340,10 @@
          "pm.test('Broken release build fails ends with status \\'error\\'', function () { pm.expect(json.status, json.message || '').to.eql('error'); });",
          "pm.test('The failure explains that a draft can be published instead', function () {",
          "    pm.expect(json.message || '').to.match(/draft/i);",
-         "});"
+         "});",
+         "pm.test('A failed publish stores its notifications', function () { pm.expect(json.hasNotifications).to.eql(true); });",
+         "pm.test('A failed publish published no version, so hasErrors is false', function () { pm.expect(json.hasErrors).to.eql(false); });",
+         "pm.test('A failed publish calculated no changelog, so changelogHasErrors is false', function () { pm.expect(json.changelogHasErrors).to.eql(false); });"
         ]
        }
       }
@@ -1338,6 +1357,530 @@
        }
       ],
       "url": "{{baseUrl}}/api/v2/packages/{{pkgAId}}/publish/{{publishId}}/status"
+     },
+     "response": []
+    },
+    {
+     "name": "Failed publish notifications list the parse failure",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Publish notifications are readable', function () { pm.response.to.have.status(200); });",
+         "var json = pm.response.json();",
+         "pm.test('At least one message is stored', function () { pm.expect(json.notifications.length).to.be.at.least(1); });",
+         "pm.test('Every message has a string severity and category', function () {",
+         "    json.notifications.forEach(function (n) {",
+         "        pm.expect(n.severity).to.be.oneOf(['error', 'warning', 'information', 'hint']);",
+         "        pm.expect(n.category).to.be.a('string').and.not.empty;",
+         "        pm.expect(n.message).to.be.a('string').and.not.empty;",
+         "    });",
+         "});",
+         "pm.test('Errors come first', function () { pm.expect(json.notifications[0].severity).to.eql('error'); });",
+         "pm.test('The parse failure is attributed to the broken document', function () {",
+         "    var slug = pm.collectionVariables.get('brokenDocumentSlug');",
+         "    var parse = json.notifications.filter(function (n) { return n.category === 'parse-file' && n.severity === 'error'; });",
+         "    pm.expect(parse.length, 'parse-file errors').to.be.at.least(1);",
+         "    pm.expect(parse[0].documentId).to.eql(slug);",
+         "});",
+         "pm.collectionVariables.set('failedNotificationCount', String(json.notifications.length));"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v2/packages/{{pkgAId}}/publish/{{publishId}}/notifications"
+     },
+     "response": []
+    },
+    {
+     "name": "Failed publish notifications filter by severity",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Severity filter succeeds', function () { pm.response.to.have.status(200); });",
+         "var json = pm.response.json();",
+         "pm.test('Only errors are returned', function () { pm.expect(json.notifications.length).to.be.at.least(1); json.notifications.forEach(function (n) { pm.expect(n.severity).to.eql('error'); }); });"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v2/packages/{{pkgAId}}/publish/{{publishId}}/notifications?severity=error"
+     },
+     "response": []
+    },
+    {
+     "name": "Failed publish notifications filter by an absent severity",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Absent severity filter succeeds', function () { pm.response.to.have.status(200); });",
+         "pm.test('No hint is stored', function () { pm.expect(pm.response.json().notifications).to.eql([]); });"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v2/packages/{{pkgAId}}/publish/{{publishId}}/notifications?severity=hint"
+     },
+     "response": []
+    },
+    {
+     "name": "Failed publish notifications filter by category",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Category filter succeeds', function () { pm.response.to.have.status(200); });",
+         "var json = pm.response.json();",
+         "pm.test('Only parse-file messages are returned', function () { pm.expect(json.notifications.length).to.be.at.least(1); json.notifications.forEach(function (n) { pm.expect(n.category).to.eql('parse-file'); }); });"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v2/packages/{{pkgAId}}/publish/{{publishId}}/notifications?category=parse-file"
+     },
+     "response": []
+    },
+    {
+     "name": "Failed publish notifications filter by document",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Document filter succeeds', function () { pm.response.to.have.status(200); });",
+         "var json = pm.response.json();",
+         "var slug = pm.collectionVariables.get('brokenDocumentSlug');",
+         "pm.test('Only messages of the document are returned', function () { pm.expect(json.notifications.length).to.be.at.least(1); json.notifications.forEach(function (n) { pm.expect(n.documentId).to.eql(slug); }); });"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v2/packages/{{pkgAId}}/publish/{{publishId}}/notifications?documentId={{brokenDocumentSlug}}"
+     },
+     "response": []
+    },
+    {
+     "name": "Failed publish notifications filter by empty document",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Empty document filter succeeds', function () { pm.response.to.have.status(200); });",
+         "pm.test('Every returned message has no document', function () { pm.response.json().notifications.forEach(function (n) { pm.expect(n.documentId || '').to.eql(''); }); });"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v2/packages/{{pkgAId}}/publish/{{publishId}}/notifications?emptyDocumentId=true"
+     },
+     "response": []
+    },
+    {
+     "name": "Failed publish notifications first page",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('First page succeeds', function () { pm.response.to.have.status(200); });",
+         "pm.test('First page holds one message', function () { pm.expect(pm.response.json().notifications.length).to.eql(1); });"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v2/packages/{{pkgAId}}/publish/{{publishId}}/notifications?limit=1&page=0"
+     },
+     "response": []
+    },
+    {
+     "name": "Failed publish notifications page past the end",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Page past the end succeeds', function () { pm.response.to.have.status(200); });",
+         "pm.test('Page past the end is empty', function () { pm.expect(pm.response.json().notifications).to.eql([]); });"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v2/packages/{{pkgAId}}/publish/{{publishId}}/notifications?limit=1&page=50"
+     },
+     "response": []
+    },
+    {
+     "name": "Failed publish notifications reject overlapping document filters",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Overlapping filters are rejected with 400', function () { pm.response.to.have.status(400); });",
+         "pm.test('Overlapping filters carry code 6013', function () { pm.expect(pm.response.json().code).to.eql('6013'); });"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v2/packages/{{pkgAId}}/publish/{{publishId}}/notifications?documentId=x&emptyDocumentId=true"
+     },
+     "response": []
+    },
+    {
+     "name": "Failed publish notifications reject an unknown severity",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Unknown severity is rejected with 400', function () { pm.response.to.have.status(400); });",
+         "pm.test('Unknown severity carries code 9', function () { pm.expect(pm.response.json().code).to.eql('9'); });"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v2/packages/{{pkgAId}}/publish/{{publishId}}/notifications?severity=critical"
+     },
+     "response": []
+    },
+    {
+     "name": "Failed publish notifications export to xlsx",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Export succeeds', function () { pm.response.to.have.status(200); });",
+         "pm.test('Export is named after the publish id', function () {",
+         "    pm.expect(pm.response.headers.get('Content-Disposition')).to.include('Notifications_' + pm.collectionVariables.get('publishId') + '.xlsx');",
+         "});",
+         "pm.test('Export is not empty', function () { pm.expect(pm.response.stream.length).to.be.above(0); });"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v2/packages/{{pkgAId}}/publish/{{publishId}}/export/notifications"
+     },
+     "response": []
+    },
+    {
+     "name": "Failed publish notifications export rejects overlapping document filters",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Overlapping filters are rejected with 400', function () { pm.response.to.have.status(400); });",
+         "pm.test('Overlapping filters carry code 6013', function () { pm.expect(pm.response.json().code).to.eql('6013'); });"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v2/packages/{{pkgAId}}/publish/{{publishId}}/export/notifications?documentId=x&emptyDocumentId=true"
+     },
+     "response": []
+    },
+    {
+     "name": "Bulk statuses carry hasNotifications",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Bulk statuses succeed', function () { pm.response.to.have.status(200); });",
+         "var json = pm.response.json();",
+         "var failed = json.find(function (s) { return s.publishId === pm.collectionVariables.get('publishId'); });",
+         "var draft = json.find(function (s) { return s.publishId === pm.collectionVariables.get('brokenDraftPublishId'); });",
+         "pm.test('The failed publish reports notifications', function () { pm.expect(failed && failed.hasNotifications).to.eql(true); });",
+         "pm.test('The completed draft publish reports none', function () { pm.expect(draft && draft.hasNotifications).to.eql(false); });"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       },
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v2/packages/{{pkgAId}}/publish/statuses",
+      "body": {
+       "mode": "raw",
+       "raw": "{\"publishIds\": [\"{{publishId}}\", \"{{brokenDraftPublishId}}\"]}"
+      }
+     },
+     "response": []
+    },
+    {
+     "name": "Completed publish has no stored notifications",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Completed publish status is readable', function () { pm.response.to.have.status(200); });",
+         "var json = pm.response.json();",
+         "pm.test('Completed publish keeps its messages on the version, not on the publish', function () { pm.expect(json.status).to.eql('complete'); pm.expect(json.hasNotifications).to.eql(false); });"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v2/packages/{{pkgAId}}/publish/{{brokenDraftPublishId}}/status"
+     },
+     "response": []
+    },
+    {
+     "name": "Completed publish notifications are empty",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Completed publish notifications are readable', function () { pm.response.to.have.status(200); });",
+         "pm.test('Completed publish has no publish-level messages', function () { pm.expect(pm.response.json().notifications).to.eql([]); });"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v2/packages/{{pkgAId}}/publish/{{brokenDraftPublishId}}/notifications"
+     },
+     "response": []
+    },
+    {
+     "name": "Unknown publish notifications are not found",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Unknown publish is rejected with 404', function () { pm.response.to.have.status(404); });",
+         "pm.test('Unknown publish carries code 2611', function () { pm.expect(pm.response.json().code).to.eql('2611'); });"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v2/packages/{{pkgAId}}/publish/{{unknownPublishId}}/notifications"
+     },
+     "response": []
+    },
+    {
+     "name": "Unknown publish export is not found",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Unknown publish export is rejected with 404', function () { pm.response.to.have.status(404); });",
+         "pm.test('Unknown publish export carries code 2611', function () { pm.expect(pm.response.json().code).to.eql('2611'); });"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v2/packages/{{pkgAId}}/publish/{{unknownPublishId}}/export/notifications"
+     },
+     "response": []
+    },
+    {
+     "name": "Publish of another package is not found",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('A publish addressed through another package is rejected with 404', function () { pm.response.to.have.status(404); });",
+         "pm.test('It carries code 2611', function () { pm.expect(pm.response.json().code).to.eql('2611'); });"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "GET",
+      "header": [
+       {
+        "key": "api-key",
+        "value": "{{apiKey}}"
+       }
+      ],
+      "url": "{{baseUrl}}/api/v2/packages/{{pkgBId}}/publish/{{publishId}}/notifications"
+     },
+     "response": []
+    },
+    {
+     "name": "Publish notifications require authentication",
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Unauthenticated request is rejected', function () { pm.response.to.have.status(401); });"
+        ]
+       }
+      }
+     ],
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": "{{baseUrl}}/api/v2/packages/{{pkgAId}}/publish/{{publishId}}/notifications"
      },
      "response": []
     },

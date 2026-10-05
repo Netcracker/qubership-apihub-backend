@@ -178,6 +178,7 @@ The cleanup job affects the following database tables:
 - **build_depends** – related to `build`, all related records are automatically removed via cascade deletion
 - **build_result** – related to `build`, all related records are automatically removed via cascade deletion
 - **build_src** – related to `build`, all related records are automatically removed via cascade deletion
+- **build_notification** – related to `build`, all related records are automatically removed via cascade deletion
 - **favorite_packages** – related to `package_group`, all related records are automatically removed via cascade deletion
 - **operation** – related to `published_version`, all related records are automatically removed via cascade deletion
 - **operation_group** – related to `published_version`, all related records are automatically removed via cascade
@@ -255,7 +256,9 @@ unreferenced data regardless of age, as unreferenced data serves no purpose in t
 APIHUB backend implements an automatic cleanup mechanism for build data to reduce database and S3 storage size. The
 system runs a scheduled job that removes builds older than a fixed retention period: 1 week for successful builds and
 30 days for failed ones. When S3 storage is enabled, the job also removes the build results of these builds from the
-bucket, and deletes expired objects that no longer correspond to any build in the database.
+bucket, and deletes expired objects that no longer correspond to any build in the database. The notifications a
+failed build stored (`build_notification`) are removed with its sources, and the `hasNotifications` flag of the build
+is cleared, so the publish status stops offering messages that no longer exist.
 
 ### Configuration
 
@@ -280,17 +283,18 @@ The builds cleanup job performs the following steps:
 1. Checks if any migrations are running - if so, it skips execution to avoid conflicts.
 2. Checks the `build_cleanup_run` table - if the previous run happened within the current schedule interval, it skips
    execution.
-3. With S3 storage disabled, deletes expired builds from `build_src` and `build_result`, then performs VACUUM FULL on
-   both tables.
+3. With S3 storage disabled, deletes expired builds from `build_src`, `build_result` and `build_notification`, then
+   performs VACUUM FULL on the three tables.
 4. With S3 storage enabled, removes the build results of expired builds from the bucket, deletes the corresponding
-   `build_src` records and performs VACUUM FULL on `build_src`.
+   `build_src` and `build_notification` records and performs VACUUM FULL on both tables.
 5. With S3 storage enabled, runs the expired S3 files phase: walks the `build_result/` prefix in the bucket and removes
    every object older than 45 days, regardless of whether it is still referenced in the database. The threshold is a
    constant in the code, not a configuration property. It keeps a margin above the 30-day retention of failed builds,
    otherwise the sweep would remove files of builds that are still referenced. The sweep restarts from the beginning of
    the prefix on every run, as no progress is stored between runs.
 6. Writes the results of the phase to the `build_cleanup_run` table, into the `expired_s3_files_count` and
-   `expired_s3_files_details` columns.
+   `expired_s3_files_details` columns. The number of removed notifications is recorded in the `build_notification`
+   column of the same table.
 
 ## Maintenance Vacuum
 

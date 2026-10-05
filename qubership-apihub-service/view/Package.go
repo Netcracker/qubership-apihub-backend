@@ -386,6 +386,11 @@ type BuildNotificationsFile struct {
 	Notifications []BuilderNotification `json:"notifications" validate:"dive,required"`
 }
 
+type FailedBuildNotifications struct {
+	Notifications           []BuilderNotification `json:"notifications" validate:"required,dive"`
+	ComparisonNotifications []BuilderNotification `json:"comparisonNotifications" validate:"required,dive"`
+}
+
 type ComparisonNotificationsFile struct {
 	Comparisons []ComparisonNotifications `json:"comparisons" validate:"dive,required"`
 }
