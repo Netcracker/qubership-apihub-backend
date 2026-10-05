@@ -622,16 +622,17 @@ func MakePackageParentView(entity *PackageEntity) *view.ParentPackageInfo {
 
 func MakePackageVersionRef(entity *PackageVersionRichEntity) view.PackageVersionRef {
 	return view.PackageVersionRef{
-		RefPackageId:      entity.PackageId,
-		RefPackageName:    entity.PackageName,
-		RefPackageVersion: view.MakeVersionRefKey(entity.Version, entity.Revision),
-		Kind:              entity.Kind,
-		Status:            entity.Status,
-		DeletedAt:         entity.DeletedAt,
-		DeletedBy:         entity.DeletedBy,
-		ParentNames:       entity.ParentNames,
-		ServiceName:       entity.ServiceName,
-		NotLatestRevision: entity.NotLatestRevision,
+		RefPackageId:        entity.PackageId,
+		RefPackageName:      entity.PackageName,
+		RefPackageVersion:   view.MakeVersionRefKey(entity.Version, entity.Revision),
+		Kind:                entity.Kind,
+		Status:              entity.Status,
+		ApiProcessorVersion: entity.Metadata.GetBuilderVersion(),
+		DeletedAt:           entity.DeletedAt,
+		DeletedBy:           entity.DeletedBy,
+		ParentNames:         entity.ParentNames,
+		ServiceName:         entity.ServiceName,
+		NotLatestRevision:   entity.NotLatestRevision,
 	}
 }
 

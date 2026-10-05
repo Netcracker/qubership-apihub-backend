@@ -36,6 +36,8 @@ func (s *enrichmentRepoStub) GetVersionsErrorSummary(_ context.Context, versionK
 	return result, nil
 }
 
+const testApiProcessorVersion = "4.2.1"
+
 func richVersion(packageId string, version string, revision int, previousVersion string) *entity.PackageVersionRichEntity {
 	return &entity.PackageVersionRichEntity{
 		PublishedVersionEntity: entity.PublishedVersionEntity{
@@ -44,6 +46,7 @@ func richVersion(packageId string, version string, revision int, previousVersion
 			Revision:        revision,
 			PreviousVersion: previousVersion,
 			Status:          string(view.Draft),
+			Metadata:        entity.Metadata{entity.BUILDER_VERSION_KEY: testApiProcessorVersion},
 		},
 		PackageName: packageId,
 		Kind:        entity.KIND_PACKAGE,
@@ -104,6 +107,9 @@ func TestGetPackageVersionRefsMapReportsErrorFlags(t *testing.T) {
 			ref, exists := refs["QS.SVC1@2026.1@2"]
 			if !exists {
 				t.Fatalf("expected the reference to be keyed by package, version and revision, got %v", refs)
+			}
+			if ref.ApiProcessorVersion != testApiProcessorVersion {
+				t.Errorf("apiProcessorVersion = %q, want %q", ref.ApiProcessorVersion, testApiProcessorVersion)
 			}
 			if ref.HasErrors != tt.expectedHasErrors {
 				t.Errorf("hasErrors = %v, want %v", ref.HasErrors, tt.expectedHasErrors)
