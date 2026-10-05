@@ -405,9 +405,9 @@ paths:
                   type: string
                 notifications:
                   description: |
-                    Messages the build had raised before it failed, sent with **error** status only. Builders should
-                    send a file part with a file name, such as `failed-build-notifications.json`; the backend must
-                    also accept a plain form field holding the same JSON, and ignores the part's `Content-Type`. The
+                    Messages the build had raised before it failed, sent with **error** status only. Builders send a
+                    file part with a file name, such as `failed-build-notifications.json`. The backend reads it as a
+                    file and ignores its `Content-Type`; a plain form field without a file name is not read. The
                     content follows the FailedBuildNotifications schema, not the archive's notifications.json.
 
                     An invalid part (not JSON, not valid against FailedBuildNotifications, or sent more than once)
