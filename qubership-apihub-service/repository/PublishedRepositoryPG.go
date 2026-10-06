@@ -2725,7 +2725,9 @@ func (p publishedRepositoryImpl) GetVersionNotifications(ctx context.Context, pa
 		query.Where("category in (?)", pg.In(filter.Categories))
 	}
 
-	err := query.Order("id").Limit(filter.Limit).Offset(filter.Offset).Select()
+	err := query.OrderExpr(`CASE severity WHEN 'error' THEN 0 WHEN 'warning' THEN 1 WHEN 'information' THEN 2 ELSE 3 END,
+		category, message, document_id NULLS FIRST, id`).
+		Limit(filter.Limit).Offset(filter.Offset).Select()
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return ents, nil
@@ -2750,7 +2752,9 @@ func (p publishedRepositoryImpl) GetComparisonNotifications(ctx context.Context,
 	if len(filter.Categories) > 0 {
 		query.Where("category in (?)", pg.In(filter.Categories))
 	}
-	err := query.Order("id").Limit(filter.Limit).Offset(filter.Offset).Select()
+	err := query.OrderExpr(`CASE severity WHEN 'error' THEN 0 WHEN 'warning' THEN 1 WHEN 'information' THEN 2 ELSE 3 END,
+		category, message, document_id NULLS FIRST, id`).
+		Limit(filter.Limit).Offset(filter.Offset).Select()
 	if err != nil {
 		if err == pg.ErrNoRows {
 			return ents, nil

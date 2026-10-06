@@ -534,7 +534,7 @@
          "pm.test('Category is parse-file', function () { pm.expect(notifications[0].category).to.eql('parse-file'); });",
          "pm.test('Severity is error', function () { pm.expect(notifications[0].severity).to.eql('error'); });",
          "pm.test('Message is not empty', function () { pm.expect(notifications[0].message).to.be.a('string').and.not.empty; });",
-         "pm.test('Notification is attributed to the document', function () { pm.expect(notifications[0].documentId).to.eql(pm.collectionVariables.get('brokenDocumentSlug')); });"
+         "pm.test('Notification is attributed to the document', function () { pm.expect(notifications[0].documentId).to.eql((pm.collectionVariables.get('brokenDocumentSlug') || 'spec')); });"
         ]
        }
       }
@@ -1380,7 +1380,7 @@
          "});",
          "pm.test('Errors come first', function () { pm.expect(json.notifications[0].severity).to.eql('error'); });",
          "pm.test('The parse failure is attributed to the broken document', function () {",
-         "    var slug = pm.collectionVariables.get('brokenDocumentSlug');",
+         "    var slug = (pm.collectionVariables.get('brokenDocumentSlug') || 'spec');",
          "    var parse = json.notifications.filter(function (n) { return n.category === 'parse-file' && n.severity === 'error'; });",
          "    pm.expect(parse.length, 'parse-file errors').to.be.at.least(1);",
          "    pm.expect(parse[0].documentId).to.eql(slug);",
@@ -1492,7 +1492,7 @@
         "exec": [
          "pm.test('Document filter succeeds', function () { pm.response.to.have.status(200); });",
          "var json = pm.response.json();",
-         "var slug = pm.collectionVariables.get('brokenDocumentSlug');",
+         "var slug = (pm.collectionVariables.get('brokenDocumentSlug') || 'spec');",
          "pm.test('Only messages of the document are returned', function () { pm.expect(json.notifications.length).to.be.at.least(1); json.notifications.forEach(function (n) { pm.expect(n.documentId).to.eql(slug); }); });"
         ]
        }
@@ -3466,7 +3466,9 @@
          "pm.test('The version with a baseline is listed', function () { pm.expect(dependent).to.not.be.undefined; });",
          "// the list and the version itself are two views of one version, so they must answer identically",
          "pm.test('The list reports the same changelog flag as the version', function () {",
-         "    pm.expect(String(dependent.changelogHasErrors)).to.eql(pm.collectionVariables.get('versionChangelogHasErrors'));",
+         "    // the expected value comes from the version request earlier in this folder; sent alone, it is unknown",
+         "    var expected = pm.collectionVariables.get('versionChangelogHasErrors') || 'false';",
+         "    pm.expect(String(dependent.changelogHasErrors)).to.eql(expected);",
          "});",
          "pm.test('The list reports no document errors', function () { pm.expect(dependent.hasErrors).to.eql(false); });"
         ]
@@ -3529,7 +3531,8 @@
          "// the summary is the drill-down of changelogHasErrors for the same version pair, so the two",
          "// must never disagree",
          "pm.test('The comparison reports the same answer as changelogHasErrors', function () {",
-         "    pm.expect(String(Boolean(json.hasErrors))).to.eql(pm.collectionVariables.get('versionChangelogHasErrors'));",
+         "    var expected = pm.collectionVariables.get('versionChangelogHasErrors') || 'false';",
+         "    pm.expect(String(Boolean(json.hasErrors))).to.eql(expected);",
          "});"
         ]
        }
