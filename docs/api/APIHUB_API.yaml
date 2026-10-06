@@ -6629,6 +6629,22 @@ paths:
       summary: Export DDL changes to xlsx file
       description: |
         Export DDL contract changes between two compared package versions. Only `table` entities are supported now.
+
+        The workbook has a `Summary` tab in addition to `DDL`. Unlike the REST API changes export, which has one
+        Summary column per referenced package to support dashboards, the DDL Summary sheet always has a single
+        data column: the per-severity counts of impacted entities across the whole export, alongside the package,
+        service and version identifiers of the exported version.
+
+        The report has one row per individual change. The entity columns are repeated on every row of the same
+        entity, and the `Change Description`, `Change Severity` and `Change Action` columns carry that one change.
+        An entity whose comparison carries no individual changes is still reported as a single row with those three
+        columns empty. `Change Severity` uses the report wording, so `semi-breaking` is rendered as
+        `requires attention`. The `DDL` tab has no per-severity count columns; the per-severity counts of impacted
+        entities are on the `Summary` tab instead.
+
+        The `severity` filter selects entities, not individual changes: an entity that has at least one change of a
+        requested severity is exported with all of its changes, the same way the REST API changes export behaves.
+
         The `Group` column lists the manual DDL table groups the entity belongs to, comma-separated. Groups are
         defined per package version, so the column is empty for an entity that belongs to no group and for an
         entity that exists only in the previous version.
