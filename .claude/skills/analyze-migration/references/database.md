@@ -1,0 +1,90 @@
+# Targeted database diagnostics
+
+Read this reference only when an identified category or unmigrated object lacks evidence for a verdict.
+The connection details must already have been collected with the migration ID, APIHub URL, API key, and release.
+Do not run queries just because DB access is available. Do not run this reference as a checklist over every build.
+
+## Connect through the scripts
+
+Use an existing PostgreSQL account restricted to SELECT on the required tables and schema access.
+The scripts never create accounts, change grants, or repair data. Never substitute an account with write access.
+Install/configure prerequisites outside this analysis workflow: Go, `psql`, and network access.
+The env files are gitignored local files. Do not read, print, create, or edit them during analysis.
+
+Connection variables are loaded from `.env.before` or `.env.after` at the repository root.
+Source the appropriate file into the process environment immediately before running a query script.
+Use `set -a; source .env.after; set +a` (or the Git Bash equivalent).
+Do not print the file contents; do not write to it.
+
+Bind only in the process running the query. The required names are:
+`PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `DB_SCHEMA`, `PGSSLMODE`,
+and either `PGPASSWORD` (plain-text password from the env file) or `PGPASSFILE` (path to an existing password file) — not both.
+Set `PGSSLROOTCERT`, `PGSSLCERT`, and `PGSSLKEY` only to paths supplied in the env file when the connection requires them.
+Do not weaken TLS after a connection failure or store a password on the command line.
+Clear process variables after the analysis.
+On PowerShell, process environment variables use `$env:PGHOST`, etc.; `go run` works natively on Windows without Git Bash.
+
+For example, with the actual IDs from the report bound to the variables:
+
+```bash
+go run .claude/skills/analyze-migration/scripts/query-suspicious-build/ \
+    operation.PreviousReleaseVersions "$MIGRATION_ID" "$BUILD_ID" "$OPERATION_ID"
+```
+
+The shared helper runs `psql` without startup files or interactive password prompts, stops on SQL errors,
+and wraps the fixed SELECT in a repeatable-read, read-only transaction. It also forces read-only sessions and timeouts.
+These transient settings do not change server configuration. No script accepts SQL text, a SQL filename, or arbitrary `psql` options.
+Statements and parameters are separated: SQL literals use `:'name'`, and the validated schema uses `:"db_schema"`.
+Result JSON is emitted only after `psql` completes successfully. No query writes an output file.
+
+## Choose one query
+
+Use [query-suspicious-build](../scripts/query-suspicious-build/) only for the categories listed below.
+Its first three arguments are always `CATEGORY MIGRATION_ID BUILD_ID`.
+
+| Category | Remaining arguments | Evidence returned |
+| --- | --- | --- |
+| `operation.PreviousReleaseVersions` | `OPERATION_ID` | Saved field diff, current operation list, publication time, and current builder/migration metadata |
+| `operation_comparison.NotFound`, `.Unexpected`, `.Changes`, `.ChangesSummary`, `.TotalChangesSummary`, `.ComparisonInternalDocumentId` | `COMPARISON_ID OPERATION_ID PREVIOUS_OPERATION_ID` | Saved change for that category, current comparison sides, operation-comparison presence and document/hash links |
+| `comparison_internal_document.NotFound`, `.Unexpected`, `.Hash` | `DOCUMENT_ID PACKAGE VERSION REVISION PREVIOUS_PACKAGE PREVIOUS_VERSION PREVIOUS_REVISION` | Saved change for that category, current document/hash, and whether its data exists |
+
+Pass an empty operation ID as `""` when one side is absent; at least one operation ID must be non-empty.
+Take comparison IDs and both operation IDs from the saved composite change key. Do not infer the previous revision from the current latest revision.
+Documents may belong to referenced comparisons rather than the build's own package. Establish the exact document comparison tuple first.
+If it is unavailable, report the missing tuple instead of searching all documents or guessing based on the document name.
+
+For a missing status or dependency fact, use [query-version](../scripts/query-version/):
+
+| Arguments | When to use |
+| --- | --- |
+| `release-status MIGRATION_ID PACKAGE VERSION REVISION` | A specific revision's status is needed to explain an unresolved `PreviousReleaseVersions` change |
+| `unmigrated-version MIGRATION_ID PACKAGE VERSION REVISION` | A post-check object lacks an explanation: inspect its current version, package kind, and tasks in this migration |
+| `dependencies MIGRATION_ID PACKAGE VERSION REVISION` | Reference dependencies of that exact object are the missing evidence |
+
+For an unresolved post-check comparison, use [query-comparison](../scripts/query-comparison/) with
+`MIGRATION_ID PACKAGE VERSION REVISION PREVIOUS_PACKAGE PREVIOUS_VERSION PREVIOUS_REVISION`.
+Query each side with `query-version` only if its status, tasks, or dependencies are also needed.
+Do not call every mode for every object. Identify the missing fact before each call and reuse results already obtained.
+
+## Interpret the evidence
+
+- Confirm that the installed backend schema matches the script's tables and fields using source at the established release.
+  If a query fails due to a schema difference, report it; do not alter the database or improvise replacement SQL.
+- `migrated_version_changes` contains the saved comparison; the other tables describe the state at collection time.
+  The schema may store its revision as text, so the script casts it when joining published objects.
+- `rows: []` means the query returned no matching rows. It is not proof of expected behaviour or a historical absence.
+- Presence flags distinguish an absent current object from an absent saved sample. A SQL/connection failure is not an empty result.
+- Where a result may contain multiple rows, the scripts fetch at most 101 and return 100 with a truncation flag.
+  Do not claim full coverage when `truncated` or `builds_truncated` is true; report the missing coverage.
+- Suspicious queries filter by build ID (indexed by schema migration 18); version/document queries use exact object keys,
+  and operation comparisons filter by the comparison ID indexed in migration 2. Verify these against the deployed schema.
+  Task filtering also reads JSON metadata and may scan more rows than it returns. A row limit does not bound scan cost;
+  keep the timeout, query only unresolved objects, and do not retry repeatedly or add indexes during analysis.
+- A task absent from `build` may never have been scheduled or may no longer be retained. Current rows alone do not establish which.
+  Dashboard references matter even when the version has no `previousVersion`.
+- The initial scripts return metadata and links, not document bytes, full build configurations, or archives.
+  An absent archive entry, semantic hash change, or original builder behaviour may still require an archive, historical logs, or tagged code.
+  Retain **insufficient data** and name that evidence rather than widening the query or making a verdict from a hash alone.
+
+Record the selected script/mode, category, exact object keys, collection time, and limitations in the report.
+Keep connection details, password-file paths/contents, and API keys out of the report. The only file writes remain the two final reports.
