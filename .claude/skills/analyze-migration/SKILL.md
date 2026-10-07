@@ -88,9 +88,7 @@ Inspect `status`, `startedAt`, `finishedAt`, `stages`, counters, `errorDetails`,
 Analyse `complete`, `failed`, and `cancelled` runs, retaining the distinction between those outcomes.
 For `running` or `cancelling`, report that this is an interim snapshot; do not issue a final migration verdict or poll indefinitely.
 
-Use `migrationChanges[].affectedBuildSample` as the single example for that category.
-Do not fetch all `/suspiciousBuilds` pages or download build archives in this initial workflow.
-If a category has no sample, report insufficient data for it. Preserve the category name and affected count.
+Note the list of `migrationChanges` categories and their `affectedBuildsCount` from the report; the build samples are fetched per category in section 3.
 Counts are not disjoint: a build may belong to several categories.
 
 ## 2. Collect code changes from branches — pause for review
@@ -154,10 +152,24 @@ Do not proceed to section 3 until the user confirms.
 
 ## 3. Explain suspicious builds
 
-For every `migrationChanges` category:
+### 3.1 Fetch up to 5 samples per category
 
-1. Identify its sample by package, version, revision, build ID, build type, and comparison sides where present.
-2. Read the relevant entries in `affectedBuildSample.changes`, preserving old/new values and original messages.
+For every `migrationChanges` category, fetch up to 5 random suspicious builds.
+Source `.env.after` and run [get-suspicious-builds](scripts/get-suspicious-builds/) from the repository root:
+
+```bash
+go run .claude/skills/analyze-migration/scripts/get-suspicious-builds/ CATEGORY
+```
+
+If the request fails or returns fewer than 5 builds, use whatever is available.
+Do not fetch further pages beyond the initial 5. Keep all results in memory.
+
+### 3.2 Analyse each sample
+
+For every build returned for each category:
+
+1. Identify the build by package, version, revision, build ID, build type, and comparison sides where present.
+2. Read the relevant entries in the build's `changes`, preserving old/new values and original messages.
 3. Connect the observed difference to the code changes, PRs, and issues collected in section 2.
 4. If evidence is insufficient, state the missing fact and consult [targeted DB diagnostics](references/database.md).
    Source `.env.after` before running any DB script.
@@ -176,7 +188,7 @@ An expected verdict requires evidence that the observed values follow the intend
 A similar PR title or a changed hash alone is insufficient. Absence of a release note does not establish a defect.
 If only hashes or counts are available and the semantic cause cannot be established, name the specific source/result data needed.
 Inspect the comparison implementation before interpreting `NotFound`/`Unexpected`; some versions use misleading category labels.
-Never generalise one sample to every build in a category, and never classify all suspicious builds as errors.
+Never generalise the analysed samples to every build in a category, and never classify all suspicious builds as errors.
 
 ## 4. Return findings
 
@@ -186,7 +198,7 @@ Return a report in the conversation, in the user's language, containing:
 - The release tag baseline and component repositories established in section 2.
 - A code-change summary: PRs and issues per repository, with titles and URLs.
 - A suspicious-change table: category, affected count, inspected sample, observed difference, cause, verdict, and PR/issue/code evidence.
-- Specific missing evidence and next actions for unresolved cases, plus the scope statement: one sample per category was inspected.
+- Specific missing evidence and next actions for unresolved cases, plus the scope statement: up to 5 samples per category were inspected.
 - For DB evidence, the script/mode, category, object keys, collection time, and whether the result was empty or truncated. Never include credentials.
 
 Clearly distinguish facts, supported conclusions, and hypotheses. Finish the supported analysis even if some cases remain unresolved.
