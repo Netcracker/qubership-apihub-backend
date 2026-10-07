@@ -102,11 +102,6 @@ func (a *BuildResultToEntitiesReader) ReadDocumentsToEntities(buildConfig *view.
 			}
 			if mcpEndpoint, exists := mcpEndpoints[document.FileId]; exists {
 				fileEntMetadata.SetMcpEndpoint(mcpEndpoint)
-			} else if document.HasErrors && view.GetContractTypeForDocumentType(document.Type) == view.ContractTypeMcp {
-				//without an endpoint the failure cannot be attributed to one, so contractsSummary.mcp will
-				//not report it and the version flag is the only signal the publisher gets
-				log.Warnf("MCP document %v of %v@%v of package %v failed to build and its build config names no mcpEndpoint, so the failure is reported on the version only",
-					document.Slug, a.PackageInfo.Version, a.PackageInfo.Revision, a.PackageInfo.PackageId)
 			}
 			index := i
 			if a.PackageInfo.MigrationBuild {
