@@ -16,8 +16,8 @@ import (
 type BuildRepository interface {
 	StoreBuild(ctx context.Context, buildEntity entity.BuildEntity, sourceEntity entity.BuildSourceEntity, depends []entity.BuildDependencyEntity) error
 	UpdateBuildStatus(ctx context.Context, buildId string, status view.BuildStatusEnum, details string) error
-	FailBuild(ctx context.Context, buildId string, details string, notifications []entity.BuildNotificationEntity) error
-	GetBuildNotifications(ctx context.Context, buildId string, filter view.NotificationsFilter) ([]entity.BuildNotificationEntity, error)
+	FailBuild(ctx context.Context, buildId string, details string, notifications []entity.ErrorBuildNotificationEntity) error
+	GetBuildNotifications(ctx context.Context, buildId string, filter view.NotificationsFilter) ([]entity.ErrorBuildNotificationEntity, error)
 	GetBuild(ctx context.Context, buildId string) (*entity.BuildEntity, error)
 	GetBuilds(ctx context.Context, buildIds []string) ([]entity.BuildEntity, error)
 	GetBuildSrc(ctx context.Context, buildId string) (*entity.BuildSourceEntity, error)
@@ -203,7 +203,7 @@ func (b buildRepositoryImpl) UpdateBuildStatus(ctx context.Context, buildId stri
 	})
 }
 
-func (b buildRepositoryImpl) FailBuild(ctx context.Context, buildId string, details string, notifications []entity.BuildNotificationEntity) error {
+func (b buildRepositoryImpl) FailBuild(ctx context.Context, buildId string, details string, notifications []entity.ErrorBuildNotificationEntity) error {
 	return b.cp.GetConnection().RunInTransaction(ctx, func(tx *pg.Tx) error {
 		ent, err := updateBuildStatusTx(tx, buildId, view.StatusError, details)
 		if err != nil {
@@ -271,8 +271,8 @@ func updateBuildStatusTx(tx *pg.Tx, buildId string, status view.BuildStatusEnum,
 	return ent, nil
 }
 
-func (b buildRepositoryImpl) GetBuildNotifications(ctx context.Context, buildId string, filter view.NotificationsFilter) ([]entity.BuildNotificationEntity, error) {
-	ents := make([]entity.BuildNotificationEntity, 0)
+func (b buildRepositoryImpl) GetBuildNotifications(ctx context.Context, buildId string, filter view.NotificationsFilter) ([]entity.ErrorBuildNotificationEntity, error) {
+	ents := make([]entity.ErrorBuildNotificationEntity, 0)
 	query := b.cp.GetConnection().WithContext(ctx).Model(&ents).
 		Where("build_id = ?", buildId)
 	if filter.DocumentId != "" {

@@ -77,7 +77,7 @@ func (b buildCleanUpRepositoryImpl) RemoveOldBuildEntities(ctx context.Context, 
 		}
 		cleanupEnt.BuildResult = deletedBuildResults
 		cleanupEnt.BuildSrc = deletedBuildSources
-		cleanupEnt.BuildNotification = deletedBuildNotifications
+		cleanupEnt.ErrorBuildNotification = deletedBuildNotifications
 		cleanupEnt.DeletedRows = cleanupEnt.DeletedRows + deletedBuildSources + deletedBuildResults + deletedBuildNotifications
 		if err = b.updateCleanupTx(tx, *cleanupEnt); err != nil {
 			return err
@@ -102,9 +102,9 @@ func (b buildCleanUpRepositoryImpl) RemoveOldBuildEntities(ctx context.Context, 
 }
 
 func (b buildCleanUpRepositoryImpl) vacuumBuildNotifications(ctx context.Context) error {
-	_, err := b.cp.GetConnection().WithContext(ctx).Exec("vacuum full build_notification")
+	_, err := b.cp.GetConnection().WithContext(ctx).Exec("vacuum full error_build_notification")
 	if err != nil {
-		return errors.Wrap(err, "failed to run vacuum for table build_notification")
+		return errors.Wrap(err, "failed to run vacuum for table error_build_notification")
 	}
 	return nil
 }
@@ -132,7 +132,7 @@ func (b buildCleanUpRepositoryImpl) RemoveOldBuildDataByIds(ctx context.Context,
 			return err
 		}
 		cleanupEnt.BuildSrc = deletedRows
-		cleanupEnt.BuildNotification = deletedNotifications
+		cleanupEnt.ErrorBuildNotification = deletedNotifications
 		cleanupEnt.DeletedRows = cleanupEnt.DeletedRows + deletedRows + deletedNotifications
 		if err = b.updateCleanupTx(tx, *cleanupEnt); err != nil {
 			return err
@@ -248,9 +248,9 @@ func (b buildCleanUpRepositoryImpl) removeBuildNotificationsByIds(tx *pg.Tx, ids
 	if len(ids) == 0 {
 		return 0, nil
 	}
-	result, err := tx.Exec(`delete from build_notification where build_id in (?)`, pg.In(ids))
+	result, err := tx.Exec(`delete from error_build_notification where build_id in (?)`, pg.In(ids))
 	if err != nil {
-		return 0, fmt.Errorf("failed to delete builds from table build_notification: %w", err)
+		return 0, fmt.Errorf("failed to delete builds from table error_build_notification: %w", err)
 	}
 	deletedRows = result.RowsAffected()
 

@@ -4,8 +4,8 @@ import (
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
 )
 
-type BuildNotificationEntity struct {
-	tableName struct{} `pg:"build_notification"`
+type ErrorBuildNotificationEntity struct {
+	tableName struct{} `pg:"error_build_notification"`
 
 	Id         int64  `pg:"id, type:bigint"`
 	BuildId    string `pg:"build_id, type:varchar"`
@@ -15,7 +15,7 @@ type BuildNotificationEntity struct {
 	DocumentId string `pg:"document_id, type:varchar, use_zero"`
 }
 
-func MakeBuildNotificationView(ent BuildNotificationEntity) view.Notification {
+func MakeErrorBuildNotificationView(ent ErrorBuildNotificationEntity) view.Notification {
 	return view.Notification{
 		Category:   ent.Category,
 		Severity:   ent.Severity,

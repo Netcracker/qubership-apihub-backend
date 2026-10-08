@@ -501,7 +501,7 @@ func (b *buildServiceImpl) UpdateBuildStatus(ctx context.Context, buildId string
 }
 
 func (b *buildServiceImpl) FailBuild(ctx context.Context, packageId string, buildId string, details string, notificationsPart []byte) error {
-	var notifications []entity.BuildNotificationEntity
+	var notifications []entity.ErrorBuildNotificationEntity
 	if notificationsPart != nil {
 		var part view.FailedBuildNotifications
 		err := json.Unmarshal(notificationsPart, &part)
@@ -518,13 +518,13 @@ func (b *buildServiceImpl) FailBuild(ctx context.Context, packageId string, buil
 			// only package builds store the part: a dashboard build compares one version pair per reference, and the
 			// flat part cannot tell the pairs apart
 			if pkg.Kind == entity.KIND_PACKAGE {
-				notifications = make([]entity.BuildNotificationEntity, 0, len(part.Notifications)+len(part.ComparisonNotifications))
+				notifications = make([]entity.ErrorBuildNotificationEntity, 0, len(part.Notifications)+len(part.ComparisonNotifications))
 				for _, notification := range slices.Concat(part.Notifications, part.ComparisonNotifications) {
 					severity, err := view.NotificationSeverityFromBuilder(notification.Severity)
 					if err != nil {
 						return fmt.Errorf("build %s: %w", buildId, err)
 					}
-					notifications = append(notifications, entity.BuildNotificationEntity{
+					notifications = append(notifications, entity.ErrorBuildNotificationEntity{
 						BuildId:    buildId,
 						Severity:   severity,
 						Category:   notification.Category,
@@ -559,7 +559,7 @@ func (b *buildServiceImpl) GetBuildNotifications(ctx context.Context, packageId 
 	}
 	result := view.Notifications{Notifications: make([]view.Notification, 0, len(ents))}
 	for _, notificationEnt := range ents {
-		result.Notifications = append(result.Notifications, entity.MakeBuildNotificationView(notificationEnt))
+		result.Notifications = append(result.Notifications, entity.MakeErrorBuildNotificationView(notificationEnt))
 	}
 	return &result, nil
 }

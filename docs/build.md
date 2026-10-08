@@ -80,7 +80,7 @@ never produced for it. Instead, the builder sends the messages it had raised bef
 The part is a JSON document with two lists, `notifications` and `comparisonNotifications`, in the integer-severity
 format of the archive files.
 
-The backend stores both lists as one in the `build_notification` table, in the transaction that marks the build
+The backend stores both lists as one in the `error_build_notification` table, in the transaction that marks the build
 failed, and sets `hasNotifications` in the build metadata. The flag is returned by the publish status endpoints. The
 messages are served by `GET /api/v2/packages/{packageId}/publish/{publishId}/notifications` (same filters and paging
 as the version notification endpoints, sorted most severe first) and exported as xlsx by

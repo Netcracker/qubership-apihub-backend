@@ -47,7 +47,7 @@ DROP TABLE IF EXISTS builder_notifications;
 -- Messages of a build that failed. A failed build publishes no version, so its messages cannot go to
 -- published_version_notification; they are kept against the build and removed with its sources by the
 -- build cleanup job.
-CREATE TABLE IF NOT EXISTS build_notification
+CREATE TABLE IF NOT EXISTS error_build_notification
 (
     id          bigint GENERATED ALWAYS AS IDENTITY,
     build_id    varchar NOT NULL,
@@ -55,15 +55,15 @@ CREATE TABLE IF NOT EXISTS build_notification
     category    varchar NOT NULL,
     message     varchar NOT NULL,
     document_id varchar,
-    CONSTRAINT pk_build_notification PRIMARY KEY (id),
-    CONSTRAINT build_notification_build_id_fk FOREIGN KEY (build_id)
+    CONSTRAINT pk_error_build_notification PRIMARY KEY (id),
+    CONSTRAINT error_build_notification_build_id_fk FOREIGN KEY (build_id)
         REFERENCES build (build_id) ON UPDATE CASCADE ON DELETE CASCADE
 );
 
 -- Serves the reads by build and the build_id foreign key: Postgres indexes the referenced side only, so without
 -- this a cascading delete of a build scans the whole table.
-CREATE INDEX IF NOT EXISTS build_notification_build_id_idx
-    ON build_notification (build_id);
+CREATE INDEX IF NOT EXISTS error_build_notification_build_id_idx
+    ON error_build_notification (build_id);
 
 ALTER TABLE build_cleanup_run
-    ADD COLUMN IF NOT EXISTS build_notification integer DEFAULT 0;
+    ADD COLUMN IF NOT EXISTS error_build_notification integer DEFAULT 0;

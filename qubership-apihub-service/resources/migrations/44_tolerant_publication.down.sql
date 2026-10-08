@@ -1,7 +1,7 @@
 ALTER TABLE build_cleanup_run
-    DROP COLUMN IF EXISTS build_notification;
+    DROP COLUMN IF EXISTS error_build_notification;
 
-DROP TABLE IF EXISTS build_notification;
+DROP TABLE IF EXISTS error_build_notification;
 
 CREATE TABLE IF NOT EXISTS builder_notifications
 (
