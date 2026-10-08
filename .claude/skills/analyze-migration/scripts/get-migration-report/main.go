@@ -18,7 +18,7 @@ func main() {
 		die("MIGRATION_ID is not a valid UUID")
 	}
 
-	endpoint := "/api/internal/migrate/operations/" + url.PathEscape(migrationID) + "?includeBuildSamples=true"
+	endpoint := "/api/internal/migrate/operations/" + url.PathEscape(migrationID) + "?includeBuildSamples=false"
 	resp, err := apiutil.Get(endpoint)
 	if err != nil {
 		die("cannot retrieve migration report: " + err.Error())

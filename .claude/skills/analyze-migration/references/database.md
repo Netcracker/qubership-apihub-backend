@@ -1,19 +1,20 @@
 # Targeted database diagnostics
 
 Read this reference only when an identified category or unmigrated object lacks evidence for a verdict.
-The connection details must already have been collected with the migration ID, APIHub URL, API key, and release.
+Use the migration ID and database side for the investigated build. Require that side's connection values before querying.
 Do not run queries just because DB access is available. Do not run this reference as a checklist over every build.
 
 ## Connect through the scripts
 
 Use an existing PostgreSQL account restricted to SELECT on the required tables and schema access.
 The scripts never create accounts, change grants, or repair data. Never substitute an account with write access.
-Install/configure prerequisites outside this analysis workflow: Go, `psql`, and network access.
-The env files are gitignored local files. Do not read, print, create, or edit them during analysis.
+The skill's initial tool check covers Go and `psql`; ask the user to install missing tools.
+Read the gitignored env files only to load the selected connection. Do not print, create, or edit them.
 
-Connection variables are loaded from `.env.before` or `.env.after` at the repository root.
-Source the appropriate file into the process environment immediately before running a query script.
-Use `set -a; source .env.after; set +a` (or the Git Bash equivalent).
+Connection variables are loaded from `.env.before` or `.env.after` in `.claude/skills/analyze-migration/`.
+Load only the selected connection values into the query process; do not pass APIHub keys to DB commands.
+Set process `MIGRATION_ID` to the investigated `PREV_MIG_ID` or `MIG_ID` from `.env.after`.
+Both migration reports use one APIHub deployment, independently of which DB snapshot is queried.
 Do not print the file contents; do not write to it.
 
 Bind only in the process running the query. The required names are:
@@ -27,7 +28,7 @@ On PowerShell, process environment variables use `$env:PGHOST`, etc.; `go run` w
 For example, with the actual IDs from the report bound to the variables:
 
 ```bash
-go run .claude/skills/analyze-migration/scripts/query-suspicious-build/ \
+go -C .claude/skills/analyze-migration run ./scripts/query-suspicious-build/ \
     operation.PreviousReleaseVersions "$MIGRATION_ID" "$BUILD_ID" "$OPERATION_ID"
 ```
 
@@ -83,8 +84,9 @@ Do not call every mode for every object. Identify the missing fact before each c
 - A task absent from `build` may never have been scheduled or may no longer be retained. Current rows alone do not establish which.
   Dashboard references matter even when the version has no `previousVersion`.
 - The initial scripts return metadata and links, not document bytes, full build configurations, or archives.
-  An absent archive entry, semantic hash change, or original builder behaviour may still require an archive, historical logs, or tagged code.
+  An absent archive entry, semantic hash change, or original builder behaviour may require source/result archives or pinned code.
+  Follow the archive instructions in [SKILL.md](../SKILL.md); do not fetch or request logs.
   Retain **insufficient data** and name that evidence rather than widening the query or making a verdict from a hash alone.
 
 Record the selected script/mode, category, exact object keys, collection time, and limitations in the report.
-Keep connection details, password-file paths/contents, and API keys out of the report. The only file writes remain the two final reports.
+Keep connection details, password-file paths/contents, and API keys out of the report. Save evidence and reports only in the run directory defined in [SKILL.md](../SKILL.md).

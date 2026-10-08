@@ -160,8 +160,9 @@ const sqlOperationComparison = `WITH sample AS (
 	FROM sample AS s
 	LEFT JOIN :"db_schema".version_comparison AS c ON c.comparison_id = :'comparison_id'
 	LEFT JOIN :"db_schema".operation_comparison AS o
-		ON o.comparison_id = c.comparison_id AND o.operation_id = :'operation_id'
-		AND o.previous_operation_id = :'previous_operation_id'
+		ON o.comparison_id = c.comparison_id
+		AND COALESCE(o.operation_id, '') = :'operation_id'
+		AND COALESCE(o.previous_operation_id, '') = :'previous_operation_id'
 	LIMIT 101
 )
 SELECT json_build_object('collected_at', CURRENT_TIMESTAMP, 'migration_id', :'migration_id',
