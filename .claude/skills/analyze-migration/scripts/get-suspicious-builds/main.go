@@ -8,6 +8,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"analyze-migration/internal/apiutil"
 )
 
 func main() {
@@ -19,47 +21,17 @@ func main() {
 		die("invalid CATEGORY")
 	}
 
-	baseRaw := os.Getenv("APIHUB_URL")
-	token := os.Getenv("APIHUB_API_KEY")
 	migrationID := os.Getenv("MIGRATION_ID")
-
-	if baseRaw == "" || token == "" || migrationID == "" {
-		die("APIHUB_URL, APIHUB_API_KEY, and MIGRATION_ID must be set")
-	}
-	if strings.ContainsAny(token, "\r\n") {
-		die("API key contains a newline")
-	}
-
-	parsed, err := url.Parse(strings.TrimRight(baseRaw, "/"))
-	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") ||
-		parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
-		die("use an absolute HTTP(S) base URL without credentials, a query, or a fragment")
-	}
 	if !isUUID(migrationID) {
 		die("MIGRATION_ID is not a valid UUID")
 	}
 
 	q := url.Values{}
-	q.Set("category", category)
+	q.Set("changedField", category)
 	q.Set("limit", "5")
-	endpoint := parsed.String() +
-		"/api/internal/migrate/operations/" + url.PathEscape(migrationID) +
+	endpoint := "/api/internal/migrate/operations/" + url.PathEscape(migrationID) +
 		"/suspiciousBuilds?" + q.Encode()
-
-	client := &http.Client{
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-		Timeout:       60 * time.Second,
-	}
-	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
-	if err != nil {
-		die("cannot build request: " + err.Error())
-	}
-	req.Header.Set("X-API-Key", token)
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := client.Do(req)
-	token = ""
-	_ = os.Unsetenv("APIHUB_API_KEY")
+	resp, err := apiutil.Get(endpoint)
 	if err != nil {
 		die("cannot retrieve suspicious builds: " + err.Error())
 	}
@@ -109,3 +81,57 @@ func die(msg string) {
 	fmt.Fprintln(os.Stderr, msg)
 	os.Exit(1)
 }
+
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"os"
+	"time"
+
+	"analyze-migration/internal/apiutil"
+)
+
+func main() {
+	if len(os.Args) != 2 {
+		die("Usage: get-apihub /api/PATH[?QUERY]")
+	}
+	resp, err := apiutil.Get(os.Args[1])
+	if err != nil {
+		die("cannot retrieve APIHub data: " + err.Error())
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		die(fmt.Sprintf("APIHub request returned HTTP %d", resp.StatusCode))
+	}
+	var body any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		die("response is not valid JSON: " + err.Error())
+	}
+	out := map[string]any{
+		"collectedAt": time.Now().UTC().Format(time.RFC3339),
+		"data":        body,
+	}
+	if err := json.NewEncoder(os.Stdout).Encode(out); err != nil {
+		die("cannot encode output: " + err.Error())
+	}
+}
+
+func die(msg string) {
+	fmt.Fprintln(os.Stderr, msg)
+	os.Exit(1)
+}
+
+github.com
+  X Failed to log in to github.com account dmuratkan (keyring)
+  - Active account: true
+  - The token in keyring is invalid.
+  - To re-authenticate, run: gh auth refresh -h github.com
+  - To forget about this account, run: gh auth logout -h github.com -u dmuratkan
+0553767d5a0ee45207c77bf226fb487b1fbc2b51
+0553767 feat: analyze 5 suspicious from each category
+10e2fd4 feat: add skill for migartion analysis
+
+

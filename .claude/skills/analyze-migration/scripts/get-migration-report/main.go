@@ -6,53 +6,20 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 	"time"
+
+	"analyze-migration/internal/apiutil"
 )
 
 func main() {
-	baseRaw := os.Getenv("APIHUB_URL")
-	token := os.Getenv("APIHUB_API_KEY")
 	migrationID := os.Getenv("MIGRATION_ID")
-
-	if baseRaw == "" || token == "" || migrationID == "" {
-		die("APIHUB_URL, APIHUB_API_KEY, and MIGRATION_ID must be set")
-	}
-	if strings.ContainsAny(token, "\r\n") {
-		die("API key contains a newline")
-	}
-	for _, c := range baseRaw {
-		if c < 32 {
-			die("APIHUB_URL contains a control character")
-		}
-	}
-
-	parsed, err := url.Parse(strings.TrimRight(baseRaw, "/"))
-	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") ||
-		parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
-		die("use an absolute HTTP(S) base URL without credentials, a query, or a fragment")
-	}
 
 	if !isUUID(migrationID) {
 		die("MIGRATION_ID is not a valid UUID")
 	}
 
-	endpoint := parsed.String() + "/api/internal/migrate/operations/" + url.PathEscape(migrationID) + "?includeBuildSamples=true"
-
-	client := &http.Client{
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-		Timeout:       60 * time.Second,
-	}
-	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
-	if err != nil {
-		die("cannot build request: " + err.Error())
-	}
-	req.Header.Set("X-API-Key", token)
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := client.Do(req)
-	token = ""
-	_ = os.Unsetenv("APIHUB_API_KEY")
+	endpoint := "/api/internal/migrate/operations/" + url.PathEscape(migrationID) + "?includeBuildSamples=true"
+	resp, err := apiutil.Get(endpoint)
 	if err != nil {
 		die("cannot retrieve migration report: " + err.Error())
 	}

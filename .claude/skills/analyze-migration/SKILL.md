@@ -44,19 +44,34 @@ Verify that `.env.before` and `.env.after` exist in `.claude/skills/analyze-migr
 If either file is missing, tell the user to create it from `.claude/skills/analyze-migration/.env.example` and wait.
 
 `.env.before` supplies `BRANCH_BEFORE` and the DB connection for the pre-migration (source) database.
-`.env.after` supplies `APIHUB_URL`, `APIHUB_API_KEY`, `MIGRATION_ID`, `BRANCH_AFTER`, and the DB connection for the post-migration (target) database.
+`.env.after` supplies `APIHUB_URL`, `APIHUB_API_KEY`, `APIHUB_READ_ONLY_API_KEY`, `MIGRATION_ID`, `BRANCH_AFTER`, and the DB connection for the post-migration (target) database.
 Both files are gitignored. Do not print their contents; do not write to them. Do not ask for any of these values in chat.
 
-Read `BRANCH_BEFORE` from `.env.before` and `APIHUB_URL`, `APIHUB_API_KEY`, `MIGRATION_ID`, `BRANCH_AFTER` from `.env.after` into memory at startup.
+Read `BRANCH_BEFORE` from `.env.before` and `APIHUB_URL`, `MIGRATION_ID`, `BRANCH_AFTER` from `.env.after` into memory at startup.
 Source each file into the process environment only when a script that needs those values is about to run.
 Use `set -a; source .env.after; set +a` (or the equivalent in the active shell) to populate variables without printing them.
 For `.env.after` DB vars, source `.env.after`; for `.env.before` DB vars, source `.env.before`.
 
-Do not repeat `APIHUB_API_KEY` in confirmations, progress messages, or findings.
-Keep the API key in a temporary process environment variable, never in a file.
-Send it only to the `APIHUB_URL` loaded from `.env.after`, not to GitHub or any other service.
+Load API keys into process environment variables only for an APIHub request. Do not repeat either key in confirmations, progress messages, or findings.
+Keep loaded keys in memory; never copy them to another file or persistent environment setting.
+Send keys only to the `APIHUB_URL` loaded from `.env.after`, not to GitHub or any other service.
 Do not enable request tracing or forward it across redirects.
-Reject CR/LF characters in `APIHUB_API_KEY`.
+Reject CR/LF characters in either selected key.
+
+### API key selection
+
+All APIHub requests use [apiutil](internal/apiutil/client.go), which sends only GET requests with the `api-key` header:
+
+| Request path | Environment variable |
+| --- | --- |
+| `/api/internal/migrate/operations/{migrationId}` | `APIHUB_API_KEY` |
+| `/api/internal/migrate/operations/{migrationId}/suspiciousBuilds` | `APIHUB_API_KEY` |
+| Any other APIHub path | `APIHUB_READ_ONLY_API_KEY` |
+
+The first two paths require a UUID migration ID and an exact path match. Query parameters do not change the selected key.
+`APIHUB_READ_ONLY_API_KEY` must be a separate key issued with the `viewer` role for the required packages.
+It may remain empty for the standard analysis. An additional request fails if it is missing; never substitute the migration key or retry with broader credentials after 401/403.
+The helper restricts how credentials are used; the server-side role must enforce the read-only key's permissions.
 
 ## 1. Retrieve the report
 
@@ -64,19 +79,19 @@ Source `.env.after` to populate `APIHUB_URL`, `APIHUB_API_KEY`, `MIGRATION_ID`, 
 These are process variables, not persistent machine settings.
 Require an absolute HTTP(S) base URL without embedded credentials, a query, or a fragment. Preserve any deployment path prefix.
 URL-encode the migration ID as a single path segment.
-Do not print environment variables. Unset the API key when the API request has finished, including on failure.
+Do not print environment variables. Clear both API keys from the request process and any parent process that loaded them, including on failure.
 
 Run [get-migration-report](scripts/get-migration-report/) from the repository root:
 
 ```bash
-go run .claude/skills/analyze-migration/scripts/get-migration-report/
+go -C .claude/skills/analyze-migration run ./scripts/get-migration-report/
 ```
 
 Go must be installed in the execution environment. The program runs on Linux, macOS, and Windows without additional shell tools.
 Do not silently switch environments if doing so loses the supplied credentials or certificate paths.
 The script issues only the report GET, refuses redirects, verifies TLS, and emits JSON with `collectedAt` and `report`.
 Keep the output in memory. Include the collection time, URL, migration ID in findings, separately from the token.
-Clear the API key from any parent process environment you populated as well as from the request process.
+The shared helper clears both key variables in the request process before sending the request. Also clear them in any parent process you populated.
 
 Analyse the JSON in the command output. If the tool truncates it, identify the missing coverage and request the omitted data from the user.
 Do not claim to have inspected categories or objects absent from the visible output, and do not save a file to work around truncation.
@@ -91,7 +106,7 @@ For `running` or `cancelling`, report that this is an interim snapshot; do not i
 Note the list of `migrationChanges` categories and their `affectedBuildsCount` from the report; the build samples are fetched per category in section 3.
 Counts are not disjoint: a build may belong to several categories.
 
-## 2. Collect code changes from branches — pause for review
+## 2. Collect code changes from branches Ã¢â‚¬â€ pause for review
 
 This section is a checkpoint. Complete it fully, return all findings to the user, and **stop**.
 Do not proceed to section 3 until the user explicitly confirms the code-change summary looks correct.
@@ -109,7 +124,7 @@ Repeat the following for each repository: `Netcracker/qubership-apihub-backend` 
 **a. Get commits between the two branches.**
 
 ```bash
-go run .claude/skills/analyze-migration/scripts/get-release-evidence/ compare OWNER/REPO BRANCH_BEFORE BRANCH_AFTER
+go -C .claude/skills/analyze-migration run ./scripts/get-release-evidence/ compare OWNER/REPO BRANCH_BEFORE BRANCH_AFTER
 ```
 
 The `commits` array contains commits present in `BRANCH_AFTER` but not in `BRANCH_BEFORE`.
@@ -120,20 +135,20 @@ If `ahead_by` is 0 or the command fails, report that no diverging commits were f
 For each commit SHA:
 
 ```bash
-go run .claude/skills/analyze-migration/scripts/get-release-evidence/ pulls OWNER/REPO SHA
+go -C .claude/skills/analyze-migration run ./scripts/get-release-evidence/ pulls OWNER/REPO SHA
 ```
 
 For each returned PR number, fetch PR details:
 
 ```bash
-go run .claude/skills/analyze-migration/scripts/get-release-evidence/ pr OWNER/REPO NUMBER
+go -C .claude/skills/analyze-migration run ./scripts/get-release-evidence/ pr OWNER/REPO NUMBER
 ```
 
 Extract issue references from the PR body (patterns such as `#NNN`, `Closes #NNN`, `Fixes #NNN`, `Resolves #NNN`).
 For each referenced issue number:
 
 ```bash
-go run .claude/skills/analyze-migration/scripts/get-release-evidence/ issue OWNER/REPO NUMBER
+go -C .claude/skills/analyze-migration run ./scripts/get-release-evidence/ issue OWNER/REPO NUMBER
 ```
 
 Keep all outputs in memory. Do not fetch duplicate PRs or issues already retrieved.
@@ -158,7 +173,7 @@ For every `migrationChanges` category, fetch up to 5 random suspicious builds.
 Source `.env.after` and run [get-suspicious-builds](scripts/get-suspicious-builds/) from the repository root:
 
 ```bash
-go run .claude/skills/analyze-migration/scripts/get-suspicious-builds/ CATEGORY
+go -C .claude/skills/analyze-migration run ./scripts/get-suspicious-builds/ CATEGORY
 ```
 
 If the request fails or returns fewer than 5 builds, use whatever is available.
@@ -189,6 +204,22 @@ A similar PR title or a changed hash alone is insufficient. Absence of a release
 If only hashes or counts are available and the semantic cause cannot be established, name the specific source/result data needed.
 Inspect the comparison implementation before interpreting `NotFound`/`Unexpected`; some versions use misleading category labels.
 Never generalise the analysed samples to every build in a category, and never classify all suspicious builds as errors.
+
+### 3.3 Additional APIHub evidence, only when needed
+
+The standard workflow needs only the two migration requests above. If a specific missing fact requires another documented read endpoint,
+use [get-apihub](scripts/get-apihub/) with a `/api/` path and optional URL-encoded query parameters:
+
+```bash
+go -C .claude/skills/analyze-migration run ./scripts/get-apihub/ '/api/v2/packages/PACKAGE_ID'
+```
+
+Replace `PACKAGE_ID` with the required package ID. Load `.env.after` immediately before the request and clear both keys afterwards.
+The script selects `APIHUB_READ_ONLY_API_KEY` for every path outside the two migration endpoints, including `/perf`.
+It accepts no HTTP method, request body, header override, or destination host. It refuses redirects and non-canonical paths.
+Use only endpoints documented as reading data; a GET method alone does not establish that an operation has no side effects.
+Do not run additional requests without a concrete evidence gap, or use the script to start/cancel migrations, retry builds, or modify data.
+Keep responses in memory. If access is denied or the read-only key is missing, report the limitation without switching credentials.
 
 ## 4. Return findings
 
@@ -233,3 +264,6 @@ The `-en.md` file is written in English.
 The `-ru.md` file is written in Russian.
 
 Use the `Write` tool to create each file. After writing, confirm the file paths to the user.
+
+
+
