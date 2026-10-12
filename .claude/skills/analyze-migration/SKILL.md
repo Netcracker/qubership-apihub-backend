@@ -123,18 +123,25 @@ Fetch PRs and linked issues only when they help explain those changes; reuse pre
 Return the component/library refs, changes, proof links, and expected effects.
 **Ask the user to confirm the code review and stop. Proceed to build investigation only after explicit confirmation.**
 
-## 3. Investigate failed and suspicious builds
+## 3. Investigate every failed build
 
-After confirmation, analyse every error group in both reports.
-Group by the content of `errorBuilds[].error`, retaining original messages and full build IDs.
+After confirmation, analyse every build in `errorBuilds` in both reports individually, retaining original messages and full build IDs.
+Group findings by error cause only after investigating each build; a representative build cannot replace the others.
 Match builds between migrations by package, version, revision, build type, and comparison sides where present.
 Build IDs can differ between runs; do not use them alone to identify new or resolved failures.
 
-For each error group, inspect representative failed builds and download both archives as described in section 4.
+Use the bundled scripts to investigate each failure. Where needed, inspect its source/result archives using section 4.1
+and use [targeted DB diagnostics](references/database.md), choosing the database side and migration ID explicitly.
 Trace the error from the offending input and build configuration to the parser/processor/backend code.
 Explain why the failure occurred, whether it existed previously, and what action follows.
 Distinguish an input problem, configuration issue, code regression, or unresolved cause using evidence.
-A repeated error text does not prove a shared root cause. State which builds were investigated and which remain unverified.
+A repeated error text does not prove a shared root cause. Current DB rows do not establish historical state.
+For every failed build, report the cause and cite evidence: migration/build ID, JSON field, archive member/lines, or DB query result.
+Link the causal PR or commit and source permalink when established, using the code review from section 2.
+If no code change caused the failure, explain why no causal PR or commit applies.
+If the cause remains unproven, report **insufficient data**, the evidence inspected, and the specific missing evidence for that build.
+
+## 4. Investigate every suspicious category
 
 For every suspicious category in either report, retrieve up to five samples from each migration where that category exists.
 Set process `MIGRATION_ID` to the correct ID, reload API credentials, then run:
@@ -144,20 +151,30 @@ go -C .claude/skills/analyze-migration run ./scripts/get-suspicious-builds/ CATE
 ```
 
 These are the first samples returned by the API, not random samples. Do not fetch additional sample pages.
+If fewer than five builds are returned, analyse all available builds and state the actual count; record request failures explicitly.
 A missing matching build in a sample is not proof that the change disappeared.
-For each sample, preserve category, object keys, full build ID, and old/new values.
-Use its source/result archives and the relevant code to explain the difference.
+Analyse every returned build in each category individually, preserving category, object keys, full build ID, and old/new values.
+Use the code changes established in section 2 to explain each difference, consulting source/result archives and DB diagnostics where needed.
 
 For each observed change or error cause, cite data evidence (migration/build ID, JSON field or archive member)
 and the causal commit plus source permalink when established. A PR title or hash change alone is insufficient.
 When the cause is unproven, mark it **insufficient data** and name the missing evidence; never invent a commit.
 Use **expected**, **unexpected / possible defect**, or **insufficient data** for suspicious changes.
+Prefer grouping categories when evidence shows that the same code change and mechanism explain their samples.
+List every category in each group and give its evidence and an explicit group verdict; otherwise report categories separately.
+Split groups where causes or verdicts differ. An **expected** verdict requires evidence that the observed values follow the intended code behaviour.
+Every category must have an explicit verdict, individually or through its named group, including categories with unavailable evidence.
 Do not generalise sampled findings to all builds or classify all suspicious builds as errors.
 
 If a specific fact still needs SQL, use [targeted DB diagnostics](references/database.md).
 Choose the database side and migration ID explicitly. Current rows do not establish historical state.
 
-## 4. Download, decompress, and read build archives
+### 4.1. Download, decompress, and read build archives
+
+For steps 3 and 4, first use the collected reports, JSON samples, and code evidence.
+Download an archive only when it is needed to establish a cause or verdict; identify the specific missing evidence before the request.
+Choose `sources`, `result`, or both according to that need. Do not download archives for every build or category by default.
+Skip archive downloads when the available evidence already supports the finding; analysing every sample does not require downloading every archive.
 
 Use the existing `APIHUB_API_KEY` in the `api-key` header for these exact GETs:
 
@@ -182,17 +199,20 @@ Cite archive member paths and relevant fields or lines. Do not execute archived 
 
 ## 5. Report findings
 
-Write equivalent English and Russian reports in the run directory:
+Write complete, self-contained English and Russian reports with equivalent findings, evidence, and verdicts in the run directory:
 `migration-report-<PREV_MIG_ID>-<MIG_ID>-<UTC_TIMESTAMP>-en.md` and the same name ending in `-ru.md`.
 
 Include:
 
 - APIHub URL without credentials, both full migration IDs, collection times, statuses, counter and stage comparisons.
 - Backend/consumer branches, pinned SHAs, changed library versions, and the confirmed code review with commit/source links.
-- Error groups, original error descriptions, full build IDs, new/resolved/persistent classification, causes, evidence, and actions.
-- Suspicious categories, counts, inspected samples, old/new values, causes, verdicts, and commit/source evidence.
+- A finding for every failed build: original error, full build ID, new/resolved/persistent classification, cause, evidence, and action.
+- Suspicious categories grouped as described in section 4, with every inspected build, old/new values, causes, and data/code evidence.
+- A summary table listing every suspicious category, its group if any, PREV/CUR counts and delta, sample coverage, verdict, and evidence links.
 - Missing archives or other evidence, hypotheses, coverage limits, and concrete next actions.
 
+Before finalising, check that both reports cover every failed build, every category from either migration, and every returned suspicious sample.
+Keep unresolved cases visible with **insufficient data** and the missing evidence; do not omit categories or replace their analysis with future tasks.
 Never shorten build IDs, including in tables, captions, filenames, or the conversational summary.
 Use full commit SHAs in proof URLs. For data/configuration causes without a code change, explain why no causal commit applies.
 Keep credentials and sensitive source contents out of reports; use the necessary excerpt and a local evidence path.
