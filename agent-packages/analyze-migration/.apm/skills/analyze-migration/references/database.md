@@ -67,6 +67,37 @@ For an unresolved post-check comparison, use [query-comparison](../scripts/query
 Query each side with `query-version` only if its status, tasks, or dependencies are also needed.
 Do not call every mode for every object. Identify the missing fact before each call and reuse results already obtained.
 
+For an `errorBuilds` entry whose message counts or names content-validation failures (for example
+"N critical errors in following documents"), use [query-build-notifications](../scripts/query-build-notifications/)
+with `MIGRATION_ID BUILD_ID`:
+
+```bash
+go -C .claude/skills/analyze-migration run ./scripts/query-build-notifications/ "$MIGRATION_ID" "$BUILD_ID"
+```
+
+This table has had three names so far on `Netcracker/qubership-apihub-backend`, same per-notification shape
+throughout (one row per severity/message/document, keyed by `build_id`):
+
+| Name | Introduced | Columns |
+| --- | --- | --- |
+| `builder_notifications` | `1_init.up.sql` (original schema) | `build_id, severity, message, file_id` — no `category` |
+| `build_notification` | commit `e3b51675` on `tolerant_publication` | `build_id, severity, category, message, document_id` |
+| `error_build_notification` | commit `035107e` on `tolerant_publication` (renamed from `build_notification`, same columns) | `build_id, severity, category, message, document_id` |
+
+A deployment's actual table name depends on exactly which commit of its backend branch is running, not on where
+that branch's head currently is — the branch may have moved past the deployed build. The script tries
+`error_build_notification`, then `build_notification`, then the legacy `builder_notifications` in that order, and
+reports which one it used in the `notifications_table` field of its output; cite that field in the report. If none
+exist, it reports which three names it tried and stops — treat that as a schema evidence gap, do not add a fourth
+guess or improvise an alternate query.
+
+`severity` is stored as `character varying` in every one of these schemas, not the integer that the superseded Go
+entity (`entity/BuilderNotificationsEntity.go`, matching only the original `builder_notifications` name) declares;
+report the raw value rather than assuming an unverified numeric mapping. An empty `rows` array with `build_found: true`
+means the build left no notifications in whichever table matched, not that the error is unexplained — the cause may
+be in `build.details` itself or require the result archive (section 4.1 of
+[full-migration-analysis.md](full-migration-analysis.md)).
+
 ## Interpret the evidence
 
 - Confirm that the installed backend schema matches the script's tables and fields using source at the established release.
@@ -85,7 +116,8 @@ Do not call every mode for every object. Identify the missing fact before each c
   Dashboard references matter even when the version has no `previousVersion`.
 - The initial scripts return metadata and links, not document bytes, full build configurations, or archives.
   An absent archive entry, semantic hash change, or original builder behaviour may require source/result archives or pinned code.
-  Follow the archive instructions in [SKILL.md](../SKILL.md); do not fetch or request logs.
+  Follow the archive instructions in [full-migration-analysis.md](full-migration-analysis.md) section 4.1
+  (used from either branch); do not fetch or request logs.
   Retain **insufficient data** and name that evidence rather than widening the query or making a verdict from a hash alone.
 
 Record the selected script/mode, category, exact object keys, collection time, and limitations in the report.

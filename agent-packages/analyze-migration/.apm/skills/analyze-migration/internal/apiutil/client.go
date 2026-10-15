@@ -18,10 +18,24 @@ const (
 )
 
 var migrationReadPath = regexp.MustCompile(`^/api/internal/migrate/operations/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}(/suspiciousBuilds)?$`)
+var archiveReadPath = regexp.MustCompile(`^/api/v2/admin/builds/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/(sources|result)$`)
 
 // Get uses the migration key only for the two migration diagnostics endpoints.
 // All other paths require a separate read-only key; requests never follow redirects.
 func Get(endpoint string) (*http.Response, error) {
+	return getFromEnvironment(endpoint, false)
+}
+
+// GetArchive uses the migration key for the two permitted binary archive endpoints.
+func GetArchive(buildID, kind string) (*http.Response, error) {
+	endpoint := "/api/v2/admin/builds/" + buildID + "/" + kind
+	if !archiveReadPath.MatchString(endpoint) {
+		return nil, fmt.Errorf("archive requires a build UUID and kind sources or result")
+	}
+	return getFromEnvironment(endpoint, true)
+}
+
+func getFromEnvironment(endpoint string, archive bool) (*http.Response, error) {
 	migrationKey := os.Getenv(migrationKeyEnv)
 	readOnlyKey := os.Getenv(readOnlyKeyEnv)
 	for _, name := range []string{migrationKeyEnv, readOnlyKeyEnv} {
@@ -29,10 +43,10 @@ func Get(endpoint string) (*http.Response, error) {
 			return nil, fmt.Errorf("cannot clear %s: %w", name, err)
 		}
 	}
-	return get(os.Getenv("APIHUB_URL"), endpoint, migrationKey, readOnlyKey)
+	return get(os.Getenv("APIHUB_URL"), endpoint, migrationKey, readOnlyKey, archive)
 }
 
-func get(baseRaw, endpoint, migrationKey, readOnlyKey string) (*http.Response, error) {
+func get(baseRaw, endpoint, migrationKey, readOnlyKey string, archive bool) (*http.Response, error) {
 	base, err := url.Parse(strings.TrimRight(baseRaw, "/"))
 	if err != nil || base == nil || (base.Scheme != "http" && base.Scheme != "https") ||
 		base.Hostname() == "" || base.User != nil || base.RawQuery != "" || base.ForceQuery || base.Fragment != "" ||
@@ -46,7 +60,10 @@ func get(baseRaw, endpoint, migrationKey, readOnlyKey string) (*http.Response, e
 	}
 
 	keyName, key := readOnlyKeyEnv, readOnlyKey
-	if migrationReadPath.MatchString(relative.Path) {
+	if archive && (!archiveReadPath.MatchString(relative.Path) || relative.RawQuery != "" || relative.ForceQuery) {
+		return nil, fmt.Errorf("archive endpoint is not permitted")
+	}
+	if migrationReadPath.MatchString(relative.Path) || archive {
 		keyName, key = migrationKeyEnv, migrationKey
 	} else if key != "" && key == migrationKey {
 		return nil, fmt.Errorf("%s must differ from %s", readOnlyKeyEnv, migrationKeyEnv)
@@ -64,6 +81,9 @@ func get(baseRaw, endpoint, migrationKey, readOnlyKey string) (*http.Response, e
 	}
 	req.Header.Set("api-key", key)
 	req.Header.Set("Accept", "application/json")
+	if archive {
+		req.Header.Set("Accept", "application/octet-stream")
+	}
 	client := &http.Client{
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		Timeout:       requestTimeout,
