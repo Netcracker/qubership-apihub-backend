@@ -1823,14 +1823,15 @@ func (p publishedRepositoryImpl) CreateVersionWithData(ctx context.Context, pack
 				// Store search texts in tmp table for selective recalculation at end of migration.
 				// Only populate for the latest revision of the version — older revisions are skipped.
 				if version.Revision == maxRevision {
+					workspaceId := utils.GetPackageWorkspaceId(version.PackageId)
 					for _, st := range operationSearchTexts {
 						insertTmpQuery := fmt.Sprintf(`
 							INSERT INTO migration."fts_operation_search_text_tmp_%s"
 								(package_id, version, revision, operation_id, api_type, status, search_data_hash, search_text_data)
 							SELECT ?, ?, ?, ?, ?, ?, ?, ?
 							WHERE NOT EXISTS (
-								SELECT 1 FROM fts_operation_search_text
-								WHERE package_id = ? AND version = ? AND revision = ? AND operation_id = ?
+								SELECT 1 FROM global_search.fts_operation_search_text
+								WHERE workspace_id = ? AND package_id = ? AND version = ? AND revision = ? AND operation_id = ?
 									AND search_data_hash = ?
 							)
 							ON CONFLICT (package_id, version, revision, operation_id) DO UPDATE
@@ -1839,7 +1840,7 @@ func (p publishedRepositoryImpl) CreateVersionWithData(ctx context.Context, pack
 						_, err = tx.Exec(insertTmpQuery,
 							version.PackageId, version.Version, version.Revision, st.OperationId,
 							st.ApiType, version.Status, st.SearchDataHash, st.SearchTextData,
-							version.PackageId, version.Version, version.Revision, st.OperationId,
+							workspaceId, version.PackageId, version.Version, version.Revision, st.OperationId,
 							st.SearchDataHash)
 						if err != nil {
 							return fmt.Errorf("failed to insert into migration.fts_operation_search_text_tmp: %w", err)
@@ -2080,14 +2081,15 @@ func (p publishedRepositoryImpl) CreateVersionWithData(ctx context.Context, pack
 					return fmt.Errorf("failed to get max revision for fts_ddl_search_text: %w", err)
 				}
 				if version.Revision == maxRevision {
+					workspaceId := utils.GetPackageWorkspaceId(version.PackageId)
 					for _, st := range ddlContractSearchTexts {
 						insertTmpQuery := fmt.Sprintf(`
 							INSERT INTO migration."fts_ddl_search_text_tmp_%s"
 								(package_id, version, revision, ddl_entity_id, status, kind, search_data_hash, search_text_data)
 							SELECT ?, ?, ?, ?, ?, ?, ?, ?
 							WHERE NOT EXISTS (
-								SELECT 1 FROM fts_ddl_search_text
-								WHERE package_id = ? AND version = ? AND revision = ? AND ddl_entity_id = ?
+								SELECT 1 FROM global_search.fts_ddl_search_text
+								WHERE workspace_id = ? AND package_id = ? AND version = ? AND revision = ? AND ddl_entity_id = ?
 									AND search_data_hash = ?
 							)
 							ON CONFLICT (package_id, version, revision, ddl_entity_id) DO UPDATE
@@ -2096,7 +2098,7 @@ func (p publishedRepositoryImpl) CreateVersionWithData(ctx context.Context, pack
 						_, err = tx.Exec(insertTmpQuery,
 							version.PackageId, version.Version, version.Revision, st.DdlEntityId,
 							version.Status, st.Kind, st.SearchDataHash, st.SearchTextData,
-							version.PackageId, version.Version, version.Revision, st.DdlEntityId,
+							workspaceId, version.PackageId, version.Version, version.Revision, st.DdlEntityId,
 							st.SearchDataHash)
 						if err != nil {
 							return fmt.Errorf("failed to insert into migration.fts_ddl_search_text_tmp: %w", err)
@@ -2229,14 +2231,15 @@ func (p publishedRepositoryImpl) CreateVersionWithData(ctx context.Context, pack
 					return fmt.Errorf("failed to get max revision for fts_mcp_search_text: %w", err)
 				}
 				if version.Revision == maxRevision {
+					workspaceId := utils.GetPackageWorkspaceId(version.PackageId)
 					for _, st := range mcpContractSearchTexts {
 						insertTmpQuery := fmt.Sprintf(`
 							INSERT INTO migration."fts_mcp_search_text_tmp_%s"
 								(package_id, version, revision, mcp_entity_id, status, kind, search_data_hash, search_text_data)
 							SELECT ?, ?, ?, ?, ?, ?, ?, ?
 							WHERE NOT EXISTS (
-								SELECT 1 FROM fts_mcp_search_text
-								WHERE package_id = ? AND version = ? AND revision = ? AND mcp_entity_id = ?
+								SELECT 1 FROM global_search.fts_mcp_search_text
+								WHERE workspace_id = ? AND package_id = ? AND version = ? AND revision = ? AND mcp_entity_id = ?
 									AND search_data_hash = ?
 							)
 							ON CONFLICT (package_id, version, revision, mcp_entity_id) DO UPDATE
@@ -2245,7 +2248,7 @@ func (p publishedRepositoryImpl) CreateVersionWithData(ctx context.Context, pack
 						_, err = tx.Exec(insertTmpQuery,
 							version.PackageId, version.Version, version.Revision, st.McpEntityId,
 							version.Status, st.Kind, st.SearchDataHash, st.SearchTextData,
-							version.PackageId, version.Version, version.Revision, st.McpEntityId,
+							workspaceId, version.PackageId, version.Version, version.Revision, st.McpEntityId,
 							st.SearchDataHash)
 						if err != nil {
 							return fmt.Errorf("failed to insert into migration.fts_mcp_search_text_tmp: %w", err)
