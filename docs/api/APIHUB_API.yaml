@@ -13353,6 +13353,20 @@ components:
         notLatestRevision:
           type: boolean
           default: false
+        apiProcessorVersion:
+          description: Version of api-processor with which the referenced version was built.
+          type: string
+        hasErrors:
+          description: |
+            Flag showing that the build of the referenced version has at least one critical problem.
+            For a referenced dashboard version the flag is also true when any of its own references, at any
+            depth, has hasErrors or changelogHasErrors. Excluded and deleted references are not counted.
+
+            Use `GET /api/v2/packages/{packageId}/versions/{version}/notifications` to get the details.
+          type: boolean
+          default: false
+        changelogHasErrors:
+          $ref: "#/components/schemas/ChangelogHasErrors"
     PackagesMap:
       description: |
         A map of referenced package versions to the package version objects.
@@ -13372,6 +13386,9 @@ components:
           deletedAt: "2023-05-30T17:17:11.755146Z"
           deletedBy: "user1221"
           notLatestRevision: true
+          apiProcessorVersion: "4.2.1"
+          hasErrors: true
+          changelogHasErrors: false
     ErrorResponse:
       description: Standard error response returned for failed requests. Includes HTTP status, internal error code, human-readable message, optional message parameters, and optional debug details (non-production only).
       type: object
