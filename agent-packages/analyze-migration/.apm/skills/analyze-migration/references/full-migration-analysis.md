@@ -104,6 +104,33 @@ If this request is actually about understanding the causes behind a large `error
 migrations end to end, consider [error-builds-analysis.md](error-builds-analysis.md) instead — it classifies every
 error build by message pattern and resolves most of them from the database without the code-review gate above.
 
+### 3.1. Expand critical errors from sources
+
+For every current `errorBuilds` entry containing a number followed by `critical errors`, including inside a restart-limit
+message, perform these steps. Apply this to every matching build, regardless of its assigned category; do not sample builds.
+
+1. Download `GET /api/v2/admin/builds/{buildId}/sources` for that exact build using the
+   [download-archive helper](local-tools.md#download-a-build-archive) with the `sources` argument.
+   Reuse that build's archive if already downloaded. Follow section 4.1 for credentials, storage, and safe ZIP handling.
+   This source investigation is required even if the aggregate error or existing evidence already explains why release publication was blocked.
+2. Read `apihub_build_config.json`. Match the document names in the error to `files[].slug` and their archive members
+   through `files[].fileId`. Inspect the actual documents and follow relevant `$ref` references, including referenced schemas.
+   Downloading the archive or confirming that the files exist is not the analysis.
+3. Identify the specific violations using the source contents, build settings, and relevant processor rules.
+   For suspected cross-document conflicts, compare the affected operations and their referenced schemas; matching operation IDs
+   or differing text alone do not establish an error. Use available processor code to establish which differences matter.
+   Keep investigating the available documents when historical notifications are absent; their absence does not prevent source analysis.
+4. Add a numbered list of all established errors for that build to the existing report. Give each error's explanation,
+   document, and archive path with a line or JSON pointer. Identify the package, version, revision, and full build ID.
+   Preserve the report's sections, build tables, cause explanations, and conclusions; use a supplied previous report as the layout reference.
+   Put long error lists below the existing build table and link them from the corresponding rows in the same report.
+   This is an addition to the report, not a replacement with a separate report or a new classification scheme.
+5. Check the findings against the reported N. Include every established error, not a representative example or another aggregate summary.
+   Distinguish source-analysis findings from verbatim historical builder messages. Do not invent messages, count each textual
+   difference as a violation, or duplicate findings merely to reach N. If all N cannot be established, show the confirmed findings
+   and explicitly state how many reported errors remain unaccounted for, or why their count cannot yet be reconciled.
+   If the archive is unavailable, report the request outcome for that build and continue with the other builds.
+
 ## 4. Investigate every suspicious category in MIG_ID
 
 For every suspicious category with affected builds in the current report, retrieve up to five samples from `MIG_ID` only.
@@ -140,6 +167,7 @@ In full comparison mode, download archives only for builds from `MIG_ID`.
 Download an archive only when it is needed to establish a cause or verdict; identify the specific missing evidence before the request.
 Choose `sources`, `result`, or both according to that need. Do not download archives for every build or category by default.
 Skip archive downloads when the available evidence already supports the finding; analysing every sample does not require downloading every archive.
+The source analysis for each `N critical errors` build in section 3.1 is required and takes precedence over this general download guidance.
 
 The bundled Go [download-archive helper](../scripts/download-archive/) uses `APIHUB_API_KEY` for these exact GETs:
 

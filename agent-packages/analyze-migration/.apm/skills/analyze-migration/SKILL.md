@@ -10,6 +10,10 @@ Analyse one or two migrations on one APIHub deployment, following the mode chose
 Preserve full migration IDs and build IDs in every output. This is a detailed investigation of reports and selected
 or all builds, depending on the chosen mode; state the actual sample coverage.
 
+In either mode, for every investigated build whose error contains `N critical errors`, download and analyse that
+build's sources and add the individual errors to the existing report. Follow
+[Expand critical errors from sources](references/full-migration-analysis.md#31-expand-critical-errors-from-sources).
+
 ## Execution boundary
 
 Use the bundled helpers for migration requests and fixed database queries.

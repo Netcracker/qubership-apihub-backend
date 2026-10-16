@@ -62,6 +62,11 @@ not that every build requires a fresh, independent investigation when its cause 
 build in this same report — reuse is only permitted along the specific links named below (cascade root, unwrapped
 inner message), never from a merely similar-looking error text.
 
+For every build whose error contains `N critical errors`, including a wrapped message, also follow
+[Expand critical errors from sources](full-migration-analysis.md#31-expand-critical-errors-from-sources).
+Download and inspect that build's sources and include all established individual errors in this report, preserving its existing structure.
+This procedure applies in this mode without the full-comparison code-review pause.
+
 **Category A.** Run:
 
 ```bash
