@@ -44,6 +44,10 @@ func mcpLegacyMetricKey(ctx context.Context, packageOrGroup string) string {
 	return MCPClientLabelFromCtx(ctx) + "|" + packageOrGroup
 }
 
+func observeMCPToolCall(ctx context.Context, tool string, apiType string) {
+	metrics.MCPToolCallsTotal.WithLabelValues(tool, MCPClientLabelFromCtx(ctx), apiType).Inc()
+}
+
 func validateMCPGroup(group, workspace string) error {
 	if group == "" {
 		return nil
@@ -125,6 +129,7 @@ func (m mcpService) ExecuteLegacyRestSearchTool(ctx context.Context, req mcp.Cal
 		metrics.MCPLegacySearchToolCalled,
 		mcpLegacyMetricKey(ctx, group),
 	)
+	observeMCPToolCall(ctx, LegacyToolNameSearchRestOperations, string(view.RestApiType))
 	log.Debugf("%s: delegating to %s with apiType=rest", LegacyToolNameSearchRestOperations, ToolNameSearchOperations)
 	return m.ExecuteSearchTool(ctx, withInjectedMCPArg(req, "apiType", string(view.RestApiType)))
 }
@@ -137,6 +142,7 @@ func (m mcpService) ExecuteLegacyRestGetSpecTool(ctx context.Context, req mcp.Ca
 			metrics.MCPLegacyGetSpecToolCalled,
 			mcpLegacyMetricKey(ctx, packageId),
 		)
+		observeMCPToolCall(ctx, LegacyToolNameGetRestOperationSpec, string(view.RestApiType))
 	}
 	log.Debugf("%s: delegating to %s with apiType=rest", LegacyToolNameGetRestOperationSpec, ToolNameGetOperationSpec)
 	return m.ExecuteGetSpecTool(ctx, withInjectedMCPArg(req, "apiType", string(view.RestApiType)))
@@ -150,6 +156,7 @@ func (m mcpService) ExecuteLegacyRestGetOperationDiffTool(ctx context.Context, r
 			metrics.MCPLegacyGetDiffToolCalled,
 			mcpLegacyMetricKey(ctx, packageId),
 		)
+		observeMCPToolCall(ctx, LegacyToolNameGetRestOperationDiff, string(view.RestApiType))
 	}
 	log.Debugf("%s: delegating to %s with apiType=rest", LegacyToolNameGetRestOperationDiff, ToolNameGetOperationDiff)
 	return m.ExecuteGetOperationDiffTool(ctx, withInjectedMCPArg(req, "apiType", string(view.RestApiType)))
@@ -185,6 +192,7 @@ func (m mcpService) ExecuteGetSpecTool(ctx context.Context, req mcp.CallToolRequ
 
 	userID := secctx.GetUserId(ctx)
 	m.monitoringService.IncreaseBusinessMetricCounter(userID, metrics.MCPGetSpecToolCalled, mcpMetricKey(ctx, apiType, packageId))
+	observeMCPToolCall(ctx, ToolNameGetOperationSpec, apiType)
 
 	log.Debugf("get_api_operation_specification: apiType=%s, operationId=%s, packageId=%s, version=%s", apiType, operationId, packageId, version)
 
@@ -222,7 +230,7 @@ func (m mcpService) ExecuteSearchTool(ctx context.Context, req mcp.CallToolReque
 	if err := validateMCPGroup(group, workspace); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	return m.executeSearchCore(ctx, req, workspace, resolveMCPSearchPackageIds([]string{group}, workspace), metrics.MCPSearchToolCalled)
+	return m.executeSearchCore(ctx, req, workspace, resolveMCPSearchPackageIds([]string{group}, workspace), metrics.MCPSearchToolCalled, , ToolNameSearchOperations)
 }
 
 // ExecuteSearchToolV2 executes the search_api_operations_v2 tool with a caller-supplied workspace
@@ -238,10 +246,10 @@ func (m mcpService) ExecuteSearchToolV2(ctx context.Context, req mcp.CallToolReq
 	if err := validateMCPGroups(groups, workspace); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	return m.executeSearchCore(ctx, req, workspace, resolveMCPSearchPackageIds(groups, workspace), metrics.MCPSearchV2ToolCalled)
+	return m.executeSearchCore(ctx, req, workspace, resolveMCPSearchPackageIds(groups, workspace), metrics.MCPSearchV2ToolCalled, ToolNameSearchOperationsV2)
 }
 
-func (m mcpService) executeSearchCore(ctx context.Context, req mcp.CallToolRequest, workspace string, packageIds []string, metric string) (*mcp.CallToolResult, error) {
+func (m mcpService) executeSearchCore(ctx context.Context, req mcp.CallToolRequest, workspace string, packageIds []string, metric string, tool string) (*mcp.CallToolResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, MCPToolCallTimeout)
 	defer cancel()
 	apiType, err := requireMCPTypeParam(req, string(view.RestApiType), string(view.GraphqlApiType), string(view.AsyncapiApiType), view.ContractTypeDdl, view.ContractTypeMcp)
@@ -261,6 +269,7 @@ func (m mcpService) executeSearchCore(ctx context.Context, req mcp.CallToolReque
 	log.Debugf("search_api_operations: apiType=%s, query=%s, limit=%d, page=%d, packageIds=%s, releaseVersion=%s, workspace=%s", apiType, q, limit, page, packageIds, releaseVersion, workspace)
 
 	m.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metric, mcpMetricKey(ctx, apiType, strings.Join(packageIds, ",")))
+	observeMCPToolCall(ctx, tool, apiType)
 
 	searchReq := view.SearchQueryReq{
 		SearchString: q,
@@ -328,6 +337,7 @@ func (m mcpService) ExecuteListWorkspacesTool(ctx context.Context, req mcp.CallT
 	log.Debugf("list_workspaces: listing accessible workspaces")
 
 	m.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.MCPListWorkspacesToolCalled, mcpListWorkspacesMetricKey)
+	observeMCPToolCall(ctx, ToolNameListWorkspaces, "")
 
 	workspaceListReq := view.PackageListReq{
 		Kind:  []string{entity.KIND_WORKSPACE},
@@ -363,6 +373,7 @@ func (m mcpService) ExecuteListWorkspacePackagesTool(ctx context.Context, req mc
 	log.Debugf("list_workspace_packages: workspace=%s, page=%d, limit=%d, textFilter=%s", workspace, page, limit, textFilter)
 
 	m.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.MCPListWorkspacePackagesToolCalled, workspace)
+	observeMCPToolCall(ctx, ToolNameListWorkspacePackages, "")
 
 	packageListReq := view.PackageListReq{
 		Kind:               []string{entity.KIND_PACKAGE},
@@ -409,6 +420,7 @@ func (m mcpService) ExecuteListPackageVersionsTool(ctx context.Context, req mcp.
 	log.Debugf("list_package_versions: packageId=%s, status=%s, page=%d, limit=%d", packageId, status, page, limit)
 
 	m.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.MCPListPackageVersionsToolCalled, packageId)
+	observeMCPToolCall(ctx, ToolNameListPackageVersions, "")
 
 	versionsReq := view.VersionListReq{
 		PackageId: packageId,
@@ -470,6 +482,7 @@ func (m mcpService) ExecuteGetOperationDiffTool(ctx context.Context, req mcp.Cal
 
 	userID := secctx.GetUserId(ctx)
 	m.monitoringService.IncreaseBusinessMetricCounter(userID, metrics.MCPGetDiffToolCalled, mcpMetricKey(ctx, apiType, packageId))
+	observeMCPToolCall(ctx, ToolNameGetOperationDiff, apiType)
 
 	log.Debugf("get_api_operation_diff: apiType=%s, operationId=%s, packageId=%s, version=%s, previousVersion=%s", apiType, operationId, packageId, version, previousVersion)
 
@@ -517,6 +530,7 @@ func (m mcpService) ExecuteGetDocumentTool(ctx context.Context, req mcp.CallTool
 
 	userID := secctx.GetUserId(ctx)
 	m.monitoringService.IncreaseBusinessMetricCounter(userID, metrics.MCPGetDocumentToolCalled, mcpMetricKey(ctx, apiType, packageId))
+	observeMCPToolCall(ctx, ToolNameGetDocument, apiType)
 
 	log.Debugf("get_document: apiType=%s, packageId=%s, version=%s, slug=%s", apiType, packageId, version, slug)
 
@@ -562,6 +576,7 @@ func (m mcpService) ExecuteListApiOperationsTool(ctx context.Context, req mcp.Ca
 	page := req.GetInt("page", 0)
 
 	m.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.MCPListApiOperationsToolCalled, mcpMetricKey(ctx, apiType, packageId))
+	observeMCPToolCall(ctx, ToolNameListApiOperations, apiType)
 
 	log.Debugf("list_api_operations: packageId=%s, version=%s, apiType=%s, textFilter=%s, limit=%d, page=%d", packageId, version, apiType, textFilter, limit, page)
 
@@ -605,6 +620,7 @@ func (m mcpService) ExecuteListDdlEntitiesTool(ctx context.Context, req mcp.Call
 	page := req.GetInt("page", 0)
 
 	m.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.MCPListDdlEntitiesToolCalled, mcpMetricKey(ctx, view.ContractTypeDdl, packageId))
+	observeMCPToolCall(ctx, ToolNameListDdlEntities, view.ContractTypeDdl)
 
 	log.Debugf("list_ddl_entities: packageId=%s, version=%s, textFilter=%s, limit=%d, page=%d", packageId, version, textFilter, limit, page)
 
@@ -645,6 +661,7 @@ func (m mcpService) ExecuteGetDdlEntityTool(ctx context.Context, req mcp.CallToo
 	includeData := req.GetBool("includeData", true)
 
 	m.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.MCPGetDdlEntityToolCalled, mcpMetricKey(ctx, view.ContractTypeDdl, packageId))
+	observeMCPToolCall(ctx, ToolNameGetDdlEntity, view.ContractTypeDdl)
 
 	log.Debugf("get_ddl_entity: packageId=%s, version=%s, ddlEntityId=%s, includeData=%t", packageId, version, ddlEntityId, includeData)
 
@@ -693,6 +710,7 @@ func (m mcpService) ExecuteGetDdlEntityDiffTool(ctx context.Context, req mcp.Cal
 	}
 
 	m.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.MCPGetDdlEntityDiffToolCalled, mcpMetricKey(ctx, view.ContractTypeDdl, packageId))
+	observeMCPToolCall(ctx, ToolNameGetDdlEntityDiff, view.ContractTypeDdl)
 
 	log.Debugf("get_ddl_entity_diff: packageId=%s, version=%s, ddlEntityId=%s, previousVersion=%s, previousVersionPackageId=%s", packageId, version, ddlEntityId, previousVersion, previousVersionPackageId)
 
@@ -733,6 +751,7 @@ func (m mcpService) ExecuteListMcpContractEntitiesTool(ctx context.Context, req 
 	page := req.GetInt("page", 0)
 
 	m.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.MCPListMcpContractEntitiesToolCalled, mcpMetricKey(ctx, view.ContractTypeMcp, packageId))
+	observeMCPToolCall(ctx, ToolNameListMcpContractEntities, view.ContractTypeMcp)
 
 	log.Debugf("list_mcp_contract_entities: packageId=%s, version=%s, kind=%s, mcpEndpoint=%s, textFilter=%s, limit=%d, page=%d", packageId, version, kind, mcpEndpoint, textFilter, limit, page)
 
@@ -773,6 +792,7 @@ func (m mcpService) ExecuteGetMcpContractEntityTool(ctx context.Context, req mcp
 	includeData := req.GetBool("includeData", true)
 
 	m.monitoringService.IncreaseBusinessMetricCounter(secctx.GetUserId(ctx), metrics.MCPGetMcpContractEntityToolCalled, mcpMetricKey(ctx, view.ContractTypeMcp, packageId))
+	observeMCPToolCall(ctx, ToolNameGetMcpContractEntity, view.ContractTypeMcp)
 
 	log.Debugf("get_mcp_contract_entity: packageId=%s, version=%s, mcpEntityId=%s, includeData=%t", packageId, version, mcpEntityId, includeData)
 
