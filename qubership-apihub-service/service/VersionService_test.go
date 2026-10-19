@@ -448,3 +448,90 @@ func TestCheckSourceVersionCanBeCopiedForDashboards(t *testing.T) {
 		})
 	}
 }
+
+const (
+	summaryPackageId       = "QS.DDL"
+	summaryVersion         = "2026.2"
+	summaryPreviousVersion = "2026.1"
+)
+
+type changeSummaryRepoStub struct {
+	repository.PublishedRepository
+	comparison      entity.VersionComparisonEntity
+	refsComparisons []entity.VersionComparisonEntity
+}
+
+func (s *changeSummaryRepoStub) GetVersionByRevision(context.Context, string, string, int) (*entity.PublishedVersionEntity, error) {
+	return &entity.PublishedVersionEntity{PackageId: summaryPackageId, Version: summaryVersion, Revision: 1, PreviousVersion: summaryPreviousVersion}, nil
+}
+
+func (s *changeSummaryRepoStub) GetVersion(context.Context, string, string) (*entity.PublishedVersionEntity, error) {
+	return &entity.PublishedVersionEntity{PackageId: summaryPackageId, Version: summaryPreviousVersion, Revision: 1}, nil
+}
+
+func (s *changeSummaryRepoStub) GetVersionComparison(context.Context, string) (*entity.VersionComparisonEntity, error) {
+	return &s.comparison, nil
+}
+
+func (s *changeSummaryRepoStub) GetVersionRefsComparisons(context.Context, string) ([]entity.VersionComparisonEntity, error) {
+	return s.refsComparisons, nil
+}
+
+func comparisonWithChanges(operationBreaking, ddlBreaking, mcpBreaking int) entity.VersionComparisonEntity {
+	return entity.VersionComparisonEntity{
+		OperationTypes: []view.OperationType{{ApiType: "rest", ChangesSummary: view.ChangeSummary{Breaking: operationBreaking}}},
+		ContractTypes: []view.ContractType{
+			{ContractType: view.ContractTypeDdl, ChangesSummary: view.ChangeSummary{Breaking: ddlBreaking}},
+			{ContractType: view.ContractTypeMcp, ChangesSummary: view.ChangeSummary{Breaking: mcpBreaking}},
+		},
+	}
+}
+
+func withRefs(comparison entity.VersionComparisonEntity, refs ...string) entity.VersionComparisonEntity {
+	comparison.Refs = refs
+	return comparison
+}
+
+// The group package list shows the BWC status from this summary, so a package that publishes only DDL
+// must report its DDL changes there, as the version summary page does. MCP changes stay out of it, and a
+// dashboard reports only the changes of its references.
+func TestGetVersionChangeSummaryCountsDdlChanges(t *testing.T) {
+	tests := []struct {
+		name string
+		repo *changeSummaryRepoStub
+		want int
+	}{
+		{
+			name: "DDL-only package",
+			repo: &changeSummaryRepoStub{comparison: comparisonWithChanges(0, 1, 0)},
+			want: 1,
+		},
+		{
+			name: "package with operations, DDL, and MCP",
+			repo: &changeSummaryRepoStub{comparison: comparisonWithChanges(2, 1, 4)},
+			want: 3,
+		},
+		{
+			name: "dashboard summing its references",
+			repo: &changeSummaryRepoStub{
+				comparison:      withRefs(comparisonWithChanges(5, 5, 0), "ref-1", "ref-2"),
+				refsComparisons: []entity.VersionComparisonEntity{comparisonWithChanges(0, 1, 4), comparisonWithChanges(2, 3, 0)},
+			},
+			want: 6,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service := versionServiceImpl{publishedRepo: tt.repo}
+
+			summary, err := service.getVersionChangeSummary(context.Background(), summaryPackageId, summaryVersion, 1)
+			if err != nil {
+				t.Fatalf("expected a change summary, got %v", err)
+			}
+			if summary == nil || summary.Breaking != tt.want {
+				t.Fatalf("expected %d breaking changes, got %+v", tt.want, summary)
+			}
+		})
+	}
+}

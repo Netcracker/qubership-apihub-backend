@@ -1152,28 +1152,25 @@ func (v versionServiceImpl) getVersionChangeSummary(ctx context.Context, package
 	if versionComparison == nil {
 		return nil, nil
 	}
-	changeSummary := &view.ChangeSummary{}
-	versionOperationTypes := make([]view.OperationType, 0)
-
+	versionComparisons := []entity.VersionComparisonEntity{*versionComparison}
 	if len(versionComparison.Refs) > 0 {
-		versionComparisons, err := v.publishedRepo.GetVersionRefsComparisons(ctx, comparisonId)
+		versionComparisons, err = v.publishedRepo.GetVersionRefsComparisons(ctx, comparisonId)
 		if err != nil {
 			return nil, err
 		}
-		for _, comparison := range versionComparisons {
-			versionOperationTypes = append(versionOperationTypes, comparison.OperationTypes...)
-		}
-	} else {
-		versionOperationTypes = append(versionOperationTypes, versionComparison.OperationTypes...)
 	}
 
-	for _, opType := range versionOperationTypes {
-		changeSummary.Breaking += opType.ChangesSummary.Breaking
-		changeSummary.SemiBreaking += opType.ChangesSummary.SemiBreaking
-		changeSummary.Deprecated += opType.ChangesSummary.Deprecated
-		changeSummary.NonBreaking += opType.ChangesSummary.NonBreaking
-		changeSummary.Annotation += opType.ChangesSummary.Annotation
-		changeSummary.Unclassified += opType.ChangesSummary.Unclassified
+	changeSummary := &view.ChangeSummary{}
+	for _, comparison := range versionComparisons {
+		for _, opType := range comparison.OperationTypes {
+			changeSummary.Add(opType.ChangesSummary)
+		}
+		// DDL changes are stored per contract type rather than per operation type
+		for _, contractType := range comparison.ContractTypes {
+			if contractType.ContractType == view.ContractTypeDdl {
+				changeSummary.Add(contractType.ChangesSummary)
+			}
+		}
 	}
 	return changeSummary, nil
 }
