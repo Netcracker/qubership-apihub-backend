@@ -230,7 +230,7 @@ func (m mcpService) ExecuteSearchTool(ctx context.Context, req mcp.CallToolReque
 	if err := validateMCPGroup(group, workspace); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	return m.executeSearchCore(ctx, req, workspace, resolveMCPSearchPackageIds([]string{group}, workspace), metrics.MCPSearchToolCalled, , ToolNameSearchOperations)
+	return m.executeSearchCore(ctx, req, workspace, resolveMCPSearchPackageIds([]string{group}, workspace), metrics.MCPSearchToolCalled, ToolNameSearchOperations)
 }
 
 // ExecuteSearchToolV2 executes the search_api_operations_v2 tool with a caller-supplied workspace
