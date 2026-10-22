@@ -123,6 +123,7 @@ func (c comparisonControllerImpl) CompareTwoVersions(w http.ResponseWriter, r *h
 			Message: exception.InvalidCompareVersionReqMsg,
 			Params:  map[string]interface{}{"compareVersionReq": compareVersionsReq, "error": err.Error()},
 		})
+		return
 	}
 
 	sufficientPrivileges, err := c.roleService.HasRequiredPermissions(ctx, compareVersionsReq.PackageId, view.ReadPermission)
