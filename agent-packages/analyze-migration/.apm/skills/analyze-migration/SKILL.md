@@ -5,7 +5,7 @@ description: Analyse an APIHub operations migration. Asks the user to choose bet
 
 # Analyse operations migrations
 
-Use `/analyze-migration` in Claude Code. Respond in the user's language.
+Use the `/analyze-migration` slash command. Respond in the user's language.
 Analyse one or two migrations on one APIHub deployment, following the mode chosen in section 0 below.
 Preserve full migration IDs and build IDs in every output. This is a detailed investigation of reports and selected
 or all builds, depending on the chosen mode; state the actual sample coverage.
