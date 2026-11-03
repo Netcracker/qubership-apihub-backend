@@ -15,6 +15,7 @@ layout (`agent-packages/<name>/.apm/...`).
 | `apihub-backend-self-review` | `apihub-backend-self-review/` | `apihub-go-self-review` |
 | `backend-conventions` | `backend-conventions/` | — |
 | `advanced-verification` | `advanced-verification/` | — |
+| `analyze-migration` | `analyze-migration/` | — |
 
 Root `apm.yml` lists both CI store dependencies and these local paths. After edits, run from
 repository root:

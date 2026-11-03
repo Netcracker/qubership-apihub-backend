@@ -15,3 +15,4 @@ dependencies:
     - ./agent-packages/apihub-backend-self-review
     - ./agent-packages/backend-conventions
     - ./agent-packages/advanced-verification
+    - ./agent-packages/analyze-migration
