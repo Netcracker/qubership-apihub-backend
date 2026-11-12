@@ -257,6 +257,7 @@ func (g *systemInfoServiceImpl) setDefaults() {
 	viper.SetDefault("olric.replicaCount", 1)
 	viper.SetDefault("olric.bindPort", 47375)
 	viper.SetDefault("olric.memberlistPort", 47376)
+	viper.SetDefault("olric.reconnectGracePeriodSec", 30)
 	viper.SetDefault("cleanup.builds.schedule", "0 1 * * 0")              // at 01:00 AM on Sunday
 	viper.SetDefault("cleanup.builds.timeoutMinutes", 360)                // 6 hours
 	viper.SetDefault("cleanup.builds.expiredS3Files.timeoutMinutes", 360) //6 hours

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/view"
@@ -25,6 +26,9 @@ func NewPublishNotificationService(op cache.OlricProvider) PublishNotificationSe
 	utils.SafeAsync(func() {
 		trh.initVersionPublishedDTopic()
 	})
+	utils.SafeAsync(func() {
+		trh.reinitOnReconnect()
+	})
 	return &trh
 }
 
@@ -33,10 +37,13 @@ type PublishNotificationService interface {
 }
 
 type publishNotificationServiceImpl struct {
-	op                    cache.OlricProvider
-	olricC                *olric.Olric
+	op cache.OlricProvider
+
+	mu                    sync.RWMutex
 	versionPublishedTopic *olric.DTopic
-	ready                 chan struct{}
+
+	readyOnce sync.Once
+	ready     chan struct{}
 }
 
 const VersionPublishedTopicName = "version-published"
@@ -48,7 +55,11 @@ func (t *publishNotificationServiceImpl) SendNotification(ctx context.Context, p
 		return ctx.Err()
 	}
 
-	if t.versionPublishedTopic == nil {
+	t.mu.RLock()
+	topic := t.versionPublishedTopic
+	t.mu.RUnlock()
+
+	if topic == nil {
 		return fmt.Errorf("failed to publish message to %s DTopic since it's not initialized", VersionPublishedTopicName)
 	}
 
@@ -64,7 +75,7 @@ func (t *publishNotificationServiceImpl) SendNotification(ctx context.Context, p
 		return err
 	}
 
-	err = t.versionPublishedTopic.Publish(string(jsonMsg))
+	err = topic.Publish(string(jsonMsg))
 	if err != nil {
 		log.Errorf("Failed to send 'version published' event: %s", err)
 		return err
@@ -75,15 +86,32 @@ func (t *publishNotificationServiceImpl) SendNotification(ctx context.Context, p
 func (t *publishNotificationServiceImpl) initVersionPublishedDTopic() {
 	var err error
 	for attempt := 1; attempt < 4; attempt++ {
-		t.olricC = t.op.Get()
-		topicName := VersionPublishedTopicName
-		t.versionPublishedTopic, err = t.olricC.NewDTopic(topicName, 10000, olric.UnorderedDelivery)
+		var topic *olric.DTopic
+		topic, err = t.op.Get().NewDTopic(VersionPublishedTopicName, 10000, olric.UnorderedDelivery)
 		if err != nil {
 			log.Errorf("Failed to create DTopic %s (attempt %d): %s", VersionPublishedTopicName, attempt, err.Error())
 			time.Sleep(10 * time.Second)
 			continue
 		}
+		t.mu.Lock()
+		t.versionPublishedTopic = topic
+		t.mu.Unlock()
 		break
 	}
-	close(t.ready)
+	t.readyOnce.Do(func() { close(t.ready) })
+}
+
+// reinitOnReconnect re-creates the "version-published" DTopic every time the
+// underlying Olric node is rebuilt after a network partition (see
+// cache.OlricProvider.WaitForReconnect). The old DTopic handle belongs to the
+// replaced node, so without this, SendNotification would keep failing forever
+// after the first reconnect.
+func (t *publishNotificationServiceImpl) reinitOnReconnect() {
+	for {
+		if err := t.op.WaitForReconnect(context.Background()); err != nil {
+			return
+		}
+		log.Infof("PublishNotificationService: olric node reconnected, re-creating DTopic %s", VersionPublishedTopicName)
+		t.initVersionPublishedDTopic()
+	}
 }

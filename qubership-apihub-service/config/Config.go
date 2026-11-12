@@ -157,6 +157,11 @@ type OlricConfig struct {
 	// (e.g. for manual testing).
 	BindPort       int
 	MemberlistPort int
+	// ReconnectGracePeriodSec is how long, after a cluster peer leaves and none rejoins, the
+	// local Olric node waits before tearing itself down and rejoining from scratch. Olric does
+	// not retry a peer that memberlist has marked dead on its own, so this is the only recovery
+	// path after a network partition.
+	ReconnectGracePeriodSec int `validate:"gt=0"`
 }
 
 type CleanupConfig struct {

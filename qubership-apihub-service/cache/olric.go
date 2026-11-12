@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"context"
 	"encoding/gob"
 	"fmt"
 	"math/rand"
@@ -10,66 +11,239 @@ import (
 	"time"
 
 	sysconfig "github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/config"
+	"github.com/Netcracker/qubership-apihub-backend/qubership-apihub-service/utils"
 	"github.com/buraksezer/olric"
 	discovery "github.com/buraksezer/olric-cloud-plugin/lib"
 	"github.com/buraksezer/olric/config"
+	"github.com/hashicorp/memberlist"
 	log "github.com/sirupsen/logrus"
 )
 
+// OlricProvider gives access to the local Olric cluster node.
+//
+// Olric (as of its current release, including its continuation under
+// github.com/olric-data/olric) never retries a peer that memberlist has marked
+// dead: the only Join attempt happens once, at initial bootstrap, and the
+// library's own Rejoin helper is never called anywhere internally. So once a
+// network error causes a peer to be marked "left", nothing reconnects it on its
+// own, even after connectivity is restored. This provider works around that gap
+// by rebuilding the local node from scratch (see watchForIsolation) whenever it
+// has been isolated for too long, which forces discovery and Join to run again.
 type OlricProvider interface {
 	Get() *olric.Olric
 	GetBindAddr() string
+	// WaitForReconnect blocks until the local Olric node has been torn down and
+	// rejoined to the cluster after a network partition, or until ctx is done.
+	// Callers that hold long-lived DTopic/DMap handles obtained from a previous
+	// Get() must re-create them after it returns nil: those handles belong to
+	// the replaced node and stop working once it is shut down.
+	WaitForReconnect(ctx context.Context) error
 }
 
-const olricBindAddr = "0.0.0.0"
+const (
+	olricBindAddr = "0.0.0.0"
+	// nodeEventChannelSize buffers memberlist join/leave notifications so a burst
+	// of membership churn cannot block memberlist's own event delegate.
+	nodeEventChannelSize = 64
+	// reconnectJoinTimeout bounds how long a reconnect attempt waits for the
+	// rebuilt node to finish joining before it is treated as failed and retried
+	// after another grace period. It matches the BootstrapTimeout used for the
+	// initial Join in "lan" mode.
+	reconnectJoinTimeout = 60 * time.Second
+	// olricShutdownTimeout bounds how long the replaced node is given to close
+	// its connections after a successful reconnect.
+	olricShutdownTimeout = 10 * time.Second
+)
 
 type olricProviderImpl struct {
-	wg     sync.WaitGroup
-	cfg    *config.Config
-	olricC *olric.Olric
+	startupWg sync.WaitGroup // signals readiness only for the very first start
+
+	mu         sync.RWMutex
+	cfg        *config.Config
+	olricC     *olric.Olric
+	nodeEvents chan memberlist.NodeEvent
+	changed    chan struct{} // closed and replaced every time olricC is swapped
+
+	olricConfig          sysconfig.OlricConfig
+	reconnectGracePeriod time.Duration
 }
 
 func NewOlricProvider(olricConfig sysconfig.OlricConfig) (OlricProvider, error) {
-	prov := &olricProviderImpl{wg: sync.WaitGroup{}}
+	prov := &olricProviderImpl{
+		olricConfig:          olricConfig,
+		reconnectGracePeriod: time.Duration(olricConfig.ReconnectGracePeriodSec) * time.Second,
+		changed:              make(chan struct{}),
+	}
 
-	var err error
 	gob.Register(map[string]interface{}{})
-	prov.cfg, err = getConfig(olricConfig)
+
+	cfg, nodeEvents, err := buildConfigWithEvents(olricConfig)
 	if err != nil {
 		return nil, err
 	}
 
-	prov.wg.Add(1)
+	prov.startupWg.Add(1)
+	cfg.Started = prov.startupWg.Done
 
-	prov.cfg.Started = prov.startCallback
-
-	prov.olricC, err = olric.New(prov.cfg)
+	olricC, err := olric.New(cfg)
 	if err != nil {
 		return nil, err
 	}
+
+	prov.cfg = cfg
+	prov.olricC = olricC
+	prov.nodeEvents = nodeEvents
 
 	go func() {
-		err = prov.olricC.Start()
-		if err != nil {
+		if err := olricC.Start(); err != nil {
 			log.Panicf("Olric cache node cannot be started. Error: %s", err.Error())
 		}
 	}()
 
+	utils.SafeAsync(prov.watchForIsolation)
+
 	return prov, nil
 }
 
-func (op *olricProviderImpl) startCallback() {
-	op.wg.Done()
-}
-
 func (op *olricProviderImpl) Get() *olric.Olric {
-	op.wg.Wait()
+	op.startupWg.Wait()
+	op.mu.RLock()
+	defer op.mu.RUnlock()
 	return op.olricC
 }
 
 func (op *olricProviderImpl) GetBindAddr() string {
-	op.wg.Wait()
+	op.startupWg.Wait()
+	op.mu.RLock()
+	defer op.mu.RUnlock()
 	return op.cfg.BindAddr
+}
+
+func (op *olricProviderImpl) WaitForReconnect(ctx context.Context) error {
+	op.mu.RLock()
+	changed := op.changed
+	op.mu.RUnlock()
+
+	select {
+	case <-changed:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (op *olricProviderImpl) currentNodeEvents() chan memberlist.NodeEvent {
+	op.mu.RLock()
+	defer op.mu.RUnlock()
+	return op.nodeEvents
+}
+
+// watchForIsolation runs for the lifetime of the provider. It rebuilds the
+// local Olric node whenever no peer has rejoined within reconnectGracePeriod of
+// the last NodeLeave, which is the only way to recover from a network partition
+// given Olric's lack of a built-in rejoin (see the OlricProvider doc comment).
+func (op *olricProviderImpl) watchForIsolation() {
+	nodeEvents := op.currentNodeEvents()
+
+	isolationTimer := time.NewTimer(op.reconnectGracePeriod)
+	if !isolationTimer.Stop() {
+		<-isolationTimer.C
+	}
+	defer isolationTimer.Stop()
+
+	for {
+		select {
+		case event := <-nodeEvents:
+			switch event.Event {
+			case memberlist.NodeLeave:
+				log.Warnf("OlricProvider: peer %s left the cluster; will force this node to rejoin in %s if no peer returns before then", event.Node.Name, op.reconnectGracePeriod)
+				isolationTimer.Reset(op.reconnectGracePeriod)
+			case memberlist.NodeJoin:
+				isolationTimer.Stop()
+			}
+		case <-isolationTimer.C:
+			log.Warnf("OlricProvider: no peer rejoined within %s of the last network partition, forcing this node to rejoin the cluster", op.reconnectGracePeriod)
+			if op.reconnect() {
+				nodeEvents = op.currentNodeEvents()
+			} else {
+				isolationTimer.Reset(op.reconnectGracePeriod)
+			}
+		}
+	}
+}
+
+// reconnect tears down the current Olric node and starts a fresh one in its
+// place, so it goes through discovery and Join again. It returns false if the
+// new node could not be started; the caller retries after another grace
+// period instead of treating the failure as fatal, since this runs long after
+// startup wiring has already succeeded once.
+func (op *olricProviderImpl) reconnect() bool {
+	cfg, nodeEvents, err := buildConfigWithEvents(op.olricConfig)
+	if err != nil {
+		log.Errorf("OlricProvider: failed to rebuild the olric config while reconnecting: %s", err.Error())
+		return false
+	}
+
+	started := make(chan struct{})
+	cfg.Started = func() { close(started) }
+
+	newC, err := olric.New(cfg)
+	if err != nil {
+		log.Errorf("OlricProvider: failed to create a new olric node while reconnecting: %s", err.Error())
+		return false
+	}
+
+	startErr := make(chan error, 1)
+	utils.SafeAsync(func() { startErr <- newC.Start() })
+
+	select {
+	case <-started:
+	case err := <-startErr:
+		if err != nil {
+			log.Errorf("OlricProvider: new olric node failed to start while reconnecting: %s", err.Error())
+			return false
+		}
+	case <-time.After(reconnectJoinTimeout):
+		log.Errorf("OlricProvider: timed out after %s waiting for the new olric node to join the cluster", reconnectJoinTimeout)
+		return false
+	}
+
+	op.mu.Lock()
+	oldC := op.olricC
+	oldChanged := op.changed
+	op.olricC = newC
+	op.cfg = cfg
+	op.nodeEvents = nodeEvents
+	op.changed = make(chan struct{})
+	op.mu.Unlock()
+	close(oldChanged)
+
+	log.Infof("OlricProvider: node rejoined the cluster (bindAddr=%s bindPort=%d)", cfg.BindAddr, cfg.BindPort)
+
+	utils.SafeAsync(func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), olricShutdownTimeout)
+		defer cancel()
+		if err := oldC.Shutdown(shutdownCtx); err != nil {
+			log.Warnf("OlricProvider: failed to shut down the replaced olric node cleanly: %s", err.Error())
+		}
+	})
+
+	return true
+}
+
+// buildConfigWithEvents builds an Olric config and wires a fresh memberlist
+// node-event channel into it, so the caller can observe NodeJoin/NodeLeave for
+// whichever node is ultimately started from the returned config.
+func buildConfigWithEvents(olricConfig sysconfig.OlricConfig) (*config.Config, chan memberlist.NodeEvent, error) {
+	cfg, err := getConfig(olricConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	nodeEvents := make(chan memberlist.NodeEvent, nodeEventChannelSize)
+	cfg.MemberlistConfig.Events = &memberlist.ChannelEventDelegate{Ch: nodeEvents}
+
+	return cfg, nodeEvents, nil
 }
 
 func getConfig(olricConfig sysconfig.OlricConfig) (*config.Config, error) {

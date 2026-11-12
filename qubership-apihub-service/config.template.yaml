@@ -203,6 +203,11 @@ olric:
   replicaCount: 1
   # Optional; Namespace for Olric discovery. If not set, default value: ""; Example: apihub
   namespace: 'apihub'
+  # Optional; Seconds to wait, after a cluster peer leaves and none rejoins, before this node
+  # tears itself down and rejoins from scratch. Olric does not retry a peer that memberlist has
+  # marked dead on its own, so this is what recovers the cluster after a network partition.
+  # If not set, default value: 30; Example: 30
+  reconnectGracePeriodSec: 30
 
 # Section with cleanup jobs configuration
 cleanup:
